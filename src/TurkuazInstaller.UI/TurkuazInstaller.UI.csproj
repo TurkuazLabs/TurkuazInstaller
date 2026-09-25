@@ -2,8 +2,8 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.UI/TurkuazInstaller.UI.csproj
 # 📌 Amac: WinUI 3 tabanli installer kullanici arayuzunu derler
 # 📌 Modul - Project XML
-# Version: 0.1.0
-# Aciklama: Windows-first MVVM shell ve composition root projesidir
+# Version: 0.1.1
+# Aciklama: Windows-first MVVM shell, composition root ve external config kopyalama kurallarini tanimlar
 
 Bagimli Oldugu Katman: View
 -->
@@ -27,6 +27,10 @@ Bagimli Oldugu Katman: View
     <PackageReference Include="CommunityToolkit.Mvvm" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="../../config/installer.yml">
+      <Link>config/installer.yml</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="../../language/*.yml">
       <Link>language/%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

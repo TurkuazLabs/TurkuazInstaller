@@ -1,0 +1,9 @@
+# 📄 Dosya Yolu: /config/installer.yml
+# 📌 Amac: TurkuazInstaller runtime seviyesindeki varsayilan UI ve dosya yerlesim ayarlarini tanimlar
+# 📌 Modul - Config YAML
+# Version: 0.1.0
+# Aciklama: Varsayilan dil ve language dizini gibi ayarlarin kaynak koda gomulmesini engeller
+# Bagimli Oldugu Katman: Tool
+
+default_language: tr
+language_directory: language
