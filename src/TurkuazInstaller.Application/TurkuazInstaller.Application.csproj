@@ -1,0 +1,19 @@
+<!--
+# 📄 Dosya Yolu: /src/TurkuazInstaller.Application/TurkuazInstaller.Application.csproj
+# 📌 Amac: Installer use-case katmanini derler
+# 📌 Modul - Project XML
+# Version: 0.1.0
+# Aciklama: Domain ve Contracts uzerinden is akisini yoneten Application projesidir
+
+Bagimli Oldugu Katman: Service
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>TurkuazInstaller.Application</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
+    <ProjectReference Include="../TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
+  </ItemGroup>
+</Project>

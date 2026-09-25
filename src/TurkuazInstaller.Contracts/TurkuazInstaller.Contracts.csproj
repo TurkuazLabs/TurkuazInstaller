@@ -1,0 +1,18 @@
+<!--
+# 📄 Dosya Yolu: /src/TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj
+# 📌 Amac: Core ile dis dunya arasindaki port kontratlarini derler
+# 📌 Modul - Project XML
+# Version: 0.1.0
+# Aciklama: Provider implementasyonlarinin uymasi gereken interface katmanidir
+
+Bagimli Oldugu Katman: Service
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>TurkuazInstaller.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
+  </ItemGroup>
+</Project>

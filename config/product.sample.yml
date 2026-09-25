@@ -1,0 +1,18 @@
+# 📄 Dosya Yolu: /config/product.sample.yml
+# 📌 Amac: Urun branding ve release ayarlarinin ornek sozlesmesini tanimlar
+# 📌 Modul - Config YAML
+# Version: 0.1.0
+# Aciklama: Uygulamaya ozel ayarlarin kaynak koda gomulmesini engelleyen ornek config dosyasidir
+# Bagimli Oldugu Katman: Tool
+
+product_id: sample-product
+display_name: Sample Product
+publisher: TurkuazLabs
+default_channel: stable
+default_language: tr
+release_source:
+  provider: github
+  repository: TurkuazLabs/SampleProduct
+ui:
+  show_release_notes: true
+  allow_install_path_change: true

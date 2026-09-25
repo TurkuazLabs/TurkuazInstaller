@@ -1,0 +1,26 @@
+# 📄 Dosya Yolu: /.gitignore
+# 📌 Amac: Derleme, IDE ve yerel gelistirme ciktilarini Git disinda tutar
+# 📌 Modul - Config
+# Version: 0.1.0
+# Aciklama: .NET, Visual Studio ve paketleme artefactlarini ignore eder
+# Bagimli Oldugu Katman: Tool
+
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+artifacts/
+packages/
+*.nupkg
+*.snupkg
+*.msix
+*.msixbundle
+*.appinstaller
+*.pfx
+*.cer
+*.key

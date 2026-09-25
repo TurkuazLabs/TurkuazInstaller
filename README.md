@@ -10,38 +10,35 @@ Bagimli Oldugu Katman: View
 
 TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum ve guncelleme platformudur.
 
-## Ana hedefler
+## Teknik yon
 
-- Modern WinUI 3 kullanici arayuzu
-- Kucuk ve bagimsiz native bootstrapper
-- Install, update, repair, rollback ve uninstall akislari
-- GitHub, Gitea ve HTTP release source provider modeli
-- Paket motorundan bagimsiz Core; Velopack ilk adapterlardan biri olacak
-- SHA-256 ve dijital imza dogrulamasi
-- Stable, beta ve ileride staged rollout kanallari
-- Community ve Pro katmanlarinin ayni Core kontratlarini kullanmasi
-- GUI ve CLI uzerinden ayni Application use-case katmaninin calismasi
+- Windows-first
+- .NET 10
+- WinUI 3 + MVVM
+- Clean Architecture
+- Ports / Adapters
+- Native bootstrapper
+- Provider-independent Core
+- Community + private Pro extension modeli
 
-## Mimari
-
-TurkuazInstaller klasik MVC kullanmaz.
+## Bagimlilik akisi
 
 ```text
-View -> ViewModel -> Application Use Case -> Port -> Adapter
-                         |
-                       Domain
+View -> ViewModel -> Application Use Case -> Contracts / Ports -> Adapters
+                           |
+                         Domain
 ```
 
-Domain ve Application katmanlari WinUI, GitHub, Velopack veya dosya sistemi gibi dis teknolojileri bilmez.
+Domain; WinUI, HTTP, GitHub, Gitea, Velopack, MSI veya MSIX bilmez.
 
 ## Edition modeli
 
-Community temel guvenlik, install/update, repair ve rollback ozelliklerini eksiksiz tasir.
+Community; temel guvenlik, install/update, repair, rollback, GUI ve CLI yeteneklerini tasir.
 
-Pro; private feed, lisans/cihaz yetkilendirme, staged rollout, merkezi yonetim, analytics ve enterprise deployment gibi operasyonel moduller ekler.
+Pro; private feed, lisans/cihaz yetkilendirme, staged rollout, merkezi yonetim, analytics ve enterprise deployment gibi operasyon modulleri ekler.
 
-## Durum
+## Aktif hedef
 
-Aktif gelistirme: v0.1.0 Foundation.
+v0.1.0 Foundation.
 
-Detayli kararlar `docs/` altinda tutulur.
+Detayli mimari, roadmap ve guvenlik kararlari `docs/` altindadir.
