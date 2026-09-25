@@ -1,0 +1,15 @@
+<!--
+# 📄 Dosya Yolu: /src/TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj
+# 📌 Amac: Saf domain modellerini derleyen .NET kutuphanesini tanimlar
+# 📌 Modul - Project XML
+# Version: 0.1.0
+# Aciklama: Dis teknoloji bagimliligi olmayan domain projesidir
+
+Bagimli Oldugu Katman: Service
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>TurkuazInstaller.Domain</RootNamespace>
+  </PropertyGroup>
+</Project>

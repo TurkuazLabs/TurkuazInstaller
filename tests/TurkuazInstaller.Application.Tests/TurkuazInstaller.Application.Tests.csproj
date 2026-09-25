@@ -1,0 +1,27 @@
+<!--
+# 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/TurkuazInstaller.Application.Tests.csproj
+# 📌 Amac: Application use-case unit test projesini tanimlar
+# 📌 Modul - Test Project XML
+# Version: 0.1.0
+# Aciklama: Use-case davranislarini fake port implementasyonlariyla dogrular
+
+Bagimli Oldugu Katman: Service
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TurkuazInstaller.Application/TurkuazInstaller.Application.csproj" />
+    <ProjectReference Include="../../src/TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
+    <ProjectReference Include="../../src/TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

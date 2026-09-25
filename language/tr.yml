@@ -1,0 +1,11 @@
+# 📄 Dosya Yolu: /language/tr.yml
+# 📌 Amac: TurkuazInstaller Turkce kullanici arayuzu metinlerini merkezilestirir
+# 📌 Modul - Language YAML
+# Version: 0.1.0
+# Aciklama: UI icindeki kullaniciya gorunen metinlerin Turkce kaynagidir
+# Bagimli Oldugu Katman: Language
+
+app_title: "TurkuazInstaller"
+foundation_subtitle: "TurkuazLabs uygulamalari icin ortak kurulum, guncelleme, onarim ve geri alma platformu."
+foundation_status_title: "Foundation hazir"
+foundation_status_message: "Domain, Contracts, Application, Infrastructure ve WinUI 3 MVVM katmanlari ayrildi."

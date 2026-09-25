@@ -1,0 +1,42 @@
+# 📄 Dosya Yolu: /.github/workflows/ci.yml
+# 📌 Amac: TurkuazInstaller kodunu Windows runner uzerinde restore, build ve test eder
+# 📌 Modul - CI YAML
+# Version: 0.1.0
+# Aciklama: .NET 10 ve WinUI 3 cozumunun ana kalite kapisidir
+# Bagimli Oldugu Katman: Tool
+
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore TurkuazInstaller.slnx
+
+      - name: Build
+        run: dotnet build TurkuazInstaller.slnx --configuration Release --no-restore -p:Platform=x64
+
+      - name: Test
+        run: dotnet test TurkuazInstaller.slnx --configuration Release --no-build -p:Platform=x64

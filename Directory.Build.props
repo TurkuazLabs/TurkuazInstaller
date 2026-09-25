@@ -1,0 +1,20 @@
+<!--
+# 📄 Dosya Yolu: /Directory.Build.props
+# 📌 Amac: Tum .NET projeleri icin ortak derleme kurallarini merkezilestirir
+# 📌 Modul - XML
+# Version: 0.1.0
+# Aciklama: Nullable, implicit usings, analiz ve surum kurallarini tek noktadan uygular
+
+Bagimli Oldugu Katman: Tool
+-->
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>
