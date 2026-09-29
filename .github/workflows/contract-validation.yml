@@ -1,0 +1,39 @@
+# 📄 Dosya Yolu: /.github/workflows/contract-validation.yml
+# 📌 Amac: TurkuazInstaller Community contract ve guvenlik invariantlarini GitHub Actions uzerinde dogrulamak
+# 📌 Modul - YAML
+# Version: 0.2.0
+# Aciklama: Manifest, provider, example ve Community-Pro boundary validatorunu Python 3.12 ile calistirir
+# Bagimli Oldugu Katman: Tool | Config
+
+name: Contract Validation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install validation dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Validate contracts
+        run: python tools/validate_contracts.py
