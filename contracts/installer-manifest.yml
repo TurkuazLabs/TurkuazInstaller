@@ -1,0 +1,76 @@
+# 📄 Dosya Yolu: /contracts/installer-manifest.yml
+# 📌 Amac: TurkuazInstaller Community paket manifest contract alanlarini ve guvenlik invariantlarini tanimlamak
+# 📌 Modul - YAML
+# Version: 0.2.0
+# Aciklama: Paket kimligi, surum, kanal, artifact, hash, imza, prerequisite ve rollback alanlarini contract-first sabitler
+# Bagimli Oldugu Katman: Application | Port | Adapter | Config
+
+schema_version: 1
+
+required:
+  package:
+    - id
+    - version
+    - channel
+  artifact:
+    - uri
+    - sha256
+    - size_bytes
+  install:
+    - mode
+    - target
+  rollback:
+    - supported
+
+package:
+  id:
+    type: string
+    pattern: "^[a-z0-9][a-z0-9._-]{1,63}$"
+  version:
+    type: semver
+  channel:
+    allowed:
+      - stable
+      - beta
+
+artifact:
+  uri:
+    allowed_schemes:
+      - https
+      - file
+  sha256:
+    format: hex
+    length: 64
+    required_before_install: true
+  size_bytes:
+    type: integer
+    minimum: 1
+  signature:
+    optional: true
+    algorithm:
+      - authenticode
+      - ed25519-detached
+
+install:
+  mode:
+    allowed:
+      - full
+      - delta
+  target:
+    type: string
+  prerequisites:
+    type: array
+  preserve_paths:
+    type: array
+
+rollback:
+  supported:
+    type: boolean
+  previous_version_required_when_supported: true
+
+security:
+  checksum_failure: deny
+  invalid_signature: deny
+  unsigned_artifact_policy: explicit_product_policy
+  transport_http_remote: deny
+  path_escape: deny
