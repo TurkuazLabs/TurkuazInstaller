@@ -1,0 +1,47 @@
+# 📄 Dosya Yolu: /contracts/release-provider.yml
+# 📌 Amac: Community release source provider port kontratini tanimlamak
+# 📌 Modul - YAML
+# Version: 0.2.0
+# Aciklama: GitHub, Gitea ve generic HTTPS providerlarin ortak release sorgu ve artifact resolve davranisini tanimlar
+# Bagimli Oldugu Katman: Application | Port | Adapter
+
+schema_version: 1
+
+provider_contract:
+  operations:
+    - get_latest_release
+    - get_release
+    - resolve_manifest
+    - resolve_artifact
+
+providers:
+  github:
+    community: true
+    authentication:
+      optional: true
+      secret_in_manifest: false
+
+  gitea:
+    community: true
+    authentication:
+      optional: true
+      secret_in_manifest: false
+
+  http:
+    community: true
+    authentication:
+      optional: true
+      secret_in_manifest: false
+    remote_plain_http: false
+
+result:
+  required:
+    - provider
+    - package_id
+    - version
+    - manifest_uri
+
+failure:
+  malformed_release: reject
+  missing_manifest: reject
+  unsupported_provider: reject
