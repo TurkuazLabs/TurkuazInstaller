@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim ve gelistirme giris dokumani
 # 📌 Modul - Markdown
-# Version: 0.1.0
-# Aciklama: Windows-first kurulum, guncelleme, onarim ve rollback platformunun temel hedeflerini tanimlar
+# Version: 0.2.0
+# Aciklama: Windows-first installer hedeflerini, Community contract foundation ve Community/Pro sinirini tanimlar
 
 Bagimli Oldugu Katman: View
 
@@ -42,6 +42,21 @@ Pro; private feed, lisans/cihaz yetkilendirme, staged rollout, merkezi yonetim, 
 
 ## Durum
 
-Aktif gelistirme: v0.1.0 Foundation.
+Aktif gelistirme: v0.2.0 Contract Foundation.
 
 Detayli kararlar `docs/` altinda tutulur.
+
+
+## v0.2.0 Contract Foundation
+
+Eklenen temel contractlar:
+
+- `contracts/installer-manifest.yml`
+- `contracts/release-provider.yml`
+- `docs/SECURITY_MODEL.md`
+- `docs/ARCHITECTURE.md`
+- `docs/ROADMAP.md`
+- `examples/community-manifest.yml`
+- contract validation CI
+
+Community guvenlik baseline'i Pro'ya tasinmaz. Hash, signature contract, HTTPS, path safety, repair ve rollback Community'de kalir.
