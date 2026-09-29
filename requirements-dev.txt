@@ -1,0 +1,8 @@
+# 📄 Dosya Yolu: /requirements-dev.txt
+# 📌 Amac: TurkuazInstaller Community contract validation gelistirme bagimliliklarini sabitlemek
+# 📌 Modul - Text
+# Version: 0.2.0
+# Aciklama: Yalniz local ve CI YAML contract validatoru icin PyYAML bagimliligini tanimlar
+# Bagimli Oldugu Katman: Tool
+
+PyYAML>=6.0,<7.0
