@@ -1,0 +1,34 @@
+# 📄 Dosya Yolu: /examples/community-manifest.yml
+# 📌 Amac: TurkuazInstaller Community manifest contracti icin guvenli ornek paket tanimlamak
+# 📌 Modul - YAML
+# Version: 0.2.0
+# Aciklama: Stable full-package, SHA-256, prerequisite, preserve path ve rollback alanlarini ornekler
+# Bagimli Oldugu Katman: Config
+
+schema_version: 1
+
+package:
+  id: example-app
+  version: 1.2.3
+  channel: stable
+
+artifact:
+  uri: https://downloads.example.invalid/example-app/1.2.3/package.zip
+  sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  size_bytes: 1048576
+  signature:
+    algorithm: ed25519-detached
+    uri: https://downloads.example.invalid/example-app/1.2.3/package.zip.sig
+
+install:
+  mode: full
+  target: "%LOCALAPPDATA%/Programs/ExampleApp"
+  prerequisites:
+    - id: dotnet-desktop-runtime
+      version: ">=8.0"
+  preserve_paths:
+    - "%LOCALAPPDATA%/ExampleApp/data"
+
+rollback:
+  supported: true
+  previous_version_required: true
