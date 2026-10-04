@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 0.5.0
-# Aciklama: Contract foundation, Core Domain, Providers, Package Engine ve sonraki Windows installer fazlarini tanimlar
+# Version: 0.6.0
+# Aciklama: Core, Providers, Package Engine, Windows Bootstrap ve sonraki WinUI fazlarini teknik sirayla tanimlar
 # Bagimli Oldugu Katman: Service | Repo | Tool | View | Config
 
 # Roadmap
@@ -47,10 +47,11 @@
 
 ## v0.6.0 - Windows Bootstrap
 
-- [ ] native bootstrapper
-- [ ] prerequisite detection
-- [ ] self-update handoff
-- [ ] process elevation boundary
+- [x] NativeAOT bootstrapper
+- [x] prerequisite detection
+- [x] self-update handoff
+- [x] process elevation boundary
+- [x] Windows NativeAOT CI
 
 ## v0.7.0 - WinUI 3
 
