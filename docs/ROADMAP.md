@@ -1,9 +1,9 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 0.4.0
-# Aciklama: Contract foundation, Core Domain, Providers ve sonraki Windows installer runtime fazlarini tanimlar
-# Bagimli Oldugu Katman: Domain | Application | Port | Adapter | ViewModel | View | Config
+# Version: 0.5.0
+# Aciklama: Contract foundation, Core Domain, Providers, Package Engine ve sonraki Windows installer fazlarini tanimlar
+# Bagimli Oldugu Katman: Service | Repo | Tool | View | Config
 
 # Roadmap
 
@@ -37,11 +37,13 @@
 ## v0.5.0 - Package Engine
 
 - [x] package engine port
-- [ ] Velopack adapter
-- [ ] staging
-- [ ] apply
-- [ ] repair
-- [ ] rollback
+- [x] Velopack adapter
+- [x] atomic staging
+- [x] apply
+- [x] repair
+- [x] rollback
+- [x] process runner port
+- [x] package engine contract tests
 
 ## v0.6.0 - Windows Bootstrap
 

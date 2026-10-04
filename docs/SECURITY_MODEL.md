@@ -1,9 +1,9 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
-# 📌 Amac: TurkuazInstaller Community install/update/repair/rollback guvenlik invariantlarini tanimlamak
+# 📌 Amac: TurkuazInstaller Community install, update, repair ve rollback guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 0.2.0
-# Aciklama: Hash, imza, path, download, rollback ve secret sinirlarini Community Core icin sabitler
-# Bagimli Oldugu Katman: Domain | Application | Port | Adapter | Config
+# Version: 0.5.0
+# Aciklama: Hash, imza, path, staging, process, download ve rollback guvenlik kurallarini Community Core icin sabitler
+# Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
 
@@ -13,7 +13,7 @@ Asagidaki davranislar Pro ozelligi degildir:
 
 - SHA-256 artifact dogrulamasi
 - dijital imza dogrulama kontrati
-- path traversal / archive escape engelleme
+- path traversal ve archive escape engelleme
 - atomic staging
 - install oncesi preflight
 - repair integrity kontrolu
@@ -41,6 +41,27 @@ Install veya update apply edilmeden once:
 
 Hash veya gerekli imza dogrulanamazsa apply baslamaz.
 
+## Atomic Staging
+
+Verified artifact dogrudan active install rootundan calistirilmaz.
+
+Package Engine:
+
+1. benzersiz staging operasyon klasoru olusturur
+2. dosyayi `.partial` olarak kopyalar
+3. ayni klasor icinde atomic rename yapar
+4. package id ve version bilgisi ile typed `PackageStage` uretir
+
+Apply, repair ve rollback yalniz staged artifact kabul eder.
+
+## Process Boundary
+
+Velopack executable cagirilari shell uzerinden string command olarak calistirilmaz.
+
+Her argument process API `ArgumentList` alanina ayri deger olarak verilir.
+
+Non-zero exit code basarili apply olarak kabul edilmez.
+
 ## Rollback
 
 Rollback:
@@ -48,7 +69,20 @@ Rollback:
 - onceki version metadata'sini korur
 - yarim uygulanmis yeni paketi active state olarak isaretlemez
 - veri klasorlerini product preserve policy disinda silmez
-- rollback artifact'i icin de integrity verification uygular
+- rollback artifacti icin de integrity verification zorunludur
+- staged artifact package id ve version degeri previous release ile eslesmelidir
+
+## Preserve Data
+
+Kalici application verisi Velopack `current` klasoru disinda tutulur.
+
+Preserve path:
+
+- install rootuna gore relative olmalidir
+- target root disina cikamaz
+- `current` altinda olamaz
+
+Bu sinir executable payload ile kalici veriyi birbirinden ayirir.
 
 ## Secret Boundary
 
@@ -60,4 +94,4 @@ Manifest veya public config su degerleri tasimaz:
 - entitlement credential
 - production certificate private key
 
-Authentication secret'i Adapter tarafinda environment/OS credential store/secret provider uzerinden gelir.
+Authentication secret Adapter tarafinda environment, OS credential store veya secret provider uzerinden gelir.
