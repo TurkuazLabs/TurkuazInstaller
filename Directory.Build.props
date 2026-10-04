@@ -2,8 +2,8 @@
 # 📄 Dosya Yolu: /Directory.Build.props
 # 📌 Amac: Tum .NET projeleri icin ortak derleme ve kalite kurallarini merkezilestirir
 # 📌 Modul - XML
-# Version: 0.3.0
-# Aciklama: Core Domain fazi icin nullable, analiz, deterministik build ve surum kurallarini uygular
+# Version: 0.4.0
+# Aciklama: Providers fazi icin nullable, analiz, deterministik build ve surum kurallarini uygular
 
 Bagimli Oldugu Katman: Tool
 -->
@@ -15,6 +15,6 @@ Bagimli Oldugu Katman: Tool
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
   </PropertyGroup>
 </Project>

@@ -1,9 +1,9 @@
 <!--
 # 📄 Dosya Yolu: /TurkuazInstaller.slnx
-# 📌 Amac: TurkuazInstaller Core kaynak ve test projelerini tek solution altinda toplar
+# 📌 Amac: TurkuazInstaller kaynak ve test projelerini tek solution altinda toplar
 # 📌 Modul - XML
-# Version: 0.3.0
-# Aciklama: Domain, Contracts, Application ve test katmanlarini roadmap sirasina gore gruplar
+# Version: 0.4.0
+# Aciklama: Domain, Contracts, Application, Infrastructure ve test katmanlarini roadmap sirasina gore gruplar
 
 Bagimli Oldugu Katman: Tool
 -->
@@ -12,9 +12,11 @@ Bagimli Oldugu Katman: Tool
     <Project Path="src/TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
     <Project Path="src/TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
     <Project Path="src/TurkuazInstaller.Application/TurkuazInstaller.Application.csproj" />
+    <Project Path="src/TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TurkuazInstaller.Domain.Tests/TurkuazInstaller.Domain.Tests.csproj" />
     <Project Path="tests/TurkuazInstaller.Application.Tests/TurkuazInstaller.Application.Tests.csproj" />
+    <Project Path="tests/TurkuazInstaller.Infrastructure.Tests/TurkuazInstaller.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>

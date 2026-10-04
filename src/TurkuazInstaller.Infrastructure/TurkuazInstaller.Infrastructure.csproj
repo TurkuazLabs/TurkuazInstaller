@@ -1,0 +1,22 @@
+<!--
+# 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj
+# 📌 Amac: Release provider ve manifest adapterlarini derleyen Infrastructure projesini tanimlar
+# 📌 Modul - Project XML
+# Version: 0.4.0
+# Aciklama: GitHub, Gitea, generic HTTPS, local file ve YAML manifest adapterlarini tasir
+
+Bagimli Oldugu Katman: Tool
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>TurkuazInstaller.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
+    <ProjectReference Include="../TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+</Project>
