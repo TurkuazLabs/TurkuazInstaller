@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Manifests/InstallerManifestReader.cs
 // 📌 Amac: Community installer manifest YAML metnini typed PackageRelease modeline donusturur
 // 📌 Modul - Tool CSharp
-// Version: 0.4.0
-// Aciklama: Provider adapterlarinin ortak kullandigi schema, package, channel ve artifact parseridir
+// Version: 0.4.1
+// Aciklama: Provider adapterlarinin ortak kullandigi parserdir; Core disi manifest alanlarini forward-compatible olarak yok sayar
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -23,6 +23,7 @@ public sealed class InstallerManifestReader
     {
         _deserializer = new DeserializerBuilder()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
+            .IgnoreUnmatchedProperties()
             .Build();
     }
 
