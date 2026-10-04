@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 0.3.0
-# Aciklama: Contract foundation, Core Domain ve sonraki Windows installer runtime fazlarini teknik sirayla tanimlar
+# Version: 0.4.0
+# Aciklama: Contract foundation, Core Domain, Providers ve sonraki Windows installer runtime fazlarini tanimlar
 # Bagimli Oldugu Katman: Domain | Application | Port | Adapter | ViewModel | View | Config
 
 # Roadmap
@@ -28,15 +28,15 @@
 
 ## v0.4.0 - Providers
 
-- [ ] GitHub adapter
-- [ ] Gitea adapter
-- [ ] generic HTTPS adapter
-- [ ] local file adapter
-- [ ] provider contract tests
+- [x] GitHub adapter
+- [x] Gitea adapter
+- [x] generic HTTPS adapter
+- [x] local file adapter
+- [x] provider contract tests
 
 ## v0.5.0 - Package Engine
 
-- [ ] package engine port
+- [x] package engine port
 - [ ] Velopack adapter
 - [ ] staging
 - [ ] apply

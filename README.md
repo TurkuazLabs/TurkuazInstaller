@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim ve gelistirme giris dokumani
 # 📌 Modul - Markdown
-# Version: 0.3.0
-# Aciklama: Windows-first installer hedeflerini, tamamlanan Core Domain fazini ve Community/Pro sinirini tanimlar
+# Version: 0.4.0
+# Aciklama: Tamamlanan Core ve Provider fazlarini, Windows-first installer hedeflerini ve Community/Pro sinirini tanimlar
 
 Bagimli Oldugu Katman: View
 
@@ -15,16 +15,14 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum ve guncel
 - Modern WinUI 3 kullanici arayuzu
 - Kucuk ve bagimsiz native bootstrapper
 - Install, update, repair, rollback ve uninstall akislari
-- GitHub, Gitea ve HTTP release source provider modeli
+- GitHub, Gitea, generic HTTPS ve local file release provider modeli
 - Paket motorundan bagimsiz Core; Velopack ilk adapterlardan biri olacak
 - SHA-256 ve dijital imza dogrulamasi
-- Stable, beta ve ileride staged rollout kanallari
+- Stable ve beta release kanallari
 - Community ve Pro katmanlarinin ayni Core kontratlarini kullanmasi
 - GUI ve CLI uzerinden ayni Application use-case katmaninin calismasi
 
 ## Mimari
-
-TurkuazInstaller klasik MVC kullanmaz.
 
 ```text
 View -> ViewModel -> Application Use Case -> Port -> Adapter
@@ -42,20 +40,19 @@ Pro; private feed, lisans/cihaz yetkilendirme, staged rollout, merkezi yonetim, 
 
 ## Durum
 
-Aktif gelistirme: v0.3.0 Core Domain.
+Aktif gelistirme: v0.4.0 Providers tamamlandi.
 
-Tamamlanan bu faz:
+Tamamlanan provider fazi:
 
-- typed PackageId
-- SemVer 2.0 SemanticVersion
-- stable/beta ReleaseChannel
-- SHA-256 ArtifactDigest ve guvenli ArtifactDescriptor
-- InstallPlan, UpdatePlan, RepairPlan ve RollbackPlan
-- VerificationResult
-- ReleaseProvider, Downloader, Verifier, PackageEngine, StateRepository ve PrerequisiteProbe portlari
-- provider bagimsiz UpdateCheckService
-- .NET 10 Core CI ve unit test altyapisi
+- ortak YAML installer manifest parseri
+- GitHub Releases adapteri
+- Gitea Releases adapteri
+- generic HTTPS manifest adapteri
+- local file / air-gapped adapteri
+- HTTPS transport baseline
+- package/channel request validation
+- provider contract unit testleri
 
-Sonraki roadmap adimi: v0.4.0 Providers.
+Sonraki roadmap adimi: v0.5.0 Package Engine.
 
 Detayli kararlar `docs/` altinda tutulur.
