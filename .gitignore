@@ -1,0 +1,17 @@
+# 📄 Dosya Yolu: /.gitignore
+# 📌 Amac: Derleme, IDE ve test ciktilarini Git disinda tutar
+# 📌 Modul - Config
+# Version: 0.3.0
+# Aciklama: .NET Core gelistirme artefactlarini ve yerel dosyalari ignore eder
+# Bagimli Oldugu Katman: Tool
+
+bin/
+obj/
+.vs/
+.idea/
+*.user
+*.suo
+TestResults/
+artifacts/
+*.nupkg
+*.snupkg

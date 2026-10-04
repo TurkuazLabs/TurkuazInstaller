@@ -1,0 +1,18 @@
+<!--
+# 📄 Dosya Yolu: /src/TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj
+# 📌 Amac: Core ile adapter katmanlari arasindaki public port kontratlarini derler
+# 📌 Modul - Project XML
+# Version: 0.3.0
+# Aciklama: Provider, download, verification, package engine, state ve prerequisite portlarini tasir
+
+Bagimli Oldugu Katman: Service
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>TurkuazInstaller.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
+  </ItemGroup>
+</Project>
