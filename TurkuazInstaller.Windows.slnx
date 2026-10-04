@@ -1,0 +1,20 @@
+<!--
+# 📄 Dosya Yolu: /TurkuazInstaller.Windows.slnx
+# 📌 Amac: Windows bootstrap ve platform projelerini Core katmanlariyla birlikte Windows CI icin toplar
+# 📌 Modul - XML
+# Version: 0.6.0
+# Aciklama: NativeAOT publish ve Windows platform build akisini Linux Core solutiondan ayirir
+
+Bagimli Oldugu Katman: Tool
+-->
+<Solution>
+  <Folder Name="/core/">
+    <Project Path="src/TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
+    <Project Path="src/TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
+    <Project Path="src/TurkuazInstaller.Application/TurkuazInstaller.Application.csproj" />
+  </Folder>
+  <Folder Name="/windows/">
+    <Project Path="src/TurkuazInstaller.Platform.Windows/TurkuazInstaller.Platform.Windows.csproj" />
+    <Project Path="src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj" />
+  </Folder>
+</Solution>

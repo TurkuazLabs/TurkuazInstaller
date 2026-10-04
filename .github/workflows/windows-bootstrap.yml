@@ -1,0 +1,59 @@
+# 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
+# 📌 Amac: Windows bootstrap projelerini build eder ve NativeAOT win-x64 binary publish sonucunu dogrular
+# 📌 Modul - CI YAML
+# Version: 0.6.0
+# Aciklama: Windows platform kodu ile native bootstrap artifactini gercek Windows runner uzerinde kalite kapisindan gecirir
+# Bagimli Oldugu Katman: Tool
+
+name: Windows Bootstrap CI
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  windows-bootstrap:
+    runs-on: windows-2025
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore Windows solution
+        run: dotnet restore TurkuazInstaller.Windows.slnx
+
+      - name: Build Windows solution
+        run: dotnet build TurkuazInstaller.Windows.slnx --configuration Release --no-restore
+
+      - name: Publish NativeAOT bootstrap
+        run: dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/bootstrapper/win-x64
+
+      - name: Verify bootstrap executable
+        shell: pwsh
+        run: |
+          $path = "artifacts/bootstrapper/win-x64/TurkuazInstaller.Bootstrapper.exe"
+          if (-not (Test-Path $path)) {
+            throw "NativeAOT bootstrap executable was not produced."
+          }
+
+      - name: Upload bootstrap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurkuazInstaller-Bootstrapper-win-x64
+          path: artifacts/bootstrapper/win-x64/
+          if-no-files-found: error
