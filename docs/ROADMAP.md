@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 1.0.4
+# Version: 1.1.0
 # Aciklama: Stable Community kod tamamlanma durumunu, production signing dis bagimliliklarini ve sonraki minor surumleri ayri takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -70,13 +70,31 @@ Asagidaki maddeler repository gelistirmesi degil, production Azure/GitHub hesap 
 - [x] NSIS replacement migration adimlari
 - [x] full package + rollback + uninstall kabul kriterleri
 
-## v1.1 Sonrasi
+## v1.1.0 - Replacement Readiness
 
-Bunlar v1.0.0 Stable Community blocker degildir:
+Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlanacak P1 katmani:
 
-- [ ] CLI View/Controller
+- [x] Authenticode publisher subject pinning
+- [x] optional certificate SHA-256 pinning
+- [x] package-scoped cross-process operation lock
+- [x] crash/reboot operation journal
+- [x] structured JSONL diagnostic log
+- [ ] detached signed manifest trust
+- [ ] prerequisite auto-install
+- [ ] generic prerequisite detection engine
+- [ ] reboot/resume orchestration
+- [ ] CLI/silent mode
+- [ ] bootstrap self-update discovery/download
+
+## v1.2 Sonrasi
+
 - [ ] private GitHub/Gitea credential adapters
+- [ ] proxy support
 - [ ] installed-app catalog/list UI
 - [ ] richer update discovery UX
+- [ ] background update policy
+- [ ] version skip/pinning
+- [ ] safe Windows integration actions
+- [ ] branding/localization extensions
 - [ ] optional delta optimization behind Package Engine
 - [ ] native ARM64 distribution

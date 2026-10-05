@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Manifests/InstallerManifestReader.cs
 // 📌 Amac: Community installer manifest YAML metnini tam typed PackageRelease modeline donusturur
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
-// Aciklama: Package, artifact, Authenticode, install policy, prerequisite, preserve path ve rollback alanlarini runtime modeline tasir
+// Version: 1.1.0
+// Aciklama: Package, artifact, Authenticode publisher pinning, install policy, prerequisite, preserve path ve rollback alanlarini runtime modeline tasir
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -178,13 +178,22 @@ public sealed class InstallerManifestReader
             return null;
         }
 
+        if (string.IsNullOrWhiteSpace(
+                signature.PublisherSubject))
+        {
+            throw new FormatException(
+                "Authenticode signature policy requires publisher_subject.");
+        }
+
         return signature.Algorithm
             .Trim()
             .ToLowerInvariant() switch
         {
             AuthenticodeAlgorithm =>
                 new ArtifactSignatureDescriptor(
-                    ArtifactSignatureAlgorithm.Authenticode),
+                    ArtifactSignatureAlgorithm.Authenticode,
+                    signature.PublisherSubject,
+                    signature.CertificateSha256),
             _ =>
                 throw new FormatException(
                     "Installer manifest artifact signature algorithm is not supported.")
@@ -237,6 +246,11 @@ public sealed class InstallerManifestReader
     {
         public string Algorithm { get; init; } =
             string.Empty;
+
+        public string PublisherSubject { get; init; } =
+            string.Empty;
+
+        public string? CertificateSha256 { get; init; }
     }
 
     private sealed class InstallSection

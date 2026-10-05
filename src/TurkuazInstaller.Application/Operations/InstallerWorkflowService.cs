@@ -1,16 +1,19 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
-// 📌 Amac: Download, prerequisite, verification, staging, package mutation ve state adimlarini installer use-case'lerinde koordine eder
+// 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.0.0
-// Aciklama: Manifest install policy, optional Authenticode, preserve paths ve uninstall state davranisini gercek runtime akisina baglar
+// Version: 1.1.0
+// Aciklama: Publisher-pinned verification, package lock ve crash journal/log checkpointlerini tum mutasyon operasyonlarina uygular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Contracts.Artifacts;
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Contracts.System;
+using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Plans;
+using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Domain.State;
 
@@ -52,6 +55,9 @@ public sealed class InstallerWorkflowService
     private readonly IInstallStateRepository _stateRepository;
     private readonly IArtifactSignatureVerifier? _signatureVerifier;
     private readonly ISystemPrerequisiteProbe? _prerequisiteProbe;
+    private readonly IInstallerOperationLock? _operationLock;
+    private readonly IInstallerOperationJournalRepository? _operationJournal;
+    private readonly IInstallerEventLogger? _eventLogger;
 
     public InstallerWorkflowService(
         IArtifactDownloader artifactDownloader,
@@ -59,7 +65,10 @@ public sealed class InstallerWorkflowService
         IPackageEngine packageEngine,
         IInstallStateRepository stateRepository,
         IArtifactSignatureVerifier? signatureVerifier = null,
-        ISystemPrerequisiteProbe? prerequisiteProbe = null)
+        ISystemPrerequisiteProbe? prerequisiteProbe = null,
+        IInstallerOperationLock? operationLock = null,
+        IInstallerOperationJournalRepository? operationJournal = null,
+        IInstallerEventLogger? eventLogger = null)
     {
         _artifactDownloader = artifactDownloader;
         _artifactVerifier = artifactVerifier;
@@ -67,9 +76,12 @@ public sealed class InstallerWorkflowService
         _stateRepository = stateRepository;
         _signatureVerifier = signatureVerifier;
         _prerequisiteProbe = prerequisiteProbe;
+        _operationLock = operationLock;
+        _operationJournal = operationJournal;
+        _eventLogger = eventLogger;
     }
 
-    public async Task InstallAsync(
+    public Task InstallAsync(
         PackageRelease release,
         string targetPath,
         string stagingDirectory,
@@ -79,47 +91,69 @@ public sealed class InstallerWorkflowService
         ArgumentNullException.ThrowIfNull(release);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
 
-        await ValidatePrerequisitesAsync(
-                release,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        var stage = await PrepareStageAsync(
-                release,
-                stagingDirectory,
-                progress,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        Report(
-            progress,
-            InstallerProgressStage.Applying,
-            ApplyPercent);
-
-        var plan = new InstallPlan(
-            release,
+        return ExecuteTrackedAsync(
+            release.PackageId,
+            InstallerOperationType.Install,
+            release.Version.ToString(),
             targetPath,
-            release.Install.Prerequisites,
-            release.Install.PreservePaths);
+            cancellationToken,
+            async operation =>
+            {
+                await ValidatePrerequisitesAsync(
+                        release,
+                        operation,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        await _packageEngine
-            .ApplyAsync(
-                plan,
-                stage,
-                cancellationToken)
-            .ConfigureAwait(false);
+                var stage =
+                    await PrepareStageAsync(
+                            release,
+                            stagingDirectory,
+                            progress,
+                            operation,
+                            cancellationToken)
+                        .ConfigureAwait(false);
 
-        await SaveStateAsync(
-                release,
-                targetPath,
-                progress,
-                cancellationToken)
-            .ConfigureAwait(false);
+                await operation
+                    .SetPhaseAsync(
+                        InstallerOperationPhase.Applying,
+                        "package.applying",
+                        "Package apply started.",
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        ReportCompleted(progress);
+                Report(
+                    progress,
+                    InstallerProgressStage.Applying,
+                    ApplyPercent);
+
+                var plan =
+                    new InstallPlan(
+                        release,
+                        targetPath,
+                        release.Install.Prerequisites,
+                        release.Install.PreservePaths);
+
+                await _packageEngine
+                    .ApplyAsync(
+                        plan,
+                        stage,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                await SaveStateAsync(
+                        release,
+                        targetPath,
+                        progress,
+                        operation,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                ReportCompleted(progress);
+            });
     }
 
-    public async Task UpdateAsync(
+    public Task UpdateAsync(
         PackageRelease release,
         InstalledPackageState currentState,
         string stagingDirectory,
@@ -129,59 +163,81 @@ public sealed class InstallerWorkflowService
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(currentState);
 
-        if (release.PackageId != currentState.PackageId)
-        {
-            throw new InvalidOperationException(
-                UpdatePackageMismatch);
-        }
-
-        if (release.Version <= currentState.Version)
-        {
-            throw new InvalidOperationException(
-                UpdateVersionInvalid);
-        }
-
-        await ValidatePrerequisitesAsync(
-                release,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        var stage = await PrepareStageAsync(
-                release,
-                stagingDirectory,
-                progress,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        Report(
-            progress,
-            InstallerProgressStage.Applying,
-            ApplyPercent);
-
-        var plan = new InstallPlan(
-            release,
+        return ExecuteTrackedAsync(
+            release.PackageId,
+            InstallerOperationType.Update,
+            release.Version.ToString(),
             currentState.TargetPath,
-            release.Install.Prerequisites,
-            release.Install.PreservePaths);
+            cancellationToken,
+            async operation =>
+            {
+                if (release.PackageId != currentState.PackageId)
+                {
+                    throw new InvalidOperationException(
+                        UpdatePackageMismatch);
+                }
 
-        await _packageEngine
-            .ApplyAsync(
-                plan,
-                stage,
-                cancellationToken)
-            .ConfigureAwait(false);
+                if (release.Version <= currentState.Version)
+                {
+                    throw new InvalidOperationException(
+                        UpdateVersionInvalid);
+                }
 
-        await SaveStateAsync(
-                release,
-                currentState.TargetPath,
-                progress,
-                cancellationToken)
-            .ConfigureAwait(false);
+                await ValidatePrerequisitesAsync(
+                        release,
+                        operation,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        ReportCompleted(progress);
+                var stage =
+                    await PrepareStageAsync(
+                            release,
+                            stagingDirectory,
+                            progress,
+                            operation,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                await operation
+                    .SetPhaseAsync(
+                        InstallerOperationPhase.Applying,
+                        "package.updating",
+                        "Package update apply started.",
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                Report(
+                    progress,
+                    InstallerProgressStage.Applying,
+                    ApplyPercent);
+
+                var plan =
+                    new InstallPlan(
+                        release,
+                        currentState.TargetPath,
+                        release.Install.Prerequisites,
+                        release.Install.PreservePaths);
+
+                await _packageEngine
+                    .ApplyAsync(
+                        plan,
+                        stage,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                await SaveStateAsync(
+                        release,
+                        currentState.TargetPath,
+                        progress,
+                        operation,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                ReportCompleted(progress);
+            });
     }
 
-    public async Task RepairAsync(
+    public Task RepairAsync(
         PackageRelease release,
         InstalledPackageState currentState,
         string stagingDirectory,
@@ -191,47 +247,65 @@ public sealed class InstallerWorkflowService
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(currentState);
 
-        if (
-            release.PackageId != currentState.PackageId ||
-            !release.Version.Equals(
-                currentState.Version))
-        {
-            throw new InvalidOperationException(
-                RepairReleaseMismatch);
-        }
+        return ExecuteTrackedAsync(
+            release.PackageId,
+            InstallerOperationType.Repair,
+            release.Version.ToString(),
+            currentState.TargetPath,
+            cancellationToken,
+            async operation =>
+            {
+                if (
+                    release.PackageId != currentState.PackageId ||
+                    !release.Version.Equals(
+                        currentState.Version))
+                {
+                    throw new InvalidOperationException(
+                        RepairReleaseMismatch);
+                }
 
-        await ValidatePrerequisitesAsync(
-                release,
-                cancellationToken)
-            .ConfigureAwait(false);
+                await ValidatePrerequisitesAsync(
+                        release,
+                        operation,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        var stage = await PrepareStageAsync(
-                release,
-                stagingDirectory,
-                progress,
-                cancellationToken)
-            .ConfigureAwait(false);
+                var stage =
+                    await PrepareStageAsync(
+                            release,
+                            stagingDirectory,
+                            progress,
+                            operation,
+                            cancellationToken)
+                        .ConfigureAwait(false);
 
-        Report(
-            progress,
-            InstallerProgressStage.Applying,
-            ApplyPercent);
+                await operation
+                    .SetPhaseAsync(
+                        InstallerOperationPhase.Applying,
+                        "package.repairing",
+                        "Package repair apply started.",
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        var plan = new RepairPlan(
-            release,
-            currentState.TargetPath);
+                Report(
+                    progress,
+                    InstallerProgressStage.Applying,
+                    ApplyPercent);
 
-        await _packageEngine
-            .RepairAsync(
-                plan,
-                stage,
-                cancellationToken)
-            .ConfigureAwait(false);
+                await _packageEngine
+                    .RepairAsync(
+                        new RepairPlan(
+                            release,
+                            currentState.TargetPath),
+                        stage,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        ReportCompleted(progress);
+                ReportCompleted(progress);
+            });
     }
 
-    public async Task RollbackAsync(
+    public Task RollbackAsync(
         PackageRelease currentRelease,
         PackageRelease previousRelease,
         InstalledPackageState currentState,
@@ -243,103 +317,227 @@ public sealed class InstallerWorkflowService
         ArgumentNullException.ThrowIfNull(previousRelease);
         ArgumentNullException.ThrowIfNull(currentState);
 
-        if (
-            currentRelease.PackageId != currentState.PackageId ||
-            !currentRelease.Version.Equals(
-                currentState.Version))
-        {
-            throw new InvalidOperationException(
-                CurrentReleaseMismatch);
-        }
+        return ExecuteTrackedAsync(
+            currentRelease.PackageId,
+            InstallerOperationType.Rollback,
+            previousRelease.Version.ToString(),
+            currentState.TargetPath,
+            cancellationToken,
+            async operation =>
+            {
+                if (
+                    currentRelease.PackageId != currentState.PackageId ||
+                    !currentRelease.Version.Equals(
+                        currentState.Version))
+                {
+                    throw new InvalidOperationException(
+                        CurrentReleaseMismatch);
+                }
 
-        if (!currentRelease.Rollback.Supported)
-        {
-            throw new InvalidOperationException(
-                RollbackDisabled);
-        }
+                if (!currentRelease.Rollback.Supported)
+                {
+                    throw new InvalidOperationException(
+                        RollbackDisabled);
+                }
 
-        await ValidatePrerequisitesAsync(
-                previousRelease,
-                cancellationToken)
-            .ConfigureAwait(false);
+                await ValidatePrerequisitesAsync(
+                        previousRelease,
+                        operation,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        var stage = await PrepareStageAsync(
-                previousRelease,
-                stagingDirectory,
-                progress,
-                cancellationToken)
-            .ConfigureAwait(false);
+                var stage =
+                    await PrepareStageAsync(
+                            previousRelease,
+                            stagingDirectory,
+                            progress,
+                            operation,
+                            cancellationToken)
+                        .ConfigureAwait(false);
 
-        Report(
-            progress,
-            InstallerProgressStage.Applying,
-            ApplyPercent);
+                await operation
+                    .SetPhaseAsync(
+                        InstallerOperationPhase.Applying,
+                        "package.rolling_back",
+                        "Package rollback apply started.",
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        var plan = new RollbackPlan(
-            currentRelease,
-            previousRelease,
-            currentState.TargetPath);
+                Report(
+                    progress,
+                    InstallerProgressStage.Applying,
+                    ApplyPercent);
 
-        await _packageEngine
-            .RollbackAsync(
-                plan,
-                stage,
-                cancellationToken)
-            .ConfigureAwait(false);
+                await _packageEngine
+                    .RollbackAsync(
+                        new RollbackPlan(
+                            currentRelease,
+                            previousRelease,
+                            currentState.TargetPath),
+                        stage,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        await SaveStateAsync(
-                previousRelease,
-                currentState.TargetPath,
-                progress,
-                cancellationToken)
-            .ConfigureAwait(false);
+                await SaveStateAsync(
+                        previousRelease,
+                        currentState.TargetPath,
+                        progress,
+                        operation,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        ReportCompleted(progress);
+                ReportCompleted(progress);
+            });
     }
 
-    public async Task UninstallAsync(
+    public Task UninstallAsync(
         InstalledPackageState currentState,
         IProgress<InstallerOperationProgress>? progress,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(currentState);
 
-        Report(
-            progress,
-            InstallerProgressStage.Uninstalling,
-            ApplyPercent);
-
-        var plan = new UninstallPlan(
+        return ExecuteTrackedAsync(
             currentState.PackageId,
-            currentState.Version,
-            currentState.TargetPath);
+            InstallerOperationType.Uninstall,
+            currentState.Version.ToString(),
+            currentState.TargetPath,
+            cancellationToken,
+            async operation =>
+            {
+                await operation
+                    .SetPhaseAsync(
+                        InstallerOperationPhase.Applying,
+                        "package.uninstalling",
+                        "Package uninstall started.",
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
-        await _packageEngine
-            .UninstallAsync(
-                plan,
+                Report(
+                    progress,
+                    InstallerProgressStage.Uninstalling,
+                    ApplyPercent);
+
+                await _packageEngine
+                    .UninstallAsync(
+                        new UninstallPlan(
+                            currentState.PackageId,
+                            currentState.Version,
+                            currentState.TargetPath),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                await operation
+                    .SetPhaseAsync(
+                        InstallerOperationPhase.RemovingState,
+                        "state.removing",
+                        "Installed package state removal started.",
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                Report(
+                    progress,
+                    InstallerProgressStage.RemovingState,
+                    SavePercent);
+
+                await _stateRepository
+                    .DeleteAsync(
+                        currentState.PackageId,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                ReportCompleted(progress);
+            });
+    }
+
+    private async Task ExecuteTrackedAsync(
+        PackageId packageId,
+        InstallerOperationType operationType,
+        string? version,
+        string targetPath,
+        CancellationToken cancellationToken,
+        Func<InstallerOperationContext, Task> operation)
+    {
+        await using var operationLease =
+            await AcquireOperationLockAsync(
+                    packageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        var context =
+            await InstallerOperationContext
+                .StartAsync(
+                    packageId,
+                    operationType,
+                    version,
+                    targetPath,
+                    _operationJournal,
+                    _eventLogger,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        try
+        {
+            await operation(context)
+                .ConfigureAwait(false);
+
+            await context
+                .CompleteAsync(
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            await context
+                .CancelAsync(
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await context
+                .FailAsync(
+                    exception,
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
+            throw;
+        }
+    }
+
+    private async Task<IAsyncDisposable> AcquireOperationLockAsync(
+        PackageId packageId,
+        CancellationToken cancellationToken)
+    {
+        if (_operationLock is null)
+        {
+            return NoopAsyncDisposable.Instance;
+        }
+
+        return await _operationLock
+            .AcquireAsync(
+                packageId,
                 cancellationToken)
             .ConfigureAwait(false);
-
-        Report(
-            progress,
-            InstallerProgressStage.RemovingState,
-            SavePercent);
-
-        await _stateRepository
-            .DeleteAsync(
-                currentState.PackageId,
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        ReportCompleted(progress);
     }
 
     private async Task<PackageStage> PrepareStageAsync(
         PackageRelease release,
         string stagingDirectory,
         IProgress<InstallerOperationProgress>? progress,
+        InstallerOperationContext operation,
         CancellationToken cancellationToken)
     {
+        await operation
+            .SetPhaseAsync(
+                InstallerOperationPhase.Downloading,
+                "artifact.downloading",
+                "Artifact download started.",
+                cancellationToken)
+            .ConfigureAwait(false);
+
         Report(
             progress,
             InstallerProgressStage.Downloading,
@@ -352,6 +550,14 @@ public sealed class InstallerWorkflowService
                     stagingDirectory,
                     cancellationToken)
                 .ConfigureAwait(false);
+
+        await operation
+            .SetPhaseAsync(
+                InstallerOperationPhase.Verifying,
+                "artifact.verifying",
+                "Artifact integrity and signature verification started.",
+                cancellationToken)
+            .ConfigureAwait(false);
 
         Report(
             progress,
@@ -375,6 +581,14 @@ public sealed class InstallerWorkflowService
         await VerifySignatureAsync(
                 release,
                 downloadedPath,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await operation
+            .SetPhaseAsync(
+                InstallerOperationPhase.Staging,
+                "artifact.staging",
+                "Verified artifact staging started.",
                 cancellationToken)
             .ConfigureAwait(false);
 
@@ -428,8 +642,17 @@ public sealed class InstallerWorkflowService
 
     private async Task ValidatePrerequisitesAsync(
         PackageRelease release,
+        InstallerOperationContext operation,
         CancellationToken cancellationToken)
     {
+        await operation
+            .SetPhaseAsync(
+                InstallerOperationPhase.ValidatingPrerequisites,
+                "prerequisite.validating",
+                "Prerequisite validation started.",
+                cancellationToken)
+            .ConfigureAwait(false);
+
         if (
             release.Install.Prerequisites.Count == 0)
         {
@@ -469,8 +692,17 @@ public sealed class InstallerWorkflowService
         PackageRelease release,
         string targetPath,
         IProgress<InstallerOperationProgress>? progress,
+        InstallerOperationContext operation,
         CancellationToken cancellationToken)
     {
+        await operation
+            .SetPhaseAsync(
+                InstallerOperationPhase.SavingState,
+                "state.saving",
+                "Installed package state save started.",
+                cancellationToken)
+            .ConfigureAwait(false);
+
         Report(
             progress,
             InstallerProgressStage.SavingState,
@@ -505,5 +737,17 @@ public sealed class InstallerWorkflowService
             new InstallerOperationProgress(
                 stage,
                 percent));
+    }
+
+    private sealed class NoopAsyncDisposable
+        : IAsyncDisposable
+    {
+        public static NoopAsyncDisposable Instance { get; } =
+            new();
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
+        }
     }
 }

@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/InstallerManifestReaderTests.cs
 // 📌 Amac: YAML installer manifest parserinin Stable v1 typed Domain sonucunu dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
+// Version: 1.1.0
 // Aciklama: Package, artifact, signature, install policy, prerequisite, preserve path ve rollback alanlarini test eder
 //
 // Bagimli Oldugu Katman: Tool | Service
@@ -52,6 +52,10 @@ public sealed class InstallerManifestReaderTests
             release.Artifact.Signature.Algorithm);
 
         Assert.Equal(
+            "CN=Example Software",
+            release.Artifact.Signature.PublisherSubject);
+
+        Assert.Equal(
             PackageInstallMode.Full,
             release.Install.Mode);
 
@@ -81,6 +85,26 @@ public sealed class InstallerManifestReaderTests
 
         Assert.True(
             release.Rollback.PreviousVersionRequired);
+    }
+
+    [Fact]
+    public void Read_RejectsAuthenticodeWithoutPublisherSubject()
+    {
+        var reader =
+            new InstallerManifestReader();
+
+        var yaml =
+            ProviderTestData
+                .Manifest(
+                    ReleaseChannel.Stable,
+                    "2.4.0")
+                .Replace(
+                    "    publisher_subject: \"CN=Example Software\"",
+                    string.Empty,
+                    StringComparison.Ordinal);
+
+        Assert.Throws<FormatException>(
+            () => reader.Read(yaml));
     }
 
     [Fact]

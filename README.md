@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim, kullanim ve release durumu giris dokumani
 # 📌 Modul - Markdown
-# Version: 1.0.3
+# Version: 1.1.0
 # Aciklama: Stable Community kod tamamlanma durumunu, combined distribution modelini ve production signing dis bagimliligini ozetler
 
 Bagimli Oldugu Katman: View
@@ -19,7 +19,11 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum, guncelle
 - Paket motorundan bagimsiz Core
 - Velopack Package Engine adapteri
 - SHA-256 artifact dogrulamasi
-- optional Authenticode artifact verification
+- Authenticode artifact verification + publisher pinning
+- optional certificate SHA-256 pinning
+- package-scoped cross-process operation lock
+- crash/reboot operation journal
+- structured JSONL diagnostics
 - Windows prerequisite kontrolu
 - Stable ve beta release kanallari
 - Community ve Pro katmanlarinin ayni Core kontratlarini kullanmasi
@@ -69,6 +73,20 @@ app/
 Kullanici TurkuazInstaller.Bootstrapper.exe calistirir.
 
 Bootstrap prerequisite ve self-update handoff kontrollerinden sonra app/TurkuazInstaller.WinUI.exe dosyasini baslatir.
+
+## v1.1 Replacement Readiness
+
+Rakip installer analizi sonrasi ilk v1.1 guvenilirlik paketi:
+
+- publisher pinning
+- optional certificate pinning
+- concurrent package operation lock
+- crash journal
+- structured diagnostics
+
+tamamlanmistir.
+
+Kalan P1 maddeleri docs/ROADMAP.md icinde takip edilir.
 
 ## Production Release Durumu
 
