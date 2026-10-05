@@ -563,11 +563,12 @@ public sealed class InstallerWorkflowService
         CancellationToken cancellationToken)
     {
         if (
-            resumeEntry.Phase !=
-            InstallerOperationPhase.AwaitingReboot)
+            resumeEntry.Phase is not
+                InstallerOperationPhase.AwaitingReboot and not
+                InstallerOperationPhase.RebootResumeArmed)
         {
             throw new InvalidOperationException(
-                "Installer operation can only resume from AwaitingReboot phase.");
+                "Installer operation can only resume from a reboot-safe checkpoint phase.");
         }
 
         if (
