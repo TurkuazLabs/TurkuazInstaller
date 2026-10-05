@@ -1,22 +1,35 @@
 # 📄 Dosya Yolu: /docs/RELEASE_CHECKLIST.md
 # 📌 Amac: TurkuazInstaller Stable Community release oncesi zorunlu teknik ve operasyonel kontrolleri siralar
 # 📌 Modul - Markdown
-# Version: 1.0.2
-# Aciklama: CI, reproducibility, immutable OIDC, signing preflight, attestation, recovery, security ve release asset kontrollerini tek checklistte toplar
+# Version: 1.0.3
+# Aciklama: Kod kalite kapilari ile Azure/GitHub production signing operasyonlarini ayri checklist gruplarinda takip eder
 # Bagimli Oldugu Katman: Tool | Config | View
 
 # Stable Release Checklist
 
-Release oncesi:
+## Kod ve Dagitim Kalitesi
 
 - [x] main Core CI yesil
 - [x] main Contract Validation yesil
 - [x] main Windows Desktop CI yesil
 - [x] main Stable Readiness CI yesil
+- [x] main Velopack E2E yesil
+- [x] main Signing Tooling Validation yesil
+- [x] bootstrap orchestration testleri yesil
+- [x] real install/update/repair/rollback/uninstall E2E yesil
+- [x] combined bootstrap + app/WinUI distribution olusuyor
 - [x] iki temiz publish agaci SHA-256 olarak birebir
-- [x] deterministic release ZIP kalite kapisi yesil
+- [x] deterministic combined release ZIP kalite kapisi yesil
+- [x] recovery testleri yesil
+- [x] security review acik P1/P2 bulgu icermiyor
 - [x] production signing bootstrap tooling repository icinde
 - [x] immutable OIDC subject ve production environment modeli tanimli
+- [x] project integration ve NSIS migration standardi tanimli
+
+## Production Signing ve Yayin
+
+Bu bolum hesap/kayit islemleridir ve kod gelistirmesinden ayri tutulur.
+
 - [ ] Azure Artifact Signing account olusturuldu
 - [ ] identity validation Azure Portal'da tamamlandi
 - [ ] production certificate profile active
@@ -28,9 +41,7 @@ Release oncesi:
 - [ ] release EXE ve DLL Authenticode verification basarili
 - [ ] SHA256SUMS.txt olustu
 - [ ] release ZIP GitHub artifact attestation olustu
-- [x] recovery testleri yesil
-- [x] security review acik P1/P2 bulgu icermiyor
 - [ ] release notes olustu
 - [ ] release assetleri indirilebilir
 
-Bu checklist tamamlanmadan stable tag release tamamlanmis kabul edilmez.
+Production signing bolumu tamamlanmadan signed v1.0.0 GitHub Release yayinlanmis kabul edilmez.
