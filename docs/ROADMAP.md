@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 0.7.0
-# Aciklama: Core, Providers, Package Engine, Windows Bootstrap, WinUI 3 ve Stable Community fazlarini teknik sirayla tanimlar
+# Version: 1.0.0
+# Aciklama: Stable Community kod ve production release gate durumunu ayri olarak takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
 # Roadmap
@@ -65,10 +65,18 @@
 - [x] JSON install state repository
 - [x] self-contained WinUI Windows CI
 
-## v1.0.0 - Stable Community
+## v1.0.0 - Stable Community Code
 
-- [ ] signed release pipeline
-- [ ] reproducible package validation
-- [ ] installer recovery tests
-- [ ] security review
-- [ ] documentation
+- [x] signed release pipeline
+- [x] reproducible package validation
+- [x] installer recovery tests
+- [x] security review
+- [x] documentation
+
+## v1.0.0 - Production Release Gate
+
+- [ ] Azure Artifact Signing OIDC identity connected
+- [ ] production certificate profile configured
+- [ ] Stable Readiness CI green on release commit
+- [ ] signed v1.0.0 tag workflow green
+- [ ] GitHub Release published
