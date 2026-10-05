@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Cli.Tests/CliServiceTests.cs
 // 📌 Amac: CLI Service terminal durumlarini deterministic process exit kodlarina map etmeyi test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Success, invalid invocation, reboot required ve runtime failure exit-code davranislarini kapsar
+// Version: 1.1.0
+// Aciklama: Success, invalid invocation, reboot, cancellation ve runtime failure exit-code davranislarini kapsar
 //
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -96,6 +96,37 @@ public sealed class CliServiceTests
 
         Assert.Equal(
             CliExitCode.RebootRequired,
+            result);
+    }
+
+    [Fact]
+    public async Task RunAsync_CancelledOperation_ReturnsCancelledExitCode()
+    {
+        var runtime =
+            new StubRuntimeService
+            {
+                Exception =
+                    new OperationCanceledException()
+            };
+
+        var service =
+            new CliService(
+                new CliCommandParser(),
+                runtime);
+
+        var result =
+            await service.RunAsync(
+                new[]
+                {
+                    "uninstall",
+                    "--package",
+                    "example-app",
+                    "--silent"
+                },
+                CancellationToken.None);
+
+        Assert.Equal(
+            CliExitCode.Cancelled,
             result);
     }
 
