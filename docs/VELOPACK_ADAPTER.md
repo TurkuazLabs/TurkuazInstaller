@@ -1,85 +1,72 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_ADAPTER.md
 # 📌 Amac: Merkezi TurkuazInstaller ile Velopack arasindaki adapter sinirini ve runtime kontratini tanimlamak
 # 📌 Modul - Markdown
-# Version: 0.5.0
-# Aciklama: Setup.exe ve Update.exe CLI entegrasyonunu, staging guvenligini ve preserve path politikasini dokumante eder
+# Version: 1.0.0
+# Aciklama: Setup.exe ve Update.exe install/update/repair/rollback/uninstall CLI entegrasyonunu ve staging guvenligini dokumante eder
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 # Velopack Adapter
 
-TurkuazInstaller merkezi bir installer oldugu icin baska uygulamalari kurar ve gunceller.
+TurkuazInstaller merkezi bir installer oldugu icin baska uygulamalari kurar, gunceller, onarir, geri alir ve kaldirir.
 
-Bu nedenle uygulama-ici self-update modeli yerine Velopack tarafindan uretilen executable kontrati kullanilir:
-
-- ilk kurulum icin `Setup.exe`
-- mevcut kurulum update, repair ve rollback islemleri icin kurulum rootundaki `Update.exe`
-- update, repair ve rollback artifacti olarak full `.nupkg`
-
-## Staging
-
-Package Engine yalniz daha once verification katmanindan gecmis artifacti kabul eder.
-
-Stage akisi:
-
-1. artifact dosyasinin varligi kontrol edilir
-2. manifest artifact URI extension degerinden Velopack artifact turu belirlenir
-3. staging root altinda benzersiz operasyon klasoru olusturulur
-4. artifact once `.partial` dosyasina kopyalanir
-5. ayni klasor icinde atomic rename ile final staged dosya olusturulur
-6. typed `PackageStage` dondurulur
-
-Generated path staging root disina cikarsa islem reddedilir.
+Stable v1 manifest yalniz full payload modeli kullanir.
 
 ## Initial Install
-
-Setup artifact apply komutu:
 
 ```text
 Setup.exe --silent --installto <target>
 ```
 
-Argumentlar shell stringi olarak birlestirilmez. `ProcessStartInfo.ArgumentList` ile ayri argumentlar olarak calistirilir.
+## Update / Repair / Rollback
 
-## Update
-
-Full package apply komutu:
+Full nupkg once install root packages klasorune atomik olarak kopyalanir.
 
 ```text
 Update.exe --silent --rootDir <target> --packageDir <target>/packages apply --norestart --package <full.nupkg>
 ```
 
-Staged nupkg once install root altindaki `packages` klasorune atomic replace ile kopyalanir.
+Repair ayni surum full package ile calisir.
 
-## Repair
+Rollback previous release full package ile calisir.
 
-Repair ayni release icin dogrulanmis full nupkg artifactini tekrar `Update.exe apply` akisi ile uygular.
+## Uninstall
 
-Setup executable repair artifacti olarak kabul edilmez.
+Resmi Velopack uninstall kontrati kullanilir:
 
-## Rollback
+```text
+Update.exe --silent --rootDir <target> uninstall
+```
 
-Rollback yalniz `RollbackPlan.PreviousRelease` ile birebir eslesen staged full nupkg artifactini kabul eder.
+Package Engine basarisizsa install state silinmez.
 
-Yanlis package id veya yanlis version staged artifact reddedilir.
+## Staging
+
+Package Engine yalniz verification katmanindan gecmis artifacti stage eder.
+
+- benzersiz operation directory
+- .partial copy
+- atomic rename
+- package id/version ile typed PackageStage
+- staging root containment
+
+kurallari uygulanir.
 
 ## Preserve Paths
 
-Velopack aktif uygulama dosyalarini `current` klasorunde yonetir.
+Manifest preserve_paths degerleri install/update planina gercek olarak tasinir.
 
-TurkuazInstaller Community preserve policy:
+Policy:
 
-- preserve path install rootuna gore relative olmalidir
+- path install rootuna gore relative olmalidir
 - path traversal yasaktir
-- kalici uygulama verisi `current` disinda tutulmalidir
-- `current` altindaki preserve path reddedilir
-- adapter install rootundaki diger veri klasorlerini silmez
-
-Bu kural update ve rollback sirasinda kalici veri ile executable payload sinirini net tutar.
+- current altindaki preserve path reddedilir
 
 ## Process Boundary
 
-Harici executable cagirilari `IProcessRunner` portu uzerinden yapilir.
+Tum Velopack cagrilari IProcessRunner uzerinden shell kullanmadan ProcessStartInfo.ArgumentList ile calistirilir.
 
-Gercek adapter `SystemProcessRunner` kullanir. Unit testler fake process runner ile calisir ve gercek Setup.exe veya Update.exe baslatmaz.
+Non-zero exit code typed PackageEngineException olarak yukari tasinir.
 
-Non-zero process exit code typed `PackageEngineException` olarak yukari tasinir.
+Unit testler CLI argument contractini FakeProcessRunner ile dogrular.
+
+Gercek Velopack E2E testi Stable v1 final kalite kapisinda ayrica calistirilacaktir.
