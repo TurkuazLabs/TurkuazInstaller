@@ -17,6 +17,54 @@ namespace TurkuazInstaller.Infrastructure.Tests;
 public sealed class JsonInstallStateRepositoryTests
 {
     [Fact]
+    public async Task DeleteAsync_RemovesCommittedState()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "TurkuazInstallerStateTests",
+            Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var repository =
+                new JsonInstallStateRepository(
+                    new JsonInstallStateRepositoryOptions(
+                        root));
+
+            var packageId =
+                PackageId.Parse("example-app");
+
+            await repository.SaveAsync(
+                new InstalledPackageState(
+                    packageId,
+                    SemanticVersion.Parse("1.0.0"),
+                    ReleaseChannel.Stable,
+                    "C:/Apps/Example"),
+                CancellationToken.None);
+
+            await repository.DeleteAsync(
+                packageId,
+                CancellationToken.None);
+
+            var loaded =
+                await repository.GetAsync(
+                    packageId,
+                    CancellationToken.None);
+
+            Assert.Null(loaded);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(
+                    root,
+                    recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task SaveAsync_ThenGetAsync_RoundTripsLatestStateWithoutTempFile()
     {
         var root = Path.Combine(
