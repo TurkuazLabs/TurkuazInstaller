@@ -183,6 +183,49 @@ public sealed class InstallerRecoveryTests
             stateRepository.CurrentState?.Version);
     }
 
+    [Fact]
+    public async Task UninstallAsync_Success_RemovesInstalledState()
+    {
+        var packageId =
+            PackageId.Parse("example-app");
+
+        var currentState =
+            new InstalledPackageState(
+                packageId,
+                SemanticVersion.Parse("1.0.0"),
+                ReleaseChannel.Stable,
+                "C:/Apps/Example");
+
+        var engine =
+            new TrackingPackageEngine();
+
+        var stateRepository =
+            new TrackingStateRepository(
+                currentState);
+
+        var service =
+            CreateService(
+                engine,
+                stateRepository,
+                VerificationResult.Passed());
+
+        await service.UninstallAsync(
+            currentState,
+            null,
+            CancellationToken.None);
+
+        Assert.Equal(
+            1,
+            engine.UninstallCalls);
+
+        Assert.Equal(
+            1,
+            stateRepository.DeleteCalls);
+
+        Assert.Null(
+            stateRepository.CurrentState);
+    }
+
     private static InstallerWorkflowService CreateService(
         TrackingPackageEngine engine,
         TrackingStateRepository repository,
@@ -210,7 +253,11 @@ public sealed class InstallerRecoveryTests
                         "https://example.invalid/",
                         fileName)),
                 ArtifactDigest.ParseSha256(Digest),
-                1024));
+                1024),
+            PackageInstallPolicy.LegacyDefault,
+            new PackageRollbackPolicy(
+                Supported: true,
+                PreviousVersionRequired: true));
     }
 
     private sealed class StubDownloader
@@ -253,6 +300,8 @@ public sealed class InstallerRecoveryTests
         public int StageCalls { get; private set; }
 
         public int ApplyCalls { get; private set; }
+
+        public int UninstallCalls { get; private set; }
 
         public Exception? ApplyException { get; init; }
 
@@ -322,6 +371,7 @@ public sealed class InstallerRecoveryTests
             UninstallPlan plan,
             CancellationToken cancellationToken)
         {
+            UninstallCalls++;
             return Task.CompletedTask;
         }
     }
@@ -336,6 +386,8 @@ public sealed class InstallerRecoveryTests
         }
 
         public int SaveCalls { get; private set; }
+
+        public int DeleteCalls { get; private set; }
 
         public InstalledPackageState? CurrentState { get; private set; }
 
@@ -360,6 +412,7 @@ public sealed class InstallerRecoveryTests
             PackageId packageId,
             CancellationToken cancellationToken)
         {
+            DeleteCalls++;
             CurrentState = null;
             return Task.CompletedTask;
         }
