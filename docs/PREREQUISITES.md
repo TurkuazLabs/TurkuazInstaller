@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/PREREQUISITES.md
 # 📌 Amac: TurkuazInstaller prerequisite detection ve guvenli auto-install mimarisini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.1
-# Aciklama: Detector registry, signed installer verification, explicit elevation ve post-install re-probe kurallarini sabitler
+# Version: 1.1.0
+# Aciklama: Detector registry, signed installer verification, typed reboot checkpoint ve post-install re-probe kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 # Prerequisite Engine
@@ -68,11 +68,24 @@ Bu zincirde hash veya signature dogrulamasi atlanamaz.
 
 ## Reboot Siniri
 
-Windows installer exit code 1641 veya 3010 donerse mevcut v1.1 runtime islemi basarili saymaz.
+Windows installer exit code 1641 veya 3010 donerse Tool katmani bunu generic failure olarak gizlemez.
 
-Reboot/resume orchestration ayri P1 maddesidir.
+Typed sonuc uretilir:
 
-Bu ozellik tamamlanana kadar reboot isteyen prerequisite auto-install fail-closed durur ve ana paket apply edilmez.
+- 3010: RebootRequired
+- 1641: RebootInitiated
+
+Application workflow bu sonucu aldiginda:
+
+1. journal phase degerini AwaitingReboot olarak kalici yazar
+2. operation.awaiting_reboot structured eventini yazar
+3. prerequisite post-install re-probe adimini reboot sonrasina birakir
+4. ana package staging/apply adimini baslatmaz
+5. normal failure checkpointi yazmaz
+
+Bu davranis reboot/resume P1 maddesinin guvenli checkpoint temelidir.
+
+Kalan kisim, reboot sonrasinda original signed manifest requestini guvenli bicimde yeniden kurup otomatik resume etmektir. Roadmap maddesi bu nedenle henuz tamamlanmis sayilmaz.
 
 ## Manifest Ornegi
 
