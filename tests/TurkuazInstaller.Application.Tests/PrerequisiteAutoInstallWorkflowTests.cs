@@ -143,8 +143,11 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
             journal.DeleteCalls);
     }
 
-    [Fact]
-    public async Task InstallAsync_ResumeAfterReboot_ReprobesWithoutReinstalling()
+    [Theory]
+    [InlineData(InstallerOperationPhase.AwaitingReboot)]
+    [InlineData(InstallerOperationPhase.RebootResumeArmed)]
+    public async Task InstallAsync_ResumeCheckpoint_ReprobesWithoutReinstalling(
+        InstallerOperationPhase resumePhase)
     {
         var probe =
             new SequencedPrerequisiteProbe(
@@ -181,7 +184,7 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
                 InstallerOperationType.Install,
                 release.Version.ToString(),
                 "C:/Apps/Example",
-                InstallerOperationPhase.AwaitingReboot,
+                resumePhase,
                 now,
                 now,
                 null,
@@ -200,8 +203,11 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
             packageEngine.ApplyCalls);
     }
 
-    [Fact]
-    public async Task InstallAsync_ResumeAfterRebootStillUnsatisfied_DoesNotReinstall()
+    [Theory]
+    [InlineData(InstallerOperationPhase.AwaitingReboot)]
+    [InlineData(InstallerOperationPhase.RebootResumeArmed)]
+    public async Task InstallAsync_ResumeCheckpointStillUnsatisfied_DoesNotReinstall(
+        InstallerOperationPhase resumePhase)
     {
         var probe =
             new SequencedPrerequisiteProbe(
@@ -240,7 +246,7 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
                         InstallerOperationType.Install,
                         release.Version.ToString(),
                         "C:/Apps/Example",
-                        InstallerOperationPhase.AwaitingReboot,
+                        resumePhase,
                         now,
                         now,
                         null,
