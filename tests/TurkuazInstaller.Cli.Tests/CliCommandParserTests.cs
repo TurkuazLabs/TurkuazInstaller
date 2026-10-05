@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Cli.Tests/CliCommandParserTests.cs
 // 📌 Amac: CLI command-line contractini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Install, silent resume, channel, required option ve duplicate rejection kurallarini kapsar
+// Version: 1.1.0
+// Aciklama: Install, silent resume, channel, required/operation-specific option ve duplicate rejection kurallarini kapsar
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -116,6 +116,42 @@ public sealed class CliCommandParserTests
                             "example-app",
                             "--package",
                             "example-app"
+                        }));
+    }
+
+    [Fact]
+    public void Parse_UpdateWithTarget_RejectsInvocation()
+    {
+        Assert.Throws<FormatException>(
+            () =>
+                new CliCommandParser()
+                    .Parse(
+                        new[]
+                        {
+                            "update",
+                            "--package",
+                            "example-app",
+                            "--manifest",
+                            "https://example.invalid/current.yml",
+                            "--target",
+                            "C:/Apps/Other"
+                        }));
+    }
+
+    [Fact]
+    public void Parse_UninstallWithManifest_RejectsInvocation()
+    {
+        Assert.Throws<FormatException>(
+            () =>
+                new CliCommandParser()
+                    .Parse(
+                        new[]
+                        {
+                            "uninstall",
+                            "--package",
+                            "example-app",
+                            "--manifest",
+                            "https://example.invalid/current.yml"
                         }));
     }
 
