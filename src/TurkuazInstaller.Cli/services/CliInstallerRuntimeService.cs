@@ -245,9 +245,14 @@ internal sealed class CliInstallerRuntimeService
                     cancellationToken)
                 .ConfigureAwait(false);
 
-        ValidateExpectedResumeRelease(
-            resumeRequest,
-            release);
+        if (
+            resumeRequest.Operation !=
+            InstallerOperationType.Rollback)
+        {
+            ValidateExpectedResumeRelease(
+                resumeRequest,
+                release);
+        }
 
         var stagingRoot =
             CreateOperationStagingRoot();
