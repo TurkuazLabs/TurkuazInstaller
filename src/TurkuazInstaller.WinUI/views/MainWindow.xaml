@@ -1,0 +1,184 @@
+<!--
+# 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
+# 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
+# 📌 Modul - View XAML
+# Version: 0.7.1
+# Aciklama: Paket kaynagi, install/update/repair/rollback islemleri, progress, error ve recovery UX'ini tek pencerede sunar
+
+Bagimli Oldugu Katman: View | Controller | Language
+-->
+<Window
+    x:Class="TurkuazInstaller.WinUI.Views.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid
+        x:Name="MainRoot"
+        Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <ScrollViewer>
+            <Grid
+                Padding="32"
+                RowSpacing="24">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <StackPanel
+                    Grid.Row="0"
+                    Spacing="6">
+                    <TextBlock
+                        Text="{Binding HeaderTitle}"
+                        FontSize="32"
+                        FontWeight="SemiBold" />
+                    <TextBlock
+                        Text="{Binding HeaderSubtitle}"
+                        FontSize="15"
+                        Opacity="0.72" />
+                </StackPanel>
+
+                <Grid
+                    Grid.Row="1"
+                    Margin="0,8,0,0"
+                    ColumnSpacing="20">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border
+                        Grid.Column="0"
+                        Padding="24"
+                        CornerRadius="16"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                        <StackPanel Spacing="14">
+                            <TextBlock
+                                Text="{Binding SourceTitle}"
+                                FontSize="18"
+                                FontWeight="SemiBold" />
+
+                            <TextBox
+                                Header="{Binding PackageIdLabel}"
+                                Text="{Binding PackageIdText, Mode=TwoWay}" />
+
+                            <ComboBox
+                                Header="{Binding ChannelLabel}"
+                                ItemsSource="{Binding ChannelOptions}"
+                                SelectedIndex="{Binding SelectedChannelIndex, Mode=TwoWay}" />
+
+                            <TextBox
+                                Header="{Binding ManifestSourceLabel}"
+                                Text="{Binding ManifestSource, Mode=TwoWay}"
+                                PlaceholderText="{Binding ManifestPlaceholder}" />
+
+                            <TextBox
+                                Header="{Binding RollbackManifestSourceLabel}"
+                                Text="{Binding RollbackManifestSource, Mode=TwoWay}"
+                                PlaceholderText="{Binding RollbackManifestPlaceholder}" />
+
+                            <TextBox
+                                Header="{Binding TargetPathLabel}"
+                                Text="{Binding TargetPath, Mode=TwoWay}" />
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel
+                        Grid.Column="1"
+                        Spacing="20">
+                        <Border
+                            Padding="24"
+                            CornerRadius="16"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <StackPanel Spacing="12">
+                                <TextBlock
+                                    Text="{Binding OperationsTitle}"
+                                    FontSize="18"
+                                    FontWeight="SemiBold" />
+
+                                <Button
+                                    Content="{Binding InstallLabel}"
+                                    IsEnabled="{Binding CanRun}"
+                                    HorizontalAlignment="Stretch"
+                                    Click="Install_Click" />
+                                <Button
+                                    Content="{Binding UpdateLabel}"
+                                    IsEnabled="{Binding CanRun}"
+                                    HorizontalAlignment="Stretch"
+                                    Click="Update_Click" />
+                                <Button
+                                    Content="{Binding RepairLabel}"
+                                    IsEnabled="{Binding CanRun}"
+                                    HorizontalAlignment="Stretch"
+                                    Click="Repair_Click" />
+                                <Button
+                                    Content="{Binding RollbackLabel}"
+                                    IsEnabled="{Binding CanRun}"
+                                    HorizontalAlignment="Stretch"
+                                    Click="Rollback_Click" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border
+                            Padding="24"
+                            CornerRadius="16"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <StackPanel Spacing="12">
+                                <TextBlock
+                                    Text="{Binding StatusTitle}"
+                                    FontSize="18"
+                                    FontWeight="SemiBold" />
+                                <TextBlock
+                                    Text="{Binding StatusMessage}"
+                                    TextWrapping="Wrap" />
+                                <ProgressBar
+                                    Minimum="0"
+                                    Maximum="100"
+                                    Value="{Binding ProgressValue}" />
+                                <InfoBar
+                                    IsOpen="{Binding HasError}"
+                                    Severity="Error"
+                                    Message="{Binding ErrorMessage}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border
+                            Padding="24"
+                            CornerRadius="16"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <StackPanel Spacing="10">
+                                <TextBlock
+                                    Text="{Binding RecoveryTitle}"
+                                    FontSize="18"
+                                    FontWeight="SemiBold" />
+                                <Grid ColumnSpacing="10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button
+                                        Grid.Column="0"
+                                        Content="{Binding RetryLabel}"
+                                        IsEnabled="{Binding CanRetry}"
+                                        HorizontalAlignment="Stretch"
+                                        Click="Retry_Click" />
+                                    <Button
+                                        Grid.Column="1"
+                                        Content="{Binding CancelLabel}"
+                                        IsEnabled="{Binding CanCancel}"
+                                        HorizontalAlignment="Stretch"
+                                        Click="Cancel_Click" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock
+                    Grid.Row="2"
+                    Text="{Binding FooterLabel}"
+                    HorizontalAlignment="Right"
+                    Opacity="0.55" />
+            </Grid>
+        </ScrollViewer>
+    </Grid>
+</Window>

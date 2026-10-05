@@ -1,11 +1,11 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
-# 📌 Amac: Windows bootstrap projelerini build eder ve NativeAOT win-x64 binary publish sonucunu dogrular
+# 📌 Amac: Windows bootstrap ve WinUI 3 desktop projelerini build/publish ederek gercek Windows artefactlarini dogrular
 # 📌 Modul - CI YAML
-# Version: 0.6.0
-# Aciklama: Windows platform kodu ile native bootstrap artifactini gercek Windows runner uzerinde kalite kapisindan gecirir
+# Version: 0.7.0
+# Aciklama: NativeAOT bootstrap ile self-contained unpackaged WinUI 3 uygulamasini Windows runner uzerinde kalite kapisindan gecirir
 # Bagimli Oldugu Katman: Tool
 
-name: Windows Bootstrap CI
+name: Windows Desktop CI
 
 on:
   push:
@@ -21,9 +21,9 @@ permissions:
   contents: read
 
 jobs:
-  windows-bootstrap:
+  windows-desktop:
     runs-on: windows-2025
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -51,9 +51,27 @@ jobs:
             throw "NativeAOT bootstrap executable was not produced."
           }
 
+      - name: Publish WinUI desktop
+        run: dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/winui/win-x64
+
+      - name: Verify WinUI executable
+        shell: pwsh
+        run: |
+          $path = "artifacts/winui/win-x64/TurkuazInstaller.WinUI.exe"
+          if (-not (Test-Path $path)) {
+            throw "WinUI desktop executable was not produced."
+          }
+
       - name: Upload bootstrap artifact
         uses: actions/upload-artifact@v4
         with:
           name: TurkuazInstaller-Bootstrapper-win-x64
           path: artifacts/bootstrapper/win-x64/
+          if-no-files-found: error
+
+      - name: Upload WinUI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurkuazInstaller-WinUI-win-x64
+          path: artifacts/winui/win-x64/
           if-no-files-found: error

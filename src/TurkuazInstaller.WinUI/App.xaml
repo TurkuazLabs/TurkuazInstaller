@@ -1,0 +1,17 @@
+<!--
+# 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/App.xaml
+# 📌 Amac: TurkuazInstaller WinUI uygulamasinin global XAML kaynaklarini tanimlar
+# 📌 Modul - View XAML
+# Version: 0.7.1
+# Aciklama: WinUI Application rootunu ve varsayilan kaynak sozluklerini olusturur
+
+Bagimli Oldugu Katman: View
+-->
+<Application
+    x:Class="TurkuazInstaller.WinUI.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Application.Resources>
+        <ResourceDictionary />
+    </Application.Resources>
+</Application>

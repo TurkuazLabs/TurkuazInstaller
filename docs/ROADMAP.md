@@ -1,9 +1,9 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 0.6.0
-# Aciklama: Core, Providers, Package Engine, Windows Bootstrap ve sonraki WinUI fazlarini teknik sirayla tanimlar
-# Bagimli Oldugu Katman: Service | Repo | Tool | View | Config
+# Version: 0.7.0
+# Aciklama: Core, Providers, Package Engine, Windows Bootstrap, WinUI 3 ve Stable Community fazlarini teknik sirayla tanimlar
+# Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
 # Roadmap
 
@@ -55,10 +55,15 @@
 
 ## v0.7.0 - WinUI 3
 
-- [ ] ViewModel
-- [ ] install/update/repair/rollback UI
-- [ ] progress/events
-- [ ] error/recovery UX
+- [x] ViewModel
+- [x] install/update/repair/rollback UI
+- [x] progress/events
+- [x] error/recovery UX
+- [x] real Application workflow wiring
+- [x] HTTPS/file artifact download
+- [x] SHA-256 runtime verification
+- [x] JSON install state repository
+- [x] self-contained WinUI Windows CI
 
 ## v1.0.0 - Stable Community
 
