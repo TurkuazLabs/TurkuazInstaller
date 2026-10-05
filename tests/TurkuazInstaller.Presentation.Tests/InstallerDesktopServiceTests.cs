@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/InstallerDesktopServiceTests.cs
 // 📌 Amac: InstallerDesktopService progress, success ve recovery state davranisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Progress event sirasi ve terminal completed state'inin gec callback ile geriye sarilmadigini framework bagimsiz test eder
+// Version: 1.1.0
+// Aciklama: Progress, reboot resume startup ve terminal UI state davranislarini framework bagimsiz test eder
 //
 // Bagimli Oldugu Katman: Service | View
 
 using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Presentation.Language;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
@@ -24,7 +25,8 @@ public sealed class InstallerDesktopServiceTests
 
         using var service = new InstallerDesktopService(
             viewModel,
-            runtime);
+            runtime,
+            new InstallerResumeLaunchParser());
 
         await service.RunAsync(
             InstallerOperationKind.Install);
@@ -49,7 +51,8 @@ public sealed class InstallerDesktopServiceTests
 
         using var service = new InstallerDesktopService(
             viewModel,
-            runtime);
+            runtime,
+            new InstallerResumeLaunchParser());
 
         await service.RunAsync(
             InstallerOperationKind.Update);
@@ -74,12 +77,47 @@ public sealed class InstallerDesktopServiceTests
 
         using var service = new InstallerDesktopService(
             viewModel,
-            runtime);
+            runtime,
+            new InstallerResumeLaunchParser());
 
         await service.RunAsync(
             InstallerOperationKind.Repair);
 
         Assert.Equal(100, viewModel.ProgressValue);
+        Assert.Equal(
+            InstallerUiLabels.Completed,
+            viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public async Task StartAsync_RebootResumeArgument_InvokesRuntimeResume()
+    {
+        var viewModel =
+            CreateViewModel();
+
+        var runtime =
+            new StubRuntimeService();
+
+        using var service =
+            new InstallerDesktopService(
+                viewModel,
+                runtime,
+                new InstallerResumeLaunchParser());
+
+        await service.StartAsync(
+            new[]
+            {
+                "--resume-package",
+                "example-app"
+            });
+
+        Assert.NotNull(
+            runtime.ResumedPackageId);
+
+        Assert.Equal(
+            "example-app",
+            runtime.ResumedPackageId!.Value);
+
         Assert.Equal(
             InstallerUiLabels.Completed,
             viewModel.StatusMessage);
@@ -100,7 +138,8 @@ public sealed class InstallerDesktopServiceTests
         using var service =
             new InstallerDesktopService(
                 viewModel,
-                runtime);
+                runtime,
+                new InstallerResumeLaunchParser());
 
         await service.RunAsync(
             InstallerOperationKind.Uninstall);
@@ -136,6 +175,8 @@ public sealed class InstallerDesktopServiceTests
 
         public InstallerDesktopRequest? LastRequest { get; private set; }
 
+        public PackageId? ResumedPackageId { get; private set; }
+
         public Task ExecuteAsync(
             InstallerDesktopRequest request,
             IProgress<InstallerOperationProgress> progress,
@@ -152,6 +193,21 @@ public sealed class InstallerDesktopServiceTests
             {
                 throw Exception;
             }
+
+            progress.Report(
+                new InstallerOperationProgress(
+                    InstallerProgressStage.Completed,
+                    100));
+
+            return Task.CompletedTask;
+        }
+
+        public Task ResumeAsync(
+            PackageId packageId,
+            IProgress<InstallerOperationProgress> progress,
+            CancellationToken cancellationToken)
+        {
+            ResumedPackageId = packageId;
 
             progress.Report(
                 new InstallerOperationProgress(

@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiLabels.cs
 // 📌 Amac: TurkuazInstaller masaustu arayuzundeki kullanici metinlerini merkezi Language katmaninda tanimlar
 // 📌 Modul - Language CSharp
-// Version: 1.0.0
-// Aciklama: Install, update, repair, rollback, uninstall ve manifest target UX metinlerini tek katalogda tutar
+// Version: 1.1.0
+// Aciklama: Install, update, repair, rollback, uninstall ve reboot resume UX metinlerini tek katalogda tutar
 //
 // Bagimli Oldugu Katman: Language
 
@@ -55,6 +55,8 @@ public static class InstallerUiLabels
         "Islem basariyla tamamlandi";
     public const string Cancelled =
         "Islem iptal edildi";
+    public const string RebootRequired =
+        "Onkosul kurulumu tamamlandi; devam etmek icin Windows yeniden baslatilmali";
 
     public const string PackageIdRequired =
         "Paket kimligi zorunludur.";

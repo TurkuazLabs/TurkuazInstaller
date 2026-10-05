@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsPrerequisiteInstaller.cs
 // 📌 Amac: Dogrulanmis prerequisite installer executable dosyasini normal veya explicit UAC elevation ile calistirir
 // 📌 Modul - Tool CSharp
-// Version: 1.1.1
-// Aciklama: Yalniz dogrudan EXE calistirir, shell-free argument listesi kullanir ve reboot-required sonucunu fail-closed dondurur
+// Version: 1.2.0
+// Aciklama: Yalniz dogrudan EXE calistirir, shell-free argument listesi kullanir ve reboot sonucunu typed olarak dondurur
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -29,7 +29,7 @@ public sealed class WindowsPrerequisiteInstaller
         _elevatedProcessRunner = elevatedProcessRunner;
     }
 
-    public async Task InstallAsync(
+    public async Task<PrerequisiteInstallResult> InstallAsync(
         string verifiedInstallerPath,
         PrerequisiteInstallAction installAction,
         CancellationToken cancellationToken)
@@ -93,9 +93,8 @@ public sealed class WindowsPrerequisiteInstaller
                     "Prerequisite installer elevation was cancelled.");
             }
 
-            ValidateExitCode(
+            return ValidateExitCode(
                 elevatedResult.ExitCode);
-            return;
         }
 
         var result =
@@ -108,11 +107,11 @@ public sealed class WindowsPrerequisiteInstaller
                     cancellationToken)
                 .ConfigureAwait(false);
 
-        ValidateExitCode(
+        return ValidateExitCode(
             result.ExitCode);
     }
 
-    private static void ValidateExitCode(
+    private static PrerequisiteInstallResult ValidateExitCode(
         int? exitCode)
     {
         if (exitCode is null)
@@ -121,12 +120,18 @@ public sealed class WindowsPrerequisiteInstaller
                 "Prerequisite installer did not return an exit code.");
         }
 
-        if (
-            exitCode is RebootInitiatedExitCode or
-            RebootRequiredExitCode)
+        if (exitCode == RebootInitiatedExitCode)
         {
-            throw new InvalidOperationException(
-                "Prerequisite installer requires a reboot; reboot/resume orchestration is not available yet.");
+            return new PrerequisiteInstallResult(
+                PrerequisiteInstallDisposition.RebootInitiated,
+                exitCode.Value);
+        }
+
+        if (exitCode == RebootRequiredExitCode)
+        {
+            return new PrerequisiteInstallResult(
+                PrerequisiteInstallDisposition.RebootRequired,
+                exitCode.Value);
         }
 
         if (exitCode != SuccessExitCode)
@@ -138,5 +143,8 @@ public sealed class WindowsPrerequisiteInstaller
                         System.Globalization.CultureInfo.InvariantCulture),
                     "."));
         }
+
+        return PrerequisiteInstallResult.Completed(
+            exitCode.Value);
     }
 }

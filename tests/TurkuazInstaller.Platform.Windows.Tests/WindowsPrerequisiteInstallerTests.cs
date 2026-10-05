@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Platform.Windows.Tests/WindowsPrerequisiteInstallerTests.cs
 // 📌 Amac: Windows prerequisite installer normal process, UAC ve reboot fail-closed davranislarini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.1
-// Aciklama: ArgumentList aktarimi, explicit elevation, UAC iptali ve reboot-required exit kodlarini kapsar
+// Version: 1.2.0
+// Aciklama: ArgumentList, explicit elevation, UAC iptali ve typed 1641/3010 reboot sonuclarini kapsar
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -168,7 +168,7 @@ public sealed class WindowsPrerequisiteInstallerTests
     }
 
     [Fact]
-    public async Task InstallAsync_RebootRequired_FailsClosed()
+    public async Task InstallAsync_RebootRequired_ReturnsTypedResult()
     {
         var installer =
             new WindowsPrerequisiteInstaller(
@@ -187,13 +187,67 @@ public sealed class WindowsPrerequisiteInstallerTests
 
         try
         {
-            await Assert.ThrowsAsync<InvalidOperationException>(
-                () =>
-                    installer.InstallAsync(
-                        path,
-                        CreateInstallAction(
-                            requiresElevation: false),
-                        CancellationToken.None));
+            var result =
+                await installer.InstallAsync(
+                    path,
+                    CreateInstallAction(
+                        requiresElevation: false),
+                    CancellationToken.None);
+
+            Assert.Equal(
+                PrerequisiteInstallDisposition.RebootRequired,
+                result.Disposition);
+
+            Assert.Equal(
+                3010,
+                result.ExitCode);
+
+            Assert.True(
+                result.RequiresReboot);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_RebootInitiated_ReturnsTypedResult()
+    {
+        var installer =
+            new WindowsPrerequisiteInstaller(
+                new StubProcessRunner(
+                    new ProcessResult(
+                        1641,
+                        string.Empty,
+                        string.Empty)),
+                new StubElevatedProcessRunner(
+                    new ElevationResult(
+                        ElevationStatus.Completed,
+                        0)));
+
+        var path =
+            CreateTemporaryExecutable();
+
+        try
+        {
+            var result =
+                await installer.InstallAsync(
+                    path,
+                    CreateInstallAction(
+                        requiresElevation: false),
+                    CancellationToken.None);
+
+            Assert.Equal(
+                PrerequisiteInstallDisposition.RebootInitiated,
+                result.Disposition);
+
+            Assert.Equal(
+                1641,
+                result.ExitCode);
+
+            Assert.True(
+                result.RequiresReboot);
         }
         finally
         {

@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
-// 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve pencere gorunumunu baslatir
+// 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.0.0
-// Aciklama: View code-behind is kurali tutmadan install/update/repair/rollback/uninstall eventlerini Controller'a delege eder
+// Version: 1.1.0
+// Aciklama: View code-behind is kurali tutmadan startup/install/update/repair/rollback/uninstall eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
 
@@ -19,22 +19,49 @@ public sealed partial class MainWindow : Window
 {
     private readonly MainWindowController _controller;
     private readonly InstallerDesktopService _desktopService;
+    private readonly IReadOnlyList<string> _startupArguments;
+    private bool _startupHandled;
 
     public MainWindow(
         MainWindowViewModel viewModel,
         MainWindowController controller,
-        InstallerDesktopService desktopService)
+        InstallerDesktopService desktopService,
+        IReadOnlyList<string> startupArguments)
     {
         InitializeComponent();
 
+        ArgumentNullException.ThrowIfNull(
+            startupArguments);
+
         _controller = controller;
         _desktopService = desktopService;
+        _startupArguments =
+            Array.AsReadOnly(
+                startupArguments.ToArray());
 
         MainRoot.DataContext = viewModel;
         Title = viewModel.WindowTitle;
 
         ResizeWindow();
+        Activated += OnActivated;
         Closed += OnClosed;
+    }
+
+    private async void OnActivated(
+        object sender,
+        WindowActivatedEventArgs args)
+    {
+        if (_startupHandled)
+        {
+            return;
+        }
+
+        _startupHandled = true;
+
+        await _controller
+            .StartAsync(
+                _startupArguments)
+            .ConfigureAwait(true);
     }
 
     private async void Install_Click(

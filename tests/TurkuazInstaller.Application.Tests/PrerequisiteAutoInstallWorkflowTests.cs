@@ -1,17 +1,19 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/PrerequisiteAutoInstallWorkflowTests.cs
 // 📌 Amac: Eksik prerequisite auto-install, verification ve zorunlu post-install re-probe akisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.1
-// Aciklama: Guvenli prerequisite install basarisi, policy eksigi ve re-probe basarisizligi durumlarinda package apply sinirini test eder
+// Version: 1.4.0
+// Aciklama: Guvenli prerequisite install, RunOnce scheduler cleanup/retention, reboot checkpoint ve post-reboot re-probe sinirlarini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Contracts.Artifacts;
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Contracts.System;
 using TurkuazInstaller.Domain.Artifacts;
+using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Plans;
 using TurkuazInstaller.Domain.Prerequisites;
 using TurkuazInstaller.Domain.Products;
@@ -41,11 +43,16 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
         var packageEngine =
             new TrackingPackageEngine();
 
+        var scheduler =
+            new StubRebootResumeScheduler();
+
         var service =
             CreateService(
                 probe,
                 prerequisiteInstaller,
-                packageEngine);
+                packageEngine,
+                rebootResumeScheduler:
+                    scheduler);
 
         await service.InstallAsync(
             CreateRelease(
@@ -65,6 +72,265 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
 
         Assert.Equal(
             1,
+            packageEngine.ApplyCalls);
+
+        Assert.Equal(
+            1,
+            scheduler.ScheduleCalls);
+
+        Assert.Equal(
+            1,
+            scheduler.CancelCalls);
+    }
+
+    [Fact]
+    public async Task InstallAsync_RebootRequired_StopsBeforeReprobeAndApply()
+    {
+        var probe =
+            new SequencedPrerequisiteProbe(
+                false,
+                true);
+
+        var prerequisiteInstaller =
+            new TrackingPrerequisiteInstaller(
+                new PrerequisiteInstallResult(
+                    PrerequisiteInstallDisposition.RebootRequired,
+                    3010));
+
+        var packageEngine =
+            new TrackingPackageEngine();
+
+        var journal =
+            new TrackingOperationJournal();
+
+        var scheduler =
+            new StubRebootResumeScheduler();
+
+        var service =
+            CreateService(
+                probe,
+                prerequisiteInstaller,
+                packageEngine,
+                journal,
+                scheduler);
+
+        var exception =
+            await Assert.ThrowsAsync<InstallerRebootRequiredException>(
+                () =>
+                    service.InstallAsync(
+                        CreateRelease(
+                            includeInstallAction: true),
+                        "C:/Apps/Example",
+                        "C:/Temp/TurkuazInstaller",
+                        null,
+                        CancellationToken.None));
+
+        Assert.Equal(
+            PrerequisiteIds.DotNetDesktopRuntime,
+            exception.PrerequisiteId);
+
+        Assert.Equal(
+            3010,
+            exception.ExitCode);
+
+        Assert.Equal(
+            1,
+            probe.Calls);
+
+        Assert.Equal(
+            1,
+            prerequisiteInstaller.Calls);
+
+        Assert.Equal(
+            0,
+            packageEngine.ApplyCalls);
+
+        Assert.NotNull(
+            journal.CurrentEntry);
+
+        Assert.Equal(
+            InstallerOperationPhase.AwaitingReboot,
+            journal.CurrentEntry!.Phase);
+
+        Assert.Null(
+            journal.CurrentEntry.Failure);
+
+        Assert.Equal(
+            0,
+            journal.DeleteCalls);
+
+        Assert.Equal(
+            1,
+            scheduler.ScheduleCalls);
+
+        Assert.Equal(
+            0,
+            scheduler.CancelCalls);
+    }
+
+    [Fact]
+    public async Task InstallAsync_PrerequisiteInstallerFailure_CancelsScheduledResume()
+    {
+        var probe =
+            new SequencedPrerequisiteProbe(
+                false);
+
+        var packageEngine =
+            new TrackingPackageEngine();
+
+        var scheduler =
+            new StubRebootResumeScheduler();
+
+        var service =
+            CreateService(
+                probe,
+                new ThrowingPrerequisiteInstaller(),
+                packageEngine,
+                rebootResumeScheduler:
+                    scheduler);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                service.InstallAsync(
+                    CreateRelease(
+                        includeInstallAction: true),
+                    "C:/Apps/Example",
+                    "C:/Temp/TurkuazInstaller",
+                    null,
+                    CancellationToken.None));
+
+        Assert.Equal(
+            1,
+            scheduler.ScheduleCalls);
+
+        Assert.Equal(
+            1,
+            scheduler.CancelCalls);
+
+        Assert.Equal(
+            0,
+            packageEngine.ApplyCalls);
+    }
+
+    [Theory]
+    [InlineData(InstallerOperationPhase.AwaitingReboot)]
+    [InlineData(InstallerOperationPhase.RebootResumeArmed)]
+    public async Task InstallAsync_ResumeCheckpoint_ReprobesWithoutReinstalling(
+        InstallerOperationPhase resumePhase)
+    {
+        var probe =
+            new SequencedPrerequisiteProbe(
+                true);
+
+        var prerequisiteInstaller =
+            new TrackingPrerequisiteInstaller();
+
+        var packageEngine =
+            new TrackingPackageEngine();
+
+        var release =
+            CreateRelease(
+                includeInstallAction: true);
+
+        var service =
+            CreateService(
+                probe,
+                prerequisiteInstaller,
+                packageEngine);
+
+        var now =
+            DateTimeOffset.UtcNow;
+
+        await service.InstallAsync(
+            release,
+            "C:/Apps/Example",
+            "C:/Temp/TurkuazInstaller",
+            null,
+            CancellationToken.None,
+            new InstallerOperationJournalEntry(
+                Guid.NewGuid(),
+                release.PackageId,
+                InstallerOperationType.Install,
+                release.Version.ToString(),
+                "C:/Apps/Example",
+                resumePhase,
+                now,
+                now,
+                null,
+                PrerequisiteIds.DotNetDesktopRuntime));
+
+        Assert.Equal(
+            1,
+            probe.Calls);
+
+        Assert.Equal(
+            0,
+            prerequisiteInstaller.Calls);
+
+        Assert.Equal(
+            1,
+            packageEngine.ApplyCalls);
+    }
+
+    [Theory]
+    [InlineData(InstallerOperationPhase.AwaitingReboot)]
+    [InlineData(InstallerOperationPhase.RebootResumeArmed)]
+    public async Task InstallAsync_ResumeCheckpointStillUnsatisfied_DoesNotReinstall(
+        InstallerOperationPhase resumePhase)
+    {
+        var probe =
+            new SequencedPrerequisiteProbe(
+                false);
+
+        var prerequisiteInstaller =
+            new TrackingPrerequisiteInstaller();
+
+        var packageEngine =
+            new TrackingPackageEngine();
+
+        var release =
+            CreateRelease(
+                includeInstallAction: true);
+
+        var service =
+            CreateService(
+                probe,
+                prerequisiteInstaller,
+                packageEngine);
+
+        var now =
+            DateTimeOffset.UtcNow;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                service.InstallAsync(
+                    release,
+                    "C:/Apps/Example",
+                    "C:/Temp/TurkuazInstaller",
+                    null,
+                    CancellationToken.None,
+                    new InstallerOperationJournalEntry(
+                        Guid.NewGuid(),
+                        release.PackageId,
+                        InstallerOperationType.Install,
+                        release.Version.ToString(),
+                        "C:/Apps/Example",
+                        resumePhase,
+                        now,
+                        now,
+                        null,
+                        PrerequisiteIds.DotNetDesktopRuntime)));
+
+        Assert.Equal(
+            1,
+            probe.Calls);
+
+        Assert.Equal(
+            0,
+            prerequisiteInstaller.Calls);
+
+        Assert.Equal(
+            0,
             packageEngine.ApplyCalls);
     }
 
@@ -186,7 +452,9 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
     private static InstallerWorkflowService CreateService(
         ISystemPrerequisiteProbe prerequisiteProbe,
         IPrerequisiteInstaller prerequisiteInstaller,
-        TrackingPackageEngine packageEngine)
+        TrackingPackageEngine packageEngine,
+        IInstallerOperationJournalRepository? operationJournal = null,
+        IRebootResumeScheduler? rebootResumeScheduler = null)
     {
         return new InstallerWorkflowService(
             new StubDownloader(),
@@ -197,8 +465,13 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
                 new StubSignatureVerifier(),
             prerequisiteProbe:
                 prerequisiteProbe,
+            operationJournal:
+                operationJournal,
             prerequisiteInstaller:
-                prerequisiteInstaller);
+                prerequisiteInstaller,
+            rebootResumeScheduler:
+                rebootResumeScheduler
+                ?? new StubRebootResumeScheduler());
     }
 
     private static PackageRelease CreateRelease(
@@ -306,15 +579,39 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
     private sealed class TrackingPrerequisiteInstaller
         : IPrerequisiteInstaller
     {
+        private readonly PrerequisiteInstallResult _result;
+
+        public TrackingPrerequisiteInstaller(
+            PrerequisiteInstallResult? result = null)
+        {
+            _result =
+                result
+                ?? PrerequisiteInstallResult.Completed();
+        }
+
         public int Calls { get; private set; }
 
-        public Task InstallAsync(
+        public Task<PrerequisiteInstallResult> InstallAsync(
             string verifiedInstallerPath,
             PrerequisiteInstallAction installAction,
             CancellationToken cancellationToken)
         {
             Calls++;
-            return Task.CompletedTask;
+            return Task.FromResult(
+                _result);
+        }
+    }
+
+    private sealed class ThrowingPrerequisiteInstaller
+        : IPrerequisiteInstaller
+    {
+        public Task<PrerequisiteInstallResult> InstallAsync(
+            string verifiedInstallerPath,
+            PrerequisiteInstallAction installAction,
+            CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException(
+                "Simulated prerequisite installer failure.");
         }
     }
 
@@ -405,6 +702,67 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
             UninstallPlan plan,
             CancellationToken cancellationToken)
         {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TrackingOperationJournal
+        : IInstallerOperationJournalRepository
+    {
+        public InstallerOperationJournalEntry? CurrentEntry
+        {
+            get;
+            private set;
+        }
+
+        public int DeleteCalls { get; private set; }
+
+        public Task<InstallerOperationJournalEntry?> GetAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(
+                CurrentEntry);
+        }
+
+        public Task SaveAsync(
+            InstallerOperationJournalEntry entry,
+            CancellationToken cancellationToken)
+        {
+            CurrentEntry = entry;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            DeleteCalls++;
+            CurrentEntry = null;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StubRebootResumeScheduler
+        : IRebootResumeScheduler
+    {
+        public int ScheduleCalls { get; private set; }
+
+        public int CancelCalls { get; private set; }
+
+        public Task ScheduleAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            ScheduleCalls++;
+            return Task.CompletedTask;
+        }
+
+        public Task CancelAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            CancelCalls++;
             return Task.CompletedTask;
         }
     }

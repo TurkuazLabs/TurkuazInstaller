@@ -1,20 +1,22 @@
-// 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Operations/JsonOperationJournalRepository.cs
-// 📌 Amac: Package bazli installer operation journal snapshotini atomik JSON dosyasinda saklar
+// 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Operations/JsonInstallerResumeRequestRepository.cs
+// 📌 Amac: Package bazli reboot resume request snapshotini atomik JSON dosyasinda saklar
 // 📌 Modul - Repo CSharp
-// Version: 1.2.0
-// Aciklama: Domain value objectlerini explicit DTO ile serialize eder ve reboot prerequisite checkpointini geri okuyabilir
+// Version: 1.0.0
+// Aciklama: Signed manifest yeniden cozumleme bilgisi ve expected release kimligini reboot boyunca kalici tutar
 //
 // Bagimli Oldugu Katman: Repo
 
 using System.Text.Json;
 using TurkuazInstaller.Contracts.Operations;
+using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Products;
+using TurkuazInstaller.Domain.Releases;
 
 namespace TurkuazInstaller.Infrastructure.Operations;
 
-public sealed class JsonOperationJournalRepository
-    : IInstallerOperationJournalRepository
+public sealed class JsonInstallerResumeRequestRepository
+    : IInstallerResumeRequestRepository
 {
     private const string JsonExtension = ".json";
     private const string TemporarySuffix = ".tmp";
@@ -25,19 +27,20 @@ public sealed class JsonOperationJournalRepository
             WriteIndented = true
         };
 
-    private readonly JsonOperationJournalRepositoryOptions _options;
+    private readonly JsonInstallerResumeRequestRepositoryOptions _options;
 
-    public JsonOperationJournalRepository(
-        JsonOperationJournalRepositoryOptions options)
+    public JsonInstallerResumeRequestRepository(
+        JsonInstallerResumeRequestRepositoryOptions options)
     {
         _options = options;
     }
 
-    public async Task<InstallerOperationJournalEntry?> GetAsync(
+    public async Task<InstallerResumeRequest?> GetAsync(
         PackageId packageId,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(packageId);
+        ArgumentNullException.ThrowIfNull(
+            packageId);
 
         var path =
             GetPath(
@@ -60,7 +63,7 @@ public sealed class JsonOperationJournalRepository
 
         var document =
             await JsonSerializer
-                .DeserializeAsync<JournalDocument>(
+                .DeserializeAsync<ResumeDocument>(
                     stream,
                     SerializerOptions,
                     cancellationToken)
@@ -69,35 +72,36 @@ public sealed class JsonOperationJournalRepository
         if (document is null)
         {
             throw new InvalidDataException(
-                "Installer operation journal document is empty.");
+                "Installer resume request document is empty.");
         }
 
-        return new InstallerOperationJournalEntry(
-            document.OperationId,
+        return new InstallerResumeRequest(
             PackageId.Parse(
                 document.PackageId),
             document.Operation,
-            document.Version,
-            document.TargetPath,
-            document.Phase,
-            document.StartedAtUtc,
-            document.UpdatedAtUtc,
-            document.Failure,
-            document.PendingPrerequisiteId);
+            SemanticVersion.Parse(
+                document.ExpectedVersion),
+            ArtifactDigest.ParseSha256(
+                document.ExpectedArtifactSha256),
+            document.Channel,
+            document.ManifestSource,
+            document.RollbackManifestSource,
+            document.CreatedAtUtc);
     }
 
     public async Task SaveAsync(
-        InstallerOperationJournalEntry entry,
+        InstallerResumeRequest request,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(
+            request);
 
         Directory.CreateDirectory(
             _options.RootDirectory);
 
         var path =
             GetPath(
-                entry.PackageId);
+                request.PackageId);
 
         var temporaryPath =
             string.Concat(
@@ -105,19 +109,24 @@ public sealed class JsonOperationJournalRepository
                 TemporarySuffix);
 
         var document =
-            new JournalDocument
+            new ResumeDocument
             {
-                OperationId = entry.OperationId,
-                PackageId = entry.PackageId.Value,
-                Operation = entry.Operation,
-                Version = entry.Version,
-                TargetPath = entry.TargetPath,
-                Phase = entry.Phase,
-                StartedAtUtc = entry.StartedAtUtc,
-                UpdatedAtUtc = entry.UpdatedAtUtc,
-                Failure = entry.Failure,
-                PendingPrerequisiteId =
-                    entry.PendingPrerequisiteId
+                PackageId =
+                    request.PackageId.Value,
+                Operation =
+                    request.Operation,
+                ExpectedVersion =
+                    request.ExpectedVersion.ToString(),
+                ExpectedArtifactSha256 =
+                    request.ExpectedArtifactDigest.Sha256,
+                Channel =
+                    request.Channel,
+                ManifestSource =
+                    request.ManifestSource,
+                RollbackManifestSource =
+                    request.RollbackManifestSource,
+                CreatedAtUtc =
+                    request.CreatedAtUtc
             };
 
         await using (
@@ -154,7 +163,8 @@ public sealed class JsonOperationJournalRepository
         PackageId packageId,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(packageId);
+        ArgumentNullException.ThrowIfNull(
+            packageId);
         cancellationToken.ThrowIfCancellationRequested();
 
         var path =
@@ -163,7 +173,8 @@ public sealed class JsonOperationJournalRepository
 
         if (File.Exists(path))
         {
-            File.Delete(path);
+            File.Delete(
+                path);
         }
 
         return Task.CompletedTask;
@@ -179,28 +190,26 @@ public sealed class JsonOperationJournalRepository
                 JsonExtension));
     }
 
-    private sealed class JournalDocument
+    private sealed class ResumeDocument
     {
-        public Guid OperationId { get; init; }
-
         public string PackageId { get; init; } =
             string.Empty;
 
         public InstallerOperationType Operation { get; init; }
 
-        public string? Version { get; init; }
-
-        public string TargetPath { get; init; } =
+        public string ExpectedVersion { get; init; } =
             string.Empty;
 
-        public InstallerOperationPhase Phase { get; init; }
+        public string ExpectedArtifactSha256 { get; init; } =
+            string.Empty;
 
-        public DateTimeOffset StartedAtUtc { get; init; }
+        public ReleaseChannel Channel { get; init; }
 
-        public DateTimeOffset UpdatedAtUtc { get; init; }
+        public string ManifestSource { get; init; } =
+            string.Empty;
 
-        public string? Failure { get; init; }
+        public string? RollbackManifestSource { get; init; }
 
-        public string? PendingPrerequisiteId { get; init; }
+        public DateTimeOffset CreatedAtUtc { get; init; }
     }
 }

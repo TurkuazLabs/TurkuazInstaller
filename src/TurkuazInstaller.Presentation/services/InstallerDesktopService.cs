@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
-// 📌 Amac: Ana pencere request validation, progress, uninstall, cancel, retry ve error recovery is kurallarini yonetir
+// 📌 Amac: Ana pencere startup resume, request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.0.1
-// Aciklama: Uninstall icin yalniz package id ister; install target manifest defaultuna birakilabilir ve progress eventleri sirali calisir
+// Version: 1.2.0
+// Aciklama: Manual operasyonlari ve reboot sonrasi package-scoped resume akislarini ayni UI state makinesinde koordine eder
 //
 // Bagimli Oldugu Katman: Service | View | Language
 
 using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Presentation.Language;
 using TurkuazInstaller.Presentation.ViewModels;
@@ -18,15 +19,53 @@ public sealed class InstallerDesktopService
 {
     private readonly MainWindowViewModel _viewModel;
     private readonly IInstallerRuntimeService _runtimeService;
+    private readonly InstallerResumeLaunchParser _resumeLaunchParser;
     private CancellationTokenSource? _operationCancellation;
     private InstallerDesktopRequest? _lastRequest;
 
     public InstallerDesktopService(
         MainWindowViewModel viewModel,
-        IInstallerRuntimeService runtimeService)
+        IInstallerRuntimeService runtimeService,
+        InstallerResumeLaunchParser resumeLaunchParser)
     {
         _viewModel = viewModel;
         _runtimeService = runtimeService;
+        _resumeLaunchParser = resumeLaunchParser;
+    }
+
+    public async Task StartAsync(
+        IReadOnlyList<string> launchArguments)
+    {
+        if (_viewModel.IsBusy)
+        {
+            return;
+        }
+
+        PackageId? resumePackageId;
+
+        try
+        {
+            resumePackageId =
+                _resumeLaunchParser.Parse(
+                    launchArguments);
+        }
+        catch (Exception exception)
+        {
+            ShowFailure(
+                exception);
+            return;
+        }
+
+        if (resumePackageId is null)
+        {
+            return;
+        }
+
+        _lastRequest = null;
+
+        await ExecuteResumeAsync(
+                resumePackageId)
+            .ConfigureAwait(true);
     }
 
     public async Task RunAsync(
@@ -150,14 +189,17 @@ public sealed class InstallerDesktopService
                     _operationCancellation.Token)
                 .ConfigureAwait(true);
 
+            await CompleteUiAsync(
+                    progress)
+                .ConfigureAwait(true);
+        }
+        catch (InstallerRebootRequiredException)
+        {
             await progress
                 .DrainAsync()
                 .ConfigureAwait(true);
 
-            _viewModel.ProgressValue = 100;
-            _viewModel.StatusMessage =
-                InstallerUiLabels.Completed;
-            _viewModel.CanRetry = false;
+            ShowRebootRequired();
         }
         catch (OperationCanceledException)
         {
@@ -180,10 +222,86 @@ public sealed class InstallerDesktopService
         }
         finally
         {
-            _viewModel.IsBusy = false;
-            _operationCancellation.Dispose();
-            _operationCancellation = null;
+            FinishOperation();
         }
+    }
+
+    private async Task ExecuteResumeAsync(
+        PackageId packageId)
+    {
+        ResetForOperation();
+
+        _operationCancellation =
+            new CancellationTokenSource();
+
+        var progress =
+            new OrderedProgress<InstallerOperationProgress>(
+                ReportProgress);
+
+        try
+        {
+            await _runtimeService
+                .ResumeAsync(
+                    packageId,
+                    progress,
+                    _operationCancellation.Token)
+                .ConfigureAwait(true);
+
+            await CompleteUiAsync(
+                    progress)
+                .ConfigureAwait(true);
+        }
+        catch (InstallerRebootRequiredException)
+        {
+            await progress
+                .DrainAsync()
+                .ConfigureAwait(true);
+
+            ShowRebootRequired();
+        }
+        catch (OperationCanceledException)
+        {
+            await progress
+                .DrainAsync()
+                .ConfigureAwait(true);
+
+            _viewModel.StatusMessage =
+                InstallerUiLabels.Cancelled;
+            _viewModel.CanRetry = false;
+        }
+        catch (Exception exception)
+        {
+            await progress
+                .DrainAsync()
+                .ConfigureAwait(true);
+
+            ShowFailure(
+                exception);
+        }
+        finally
+        {
+            FinishOperation();
+        }
+    }
+
+    private async Task CompleteUiAsync(
+        OrderedProgress<InstallerOperationProgress> progress)
+    {
+        await progress
+            .DrainAsync()
+            .ConfigureAwait(true);
+
+        _viewModel.ProgressValue = 100;
+        _viewModel.StatusMessage =
+            InstallerUiLabels.Completed;
+        _viewModel.CanRetry = false;
+    }
+
+    private void FinishOperation()
+    {
+        _viewModel.IsBusy = false;
+        _operationCancellation?.Dispose();
+        _operationCancellation = null;
     }
 
     private void ResetForOperation()
@@ -195,6 +313,15 @@ public sealed class InstallerDesktopService
         _viewModel.ProgressValue = 0;
         _viewModel.StatusMessage =
             InstallerUiLabels.Preparing;
+    }
+
+    private void ShowRebootRequired()
+    {
+        _viewModel.HasError = false;
+        _viewModel.ErrorMessage = string.Empty;
+        _viewModel.StatusMessage =
+            InstallerUiLabels.RebootRequired;
+        _viewModel.CanRetry = false;
     }
 
     private void ShowFailure(

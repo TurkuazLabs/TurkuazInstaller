@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/PREREQUISITES.md
 # 📌 Amac: TurkuazInstaller prerequisite detection ve guvenli auto-install mimarisini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.1
-# Aciklama: Detector registry, signed installer verification, explicit elevation ve post-install re-probe kurallarini sabitler
+# Version: 1.2.1
+# Aciklama: Detector registry, signed installer verification, persisted RunOnce reboot resume ve post-reboot re-probe kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 # Prerequisite Engine
@@ -68,11 +68,34 @@ Bu zincirde hash veya signature dogrulamasi atlanamaz.
 
 ## Reboot Siniri
 
-Windows installer exit code 1641 veya 3010 donerse mevcut v1.1 runtime islemi basarili saymaz.
+Windows installer exit code 1641 veya 3010 donerse Tool katmani bunu generic failure olarak gizlemez.
 
-Reboot/resume orchestration ayri P1 maddesidir.
+Typed sonuc uretilir:
 
-Bu ozellik tamamlanana kadar reboot isteyen prerequisite auto-install fail-closed durur ve ana paket apply edilmez.
+- 3010: RebootRequired
+- 1641: RebootInitiated
+
+Prerequisite installer calismadan once package-scoped resume request kalici yazilir, HKCU RunOnce bootstrap relaunch kaydi olusturulur ve journal RebootResumeArmed checkpointine alinir.
+
+Application workflow reboot sonucu aldiginda:
+
+1. pre-execution RebootResumeArmed phase degerini AwaitingReboot olarak ilerletir
+2. pending prerequisite id degerini journal icinde saklar
+3. operation.awaiting_reboot structured eventini yazar
+4. prerequisite post-install re-probe adimini reboot sonrasina birakir
+5. ana package staging/apply adimini baslatmaz
+6. normal failure checkpointi yazmaz
+7. RunOnce relaunch kaydini korur
+
+Reboot sonrasi bootstrap internal package resume argumanini WinUI'a aktarir.
+
+WinUI resume Service journal ve persisted request eslesmesini kontrol eder, signed manifesti yeniden dogrular, expected version ve package artifact SHA-256 kimligini sabitler ve pending prerequisite'i yeniden probe eder.
+
+Pending prerequisite hala saglanmiyorsa ayni installer tekrar calistirilmaz. Runtime fail-closed durur ve reboot/install dongusu olusmaz.
+
+Detay:
+
+docs/REBOOT_RESUME.md
 
 ## Manifest Ornegi
 
@@ -102,8 +125,8 @@ Production projeleri gercek vendor URI, hash, size ve publisher degerlerini rele
 
 - Domain: Prerequisite, expression ve install policy
 - Service: detector registry ve orchestration
-- Repo: prerequisite icin persistent storage yok
-- Tool: Windows detectorlari, download/verification ve process adapterlari
+- Repo: operation journal ve package-scoped resume request storage
+- Tool: Windows detectorlari, download/verification, process ve RunOnce adapterlari
 - View: operation progress
 - Config: signed manifest policy
 

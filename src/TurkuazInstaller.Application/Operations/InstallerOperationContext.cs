@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerOperationContext.cs
 // 📌 Amac: Bir installer operasyonunun crash journal ve structured log checkpoint yasam dongusunu koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.1.1
-// Aciklama: Diagnostics storage hatalarinin paket mutasyon sonucunu bozmamasi icin journal/log yazimini best-effort yapar
+// Version: 1.4.0
+// Aciklama: Diagnostics storage hatalarini izole eder; pre-execution resume arm, reboot wait, resume ve clear checkpointlerini yonetir
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -27,6 +27,9 @@ internal sealed class InstallerOperationContext
         _journal = journal;
         _logger = logger;
     }
+
+    public string? PendingPrerequisiteId =>
+        _entry.PendingPrerequisiteId;
 
     public static async Task<InstallerOperationContext> StartAsync(
         PackageId packageId,
@@ -67,6 +70,33 @@ internal sealed class InstallerOperationContext
         return context;
     }
 
+    public static async Task<InstallerOperationContext> ResumeAsync(
+        InstallerOperationJournalEntry entry,
+        IInstallerOperationJournalRepository? journal,
+        IInstallerEventLogger? logger,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(
+            entry);
+
+        var context =
+            new InstallerOperationContext(
+                entry,
+                journal,
+                logger);
+
+        await context
+            .PersistBestEffortAsync(
+                InstallerEventLevel.Information,
+                "operation.resumed",
+                "Installer operation resumed after reboot.",
+                null,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        return context;
+    }
+
     public async Task SetPhaseAsync(
         InstallerOperationPhase phase,
         string eventName,
@@ -85,6 +115,87 @@ internal sealed class InstallerOperationContext
                 InstallerEventLevel.Information,
                 eventName,
                 message,
+                null,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task ArmRebootResumeAsync(
+        string prerequisiteId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            prerequisiteId);
+
+        _entry =
+            _entry with
+            {
+                Phase = InstallerOperationPhase.RebootResumeArmed,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+                Failure = null,
+                PendingPrerequisiteId =
+                    prerequisiteId.Trim()
+            };
+
+        await PersistBestEffortAsync(
+                InstallerEventLevel.Information,
+                "operation.reboot_resume_armed",
+                "Prerequisite execution armed for reboot-safe resume.",
+                null,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task AwaitRebootAsync(
+        string prerequisiteId,
+        string message,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            prerequisiteId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            message);
+
+        _entry =
+            _entry with
+            {
+                Phase = InstallerOperationPhase.AwaitingReboot,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+                Failure = null,
+                PendingPrerequisiteId =
+                    prerequisiteId.Trim()
+            };
+
+        await PersistBestEffortAsync(
+                InstallerEventLevel.Warning,
+                "operation.awaiting_reboot",
+                message,
+                null,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    public async Task ClearRebootCheckpointAsync(
+        CancellationToken cancellationToken)
+    {
+        if (_entry.PendingPrerequisiteId is null)
+        {
+            return;
+        }
+
+        _entry =
+            _entry with
+            {
+                Phase = InstallerOperationPhase.ValidatingPrerequisites,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+                Failure = null,
+                PendingPrerequisiteId = null
+            };
+
+        await PersistBestEffortAsync(
+                InstallerEventLevel.Information,
+                "operation.reboot_checkpoint_cleared",
+                "Post-reboot prerequisite validation completed.",
                 null,
                 cancellationToken)
             .ConfigureAwait(false);

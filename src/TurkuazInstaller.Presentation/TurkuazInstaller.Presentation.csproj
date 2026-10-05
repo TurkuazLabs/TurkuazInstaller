@@ -2,8 +2,8 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/TurkuazInstaller.Presentation.csproj
 # 📌 Amac: WinUI ve gelecekteki GUI hostlarindan bagimsiz ViewModel, Controller ve UI Service katmanini derler
 # 📌 Modul - Project XML
-# Version: 0.7.0
-# Aciklama: UI state ve event orchestration kodunu WinUI framework detaylarindan ayirir
+# Version: 1.1.0
+# Aciklama: UI state, reboot resume launch protokolu ve event orchestration kodunu WinUI framework detaylarindan ayirir
 
 Bagimli Oldugu Katman: Controller | Service | View | Language
 -->
@@ -14,6 +14,7 @@ Bagimli Oldugu Katman: Controller | Service | View | Language
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../TurkuazInstaller.Application/TurkuazInstaller.Application.csproj" />
+    <ProjectReference Include="../TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
     <ProjectReference Include="../TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
   </ItemGroup>
 </Project>

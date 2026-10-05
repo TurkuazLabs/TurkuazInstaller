@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/controllers/App.xaml.cs
 // 📌 Amac: WinUI launch requestini alir ve desktop composition root tarafindan uretilen ana pencereyi acar
 // 📌 Modul - Controller CSharp
-// Version: 0.7.2
-// Aciklama: Application namespace cakismasini onleyerek XAML initialize, composition ve View activation akisini baslatir
+// Version: 1.1.0
+// Aciklama: XAML initialize eder, process startup argumanlarini request olarak alir ve composition/View activation akisini baslatir
 //
 // Bagimli Oldugu Katman: Controller | Config | View
 
@@ -23,8 +23,17 @@ public partial class App : Microsoft.UI.Xaml.Application
     protected override void OnLaunched(
         LaunchActivatedEventArgs args)
     {
+        var commandLineArguments =
+            Environment.GetCommandLineArgs();
+
+        IReadOnlyList<string> startupArguments =
+            commandLineArguments.Length <= 1
+                ? Array.Empty<string>()
+                : commandLineArguments[1..];
+
         _window = DesktopCompositionRoot
-            .CreateMainWindow();
+            .CreateMainWindow(
+                startupArguments);
 
         _window.Activate();
     }

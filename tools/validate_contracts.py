@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.3.1
-# Aciklama: Detached CMS trust, Authenticode, detector registry, prerequisite auto-install, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.5.1
+# Aciklama: Detached trust, prerequisite auto-install, persisted reboot resume, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -269,11 +269,42 @@ if (
 if (
     auto_install_policy
     .get("reboot_required_exit")
-    != "deny_until_resume_supported"
+    != "persist_request_schedule_runonce_reprobe_resume"
 ):
     fail(
-        "reboot-required prerequisite result must fail closed until resume support exists"
+        "reboot-required prerequisite result must use persisted RunOnce resume orchestration"
     )
+
+resume_policy = auto_install_policy.get(
+    "resume",
+    {},
+)
+
+if resume_policy.get("journal_phases") != [
+    "reboot_resume_armed",
+    "awaiting_reboot",
+]:
+    fail(
+        "reboot resume journal phases must preserve pre-execution arm and reboot wait"
+    )
+
+expected_resume_policy = {
+    "persisted_request_required": True,
+    "relaunch": "hkcu_runonce_bootstrap",
+    "deferred_delete_value_prefix": True,
+    "signed_manifest_revalidation_required": True,
+    "expected_version_pin_required": True,
+    "expected_artifact_sha256_pin_required": True,
+    "pending_prerequisite_reprobe_required": True,
+    "repeat_same_installer_when_still_unsatisfied": False,
+    "manual_mutation_while_awaiting_reboot": "deny",
+}
+
+for key, expected_value in expected_resume_policy.items():
+    if resume_policy.get(key) != expected_value:
+        fail(
+            f"reboot resume invariant mismatch: {key}"
+        )
 
 security = manifest.get("security", {})
 
@@ -292,6 +323,8 @@ for key in (
     "prerequisite_hash_failure",
     "prerequisite_signature_failure",
     "prerequisite_post_install_unsatisfied",
+    "resume_journal_mismatch",
+    "resume_release_identity_mismatch",
 ):
     if security.get(key) != "deny":
         fail(
