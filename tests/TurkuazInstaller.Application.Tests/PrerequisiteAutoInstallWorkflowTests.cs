@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/PrerequisiteAutoInstallWorkflowTests.cs
 // 📌 Amac: Eksik prerequisite auto-install, verification ve zorunlu post-install re-probe akisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.3.0
-// Aciklama: Guvenli prerequisite install, pre-reboot scheduler, reboot checkpoint ve post-reboot re-probe sinirlarini test eder
+// Version: 1.4.0
+// Aciklama: Guvenli prerequisite install, RunOnce scheduler cleanup/retention, reboot checkpoint ve post-reboot re-probe sinirlarini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -43,11 +43,16 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
         var packageEngine =
             new TrackingPackageEngine();
 
+        var scheduler =
+            new StubRebootResumeScheduler();
+
         var service =
             CreateService(
                 probe,
                 prerequisiteInstaller,
-                packageEngine);
+                packageEngine,
+                rebootResumeScheduler:
+                    scheduler);
 
         await service.InstallAsync(
             CreateRelease(
@@ -68,6 +73,14 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
         Assert.Equal(
             1,
             packageEngine.ApplyCalls);
+
+        Assert.Equal(
+            1,
+            scheduler.ScheduleCalls);
+
+        Assert.Equal(
+            1,
+            scheduler.CancelCalls);
     }
 
     [Fact]
@@ -90,12 +103,16 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
         var journal =
             new TrackingOperationJournal();
 
+        var scheduler =
+            new StubRebootResumeScheduler();
+
         var service =
             CreateService(
                 probe,
                 prerequisiteInstaller,
                 packageEngine,
-                journal);
+                journal,
+                scheduler);
 
         var exception =
             await Assert.ThrowsAsync<InstallerRebootRequiredException>(
@@ -141,6 +158,58 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
         Assert.Equal(
             0,
             journal.DeleteCalls);
+
+        Assert.Equal(
+            1,
+            scheduler.ScheduleCalls);
+
+        Assert.Equal(
+            0,
+            scheduler.CancelCalls);
+    }
+
+    [Fact]
+    public async Task InstallAsync_PrerequisiteInstallerFailure_CancelsScheduledResume()
+    {
+        var probe =
+            new SequencedPrerequisiteProbe(
+                false);
+
+        var packageEngine =
+            new TrackingPackageEngine();
+
+        var scheduler =
+            new StubRebootResumeScheduler();
+
+        var service =
+            CreateService(
+                probe,
+                new ThrowingPrerequisiteInstaller(),
+                packageEngine,
+                rebootResumeScheduler:
+                    scheduler);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                service.InstallAsync(
+                    CreateRelease(
+                        includeInstallAction: true),
+                    "C:/Apps/Example",
+                    "C:/Temp/TurkuazInstaller",
+                    null,
+                    CancellationToken.None));
+
+        Assert.Equal(
+            1,
+            scheduler.ScheduleCalls);
+
+        Assert.Equal(
+            1,
+            scheduler.CancelCalls);
+
+        Assert.Equal(
+            0,
+            packageEngine.ApplyCalls);
     }
 
     [Theory]
@@ -384,7 +453,8 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
         ISystemPrerequisiteProbe prerequisiteProbe,
         IPrerequisiteInstaller prerequisiteInstaller,
         TrackingPackageEngine packageEngine,
-        IInstallerOperationJournalRepository? operationJournal = null)
+        IInstallerOperationJournalRepository? operationJournal = null,
+        IRebootResumeScheduler? rebootResumeScheduler = null)
     {
         return new InstallerWorkflowService(
             new StubDownloader(),
@@ -400,7 +470,8 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
             prerequisiteInstaller:
                 prerequisiteInstaller,
             rebootResumeScheduler:
-                new StubRebootResumeScheduler());
+                rebootResumeScheduler
+                ?? new StubRebootResumeScheduler());
     }
 
     private static PackageRelease CreateRelease(
@@ -528,6 +599,19 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
             Calls++;
             return Task.FromResult(
                 _result);
+        }
+    }
+
+    private sealed class ThrowingPrerequisiteInstaller
+        : IPrerequisiteInstaller
+    {
+        public Task<PrerequisiteInstallResult> InstallAsync(
+            string verifiedInstallerPath,
+            PrerequisiteInstallAction installAction,
+            CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException(
+                "Simulated prerequisite installer failure.");
         }
     }
 
