@@ -1,0 +1,29 @@
+<!--
+# 📄 Dosya Yolu: /tests/TurkuazInstaller.Platform.Windows.Tests/TurkuazInstaller.Platform.Windows.Tests.csproj
+# 📌 Amac: Windows prerequisite detector ve installer Tool adapterlari icin unit test projesini tanimlar
+# 📌 Modul - Test Project XML
+# Version: 1.1.0
+# Aciklama: Shell-free process, explicit UAC elevation ve reboot exit-code guvenlik davranislarini Windows CI'da dogrular
+
+Bagimli Oldugu Katman: Service | Tool
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
+    <ProjectReference Include="../../src/TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
+    <ProjectReference Include="../../src/TurkuazInstaller.Platform.Windows/TurkuazInstaller.Platform.Windows.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>
