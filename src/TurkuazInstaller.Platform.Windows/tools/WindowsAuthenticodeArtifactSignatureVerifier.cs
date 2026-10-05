@@ -114,7 +114,7 @@ public sealed class WindowsAuthenticodeArtifactSignatureVerifier
             Marshal.StructureToPtr(
                 fileInfo,
                 fileInfoPointer,
-                deleteOld: false);
+                false);
 
             var trustData =
                 new WinTrustData
@@ -154,7 +154,7 @@ public sealed class WindowsAuthenticodeArtifactSignatureVerifier
             Marshal.StructureToPtr(
                 trustData,
                 trustDataPointer,
-                deleteOld: false);
+                false);
 
             var action =
                 GenericVerifyV2;
