@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/stable-readiness.yml
 # 📌 Amac: Stable Community release oncesinde combined Windows dagitiminin reproducibility ve recovery kapilarini calistirir
 # 📌 Modul - CI YAML
-# Version: 1.1.0
-# Aciklama: Iki temiz publish ve combined distribution agacini, deterministic tek ZIP'i ve Core recovery testlerini dogrular
+# Version: 1.1.1
+# Aciklama: Core recovery ve bootstrap orchestration testleriyle iki temiz combined distribution agacini ve deterministic tek ZIP'i dogrular
 # Bagimli Oldugu Katman: Tool
 
 name: Stable Readiness CI
@@ -43,6 +43,9 @@ jobs:
 
       - name: Run Core and recovery tests
         run: dotnet test TurkuazInstaller.slnx --configuration Release
+
+      - name: Run bootstrap orchestration tests
+        run: dotnet test tests/TurkuazInstaller.Bootstrapper.Tests/TurkuazInstaller.Bootstrapper.Tests.csproj --configuration Release --no-restore
 
       - name: Publish reproducibility pass A
         shell: pwsh

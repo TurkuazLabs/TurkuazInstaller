@@ -1,9 +1,9 @@
 <!--
 # 📄 Dosya Yolu: /TurkuazInstaller.Windows.slnx
-# 📌 Amac: Windows bootstrap, platform ve WinUI 3 projelerini Core katmanlariyla birlikte Windows CI icin toplar
+# 📌 Amac: Windows bootstrap, platform, WinUI ve bootstrap orchestration test projelerini Windows CI icin toplar
 # 📌 Modul - XML
-# Version: 0.7.0
-# Aciklama: NativeAOT bootstrap ve self-contained WinUI desktop build/publish akisini tek Windows solutionda dogrular
+# Version: 1.0.0
+# Aciklama: NativeAOT bootstrap, self-contained WinUI ve Windows-specific bootstrap unit testlerini tek solutionda dogrular
 
 Bagimli Oldugu Katman: Tool
 -->
@@ -19,5 +19,8 @@ Bagimli Oldugu Katman: Tool
     <Project Path="src/TurkuazInstaller.Platform.Windows/TurkuazInstaller.Platform.Windows.csproj" />
     <Project Path="src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj" />
     <Project Path="src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TurkuazInstaller.Bootstrapper.Tests/TurkuazInstaller.Bootstrapper.Tests.csproj" />
   </Folder>
 </Solution>
