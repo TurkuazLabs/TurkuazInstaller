@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.3.0
-// Aciklama: Publisher-pinned verification, prerequisite auto-install, typed reboot checkpoint, package lock ve crash journal/log akisini uygular
+// Version: 1.4.0
+// Aciklama: Prerequisite auto-install, pre-reboot relaunch scheduling, typed resume checkpoint ve package mutation akisini uygular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -54,6 +54,9 @@ public sealed class InstallerWorkflowService
     private const string PrerequisiteInstallerMissing =
         "Prerequisite auto-install is declared but no prerequisite installer is configured.";
 
+    private const string RebootResumeSchedulerMissing =
+        "Prerequisite auto-install requires a reboot resume scheduler before execution.";
+
     private const string PrerequisiteInstallingEvent =
         "prerequisite.installing";
 
@@ -70,6 +73,7 @@ public sealed class InstallerWorkflowService
     private readonly IInstallerOperationJournalRepository? _operationJournal;
     private readonly IInstallerEventLogger? _eventLogger;
     private readonly IPrerequisiteInstaller? _prerequisiteInstaller;
+    private readonly IRebootResumeScheduler? _rebootResumeScheduler;
 
     public InstallerWorkflowService(
         IArtifactDownloader artifactDownloader,
@@ -81,7 +85,8 @@ public sealed class InstallerWorkflowService
         IInstallerOperationLock? operationLock = null,
         IInstallerOperationJournalRepository? operationJournal = null,
         IInstallerEventLogger? eventLogger = null,
-        IPrerequisiteInstaller? prerequisiteInstaller = null)
+        IPrerequisiteInstaller? prerequisiteInstaller = null,
+        IRebootResumeScheduler? rebootResumeScheduler = null)
     {
         _artifactDownloader = artifactDownloader;
         _artifactVerifier = artifactVerifier;
@@ -93,6 +98,7 @@ public sealed class InstallerWorkflowService
         _operationJournal = operationJournal;
         _eventLogger = eventLogger;
         _prerequisiteInstaller = prerequisiteInstaller;
+        _rebootResumeScheduler = rebootResumeScheduler;
     }
 
     public Task InstallAsync(
@@ -100,7 +106,8 @@ public sealed class InstallerWorkflowService
         string targetPath,
         string stagingDirectory,
         IProgress<InstallerOperationProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        InstallerOperationJournalEntry? resumeEntry = null)
     {
         ArgumentNullException.ThrowIfNull(release);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
@@ -111,6 +118,7 @@ public sealed class InstallerWorkflowService
             release.Version.ToString(),
             targetPath,
             cancellationToken,
+            resumeEntry,
             async operation =>
             {
                 await ValidatePrerequisitesAsync(
@@ -173,7 +181,8 @@ public sealed class InstallerWorkflowService
         InstalledPackageState currentState,
         string stagingDirectory,
         IProgress<InstallerOperationProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        InstallerOperationJournalEntry? resumeEntry = null)
     {
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(currentState);
@@ -184,6 +193,7 @@ public sealed class InstallerWorkflowService
             release.Version.ToString(),
             currentState.TargetPath,
             cancellationToken,
+            resumeEntry,
             async operation =>
             {
                 if (release.PackageId != currentState.PackageId)
@@ -258,7 +268,8 @@ public sealed class InstallerWorkflowService
         InstalledPackageState currentState,
         string stagingDirectory,
         IProgress<InstallerOperationProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        InstallerOperationJournalEntry? resumeEntry = null)
     {
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(currentState);
@@ -269,6 +280,7 @@ public sealed class InstallerWorkflowService
             release.Version.ToString(),
             currentState.TargetPath,
             cancellationToken,
+            resumeEntry,
             async operation =>
             {
                 if (
@@ -328,7 +340,8 @@ public sealed class InstallerWorkflowService
         InstalledPackageState currentState,
         string stagingDirectory,
         IProgress<InstallerOperationProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        InstallerOperationJournalEntry? resumeEntry = null)
     {
         ArgumentNullException.ThrowIfNull(currentRelease);
         ArgumentNullException.ThrowIfNull(previousRelease);
@@ -340,6 +353,7 @@ public sealed class InstallerWorkflowService
             previousRelease.Version.ToString(),
             currentState.TargetPath,
             cancellationToken,
+            resumeEntry,
             async operation =>
             {
                 if (
@@ -421,6 +435,7 @@ public sealed class InstallerWorkflowService
             currentState.Version.ToString(),
             currentState.TargetPath,
             cancellationToken,
+            null,
             async operation =>
             {
                 await operation
@@ -474,6 +489,7 @@ public sealed class InstallerWorkflowService
         string? version,
         string targetPath,
         CancellationToken cancellationToken,
+        InstallerOperationJournalEntry? resumeEntry,
         Func<InstallerOperationContext, Task> operation)
     {
         await using var operationLease =
@@ -483,16 +499,25 @@ public sealed class InstallerWorkflowService
                 .ConfigureAwait(false);
 
         var context =
-            await InstallerOperationContext
-                .StartAsync(
-                    packageId,
-                    operationType,
-                    version,
-                    targetPath,
-                    _operationJournal,
-                    _eventLogger,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            resumeEntry is null
+                ? await InstallerOperationContext
+                    .StartAsync(
+                        packageId,
+                        operationType,
+                        version,
+                        targetPath,
+                        _operationJournal,
+                        _eventLogger,
+                        cancellationToken)
+                    .ConfigureAwait(false)
+                : await ResumeOperationContextAsync(
+                        packageId,
+                        operationType,
+                        version,
+                        targetPath,
+                        resumeEntry,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
         try
         {
@@ -527,6 +552,49 @@ public sealed class InstallerWorkflowService
 
             throw;
         }
+    }
+
+    private async Task<InstallerOperationContext> ResumeOperationContextAsync(
+        PackageId packageId,
+        InstallerOperationType operationType,
+        string? version,
+        string targetPath,
+        InstallerOperationJournalEntry resumeEntry,
+        CancellationToken cancellationToken)
+    {
+        if (
+            resumeEntry.Phase !=
+            InstallerOperationPhase.AwaitingReboot)
+        {
+            throw new InvalidOperationException(
+                "Installer operation can only resume from AwaitingReboot phase.");
+        }
+
+        if (
+            resumeEntry.PackageId != packageId ||
+            resumeEntry.Operation != operationType ||
+            !string.Equals(
+                resumeEntry.Version,
+                version,
+                StringComparison.Ordinal) ||
+            !string.Equals(
+                resumeEntry.TargetPath,
+                targetPath,
+                StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(
+                resumeEntry.PendingPrerequisiteId))
+        {
+            throw new InvalidOperationException(
+                "Installer reboot resume journal does not match the requested operation.");
+        }
+
+        return await InstallerOperationContext
+            .ResumeAsync(
+                resumeEntry,
+                _operationJournal,
+                _eventLogger,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task<IAsyncDisposable> AcquireOperationLockAsync(
