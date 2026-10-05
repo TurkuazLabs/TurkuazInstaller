@@ -96,9 +96,9 @@ public sealed class WindowsRunOnceRebootResumeScheduler
         PackageId packageId)
     {
         return string.Concat(
-            """,
+            "\"",
             bootstrapExecutablePath,
-            "" ",
+            "\" ",
             InstallerResumeLaunchArguments.PackageOption,
             " ",
             packageId.Value);
