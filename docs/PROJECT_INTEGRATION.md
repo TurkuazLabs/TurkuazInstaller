@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/PROJECT_INTEGRATION.md
 # 📌 Amac: TurkuazInstaller'i NSIS yerine kullanacak projeler icin ortak entegrasyon ve migration standardini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.2
+# Version: 1.2.0
 # Aciklama: Signed manifest trust, Velopack full package, prerequisite, preserve path, rollback, uninstall ve kabul testlerini tum projeler icin standartlastirir
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -147,13 +147,19 @@ Prerequisite installer icin:
 
 zorunlu guvenlik siniridir.
 
-Installer calistiktan sonra prerequisite tekrar detect edilir. Re-probe basarisizsa ana paket kurulmaz.
+Installer normal basari ile tamamlanirsa prerequisite tekrar detect edilir. Re-probe basarisizsa ana paket kurulmaz.
 
-Reboot gerektiren installer sonucu reboot/resume P1 tamamlanana kadar fail-closed durur.
+Installer 3010 veya 1641 donerse TurkuazInstaller persisted resume request + AwaitingReboot journal + HKCU RunOnce bootstrap relaunch zincirini kullanir.
+
+Reboot sonrasinda signed manifest yeniden dogrulanir; expected version ve package artifact SHA-256 degisirse resume fail-closed durur.
+
+Pending prerequisite hala saglanmiyorsa ayni installer tekrar calistirilmaz.
 
 Detay:
 
 docs/PREREQUISITES.md
+
+docs/REBOOT_RESUME.md
 
 ## Preserve Paths
 
