@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
-# 📌 Amac: Windows bootstrap ve WinUI 3 desktop projelerini build/publish ederek gercek Windows artefactlarini dogrular
+# 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 0.7.0
-# Aciklama: NativeAOT bootstrap ile self-contained unpackaged WinUI 3 uygulamasini Windows runner uzerinde kalite kapisindan gecirir
+# Version: 1.0.1
+# Aciklama: NativeAOT bootstrap orchestration testlerini ve bootstrap -> app/WinUI combined distribution layoutunu Windows runner uzerinde dogrular
 # Bagimli Oldugu Katman: Tool
 
 name: Windows Desktop CI
@@ -40,38 +40,36 @@ jobs:
       - name: Build Windows solution
         run: dotnet build TurkuazInstaller.Windows.slnx --configuration Release --no-restore
 
-      - name: Publish NativeAOT bootstrap
-        run: dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/bootstrapper/win-x64
+      - name: Test bootstrap orchestration
+        run: dotnet test tests/TurkuazInstaller.Bootstrapper.Tests/TurkuazInstaller.Bootstrapper.Tests.csproj --configuration Release --no-restore
 
-      - name: Verify bootstrap executable
-        shell: pwsh
-        run: |
-          $path = "artifacts/bootstrapper/win-x64/TurkuazInstaller.Bootstrapper.exe"
-          if (-not (Test-Path $path)) {
-            throw "NativeAOT bootstrap executable was not produced."
-          }
+      - name: Publish NativeAOT bootstrap
+        run: dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/bootstrap/win-x64
 
       - name: Publish WinUI desktop
-        run: dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/winui/win-x64
+        run: dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/winui/win-x64
 
-      - name: Verify WinUI executable
+      - name: Build combined distribution
+        shell: pwsh
+        run: ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/publish/bootstrap/win-x64 -WinUiRoot artifacts/publish/winui/win-x64 -OutputRoot artifacts/distribution/win-x64
+
+      - name: Verify combined startup layout
         shell: pwsh
         run: |
-          $path = "artifacts/winui/win-x64/TurkuazInstaller.WinUI.exe"
-          if (-not (Test-Path $path)) {
-            throw "WinUI desktop executable was not produced."
+          $bootstrap = "artifacts/distribution/win-x64/TurkuazInstaller.Bootstrapper.exe"
+          $desktop = "artifacts/distribution/win-x64/app/TurkuazInstaller.WinUI.exe"
+
+          if (-not (Test-Path -LiteralPath $bootstrap)) {
+            throw "Combined distribution bootstrap executable was not produced."
           }
 
-      - name: Upload bootstrap artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: TurkuazInstaller-Bootstrapper-win-x64
-          path: artifacts/bootstrapper/win-x64/
-          if-no-files-found: error
+          if (-not (Test-Path -LiteralPath $desktop)) {
+            throw "Combined distribution WinUI executable was not produced."
+          }
 
-      - name: Upload WinUI artifact
+      - name: Upload combined distribution
         uses: actions/upload-artifact@v4
         with:
-          name: TurkuazInstaller-WinUI-win-x64
-          path: artifacts/winui/win-x64/
+          name: TurkuazInstaller-win-x64
+          path: artifacts/distribution/win-x64/
           if-no-files-found: error

@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/config/BootstrapDefaults.cs
-// 📌 Amac: Native bootstrap runtime requirement ve self-update retry varsayilanlarini tek config katmaninda tanimlar
+// 📌 Amac: Native bootstrap runtime requirement, app layout ve self-update retry varsayilanlarini tek config katmaninda tanimlar
 // 📌 Modul - Config CSharp
-// Version: 0.6.0
-// Aciklama: Windows 10 1809 tabani, desteklenen mimariler ve handoff retry politikasini inline config disina tasir
+// Version: 1.0.0
+// Aciklama: Windows baseline, x64 Stable v1 policy, combined distribution app yolu ve handoff retry politikasini merkezilestirir
 //
 // Bagimli Oldugu Katman: Config
 
@@ -18,6 +18,10 @@ internal static class BootstrapDefaults
     private const int ReplacementAttempts = 12;
     private const int ReplacementRetryMilliseconds = 250;
 
+    private const string AppDirectoryName = "app";
+    private const string DesktopExecutableName =
+        "TurkuazInstaller.WinUI.exe";
+
     public static BootstrapRequirements CreateRequirements()
     {
         return new BootstrapRequirements(
@@ -28,8 +32,7 @@ internal static class BootstrapDefaults
                 0),
             new[]
             {
-                BootstrapCpuArchitecture.X64,
-                BootstrapCpuArchitecture.Arm64
+                BootstrapCpuArchitecture.X64
             });
     }
 
@@ -39,5 +42,13 @@ internal static class BootstrapDefaults
             ReplacementAttempts,
             TimeSpan.FromMilliseconds(
                 ReplacementRetryMilliseconds));
+    }
+
+    public static BootstrapRuntimeOptions CreateRuntimeOptions()
+    {
+        return new BootstrapRuntimeOptions(
+            Path.Combine(
+                AppDirectoryName,
+                DesktopExecutableName));
     }
 }
