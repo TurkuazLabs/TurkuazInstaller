@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.0.1
-# Aciklama: NativeAOT bootstrap orchestration testlerini ve bootstrap -> app/WinUI combined distribution layoutunu Windows runner uzerinde dogrular
+# Version: 1.1.0
+# Aciklama: Bootstrap orchestration, prerequisite Tool adapter testleri ve combined distribution layoutunu Windows runner uzerinde dogrular
 # Bagimli Oldugu Katman: Tool
 
 name: Windows Desktop CI
@@ -42,6 +42,9 @@ jobs:
 
       - name: Test bootstrap orchestration
         run: dotnet test tests/TurkuazInstaller.Bootstrapper.Tests/TurkuazInstaller.Bootstrapper.Tests.csproj --configuration Release --no-restore
+
+      - name: Test Windows prerequisite adapters
+        run: dotnet test tests/TurkuazInstaller.Platform.Windows.Tests/TurkuazInstaller.Platform.Windows.Tests.csproj --configuration Release --no-restore
 
       - name: Publish NativeAOT bootstrap
         run: dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/bootstrap/win-x64
