@@ -51,7 +51,8 @@ public sealed class InstallerDesktopServiceTests
 
         using var service = new InstallerDesktopService(
             viewModel,
-            runtime);
+            runtime,
+            new InstallerResumeLaunchParser());
 
         await service.RunAsync(
             InstallerOperationKind.Update);
@@ -76,7 +77,8 @@ public sealed class InstallerDesktopServiceTests
 
         using var service = new InstallerDesktopService(
             viewModel,
-            runtime);
+            runtime,
+            new InstallerResumeLaunchParser());
 
         await service.RunAsync(
             InstallerOperationKind.Repair);
