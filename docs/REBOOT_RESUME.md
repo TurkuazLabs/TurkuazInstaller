@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/REBOOT_RESUME.md
 # 📌 Amac: TurkuazInstaller prerequisite reboot ve otomatik resume guvenilirlik modelini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.0
-# Aciklama: Persisted request, AwaitingReboot journal, HKCU RunOnce relaunch, signed manifest revalidation ve post-reboot re-probe zincirini sabitler
+# Version: 1.1.0
+# Aciklama: Persisted request, RebootResumeArmed/AwaitingReboot journal, HKCU RunOnce ve post-reboot trust/re-probe zincirini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | View | Config
 
 # Reboot Resume
@@ -54,9 +54,10 @@ Eksik prerequisite icin:
 4. Authenticode publisher/certificate policy dogrulanir
 5. resume request kalici repository icinde bulunur
 6. HKCU RunOnce altinda package-scoped bootstrap relaunch kaydi olusturulur
-7. ancak bundan sonra prerequisite installer calistirilir
+7. journal RebootResumeArmed phase ve pending prerequisite id ile pre-execution checkpoint yazar
+8. ancak bundan sonra prerequisite installer calistirilir
 
-Installer normal basari donerse RunOnce kaydi silinir ve post-install re-probe ayni process icinde yapilir.
+Installer normal basari donerse RunOnce kaydi silinir, post-install re-probe ayni process icinde yapilir ve armed checkpoint temizlenir.
 
 Installer 3010 veya 1641 donerse:
 
@@ -90,7 +91,7 @@ WinUI Service:
 
 1. package-scoped resume request dosyasini okur
 2. package-scoped operation journal dosyasini okur
-3. journal phase degerinin AwaitingReboot oldugunu dogrular
+3. journal phase degerinin RebootResumeArmed veya AwaitingReboot oldugunu dogrular
 4. package id ve operation type eslesmesini dogrular
 5. journal version ile expected resume version degerini dogrular
 6. pending prerequisite id varligini dogrular
