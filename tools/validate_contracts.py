@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.5.0
+# Version: 1.5.1
 # Aciklama: Detached trust, prerequisite auto-install, persisted reboot resume, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -280,8 +280,15 @@ resume_policy = auto_install_policy.get(
     {},
 )
 
+if resume_policy.get("journal_phases") != [
+    "reboot_resume_armed",
+    "awaiting_reboot",
+]:
+    fail(
+        "reboot resume journal phases must preserve pre-execution arm and reboot wait"
+    )
+
 expected_resume_policy = {
-    "journal_phase": "awaiting_reboot",
     "persisted_request_required": True,
     "relaunch": "hkcu_runonce_bootstrap",
     "deferred_delete_value_prefix": True,
