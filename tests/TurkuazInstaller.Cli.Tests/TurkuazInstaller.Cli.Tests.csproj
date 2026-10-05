@@ -1,0 +1,27 @@
+<!--
+# 📄 Dosya Yolu: /tests/TurkuazInstaller.Cli.Tests/TurkuazInstaller.Cli.Tests.csproj
+# 📌 Amac: CLI parser, silent-mode ve process exit-code davranislarini unit test eder
+# 📌 Modul - Test Project XML
+# Version: 1.0.0
+# Aciklama: Windows CLI kontratini framework dis sistemlerinden bagimsiz test eder
+
+Bagimli Oldugu Katman: Controller | Service | Tool
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>
