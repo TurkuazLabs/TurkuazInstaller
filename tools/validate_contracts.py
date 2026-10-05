@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.4.0
-# Aciklama: Detached trust, prerequisite auto-install, reboot checkpoint, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.5.0
+# Aciklama: Detached trust, prerequisite auto-install, persisted reboot resume, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -269,11 +269,35 @@ if (
 if (
     auto_install_policy
     .get("reboot_required_exit")
-    != "checkpoint_and_stop_before_package_apply"
+    != "persist_request_schedule_runonce_reprobe_resume"
 ):
     fail(
-        "reboot-required prerequisite result must checkpoint and stop before package apply"
+        "reboot-required prerequisite result must use persisted RunOnce resume orchestration"
     )
+
+resume_policy = auto_install_policy.get(
+    "resume",
+    {},
+)
+
+expected_resume_policy = {
+    "journal_phase": "awaiting_reboot",
+    "persisted_request_required": True,
+    "relaunch": "hkcu_runonce_bootstrap",
+    "deferred_delete_value_prefix": True,
+    "signed_manifest_revalidation_required": True,
+    "expected_version_pin_required": True,
+    "expected_artifact_sha256_pin_required": True,
+    "pending_prerequisite_reprobe_required": True,
+    "repeat_same_installer_when_still_unsatisfied": False,
+    "manual_mutation_while_awaiting_reboot": "deny",
+}
+
+for key, expected_value in expected_resume_policy.items():
+    if resume_policy.get(key) != expected_value:
+        fail(
+            f"reboot resume invariant mismatch: {key}"
+        )
 
 security = manifest.get("security", {})
 
@@ -292,6 +316,8 @@ for key in (
     "prerequisite_hash_failure",
     "prerequisite_signature_failure",
     "prerequisite_post_install_unsatisfied",
+    "resume_journal_mismatch",
+    "resume_release_identity_mismatch",
 ):
     if security.get(key) != "deny":
         fail(
