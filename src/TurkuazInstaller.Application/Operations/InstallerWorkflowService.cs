@@ -736,6 +736,22 @@ public sealed class InstallerWorkflowService
         InstallerOperationContext operation,
         CancellationToken cancellationToken)
     {
+        var pendingPrerequisiteId =
+            operation.PendingPrerequisiteId;
+
+        if (
+            pendingPrerequisiteId is not null &&
+            !release.Install.Prerequisites.Any(
+                prerequisite =>
+                    string.Equals(
+                        prerequisite.Id,
+                        pendingPrerequisiteId,
+                        StringComparison.Ordinal)))
+        {
+            throw new InvalidOperationException(
+                "Pending reboot prerequisite is not present in the resumed signed manifest.");
+        }
+
         await operation
             .SetPhaseAsync(
                 InstallerOperationPhase.ValidatingPrerequisites,
@@ -777,9 +793,36 @@ public sealed class InstallerWorkflowService
                         cancellationToken)
                     .ConfigureAwait(false);
 
+            var isPendingRebootPrerequisite =
+                pendingPrerequisiteId is not null &&
+                string.Equals(
+                    prerequisite.Id,
+                    pendingPrerequisiteId,
+                    StringComparison.Ordinal);
+
             if (satisfied)
             {
+                if (isPendingRebootPrerequisite)
+                {
+                    await operation
+                        .ClearRebootCheckpointAsync(
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                    pendingPrerequisiteId = null;
+                }
+
                 continue;
+            }
+
+            if (isPendingRebootPrerequisite)
+            {
+                throw new InvalidOperationException(
+                    string.Concat(
+                        "Prerequisite is still not satisfied after reboot: ",
+                        prerequisite.Id,
+                        " ",
+                        prerequisite.VersionExpression));
             }
 
             var installAction =
@@ -796,6 +839,12 @@ public sealed class InstallerWorkflowService
             {
                 throw new InvalidOperationException(
                     PrerequisiteInstallerMissing);
+            }
+
+            if (_rebootResumeScheduler is null)
+            {
+                throw new InvalidOperationException(
+                    RebootResumeSchedulerMissing);
             }
 
             await operation
@@ -837,32 +886,57 @@ public sealed class InstallerWorkflowService
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            var installResult =
-                await _prerequisiteInstaller
-                    .InstallAsync(
-                        installerPath,
-                        installAction,
-                        cancellationToken)
-                    .ConfigureAwait(false);
+            await _rebootResumeScheduler
+                .ScheduleAsync(
+                    release.PackageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-            if (installResult.RequiresReboot)
+            var keepResumeScheduled = false;
+
+            try
             {
-                var rebootMessage =
-                    string.Concat(
-                        "Prerequisite installed and reboot is required before re-probe: ",
+                var installResult =
+                    await _prerequisiteInstaller
+                        .InstallAsync(
+                            installerPath,
+                            installAction,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                if (installResult.RequiresReboot)
+                {
+                    keepResumeScheduled = true;
+
+                    var rebootMessage =
+                        string.Concat(
+                            "Prerequisite installed and reboot is required before re-probe: ",
+                            prerequisite.Id,
+                            ".");
+
+                    await operation
+                        .AwaitRebootAsync(
+                            prerequisite.Id,
+                            rebootMessage,
+                            CancellationToken.None)
+                        .ConfigureAwait(false);
+
+                    throw new InstallerRebootRequiredException(
                         prerequisite.Id,
-                        ".");
-
-                await operation
-                    .AwaitRebootAsync(
-                        rebootMessage,
-                        CancellationToken.None)
-                    .ConfigureAwait(false);
-
-                throw new InstallerRebootRequiredException(
-                    prerequisite.Id,
-                    installResult.Disposition,
-                    installResult.ExitCode);
+                        installResult.Disposition,
+                        installResult.ExitCode);
+                }
+            }
+            finally
+            {
+                if (!keepResumeScheduled)
+                {
+                    await _rebootResumeScheduler
+                        .CancelAsync(
+                            release.PackageId,
+                            CancellationToken.None)
+                        .ConfigureAwait(false);
+                }
             }
 
             var satisfiedAfterInstall =
