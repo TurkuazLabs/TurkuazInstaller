@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/WINUI_DESKTOP.md
 # 📌 Amac: TurkuazInstaller WinUI 3 desktop mimarisi, runtime composition ve recovery UX kararlarini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.0.0
-# Aciklama: Manifest policy, Windows verification, uninstall ve gercek workflow baglantisini tanimlar
+# Version: 1.1.0
+# Aciklama: Manifest policy, Windows verification, reboot resume startup, uninstall ve gercek workflow baglantisini tanimlar
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
 # WinUI Desktop
@@ -36,6 +36,9 @@ Desktop composition:
 - prerequisites -> Windows system prerequisite probe
 - package engine -> Velopack
 - state -> atomic JSON repository
+- operation journal -> atomic JSON repository
+- reboot resume request -> atomic JSON repository
+- reboot relaunch -> HKCU RunOnce Tool adapter
 - workflow -> InstallerWorkflowService
 
 ## Operasyonlar
@@ -51,6 +54,24 @@ UI gercek olarak:
 operasyonlarini calistirir.
 
 Uninstall manifest gerektirmez ve installed state uzerinden calisir.
+
+## Reboot Resume Startup
+
+MainWindow ilk activation eventinde startup argumentlarini yalniz bir kez Controller -> Presentation Service akisina aktarir.
+
+Internal --resume-package requesti:
+
+1. package id olarak parse edilir
+2. Runtime Service resume request ve journal kaydini yukler
+3. AwaitingReboot checkpointini dogrular
+4. signed manifesti yeniden cozer
+5. expected version ve package artifact SHA-256 kimligini dogrular
+6. pending prerequisite'i yeniden probe eder
+7. ancak sonra normal package workflow devam eder
+
+Resume startup parse veya trust kontrolu basarisizsa View hata state'ine gecer ve package mutation baslamaz.
+
+3010/1641 ilk yakalandiginda UI normal failure yerine reboot required statusu gosterir.
 
 ## Manifest-driven Target
 
@@ -75,6 +96,7 @@ UI su state'leri gosterir:
 - removing state
 - completed
 - cancelled
+- reboot required
 - failed
 
 Failure sonrasi Retry aktif olur.
