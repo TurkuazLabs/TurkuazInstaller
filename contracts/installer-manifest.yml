@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /contracts/installer-manifest.yml
 # 📌 Amac: TurkuazInstaller Community Stable v1 paket manifest contract alanlarini ve guvenlik invariantlarini tanimlamak
 # 📌 Modul - YAML
-# Version: 1.1.1
-# Aciklama: Paket, external detached manifest trust, full install, SHA-256, optional Authenticode, prerequisite, preserve path ve rollback alanlarini runtime ile birebir sabitler
+# Version: 1.2.1
+# Aciklama: Detached manifest trust, publisher-pinned artifact ve guvenli prerequisite detection/auto-install contractini runtime ile birebir sabitler
 # Bagimli Oldugu Katman: Application | Port | Adapter | Config
 
 schema_version: 1
@@ -73,6 +73,27 @@ install:
       - windows-build
       - architecture
       - dotnet-desktop-runtime
+    detection:
+      engine: detector_registry
+      unknown_id: deny
+    auto_install:
+      optional: true
+      artifact:
+        allowed_schemes:
+          - https
+          - file
+        file_extension: .exe
+        sha256_required_before_execute: true
+        authenticode_required: true
+        publisher_subject_required: true
+        certificate_sha256_optional: true
+      arguments:
+        type: array
+        shell_interpretation: false
+      requires_elevation:
+        type: boolean
+      post_install_reprobe_required: true
+      reboot_required_exit: deny_until_resume_supported
   preserve_paths:
     type: array
     relative_to_install_root: true
@@ -95,3 +116,7 @@ security:
   transport_http_remote: deny
   path_escape: deny
   unsupported_prerequisite: deny
+  unsigned_prerequisite_installer: deny
+  prerequisite_hash_failure: deny
+  prerequisite_signature_failure: deny
+  prerequisite_post_install_unsatisfied: deny

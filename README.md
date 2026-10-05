@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim, kullanim ve release durumu giris dokumani
 # 📌 Modul - Markdown
-# Version: 1.1.1
-# Aciklama: Stable Community kod durumunu, signed manifest trust modelini, combined distribution yapisini ve production signing dis bagimliligini ozetler
+# Version: 1.1.2
+# Aciklama: Stable Community kod durumunu, signed manifest trust, secure prerequisite engine ve production signing dis bagimliligini ozetler
 
 Bagimli Oldugu Katman: View
 
@@ -26,6 +26,8 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum, guncelle
 - package-scoped cross-process operation lock
 - crash/reboot operation journal
 - structured JSONL diagnostics
+- generic prerequisite detector registry
+- hash + Authenticode dogrulamali prerequisite auto-install
 - Windows prerequisite kontrolu
 - Stable ve beta release kanallari
 - Community ve Pro katmanlarinin ayni Core kontratlarini kullanmasi
@@ -88,6 +90,8 @@ Tamamlanan P1 maddeleri:
 - crash journal
 - structured diagnostics
 - detached signed manifest trust
+- generic prerequisite detection engine
+- secure prerequisite auto-install + post-install re-probe
 
 Manifest runtime artik:
 
@@ -134,6 +138,10 @@ Manifest trust detaylari:
 
 docs/MANIFEST_TRUST.md
 
+Prerequisite engine detaylari:
+
+docs/PREREQUISITES.md
+
 Bir proje TurkuazInstaller'a gecmeden once signed manifest, install, update, repair, rollback ve uninstall smoke testlerini gecmelidir.
 
 ## Dokuman
@@ -143,6 +151,7 @@ Bir proje TurkuazInstaller'a gecmeden once signed manifest, install, update, rep
 - docs/SECURITY_REVIEW_v1.0.0.md
 - docs/PROJECT_INTEGRATION.md
 - docs/MANIFEST_TRUST.md
+- docs/PREREQUISITES.md
 - docs/VELOPACK_E2E.md
 - docs/AZURE_SIGNING_BOOTSTRAP.md
 - docs/RELEASE_SIGNING.md

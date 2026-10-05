@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Manifests/InstallerManifestReader.cs
 // 📌 Amac: Community installer manifest YAML metnini tam typed PackageRelease modeline donusturur
 // 📌 Modul - Tool CSharp
-// Version: 1.1.0
-// Aciklama: Package, artifact, Authenticode publisher pinning, install policy, prerequisite, preserve path ve rollback alanlarini runtime modeline tasir
+// Version: 1.2.0
+// Aciklama: Package, artifact, Authenticode, prerequisite detector ve guvenli auto-install alanlarini typed runtime modeline tasir
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -81,10 +81,7 @@ public sealed class InstallerManifestReader
         var prerequisites =
             document.Install.Prerequisites
                 .Select(
-                    item =>
-                        new Prerequisite(
-                            item.Id,
-                            item.Version))
+                    ParsePrerequisite)
                 .ToArray();
 
         var preservePaths =
@@ -168,6 +165,53 @@ public sealed class InstallerManifestReader
                 throw new FormatException(
                     "Installer manifest install mode is not supported by Stable v1.")
         };
+    }
+
+    private static Prerequisite ParsePrerequisite(
+        PrerequisiteSection prerequisite)
+    {
+        ArgumentNullException.ThrowIfNull(
+            prerequisite);
+
+        return new Prerequisite(
+            prerequisite.Id,
+            prerequisite.Version,
+            ParsePrerequisiteInstallAction(
+                prerequisite.Install));
+    }
+
+    private static PrerequisiteInstallAction? ParsePrerequisiteInstallAction(
+        PrerequisiteInstallSection? install)
+    {
+        if (install is null)
+        {
+            return null;
+        }
+
+        var signature =
+            ParseSignature(
+                install.Artifact.Signature);
+
+        if (signature is null)
+        {
+            throw new FormatException(
+                "Prerequisite auto-install artifact requires Authenticode signature policy.");
+        }
+
+        var artifact =
+            new ArtifactDescriptor(
+                new Uri(
+                    install.Artifact.Uri,
+                    UriKind.Absolute),
+                ArtifactDigest.ParseSha256(
+                    install.Artifact.Sha256),
+                install.Artifact.SizeBytes,
+                signature);
+
+        return new PrerequisiteInstallAction(
+            artifact,
+            install.Arguments,
+            install.RequiresElevation);
     }
 
     private static ArtifactSignatureDescriptor? ParseSignature(
@@ -275,6 +319,19 @@ public sealed class InstallerManifestReader
 
         public string Version { get; init; } =
             string.Empty;
+
+        public PrerequisiteInstallSection? Install { get; init; }
+    }
+
+    private sealed class PrerequisiteInstallSection
+    {
+        public ArtifactSection Artifact { get; init; } =
+            new();
+
+        public List<string> Arguments { get; init; } =
+            new();
+
+        public bool RequiresElevation { get; init; }
     }
 
     private sealed class RollbackSection

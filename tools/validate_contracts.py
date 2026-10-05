@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.2.0
-# Aciklama: Detached CMS trust, Stable v1 full install, Authenticode, prerequisite, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.3.1
+# Aciklama: Detached CMS trust, Authenticode, detector registry, prerequisite auto-install, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -182,6 +182,99 @@ if prerequisites != EXPECTED_PREREQUISITES:
         f"prerequisite IDs drifted: {sorted(prerequisites)}"
     )
 
+prerequisite_policy = (
+    manifest
+    .get("install", {})
+    .get("prerequisites", {})
+)
+
+detection_policy = prerequisite_policy.get(
+    "detection",
+    {},
+)
+
+if detection_policy.get("engine") != "detector_registry":
+    fail(
+        "prerequisite detection engine must use detector_registry"
+    )
+
+if detection_policy.get("unknown_id") != "deny":
+    fail(
+        "unknown prerequisite IDs must fail closed"
+    )
+
+auto_install_policy = prerequisite_policy.get(
+    "auto_install",
+    {},
+)
+
+if auto_install_policy.get("optional") is not True:
+    fail(
+        "prerequisite auto-install must remain optional"
+    )
+
+prerequisite_artifact_policy = auto_install_policy.get(
+    "artifact",
+    {},
+)
+
+if set(
+    prerequisite_artifact_policy.get(
+        "allowed_schemes",
+        [],
+    )
+) != EXPECTED_URI_SCHEMES:
+    fail(
+        "prerequisite installer URI schemes must match artifact policy"
+    )
+
+if (
+    prerequisite_artifact_policy
+    .get("file_extension")
+    != ".exe"
+):
+    fail(
+        "prerequisite auto-install must remain restricted to direct EXE artifacts"
+    )
+
+for key in (
+    "sha256_required_before_execute",
+    "authenticode_required",
+    "publisher_subject_required",
+):
+    if prerequisite_artifact_policy.get(key) is not True:
+        fail(
+            f"prerequisite installer invariant missing: {key}"
+        )
+
+if (
+    auto_install_policy
+    .get("arguments", {})
+    .get("shell_interpretation")
+    is not False
+):
+    fail(
+        "prerequisite installer arguments must remain shell-free"
+    )
+
+if (
+    auto_install_policy
+    .get("post_install_reprobe_required")
+    is not True
+):
+    fail(
+        "prerequisite auto-install must re-probe after execution"
+    )
+
+if (
+    auto_install_policy
+    .get("reboot_required_exit")
+    != "deny_until_resume_supported"
+):
+    fail(
+        "reboot-required prerequisite result must fail closed until resume support exists"
+    )
+
 security = manifest.get("security", {})
 
 for key in (
@@ -195,6 +288,10 @@ for key in (
     "transport_http_remote",
     "path_escape",
     "unsupported_prerequisite",
+    "unsigned_prerequisite_installer",
+    "prerequisite_hash_failure",
+    "prerequisite_signature_failure",
+    "prerequisite_post_install_unsatisfied",
 ):
     if security.get(key) != "deny":
         fail(
@@ -421,6 +518,75 @@ if (
 ):
     fail(
         "example signature algorithm unsupported"
+    )
+
+example_prerequisites = (
+    example
+    .get("install", {})
+    .get("prerequisites", [])
+)
+
+auto_install_examples = [
+    prerequisite
+    for prerequisite in example_prerequisites
+    if isinstance(prerequisite, dict)
+    and isinstance(
+        prerequisite.get("install"),
+        dict,
+    )
+]
+
+if not auto_install_examples:
+    fail(
+        "example manifest must include one prerequisite auto-install policy"
+    )
+
+example_auto_install = auto_install_examples[0]["install"]
+example_prerequisite_artifact = example_auto_install.get(
+    "artifact",
+    {},
+)
+
+example_prerequisite_hash = str(
+    example_prerequisite_artifact.get(
+        "sha256",
+        "",
+    )
+).strip().lower()
+
+if not SHA256_PATTERN.fullmatch(
+    example_prerequisite_hash
+):
+    fail(
+        "example prerequisite installer SHA-256 must contain exactly 64 lowercase hex characters"
+    )
+
+if (
+    example_prerequisite_artifact
+    .get("signature", {})
+    .get("algorithm")
+    not in EXPECTED_SIGNATURE_ALGORITHMS
+):
+    fail(
+        "example prerequisite installer must declare Authenticode"
+    )
+
+if (
+    not example_prerequisite_artifact
+    .get("signature", {})
+    .get("publisher_subject")
+):
+    fail(
+        "example prerequisite installer publisher_subject is required"
+    )
+
+if (
+    example_auto_install
+    .get("requires_elevation")
+    is not True
+):
+    fail(
+        "example prerequisite installer must demonstrate explicit elevation"
     )
 
 security_text = SECURITY.read_text(

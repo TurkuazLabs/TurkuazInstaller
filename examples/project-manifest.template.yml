@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /examples/project-manifest.template.yml
 # 📌 Amac: TurkuazInstaller'a gececek projeler icin reusable Stable v1 manifest sablonu saglar
 # 📌 Modul - Config YAML
-# Version: 1.1.1
-# Aciklama: Detached .p7s manifest trust, full install, SHA-256, optional Authenticode, prerequisite, preserve path ve rollback alanlarini migration icin standartlastirir
+# Version: 1.2.0
+# Aciklama: Detached .p7s trust, full install, guvenli prerequisite detection/auto-install, preserve path ve rollback alanlarini migration icin standartlastirir
 # Bagimli Oldugu Katman: Config
 
 # Release pipeline bu dosyanin raw byte'larini CMS/PKCS#7 detached olarak imzalamali.
@@ -33,6 +33,23 @@ install:
       version: ">=17763"
     - id: architecture
       version: "x64"
+    # Optional auto-install ornegi:
+    # - id: dotnet-desktop-runtime
+    #   version: ">=10.0.0"
+    #   install:
+    #     artifact:
+    #       uri: "__HTTPS_OR_FILE_PREREQUISITE_INSTALLER_URI__"
+    #       sha256: "__64_CHAR_SHA256__"
+    #       size_bytes: 1
+    #       signature:
+    #         algorithm: authenticode
+    #         publisher_subject: "__PREREQUISITE_PUBLISHER_SUBJECT__"
+    #         # certificate_sha256: "__OPTIONAL_PREREQUISITE_CERTIFICATE_SHA256_PIN__"
+    #     arguments:
+    #       - "/install"
+    #       - "/quiet"
+    #       - "/norestart"
+    #     requires_elevation: true
   preserve_paths:
     - "UserData"
 

@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.1.0
-// Aciklama: Publisher-pinned verification, package lock ve crash journal/log checkpointlerini tum mutasyon operasyonlarina uygular
+// Version: 1.2.1
+// Aciklama: Publisher-pinned verification, prerequisite auto-install/re-probe, package lock ve crash journal/log checkpointlerini uygular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -11,8 +11,10 @@ using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Contracts.System;
+using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Plans;
+using TurkuazInstaller.Domain.Prerequisites;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Domain.State;
@@ -49,6 +51,15 @@ public sealed class InstallerWorkflowService
     private const string PrerequisiteProbeMissing =
         "Manifest prerequisites are declared but no prerequisite probe is configured.";
 
+    private const string PrerequisiteInstallerMissing =
+        "Prerequisite auto-install is declared but no prerequisite installer is configured.";
+
+    private const string PrerequisiteInstallingEvent =
+        "prerequisite.installing";
+
+    private const string PrerequisiteInstalledEvent =
+        "prerequisite.installed";
+
     private readonly IArtifactDownloader _artifactDownloader;
     private readonly IArtifactVerifier _artifactVerifier;
     private readonly IPackageEngine _packageEngine;
@@ -58,6 +69,7 @@ public sealed class InstallerWorkflowService
     private readonly IInstallerOperationLock? _operationLock;
     private readonly IInstallerOperationJournalRepository? _operationJournal;
     private readonly IInstallerEventLogger? _eventLogger;
+    private readonly IPrerequisiteInstaller? _prerequisiteInstaller;
 
     public InstallerWorkflowService(
         IArtifactDownloader artifactDownloader,
@@ -68,7 +80,8 @@ public sealed class InstallerWorkflowService
         ISystemPrerequisiteProbe? prerequisiteProbe = null,
         IInstallerOperationLock? operationLock = null,
         IInstallerOperationJournalRepository? operationJournal = null,
-        IInstallerEventLogger? eventLogger = null)
+        IInstallerEventLogger? eventLogger = null,
+        IPrerequisiteInstaller? prerequisiteInstaller = null)
     {
         _artifactDownloader = artifactDownloader;
         _artifactVerifier = artifactVerifier;
@@ -79,6 +92,7 @@ public sealed class InstallerWorkflowService
         _operationLock = operationLock;
         _operationJournal = operationJournal;
         _eventLogger = eventLogger;
+        _prerequisiteInstaller = prerequisiteInstaller;
     }
 
     public Task InstallAsync(
@@ -101,6 +115,7 @@ public sealed class InstallerWorkflowService
             {
                 await ValidatePrerequisitesAsync(
                         release,
+                        stagingDirectory,
                         operation,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -185,6 +200,7 @@ public sealed class InstallerWorkflowService
 
                 await ValidatePrerequisitesAsync(
                         release,
+                        stagingDirectory,
                         operation,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -266,6 +282,7 @@ public sealed class InstallerWorkflowService
 
                 await ValidatePrerequisitesAsync(
                         release,
+                        stagingDirectory,
                         operation,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -342,6 +359,7 @@ public sealed class InstallerWorkflowService
 
                 await ValidatePrerequisitesAsync(
                         previousRelease,
+                        stagingDirectory,
                         operation,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -579,7 +597,7 @@ public sealed class InstallerWorkflowService
         }
 
         await VerifySignatureAsync(
-                release,
+                release.Artifact,
                 downloadedPath,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -607,12 +625,12 @@ public sealed class InstallerWorkflowService
     }
 
     private async Task VerifySignatureAsync(
-        PackageRelease release,
+        ArtifactDescriptor artifact,
         string artifactPath,
         CancellationToken cancellationToken)
     {
         var signature =
-            release.Artifact.Signature;
+            artifact.Signature;
 
         if (signature is null)
         {
@@ -642,6 +660,7 @@ public sealed class InstallerWorkflowService
 
     private async Task ValidatePrerequisitesAsync(
         PackageRelease release,
+        string stagingDirectory,
         InstallerOperationContext operation,
         CancellationToken cancellationToken)
     {
@@ -669,6 +688,16 @@ public sealed class InstallerWorkflowService
             var prerequisite in
             release.Install.Prerequisites)
         {
+            if (
+                !_prerequisiteProbe.Supports(
+                    prerequisite.Id))
+            {
+                throw new InvalidOperationException(
+                    string.Concat(
+                        "Unsupported prerequisite id: ",
+                        prerequisite.Id));
+            }
+
             var satisfied =
                 await _prerequisiteProbe
                     .IsSatisfiedAsync(
@@ -676,16 +705,111 @@ public sealed class InstallerWorkflowService
                         cancellationToken)
                     .ConfigureAwait(false);
 
-            if (!satisfied)
+            if (satisfied)
+            {
+                continue;
+            }
+
+            var installAction =
+                prerequisite.InstallAction;
+
+            if (installAction is null)
+            {
+                throw new InvalidOperationException(
+                    BuildUnsatisfiedPrerequisiteMessage(
+                        prerequisite));
+            }
+
+            if (_prerequisiteInstaller is null)
+            {
+                throw new InvalidOperationException(
+                    PrerequisiteInstallerMissing);
+            }
+
+            await operation
+                .SetPhaseAsync(
+                    InstallerOperationPhase.ValidatingPrerequisites,
+                    PrerequisiteInstallingEvent,
+                    string.Concat(
+                        "Prerequisite auto-install started: ",
+                        prerequisite.Id,
+                        "."),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            var installerPath =
+                await _artifactDownloader
+                    .DownloadAsync(
+                        installAction.Artifact,
+                        stagingDirectory,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            var verification =
+                await _artifactVerifier
+                    .VerifyAsync(
+                        installerPath,
+                        installAction.Artifact,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (!verification.IsValid)
+            {
+                throw new InvalidDataException(
+                    verification.Message);
+            }
+
+            await VerifySignatureAsync(
+                    installAction.Artifact,
+                    installerPath,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            await _prerequisiteInstaller
+                .InstallAsync(
+                    installerPath,
+                    installAction,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            var satisfiedAfterInstall =
+                await _prerequisiteProbe
+                    .IsSatisfiedAsync(
+                        prerequisite,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (!satisfiedAfterInstall)
             {
                 throw new InvalidOperationException(
                     string.Concat(
-                        "Required prerequisite is not satisfied: ",
+                        "Prerequisite auto-install completed but requirement is still not satisfied: ",
                         prerequisite.Id,
                         " ",
                         prerequisite.VersionExpression));
             }
+
+            await operation
+                .SetPhaseAsync(
+                    InstallerOperationPhase.ValidatingPrerequisites,
+                    PrerequisiteInstalledEvent,
+                    string.Concat(
+                        "Prerequisite auto-install completed: ",
+                        prerequisite.Id,
+                        "."),
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
+    }
+
+    private static string BuildUnsatisfiedPrerequisiteMessage(
+        Prerequisite prerequisite)
+    {
+        return string.Concat(
+            "Required prerequisite is not satisfied: ",
+            prerequisite.Id,
+            " ",
+            prerequisite.VersionExpression);
     }
 
     private async Task SaveStateAsync(

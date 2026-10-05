@@ -1,12 +1,14 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.2.0
-// Aciklama: Detached manifest trust, publisher pinning, prerequisite, package lock, crash journal, structured log ve Velopack runtime adapterlarini baglar
+// Version: 1.3.0
+// Aciklama: Detached trust, generic prerequisite detector registry, auto-install Tool, package lock, journal, log ve Velopack runtime adapterlarini baglar
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
 
 using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Application.Prerequisites;
+using TurkuazInstaller.Contracts.System;
 using TurkuazInstaller.Infrastructure.Artifacts;
 using TurkuazInstaller.Infrastructure.Manifests;
 using TurkuazInstaller.Infrastructure.Operations;
@@ -65,19 +67,37 @@ internal static class DesktopCompositionRoot
                 new JsonLinesInstallerEventLoggerOptions(
                     runtimeOptions.LogRoot));
 
+        var processRunner =
+            new SystemProcessRunner();
+
+        var prerequisiteProbe =
+            new PrerequisiteDetectionService(
+                new IPrerequisiteDetector[]
+                {
+                    new WindowsBuildPrerequisiteDetector(),
+                    new WindowsArchitecturePrerequisiteDetector(),
+                    new WindowsDesktopRuntimePrerequisiteDetector()
+                });
+
+        var prerequisiteInstaller =
+            new WindowsPrerequisiteInstaller(
+                processRunner,
+                new WindowsElevatedProcessRunner());
+
         var workflowService =
             new InstallerWorkflowService(
                 new DefaultArtifactDownloader(
                     httpClient),
                 new Sha256ArtifactVerifier(),
                 new VelopackPackageEngine(
-                    new SystemProcessRunner()),
+                    processRunner),
                 stateRepository,
                 new WindowsAuthenticodeArtifactSignatureVerifier(),
-                new WindowsSystemPrerequisiteProbe(),
+                prerequisiteProbe,
                 operationLock,
                 operationJournal,
-                eventLogger);
+                eventLogger,
+                prerequisiteInstaller);
 
         var runtimeService =
             new WinUiInstallerRuntimeService(
