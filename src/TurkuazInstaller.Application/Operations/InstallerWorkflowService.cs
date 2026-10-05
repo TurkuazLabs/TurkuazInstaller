@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.2.1
-// Aciklama: Publisher-pinned verification, prerequisite auto-install/re-probe, package lock ve crash journal/log checkpointlerini uygular
+// Version: 1.3.0
+// Aciklama: Publisher-pinned verification, prerequisite auto-install, typed reboot checkpoint, package lock ve crash journal/log akisini uygular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -504,6 +504,10 @@ public sealed class InstallerWorkflowService
                     CancellationToken.None)
                 .ConfigureAwait(false);
         }
+        catch (InstallerRebootRequiredException)
+        {
+            throw;
+        }
         catch (OperationCanceledException)
         {
             await context
@@ -765,12 +769,33 @@ public sealed class InstallerWorkflowService
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            await _prerequisiteInstaller
-                .InstallAsync(
-                    installerPath,
-                    installAction,
-                    cancellationToken)
-                .ConfigureAwait(false);
+            var installResult =
+                await _prerequisiteInstaller
+                    .InstallAsync(
+                        installerPath,
+                        installAction,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (installResult.RequiresReboot)
+            {
+                var rebootMessage =
+                    string.Concat(
+                        "Prerequisite installed and reboot is required before re-probe: ",
+                        prerequisite.Id,
+                        ".");
+
+                await operation
+                    .AwaitRebootAsync(
+                        rebootMessage,
+                        CancellationToken.None)
+                    .ConfigureAwait(false);
+
+                throw new InstallerRebootRequiredException(
+                    prerequisite.Id,
+                    installResult.Disposition,
+                    installResult.ExitCode);
+            }
 
             var satisfiedAfterInstall =
                 await _prerequisiteProbe
