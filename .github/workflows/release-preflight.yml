@@ -1,0 +1,91 @@
+# 📄 Dosya Yolu: /.github/workflows/release-preflight.yml
+# 📌 Amac: Stable tag olusturmadan once production OIDC, Azure Artifact Signing, timestamp ve Authenticode zincirini gercek bir probe binary ile dogrular
+# 📌 Modul - CI YAML
+# Version: 1.0.0
+# Aciklama: GitHub production environment uzerinden kucuk bir Windows PE/DLL uretir, Azure'da imzalar ve SignTool ile dogrular
+# Bagimli Oldugu Katman: Tool | Config
+
+name: Production Signing Preflight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-signing-preflight
+  cancel-in-progress: false
+
+jobs:
+  signing-preflight:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Validate signing configuration
+        shell: pwsh
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARTIFACT_SIGNING_ENDPOINT: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          ARTIFACT_SIGNING_ACCOUNT_NAME: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          ARTIFACT_SIGNING_CERT_PROFILE_NAME: ${{ vars.ARTIFACT_SIGNING_CERT_PROFILE_NAME }}
+          ARTIFACT_SIGNING_TIMESTAMP_URL: ${{ vars.ARTIFACT_SIGNING_TIMESTAMP_URL }}
+        run: |
+          $required = @(
+            "AZURE_CLIENT_ID",
+            "AZURE_TENANT_ID",
+            "AZURE_SUBSCRIPTION_ID",
+            "ARTIFACT_SIGNING_ENDPOINT",
+            "ARTIFACT_SIGNING_ACCOUNT_NAME",
+            "ARTIFACT_SIGNING_CERT_PROFILE_NAME",
+            "ARTIFACT_SIGNING_TIMESTAMP_URL"
+          )
+
+          foreach ($name in $required) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Required production signing configuration is missing: $name"
+            }
+          }
+
+      - name: Create signing probe
+        shell: pwsh
+        run: |
+          dotnet new console --name TurkuazInstaller.SigningProbe --output artifacts/signing-probe/src --framework net10.0 --force
+          dotnet publish artifacts/signing-probe/src/TurkuazInstaller.SigningProbe.csproj --configuration Release --runtime win-x64 --self-contained false --output artifacts/signing-probe/out
+
+      - name: Azure login with OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign probe binaries
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_CERT_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\artifacts\signing-probe\out
+          files-folder-filter: TurkuazInstaller.SigningProbe.exe,TurkuazInstaller.SigningProbe.dll
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: ${{ vars.ARTIFACT_SIGNING_TIMESTAMP_URL }}
+          timestamp-digest: SHA256
+
+      - name: Verify probe Authenticode signatures
+        shell: pwsh
+        run: ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/signing-probe/out

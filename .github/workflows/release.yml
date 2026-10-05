@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
-# 📌 Amac: v1 ve sonrasi tag'lerde reproducible Windows binary uretir, Azure Artifact Signing ile imzalar, attest eder ve GitHub Release yayinlar
+# 📌 Amac: v1 ve sonrasi tag'lerde reproducible Windows binary uretir, production environment uzerinden Azure Artifact Signing ile imzalar, attest eder ve GitHub Release yayinlar
 # 📌 Modul - CI YAML
-# Version: 1.0.1
-# Aciklama: OIDC production signing, deterministic archive, Authenticode verify, SHA-256 checksum ve GitHub provenance attestation release kapisidir
+# Version: 1.0.2
+# Aciklama: Immutable OIDC production environment, deterministic archive, Authenticode verify, SHA-256 checksum ve GitHub provenance attestation release kapisidir
 # Bagimli Oldugu Katman: Tool | Config
 
 name: Signed Release
@@ -17,10 +17,15 @@ permissions:
   id-token: write
   attestations: write
 
+concurrency:
+  group: signed-release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   signed-release:
     runs-on: windows-2025
     timeout-minutes: 45
+    environment: production
 
     steps:
       - name: Checkout

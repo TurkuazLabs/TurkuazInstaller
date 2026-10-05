@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim, kullanim ve release durumu giris dokumani
 # 📌 Modul - Markdown
-# Version: 1.0.1
-# Aciklama: Stable Community kod kapsamlarini, deterministic dagitimi ve production signing release gate durumunu ozetler
+# Version: 1.0.2
+# Aciklama: Stable Community kod kapsamlarini, deterministic dagitimi ve production signing bootstrap durumunu ozetler
 
 Bagimli Oldugu Katman: View
 
@@ -39,25 +39,41 @@ Tamamlanan release kalite katmanlari:
 
 - Core ve Windows CI
 - contract validation
+- main Stable Readiness
 - iki temiz publish agaci SHA-256 reproducibility dogrulamasi
 - deterministic release ZIP packaging
 - install ve rollback recovery testleri
+- progress ordering race fix
 - security review
 - OIDC tabanli Azure Artifact Signing release workflow
+- immutable GitHub OIDC production environment modeli
+- production signing bootstrap scripti
+- production signing preflight workflow
 - SignTool Authenticode verification
 - signing sonrasi SHA-256 release checksum manifesti
 - GitHub artifact attestation provenance
 - user ve release dokumani
 
-Production v1.0.0 tag'i, Azure Artifact Signing identity ve certificate profile repository'ye baglanmadan olusturulmamalidir.
+Production v1.0.0 tag'i, Azure Artifact Signing account, identity validation, production certificate profile ve OIDC/RBAC baglantisi tamamlanmadan olusturulmamalidir.
 
 Unsigned production fallback yoktur.
+
+## Production Signing Bootstrap
+
+Baslangic dokumani:
+
+docs/AZURE_SIGNING_BOOTSTRAP.md
+
+Bootstrap araci:
+
+tools/release/Initialize-ProductionSigning.ps1
 
 ## Dokuman
 
 - docs/ARCHITECTURE.md
 - docs/SECURITY_MODEL.md
 - docs/SECURITY_REVIEW_v1.0.0.md
+- docs/AZURE_SIGNING_BOOTSTRAP.md
 - docs/RELEASE_SIGNING.md
 - docs/RELEASE_CHECKLIST.md
 - docs/WINDOWS_BOOTSTRAP.md
