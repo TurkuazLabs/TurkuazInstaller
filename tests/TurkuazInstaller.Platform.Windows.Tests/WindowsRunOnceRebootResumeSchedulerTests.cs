@@ -44,9 +44,9 @@ public sealed class WindowsRunOnceRebootResumeSchedulerTests
 
             Assert.Equal(
                 string.Concat(
-                    """,
+                    "\"",
                     bootstrapPath,
-                    "" ",
+                    "\" ",
                     InstallerResumeLaunchArguments.PackageOption,
                     " example-app"),
                 store.CommandLine);
