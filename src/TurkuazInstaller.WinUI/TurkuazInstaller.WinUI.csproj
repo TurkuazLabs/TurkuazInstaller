@@ -2,8 +2,8 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj
 # 📌 Amac: TurkuazInstaller WinUI 3 unpackaged self-contained masaustu uygulamasini derler
 # 📌 Modul - Project XML
-# Version: 0.7.0
-# Aciklama: Windows App SDK 2.5.1 stable ile View katmanini ve desktop composition rootunu tasir
+# Version: 1.0.0
+# Aciklama: Windows App SDK ile View katmanini, Windows prerequisite ve Authenticode adapterlarini self-contained desktop runtime'a baglar
 
 Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
 -->
@@ -31,6 +31,7 @@ Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
     <ProjectReference Include="../TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
     <ProjectReference Include="../TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
     <ProjectReference Include="../TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj" />
+    <ProjectReference Include="../TurkuazInstaller.Platform.Windows/TurkuazInstaller.Platform.Windows.csproj" />
     <ProjectReference Include="../TurkuazInstaller.Presentation/TurkuazInstaller.Presentation.csproj" />
   </ItemGroup>
 </Project>

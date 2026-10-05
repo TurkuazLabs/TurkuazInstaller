@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Contracts/Packages/IPackageEngine.cs
-// 📌 Amac: Package engine adapterlarinin staging, apply, repair ve rollback davranisini tanimlar
+// 📌 Amac: Package engine adapterlarinin staging, apply, repair, rollback ve uninstall davranisini tanimlar
 // 📌 Modul - Port CSharp
-// Version: 0.5.0
-// Aciklama: Dogrulanmis artifacti typed stage haline getirir ve tum mutasyonlari staged artifact uzerinden calistirir
+// Version: 1.0.0
+// Aciklama: Dogrulanmis artifacti typed stage haline getirir ve installer mutasyonlarini package engine portu uzerinden calistirir
 //
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -32,5 +32,9 @@ public interface IPackageEngine
     Task RollbackAsync(
         RollbackPlan plan,
         PackageStage stage,
+        CancellationToken cancellationToken);
+
+    Task UninstallAsync(
+        UninstallPlan plan,
         CancellationToken cancellationToken);
 }

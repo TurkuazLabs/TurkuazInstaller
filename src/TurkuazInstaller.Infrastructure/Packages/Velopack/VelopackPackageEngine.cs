@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Packages/Velopack/VelopackPackageEngine.cs
-// 📌 Amac: Merkezi TurkuazInstaller icin Velopack staging, apply, repair ve rollback adapterini uygular
+// 📌 Amac: Merkezi TurkuazInstaller icin Velopack staging, apply, repair, rollback ve uninstall adapterini uygular
 // 📌 Modul - Tool CSharp
-// Version: 0.5.0
+// Version: 1.0.0
 // Aciklama: Dogrulanmis Setup.exe veya full nupkg artifactini atomik stage eder ve resmi Velopack CLI kontratini shell kullanmadan cagirir
 //
 // Bagimli Oldugu Katman: Service | Tool
@@ -19,7 +19,8 @@ public sealed class VelopackPackageEngine : IPackageEngine
 
     private readonly IProcessRunner _processRunner;
 
-    public VelopackPackageEngine(IProcessRunner processRunner)
+    public VelopackPackageEngine(
+        IProcessRunner processRunner)
     {
         _processRunner = processRunner;
     }
@@ -31,8 +32,10 @@ public sealed class VelopackPackageEngine : IPackageEngine
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(release);
-        ArgumentException.ThrowIfNullOrWhiteSpace(verifiedArtifactPath);
-        ArgumentException.ThrowIfNullOrWhiteSpace(stagingDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            verifiedArtifactPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            stagingDirectory);
 
         if (!File.Exists(verifiedArtifactPath))
         {
@@ -41,22 +44,43 @@ public sealed class VelopackPackageEngine : IPackageEngine
                 "Verified artifact file does not exist.");
         }
 
-        var artifactKind = ResolveArtifactKind(release);
-        var stageRoot = Path.GetFullPath(stagingDirectory);
-        Directory.CreateDirectory(stageRoot);
+        var artifactKind =
+            ResolveArtifactKind(release);
 
-        var operationDirectory = EnsureChildPath(
-            stageRoot,
-            Path.Combine(stageRoot, Guid.NewGuid().ToString("N")));
+        var stageRoot =
+            Path.GetFullPath(
+                stagingDirectory);
 
-        Directory.CreateDirectory(operationDirectory);
+        Directory.CreateDirectory(
+            stageRoot);
 
-        var fileName = ResolveArtifactFileName(release, artifactKind);
-        var stagedArtifactPath = EnsureChildPath(
-            operationDirectory,
-            Path.Combine(operationDirectory, fileName));
+        var operationDirectory =
+            EnsureChildPath(
+                stageRoot,
+                Path.Combine(
+                    stageRoot,
+                    Guid.NewGuid()
+                        .ToString("N")));
 
-        var partialPath = string.Concat(stagedArtifactPath, VelopackConventions.PartialSuffix);
+        Directory.CreateDirectory(
+            operationDirectory);
+
+        var fileName =
+            ResolveArtifactFileName(
+                release,
+                artifactKind);
+
+        var stagedArtifactPath =
+            EnsureChildPath(
+                operationDirectory,
+                Path.Combine(
+                    operationDirectory,
+                    fileName));
+
+        var partialPath =
+            string.Concat(
+                stagedArtifactPath,
+                VelopackConventions.PartialSuffix);
 
         try
         {
@@ -66,7 +90,9 @@ public sealed class VelopackPackageEngine : IPackageEngine
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            File.Move(partialPath, stagedArtifactPath);
+            File.Move(
+                partialPath,
+                stagedArtifactPath);
 
             return new PackageStage(
                 release.PackageId,
@@ -76,12 +102,17 @@ public sealed class VelopackPackageEngine : IPackageEngine
         }
         catch (PackageEngineException)
         {
-            TryDeleteDirectory(operationDirectory);
+            TryDeleteDirectory(
+                operationDirectory);
             throw;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception)
+            when (
+                exception is IOException or
+                UnauthorizedAccessException)
         {
-            TryDeleteDirectory(operationDirectory);
+            TryDeleteDirectory(
+                operationDirectory);
 
             throw new PackageEngineException(
                 PackageEngineOperation.Stage,
@@ -98,10 +129,18 @@ public sealed class VelopackPackageEngine : IPackageEngine
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(stage);
 
-        ValidateStageMatchesRelease(stage, plan.Release, PackageEngineOperation.Apply);
-        ValidatePreservePaths(plan.TargetPath, plan.PreservePaths);
+        ValidateStageMatchesRelease(
+            stage,
+            plan.Release,
+            PackageEngineOperation.Apply);
 
-        if (stage.ArtifactKind == PackageArtifactKind.VelopackSetup)
+        ValidatePreservePaths(
+            plan.TargetPath,
+            plan.PreservePaths);
+
+        if (
+            stage.ArtifactKind ==
+            PackageArtifactKind.VelopackSetup)
         {
             await RunSetupAsync(
                     plan.TargetPath,
@@ -128,8 +167,14 @@ public sealed class VelopackPackageEngine : IPackageEngine
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(stage);
 
-        ValidateStageMatchesRelease(stage, plan.Release, PackageEngineOperation.Repair);
-        RequireFullPackage(stage, PackageEngineOperation.Repair);
+        ValidateStageMatchesRelease(
+            stage,
+            plan.Release,
+            PackageEngineOperation.Repair);
+
+        RequireFullPackage(
+            stage,
+            PackageEngineOperation.Repair);
 
         await RunUpdaterApplyAsync(
                 PackageEngineOperation.Repair,
@@ -152,7 +197,9 @@ public sealed class VelopackPackageEngine : IPackageEngine
             plan.PreviousRelease,
             PackageEngineOperation.Rollback);
 
-        RequireFullPackage(stage, PackageEngineOperation.Rollback);
+        RequireFullPackage(
+            stage,
+            PackageEngineOperation.Rollback);
 
         await RunUpdaterApplyAsync(
                 PackageEngineOperation.Rollback,
@@ -162,23 +209,71 @@ public sealed class VelopackPackageEngine : IPackageEngine
             .ConfigureAwait(false);
     }
 
+    public async Task UninstallAsync(
+        UninstallPlan plan,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var targetRoot =
+            Path.GetFullPath(
+                plan.TargetPath);
+
+        var updaterPath =
+            Path.Combine(
+                targetRoot,
+                VelopackConventions.UpdateExecutableName);
+
+        if (!File.Exists(updaterPath))
+        {
+            throw new PackageEngineException(
+                PackageEngineOperation.Uninstall,
+                "Velopack Update.exe was not found in the install root.");
+        }
+
+        var command =
+            new ProcessCommand(
+                updaterPath,
+                new[]
+                {
+                    VelopackConventions.SilentArgument,
+                    VelopackConventions.RootDirectoryArgument,
+                    targetRoot,
+                    VelopackConventions.UninstallCommand
+                },
+                targetRoot);
+
+        await RunCheckedAsync(
+                PackageEngineOperation.Uninstall,
+                command,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     private async Task RunSetupAsync(
         string targetPath,
         PackageStage stage,
         CancellationToken cancellationToken)
     {
-        EnsureStagedArtifactExists(stage, PackageEngineOperation.Apply);
+        EnsureStagedArtifactExists(
+            stage,
+            PackageEngineOperation.Apply);
 
-        var targetRoot = Path.GetFullPath(targetPath);
-        var command = new ProcessCommand(
-            stage.ArtifactPath,
-            new[]
-            {
-                VelopackConventions.SilentArgument,
-                VelopackConventions.InstallToArgument,
-                targetRoot
-            },
-            Path.GetDirectoryName(stage.ArtifactPath));
+        var targetRoot =
+            Path.GetFullPath(
+                targetPath);
+
+        var command =
+            new ProcessCommand(
+                stage.ArtifactPath,
+                new[]
+                {
+                    VelopackConventions.SilentArgument,
+                    VelopackConventions.InstallToArgument,
+                    targetRoot
+                },
+                Path.GetDirectoryName(
+                    stage.ArtifactPath));
 
         await RunCheckedAsync(
                 PackageEngineOperation.Apply,
@@ -193,12 +288,18 @@ public sealed class VelopackPackageEngine : IPackageEngine
         PackageStage stage,
         CancellationToken cancellationToken)
     {
-        EnsureStagedArtifactExists(stage, operation);
+        EnsureStagedArtifactExists(
+            stage,
+            operation);
 
-        var targetRoot = Path.GetFullPath(targetPath);
-        var updaterPath = Path.Combine(
-            targetRoot,
-            VelopackConventions.UpdateExecutableName);
+        var targetRoot =
+            Path.GetFullPath(
+                targetPath);
+
+        var updaterPath =
+            Path.Combine(
+                targetRoot,
+                VelopackConventions.UpdateExecutableName);
 
         if (!File.Exists(updaterPath))
         {
@@ -207,16 +308,24 @@ public sealed class VelopackPackageEngine : IPackageEngine
                 "Velopack Update.exe was not found in the install root.");
         }
 
-        var packagesDirectory = Path.Combine(
-            targetRoot,
-            VelopackConventions.PackagesDirectoryName);
+        var packagesDirectory =
+            Path.Combine(
+                targetRoot,
+                VelopackConventions.PackagesDirectoryName);
 
-        Directory.CreateDirectory(packagesDirectory);
+        Directory.CreateDirectory(
+            packagesDirectory);
 
-        var packageFileName = Path.GetFileName(stage.ArtifactPath);
-        var packagePath = EnsureChildPath(
-            packagesDirectory,
-            Path.Combine(packagesDirectory, packageFileName));
+        var packageFileName =
+            Path.GetFileName(
+                stage.ArtifactPath);
+
+        var packagePath =
+            EnsureChildPath(
+                packagesDirectory,
+                Path.Combine(
+                    packagesDirectory,
+                    packageFileName));
 
         await CopyAtomicReplaceAsync(
                 stage.ArtifactPath,
@@ -224,21 +333,22 @@ public sealed class VelopackPackageEngine : IPackageEngine
                 cancellationToken)
             .ConfigureAwait(false);
 
-        var command = new ProcessCommand(
-            updaterPath,
-            new[]
-            {
-                VelopackConventions.SilentArgument,
-                VelopackConventions.RootDirectoryArgument,
-                targetRoot,
-                VelopackConventions.PackageDirectoryArgument,
-                packagesDirectory,
-                VelopackConventions.ApplyCommand,
-                VelopackConventions.NoRestartArgument,
-                VelopackConventions.PackageArgument,
-                packagePath
-            },
-            targetRoot);
+        var command =
+            new ProcessCommand(
+                updaterPath,
+                new[]
+                {
+                    VelopackConventions.SilentArgument,
+                    VelopackConventions.RootDirectoryArgument,
+                    targetRoot,
+                    VelopackConventions.PackageDirectoryArgument,
+                    packagesDirectory,
+                    VelopackConventions.ApplyCommand,
+                    VelopackConventions.NoRestartArgument,
+                    VelopackConventions.PackageArgument,
+                    packagePath
+                },
+                targetRoot);
 
         await RunCheckedAsync(
                 operation,
@@ -256,9 +366,12 @@ public sealed class VelopackPackageEngine : IPackageEngine
 
         try
         {
-            result = await _processRunner
-                .RunAsync(command, cancellationToken)
-                .ConfigureAwait(false);
+            result =
+                await _processRunner
+                    .RunAsync(
+                        command,
+                        cancellationToken)
+                    .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -286,8 +399,10 @@ public sealed class VelopackPackageEngine : IPackageEngine
         PackageRelease release,
         PackageEngineOperation operation)
     {
-        if (stage.PackageId != release.PackageId
-            || !stage.Version.Equals(release.Version))
+        if (
+            stage.PackageId != release.PackageId ||
+            !stage.Version.Equals(
+                release.Version))
         {
             throw new PackageEngineException(
                 operation,
@@ -299,7 +414,9 @@ public sealed class VelopackPackageEngine : IPackageEngine
         PackageStage stage,
         PackageEngineOperation operation)
     {
-        if (stage.ArtifactKind != PackageArtifactKind.VelopackFullPackage)
+        if (
+            stage.ArtifactKind !=
+            PackageArtifactKind.VelopackFullPackage)
         {
             throw new PackageEngineException(
                 operation,
@@ -319,15 +436,19 @@ public sealed class VelopackPackageEngine : IPackageEngine
         }
     }
 
-    private static PackageArtifactKind ResolveArtifactKind(PackageRelease release)
+    private static PackageArtifactKind ResolveArtifactKind(
+        PackageRelease release)
     {
-        var path = release.Artifact.Uri.IsFile
-            ? release.Artifact.Uri.LocalPath
-            : release.Artifact.Uri.AbsolutePath;
+        var path =
+            release.Artifact.Uri.IsFile
+                ? release.Artifact.Uri.LocalPath
+                : release.Artifact.Uri.AbsolutePath;
 
-        var extension = Path.GetExtension(path);
+        var extension =
+            Path.GetExtension(path);
 
-        if (string.Equals(
+        if (
+            string.Equals(
                 extension,
                 VelopackConventions.SetupExtension,
                 StringComparison.OrdinalIgnoreCase))
@@ -335,7 +456,8 @@ public sealed class VelopackPackageEngine : IPackageEngine
             return PackageArtifactKind.VelopackSetup;
         }
 
-        if (string.Equals(
+        if (
+            string.Equals(
                 extension,
                 VelopackConventions.FullPackageExtension,
                 StringComparison.OrdinalIgnoreCase))
@@ -352,34 +474,44 @@ public sealed class VelopackPackageEngine : IPackageEngine
         PackageRelease release,
         PackageArtifactKind artifactKind)
     {
-        var path = release.Artifact.Uri.IsFile
-            ? release.Artifact.Uri.LocalPath
-            : release.Artifact.Uri.AbsolutePath;
+        var path =
+            release.Artifact.Uri.IsFile
+                ? release.Artifact.Uri.LocalPath
+                : release.Artifact.Uri.AbsolutePath;
 
-        var fileName = Path.GetFileName(Uri.UnescapeDataString(path));
+        var fileName =
+            Path.GetFileName(
+                Uri.UnescapeDataString(path));
 
         if (!string.IsNullOrWhiteSpace(fileName))
         {
             return fileName;
         }
 
-        return artifactKind == PackageArtifactKind.VelopackSetup
-            ? VelopackConventions.SetupFallbackName
-            : VelopackConventions.FullPackageFallbackName;
+        return artifactKind ==
+            PackageArtifactKind.VelopackSetup
+                ? VelopackConventions.SetupFallbackName
+                : VelopackConventions.FullPackageFallbackName;
     }
 
     private static void ValidatePreservePaths(
         string targetPath,
         IReadOnlyList<string> preservePaths)
     {
-        var targetRoot = Path.GetFullPath(targetPath);
-        var currentRoot = Path.GetFullPath(Path.Combine(
-            targetRoot,
-            VelopackConventions.CurrentDirectoryName));
+        var targetRoot =
+            Path.GetFullPath(
+                targetPath);
+
+        var currentRoot =
+            Path.GetFullPath(
+                Path.Combine(
+                    targetRoot,
+                    VelopackConventions.CurrentDirectoryName));
 
         foreach (var preservePath in preservePaths)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(preservePath);
+            ArgumentException.ThrowIfNullOrWhiteSpace(
+                preservePath);
 
             if (Path.IsPathRooted(preservePath))
             {
@@ -388,13 +520,20 @@ public sealed class VelopackPackageEngine : IPackageEngine
                     "Preserve paths must be relative to the install root.");
             }
 
-            var resolvedPath = Path.GetFullPath(Path.Combine(
+            var resolvedPath =
+                Path.GetFullPath(
+                    Path.Combine(
+                        targetRoot,
+                        preservePath));
+
+            EnsureChildPath(
                 targetRoot,
-                preservePath));
+                resolvedPath);
 
-            EnsureChildPath(targetRoot, resolvedPath);
-
-            if (IsPathWithin(currentRoot, resolvedPath))
+            if (
+                IsPathWithin(
+                    currentRoot,
+                    resolvedPath))
             {
                 throw new PackageEngineException(
                     PackageEngineOperation.Apply,
@@ -407,8 +546,13 @@ public sealed class VelopackPackageEngine : IPackageEngine
         string rootPath,
         string candidatePath)
     {
-        var root = Path.GetFullPath(rootPath);
-        var candidate = Path.GetFullPath(candidatePath);
+        var root =
+            Path.GetFullPath(
+                rootPath);
+
+        var candidate =
+            Path.GetFullPath(
+                candidatePath);
 
         if (!IsPathWithin(root, candidate))
         {
@@ -424,23 +568,33 @@ public sealed class VelopackPackageEngine : IPackageEngine
         string rootPath,
         string candidatePath)
     {
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
+        var comparison =
+            OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
 
-        var root = Path.TrimEndingDirectorySeparator(
-            Path.GetFullPath(rootPath));
+        var root =
+            Path.TrimEndingDirectorySeparator(
+                Path.GetFullPath(
+                    rootPath));
 
-        var candidate = Path.GetFullPath(candidatePath);
+        var candidate =
+            Path.GetFullPath(
+                candidatePath);
 
-        if (string.Equals(root, candidate, comparison))
+        if (
+            string.Equals(
+                root,
+                candidate,
+                comparison))
         {
             return true;
         }
 
-        var rootWithSeparator = string.Concat(
-            root,
-            Path.DirectorySeparatorChar);
+        var rootWithSeparator =
+            string.Concat(
+                root,
+                Path.DirectorySeparatorChar);
 
         return candidate.StartsWith(
             rootWithSeparator,
@@ -452,14 +606,18 @@ public sealed class VelopackPackageEngine : IPackageEngine
         string destinationPath,
         CancellationToken cancellationToken)
     {
-        if (PathsEqual(sourcePath, destinationPath))
+        if (
+            PathsEqual(
+                sourcePath,
+                destinationPath))
         {
             return;
         }
 
-        var partialPath = string.Concat(
-            destinationPath,
-            VelopackConventions.PartialSuffix);
+        var partialPath =
+            string.Concat(
+                destinationPath,
+                VelopackConventions.PartialSuffix);
 
         try
         {
@@ -488,30 +646,36 @@ public sealed class VelopackPackageEngine : IPackageEngine
         string destinationPath,
         CancellationToken cancellationToken)
     {
-        await using var source = new FileStream(
-            sourcePath,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            CopyBufferSize,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using var source =
+            new FileStream(
+                sourcePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                CopyBufferSize,
+                FileOptions.Asynchronous |
+                FileOptions.SequentialScan);
 
-        await using var destination = new FileStream(
-            destinationPath,
-            FileMode.CreateNew,
-            FileAccess.Write,
-            FileShare.None,
-            CopyBufferSize,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using var destination =
+            new FileStream(
+                destinationPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                CopyBufferSize,
+                FileOptions.Asynchronous |
+                FileOptions.SequentialScan);
 
-        await source.CopyToAsync(
+        await source
+            .CopyToAsync(
                 destination,
                 CopyBufferSize,
                 cancellationToken)
             .ConfigureAwait(false);
 
         await destination
-            .FlushAsync(cancellationToken)
+            .FlushAsync(
+                cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -519,9 +683,10 @@ public sealed class VelopackPackageEngine : IPackageEngine
         string left,
         string right)
     {
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
+        var comparison =
+            OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
 
         return string.Equals(
             Path.GetFullPath(left),
@@ -529,13 +694,16 @@ public sealed class VelopackPackageEngine : IPackageEngine
             comparison);
     }
 
-    private static void TryDeleteDirectory(string path)
+    private static void TryDeleteDirectory(
+        string path)
     {
         try
         {
             if (Directory.Exists(path))
             {
-                Directory.Delete(path, recursive: true);
+                Directory.Delete(
+                    path,
+                    recursive: true);
             }
         }
         catch (IOException)

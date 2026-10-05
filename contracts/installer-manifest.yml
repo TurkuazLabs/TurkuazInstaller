@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /contracts/installer-manifest.yml
-# 📌 Amac: TurkuazInstaller Community paket manifest contract alanlarini ve guvenlik invariantlarini tanimlamak
+# 📌 Amac: TurkuazInstaller Community Stable v1 paket manifest contract alanlarini ve guvenlik invariantlarini tanimlamak
 # 📌 Modul - YAML
-# Version: 0.2.0
-# Aciklama: Paket kimligi, surum, kanal, artifact, hash, imza, prerequisite ve rollback alanlarini contract-first sabitler
+# Version: 1.0.0
+# Aciklama: Paket, full install, SHA-256, optional Authenticode, prerequisite, preserve path ve rollback alanlarini runtime ile birebir sabitler
 # Bagimli Oldugu Katman: Application | Port | Adapter | Config
 
 schema_version: 1
@@ -49,19 +49,23 @@ artifact:
     optional: true
     algorithm:
       - authenticode
-      - ed25519-detached
 
 install:
   mode:
     allowed:
       - full
-      - delta
   target:
     type: string
   prerequisites:
     type: array
+    supported_ids:
+      - windows-build
+      - architecture
+      - dotnet-desktop-runtime
   preserve_paths:
     type: array
+    relative_to_install_root: true
+    current_directory_forbidden: true
 
 rollback:
   supported:
@@ -74,3 +78,4 @@ security:
   unsigned_artifact_policy: explicit_product_policy
   transport_http_remote: deny
   path_escape: deny
+  unsupported_prerequisite: deny

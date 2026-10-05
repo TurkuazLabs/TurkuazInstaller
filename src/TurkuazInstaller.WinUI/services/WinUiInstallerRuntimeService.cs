@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/services/WinUiInstallerRuntimeService.cs
 // 📌 Amac: Presentation desktop requestlerini gercek provider, workflow, repository ve Velopack runtime operasyonlarina baglar
 // 📌 Modul - Service CSharp
-// Version: 0.7.1
-// Aciklama: Install/update/repair/rollback requestlerini Application InstallerWorkflowService uzerinden calistirir
+// Version: 1.0.0
+// Aciklama: Install target fallback, install/update/repair/rollback ve manifestsiz uninstall requestlerini Application workflow uzerinden calistirir
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -11,6 +11,7 @@ using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Domain.State;
+using TurkuazInstaller.Presentation.Language;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
 using TurkuazInstaller.WinUI.Config;
@@ -23,10 +24,13 @@ internal sealed class WinUiInstallerRuntimeService
 {
     private const string ReleaseNotFoundMessage =
         "Manifest release could not be resolved.";
+
     private const string RollbackSourceRequiredMessage =
         "Rollback manifest source is required.";
+
     private const string RollbackReleaseNotFoundMessage =
         "Rollback release could not be resolved.";
+
     private const string InstalledStateNotFoundMessage =
         "Installed package state was not found.";
 
@@ -55,18 +59,38 @@ internal sealed class WinUiInstallerRuntimeService
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(progress);
 
-        var packageId = PackageId.Parse(
-            request.PackageId);
+        var packageId =
+            PackageId.Parse(
+                request.PackageId);
 
-        var provider = _providerFactory.Create(
-            request.ManifestSource);
+        if (
+            request.Operation ==
+            InstallerOperationKind.Uninstall)
+        {
+            await _workflowService
+                .UninstallAsync(
+                    await RequireInstalledStateAsync(
+                            packageId,
+                            cancellationToken)
+                        .ConfigureAwait(false),
+                    progress,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-        var release = await provider
-            .GetLatestReleaseAsync(
-                packageId,
-                request.Channel,
-                cancellationToken)
-            .ConfigureAwait(false)
+            return;
+        }
+
+        var provider =
+            _providerFactory.Create(
+                request.ManifestSource);
+
+        var release =
+            await provider
+                .GetLatestReleaseAsync(
+                    packageId,
+                    request.Channel,
+                    cancellationToken)
+                .ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 ReleaseNotFoundMessage);
 
@@ -81,7 +105,9 @@ internal sealed class WinUiInstallerRuntimeService
                     await _workflowService
                         .InstallAsync(
                             release,
-                            request.TargetPath,
+                            ResolveInstallTarget(
+                                request.TargetPath,
+                                release),
                             operationStagingRoot,
                             progress,
                             cancellationToken)
@@ -153,22 +179,25 @@ internal sealed class WinUiInstallerRuntimeService
                 RollbackSourceRequiredMessage);
         }
 
-        var previousProvider = _providerFactory.Create(
-            request.RollbackManifestSource);
+        var previousProvider =
+            _providerFactory.Create(
+                request.RollbackManifestSource);
 
-        var previousRelease = await previousProvider
-            .GetLatestReleaseAsync(
-                packageId,
-                request.Channel,
-                cancellationToken)
-            .ConfigureAwait(false)
+        var previousRelease =
+            await previousProvider
+                .GetLatestReleaseAsync(
+                    packageId,
+                    request.Channel,
+                    cancellationToken)
+                .ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 RollbackReleaseNotFoundMessage);
 
-        var state = await RequireInstalledStateAsync(
-                packageId,
-                cancellationToken)
-            .ConfigureAwait(false);
+        var state =
+            await RequireInstalledStateAsync(
+                    packageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         await _workflowService
             .RollbackAsync(
@@ -195,11 +224,34 @@ internal sealed class WinUiInstallerRuntimeService
                 InstalledStateNotFoundMessage);
     }
 
+    private static string ResolveInstallTarget(
+        string requestedTarget,
+        PackageRelease release)
+    {
+        var candidate =
+            string.IsNullOrWhiteSpace(
+                requestedTarget)
+                ? release.Install.DefaultTargetPath
+                : requestedTarget;
+
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            throw new InvalidOperationException(
+                InstallerUiLabels.TargetPathUnavailable);
+        }
+
+        return Path.GetFullPath(
+            Environment.ExpandEnvironmentVariables(
+                candidate));
+    }
+
     private string CreateOperationStagingRoot()
     {
-        var path = Path.Combine(
-            _options.StagingRoot,
-            Guid.NewGuid().ToString("N"));
+        var path =
+            Path.Combine(
+                _options.StagingRoot,
+                Guid.NewGuid()
+                    .ToString("N"));
 
         Directory.CreateDirectory(path);
         return path;

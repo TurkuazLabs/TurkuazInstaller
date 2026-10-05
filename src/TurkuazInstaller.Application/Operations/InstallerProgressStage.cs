@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerProgressStage.cs
-// 📌 Amac: Install, update, repair ve rollback workflow progress asamalarini typed olarak tanimlar
+// 📌 Amac: Installer workflow progress asamalarini typed olarak tanimlar
 // 📌 Modul - Service CSharp
-// Version: 0.7.0
-// Aciklama: UI progress ve log katmanlarina magic string olmadan operasyon asamasi aktarir
+// Version: 1.0.0
+// Aciklama: Install, update, repair, rollback ve uninstall UI progress olaylarini magic string olmadan aktarir
 //
 // Bagimli Oldugu Katman: Service
 
@@ -14,6 +14,8 @@ public enum InstallerProgressStage
     Verifying = 1,
     Staging = 2,
     Applying = 3,
-    SavingState = 4,
-    Completed = 5
+    Uninstalling = 4,
+    SavingState = 5,
+    RemovingState = 6,
+    Completed = 7
 }
