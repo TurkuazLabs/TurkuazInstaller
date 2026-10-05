@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/PROJECT_INTEGRATION.md
 # 📌 Amac: TurkuazInstaller'i NSIS yerine kullanacak projeler icin ortak entegrasyon ve migration standardini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.1
+# Version: 1.1.2
 # Aciklama: Signed manifest trust, Velopack full package, prerequisite, preserve path, rollback, uninstall ve kabul testlerini tum projeler icin standartlastirir
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -137,6 +137,7 @@ Eksik prerequisite otomatik kurulacaksa manifestte explicit install policy tanim
 Prerequisite installer icin:
 
 - HTTPS veya file URI
+- direct .exe artifact
 - gercek SHA-256 ve size
 - Authenticode signature
 - exact publisher subject
