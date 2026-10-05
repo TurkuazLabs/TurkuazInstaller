@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Cli/tools/CliCommandParser.cs
 // 📌 Amac: Raw command-line argumanlarini dogrulanmis CliInvocation modeline parse eder
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
-// Aciklama: Explicit operation/options, duplicate rejection, stable/beta channel ve internal resume protokolunu fail-closed parse eder
+// Version: 1.1.0
+// Aciklama: Operation-specific option allowlist, duplicate rejection, channel ve internal resume protokolunu fail-closed parse eder
 //
 // Bagimli Oldugu Katman: Tool | Service | Config
 
@@ -139,6 +139,34 @@ public sealed class CliCommandParser
         {
             throw new FormatException(
                 "Rollback manifest option is required for rollback.");
+        }
+
+        if (
+            operation != InstallerOperationType.Rollback &&
+            rollbackManifest is not null)
+        {
+            throw new FormatException(
+                "Rollback manifest option is only valid for rollback.");
+        }
+
+        if (
+            operation != InstallerOperationType.Install &&
+            target is not null)
+        {
+            throw new FormatException(
+                "Target option is only valid for install.");
+        }
+
+        if (
+            operation == InstallerOperationType.Uninstall &&
+            (
+                manifest is not null ||
+                rollbackManifest is not null ||
+                target is not null ||
+                channelSeen))
+        {
+            throw new FormatException(
+                "Uninstall only accepts package and optional silent mode.");
         }
 
         return new CliInvocation(
