@@ -1,0 +1,35 @@
+# 📄 Dosya Yolu: /examples/project-manifest.template.yml
+# 📌 Amac: TurkuazInstaller'a gececek projeler icin reusable Stable v1 manifest sablonu saglar
+# 📌 Modul - Config YAML
+# Version: 1.0.0
+# Aciklama: Full install, SHA-256, optional Authenticode, prerequisite, preserve path ve rollback alanlarini proje migration'i icin standartlastirir
+# Bagimli Oldugu Katman: Config
+
+schema_version: 1
+
+package:
+  id: "__PACKAGE_ID__"
+  version: "__SEMVER__"
+  channel: stable
+
+artifact:
+  uri: "__HTTPS_OR_FILE_ARTIFACT_URI__"
+  sha256: "__64_CHAR_SHA256__"
+  size_bytes: 1
+  signature:
+    algorithm: authenticode
+
+install:
+  mode: full
+  target: "%LOCALAPPDATA%/Programs/__PRODUCT_DIRECTORY__"
+  prerequisites:
+    - id: windows-build
+      version: ">=17763"
+    - id: architecture
+      version: "x64"
+  preserve_paths:
+    - "UserData"
+
+rollback:
+  supported: true
+  previous_version_required: true
