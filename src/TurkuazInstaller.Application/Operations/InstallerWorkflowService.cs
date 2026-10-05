@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.4.0
-// Aciklama: Prerequisite auto-install, pre-reboot relaunch scheduling, typed resume checkpoint ve package mutation akisini uygular
+// Version: 1.5.0
+// Aciklama: Prerequisite auto-install, pre-execution reboot-safe arm, RunOnce resume ve package mutation akisini uygular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -740,29 +740,22 @@ public sealed class InstallerWorkflowService
             operation.PendingPrerequisiteId;
 
         if (
-            pendingPrerequisiteId is not null &&
-            !release.Install.Prerequisites.Any(
-                prerequisite =>
-                    string.Equals(
-                        prerequisite.Id,
-                        pendingPrerequisiteId,
-                        StringComparison.Ordinal)))
-        {
-            throw new InvalidOperationException(
-                "Pending reboot prerequisite is not present in the resumed signed manifest.");
-        }
-
-        await operation
-            .SetPhaseAsync(
-                InstallerOperationPhase.ValidatingPrerequisites,
-                "prerequisite.validating",
-                "Prerequisite validation started.",
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        if (
             release.Install.Prerequisites.Count == 0)
         {
+            if (pendingPrerequisiteId is not null)
+            {
+                throw new InvalidOperationException(
+                    "Pending reboot prerequisite is not present in the resumed signed manifest.");
+            }
+
+            await operation
+                .SetPhaseAsync(
+                    InstallerOperationPhase.ValidatingPrerequisites,
+                    "prerequisite.validating",
+                    "Prerequisite validation started.",
+                    cancellationToken)
+                .ConfigureAwait(false);
+
             return;
         }
 
@@ -772,10 +765,81 @@ public sealed class InstallerWorkflowService
                 PrerequisiteProbeMissing);
         }
 
+        string? validatedPendingPrerequisiteId = null;
+
+        if (pendingPrerequisiteId is not null)
+        {
+            var pendingPrerequisite =
+                release.Install.Prerequisites
+                    .FirstOrDefault(
+                        prerequisite =>
+                            string.Equals(
+                                prerequisite.Id,
+                                pendingPrerequisiteId,
+                                StringComparison.Ordinal))
+                ?? throw new InvalidOperationException(
+                    "Pending reboot prerequisite is not present in the resumed signed manifest.");
+
+            if (
+                !_prerequisiteProbe.Supports(
+                    pendingPrerequisite.Id))
+            {
+                throw new InvalidOperationException(
+                    string.Concat(
+                        "Unsupported prerequisite id: ",
+                        pendingPrerequisite.Id));
+            }
+
+            var satisfiedAfterReboot =
+                await _prerequisiteProbe
+                    .IsSatisfiedAsync(
+                        pendingPrerequisite,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (!satisfiedAfterReboot)
+            {
+                throw new InvalidOperationException(
+                    string.Concat(
+                        "Prerequisite is still not satisfied after reboot-safe resume: ",
+                        pendingPrerequisite.Id,
+                        " ",
+                        pendingPrerequisite.VersionExpression));
+            }
+
+            validatedPendingPrerequisiteId =
+                pendingPrerequisite.Id;
+
+            await operation
+                .ClearRebootCheckpointAsync(
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        else
+        {
+            await operation
+                .SetPhaseAsync(
+                    InstallerOperationPhase.ValidatingPrerequisites,
+                    "prerequisite.validating",
+                    "Prerequisite validation started.",
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         foreach (
             var prerequisite in
             release.Install.Prerequisites)
         {
+            if (
+                validatedPendingPrerequisiteId is not null &&
+                string.Equals(
+                    prerequisite.Id,
+                    validatedPendingPrerequisiteId,
+                    StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             if (
                 !_prerequisiteProbe.Supports(
                     prerequisite.Id))
@@ -793,36 +857,9 @@ public sealed class InstallerWorkflowService
                         cancellationToken)
                     .ConfigureAwait(false);
 
-            var isPendingRebootPrerequisite =
-                pendingPrerequisiteId is not null &&
-                string.Equals(
-                    prerequisite.Id,
-                    pendingPrerequisiteId,
-                    StringComparison.Ordinal);
-
             if (satisfied)
             {
-                if (isPendingRebootPrerequisite)
-                {
-                    await operation
-                        .ClearRebootCheckpointAsync(
-                            cancellationToken)
-                        .ConfigureAwait(false);
-
-                    pendingPrerequisiteId = null;
-                }
-
                 continue;
-            }
-
-            if (isPendingRebootPrerequisite)
-            {
-                throw new InvalidOperationException(
-                    string.Concat(
-                        "Prerequisite is still not satisfied after reboot: ",
-                        prerequisite.Id,
-                        " ",
-                        prerequisite.VersionExpression));
             }
 
             var installAction =
@@ -892,6 +929,12 @@ public sealed class InstallerWorkflowService
                     cancellationToken)
                 .ConfigureAwait(false);
 
+            await operation
+                .ArmRebootResumeAsync(
+                    prerequisite.Id,
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
             var keepResumeScheduled = false;
 
             try
@@ -955,6 +998,11 @@ public sealed class InstallerWorkflowService
                         " ",
                         prerequisite.VersionExpression));
             }
+
+            await operation
+                .ClearRebootCheckpointAsync(
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             await operation
                 .SetPhaseAsync(
