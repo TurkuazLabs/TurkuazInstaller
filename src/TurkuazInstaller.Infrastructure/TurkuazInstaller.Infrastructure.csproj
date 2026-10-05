@@ -1,11 +1,11 @@
 <!--
 # 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj
-# 📌 Amac: Release provider ve manifest adapterlarini derleyen Infrastructure projesini tanimlar
+# 📌 Amac: Release provider, manifest trust, repository ve parser adapterlarini derleyen Infrastructure projesini tanimlar
 # 📌 Modul - Project XML
-# Version: 0.4.0
-# Aciklama: GitHub, Gitea, generic HTTPS, local file ve YAML manifest adapterlarini tasir
+# Version: 1.1.0
+# Aciklama: GitHub, Gitea, generic HTTPS, local file, YAML manifest ve CMS/PKCS#7 detached signature adapterlarini tasir
 
-Bagimli Oldugu Katman: Tool
+Bagimli Oldugu Katman: Repo | Tool
 -->
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -18,5 +18,6 @@ Bagimli Oldugu Katman: Tool
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="YamlDotNet" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>
 </Project>

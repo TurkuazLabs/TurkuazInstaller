@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim, kullanim ve release durumu giris dokumani
 # 📌 Modul - Markdown
-# Version: 1.1.0
-# Aciklama: Stable Community kod tamamlanma durumunu, combined distribution modelini ve production signing dis bagimliligini ozetler
+# Version: 1.1.1
+# Aciklama: Stable Community kod durumunu, signed manifest trust modelini, combined distribution yapisini ve production signing dis bagimliligini ozetler
 
 Bagimli Oldugu Katman: View
 
@@ -18,9 +18,11 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum, guncelle
 - GitHub, Gitea, generic HTTPS ve local file release provider modeli
 - Paket motorundan bagimsiz Core
 - Velopack Package Engine adapteri
+- CMS/PKCS#7 detached manifest signature
+- package-scoped external manifest publisher + certificate SHA-256 pinning
 - SHA-256 artifact dogrulamasi
 - Authenticode artifact verification + publisher pinning
-- optional certificate SHA-256 pinning
+- optional artifact certificate SHA-256 pinning
 - package-scoped cross-process operation lock
 - crash/reboot operation journal
 - structured JSONL diagnostics
@@ -35,6 +37,8 @@ View -> Controller -> Presentation Service -> Application Use Case -> Port -> Ad
 Application Use Case -> Domain
 
 Windows platform detaylari ayri TurkuazInstaller.Platform.Windows projesinde tutulur.
+
+Manifest trust policy manifestin kendisinden okunmaz; package bazli external Repo uzerinden resolve edilir.
 
 ## Stable Community Durumu
 
@@ -76,15 +80,22 @@ Bootstrap prerequisite ve self-update handoff kontrollerinden sonra app/TurkuazI
 
 ## v1.1 Replacement Readiness
 
-Rakip installer analizi sonrasi ilk v1.1 guvenilirlik paketi:
+Tamamlanan P1 maddeleri:
 
-- publisher pinning
-- optional certificate pinning
+- Authenticode publisher pinning
+- optional artifact certificate pinning
 - concurrent package operation lock
 - crash journal
 - structured diagnostics
+- detached signed manifest trust
 
-tamamlanmistir.
+Manifest runtime artik:
+
+1. manifest raw byte'larini alir
+2. `.p7s` CMS detached signature zorunlu tutar
+3. package id ile external trust policy resolve eder
+4. publisher subject ve certificate SHA-256 pinini dogrular
+5. ancak sonra YAML parse eder
 
 Kalan P1 maddeleri docs/ROADMAP.md icinde takip edilir.
 
@@ -115,7 +126,15 @@ Manifest sablonu:
 
 examples/project-manifest.template.yml
 
-Bir proje TurkuazInstaller'a gecmeden once install, update, repair, rollback ve uninstall smoke testlerini gecmelidir.
+Manifest trust sablonu:
+
+examples/manifest-trust.template.yml
+
+Manifest trust detaylari:
+
+docs/MANIFEST_TRUST.md
+
+Bir proje TurkuazInstaller'a gecmeden once signed manifest, install, update, repair, rollback ve uninstall smoke testlerini gecmelidir.
 
 ## Dokuman
 
@@ -123,6 +142,7 @@ Bir proje TurkuazInstaller'a gecmeden once install, update, repair, rollback ve 
 - docs/SECURITY_MODEL.md
 - docs/SECURITY_REVIEW_v1.0.0.md
 - docs/PROJECT_INTEGRATION.md
+- docs/MANIFEST_TRUST.md
 - docs/VELOPACK_E2E.md
 - docs/AZURE_SIGNING_BOOTSTRAP.md
 - docs/RELEASE_SIGNING.md

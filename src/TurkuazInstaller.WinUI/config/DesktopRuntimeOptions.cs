@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopRuntimeOptions.cs
-// 📌 Amac: WinUI runtime state, staging ve cross-process lock dizinlerini typed config olarak tasir
+// 📌 Amac: WinUI runtime state, staging, lock, journal, log ve manifest trust store yollarini typed config olarak tasir
 // 📌 Modul - Config CSharp
-// Version: 1.1.1
-// Aciklama: Desktop runtime state, staging, lock, journal ve structured log storage yollarini Service/Repo/Tool implementasyonlarindan ayirir
+// Version: 1.2.0
+// Aciklama: Desktop runtime storage ve manifest trust anchor dosya yolunu Service/Repo/Tool implementasyonlarindan ayirir
 //
 // Bagimli Oldugu Katman: Config
 
@@ -13,4 +13,5 @@ public sealed record DesktopRuntimeOptions(
     string StagingRoot,
     string LockRoot,
     string JournalRoot,
-    string LogRoot);
+    string LogRoot,
+    string ManifestTrustStorePath);

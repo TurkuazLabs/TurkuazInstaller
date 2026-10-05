@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/GitHubReleaseProviderTests.cs
-// 📌 Amac: GitHub providerin stable release assetinden manifest bulma davranisini dogrular
+// 📌 Amac: GitHub providerin stable release assetinden signed manifest bulma davranisini dogrular
 // 📌 Modul - Test CSharp
-// Version: 0.4.0
-// Aciklama: GitHub API ve manifest response'larini stub ederek provider contractini test eder
+// Version: 1.1.0
+// Aciklama: GitHub API, manifest ve .p7s response'larini stub ederek provider trust contractini test eder
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -17,35 +17,68 @@ namespace TurkuazInstaller.Infrastructure.Tests;
 public sealed class GitHubReleaseProviderTests
 {
     [Fact]
-    public async Task GetLatestReleaseAsync_LoadsStableManifestAsset()
+    public async Task GetLatestReleaseAsync_LoadsVerifiedStableManifestAsset()
     {
-        const string apiUrl = "https://api.github.test/repos/turkuaz/example/releases/latest";
-        const string manifestUrl = "https://downloads.github.test/installer-manifest.yml";
-        var releaseJson = $$"""
+        const string apiUrl =
+            "https://api.github.test/repos/turkuaz/example/releases/latest";
+
+        const string manifestUrl =
+            "https://downloads.github.test/installer-manifest.yml";
+
+        var signatureUrl =
+            string.Concat(
+                manifestUrl,
+                ManifestSignatureConventions.DetachedSignatureSuffix);
+
+        var releaseJson =
+            $$"""
 {"draft":false,"prerelease":false,"assets":[{"name":"{{ProviderTestData.ManifestAssetName}}","browser_download_url":"{{manifestUrl}}"}]}
 """;
 
-        using var client = new HttpClient(new StubHttpMessageHandler(new Dictionary<string, string>
-        {
-            [apiUrl] = releaseJson,
-            [manifestUrl] = ProviderTestData.Manifest(ReleaseChannel.Stable, "4.0.0")
-        }));
+        using var client =
+            new HttpClient(
+                new StubHttpMessageHandler(
+                    new Dictionary<string, string>
+                    {
+                        [apiUrl] =
+                            releaseJson,
+                        [manifestUrl] =
+                            ProviderTestData.Manifest(
+                                ReleaseChannel.Stable,
+                                "4.0.0"),
+                        [signatureUrl] =
+                            ProviderTestData.DetachedSignature
+                    }));
 
-        var provider = new GitHubReleaseProvider(
-            client,
-            new InstallerManifestReader(),
-            new GitHubReleaseProviderOptions(
-                new Uri("https://api.github.test/"),
-                "turkuaz",
-                "example",
-                ProviderTestData.ManifestAssetName,
-                "TurkuazInstaller-Test/0.4.0"));
+        var signatureVerifier =
+            new FakeManifestSignatureVerifier();
 
-        var release = await provider.GetLatestReleaseAsync(
-            PackageId.Parse(ProviderTestData.PackageId),
-            ReleaseChannel.Stable,
-            CancellationToken.None);
+        var provider =
+            new GitHubReleaseProvider(
+                client,
+                new InstallerManifestReader(),
+                signatureVerifier,
+                new GitHubReleaseProviderOptions(
+                    new Uri(
+                        "https://api.github.test/"),
+                    "turkuaz",
+                    "example",
+                    ProviderTestData.ManifestAssetName,
+                    "TurkuazInstaller-Test/1.1.0"));
 
-        Assert.Equal("4.0.0", release?.Version.ToString());
+        var release =
+            await provider.GetLatestReleaseAsync(
+                PackageId.Parse(
+                    ProviderTestData.PackageId),
+                ReleaseChannel.Stable,
+                CancellationToken.None);
+
+        Assert.Equal(
+            "4.0.0",
+            release?.Version.ToString());
+
+        Assert.Equal(
+            1,
+            signatureVerifier.CallCount);
     }
 }

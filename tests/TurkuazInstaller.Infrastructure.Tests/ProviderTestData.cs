@@ -1,10 +1,10 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/ProviderTestData.cs
-// 📌 Amac: Provider contract testlerinde ortak Stable v1 manifest ve digest verilerini tek noktada tanimlar
+// 📌 Amac: Provider ve manifest trust contract testlerinde ortak Stable v1 veri setini tek noktada tanimlar
 // 📌 Modul - Test Config CSharp
 // Version: 1.1.0
-// Aciklama: Install policy, prerequisite, preserve path, rollback ve Authenticode alanlarini parser testlerine saglar
+// Aciklama: Manifest, digest, detached signature ve certificate SHA-256 test degerlerini adapter testlerine saglar
 //
-// Bagimli Oldugu Katman: Tool
+// Bagimli Oldugu Katman: Tool | Config
 
 using TurkuazInstaller.Domain.Releases;
 
@@ -18,8 +18,14 @@ internal static class ProviderTestData
     public const string Digest =
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+    public const string CertificateSha256 =
+        "abcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+
     public const string ManifestAssetName =
         "installer-manifest.yml";
+
+    public const string DetachedSignature =
+        "detached-signature-test-data";
 
     public static string Manifest(
         ReleaseChannel channel,

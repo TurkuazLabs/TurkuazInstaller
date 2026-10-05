@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 1.1.0
+# Version: 1.1.1
 # Aciklama: Stable Community kod tamamlanma durumunu, production signing dis bagimliliklarini ve sonraki minor surumleri ayri takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -79,7 +79,7 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [x] package-scoped cross-process operation lock
 - [x] crash/reboot operation journal
 - [x] structured JSONL diagnostic log
-- [ ] detached signed manifest trust
+- [x] detached signed manifest trust
 - [ ] prerequisite auto-install
 - [ ] generic prerequisite detection engine
 - [ ] reboot/resume orchestration

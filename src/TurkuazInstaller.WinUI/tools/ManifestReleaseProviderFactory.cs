@@ -1,11 +1,12 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/tools/ManifestReleaseProviderFactory.cs
-// 📌 Amac: Kullanici tarafindan girilen manifest URL veya dosya yolunu mevcut release provider adapterina map eder
+// 📌 Amac: Kullanici tarafindan girilen manifest URL veya dosya yolunu signed release provider adapterina map eder
 // 📌 Modul - Tool CSharp
-// Version: 0.7.1
-// Aciklama: HTTPS, file URI ve Windows local path kaynaklarini provider factory sinirinda ayirir
+// Version: 1.1.0
+// Aciklama: HTTPS, file URI ve Windows local path kaynaklarini ayirir ve detached manifest signature verifierini tum providerlara zorunlu enjekte eder
 //
 // Bagimli Oldugu Katman: Tool
 
+using TurkuazInstaller.Contracts.Manifests;
 using TurkuazInstaller.Contracts.Releases;
 using TurkuazInstaller.Infrastructure.Manifests;
 using TurkuazInstaller.Infrastructure.Providers.File;
@@ -20,36 +21,51 @@ internal sealed class ManifestReleaseProviderFactory
 
     private readonly HttpClient _httpClient;
     private readonly InstallerManifestReader _manifestReader;
+    private readonly IManifestSignatureVerifier
+        _manifestSignatureVerifier;
 
     public ManifestReleaseProviderFactory(
         HttpClient httpClient,
-        InstallerManifestReader manifestReader)
+        InstallerManifestReader manifestReader,
+        IManifestSignatureVerifier manifestSignatureVerifier)
     {
-        _httpClient = httpClient;
-        _manifestReader = manifestReader;
+        _httpClient =
+            httpClient;
+
+        _manifestReader =
+            manifestReader;
+
+        _manifestSignatureVerifier =
+            manifestSignatureVerifier;
     }
 
     public IReleaseProvider Create(
         string source)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            source);
 
         if (Path.IsPathFullyQualified(source))
         {
             return CreateFileProvider(
-                Path.GetFullPath(source));
+                Path.GetFullPath(
+                    source));
         }
 
-        if (Uri.TryCreate(
+        if (
+            Uri.TryCreate(
                 source,
                 UriKind.Absolute,
                 out var uri))
         {
-            if (uri.Scheme == Uri.UriSchemeHttps)
+            if (
+                uri.Scheme ==
+                Uri.UriSchemeHttps)
             {
                 return new HttpReleaseProvider(
                     _httpClient,
                     _manifestReader,
+                    _manifestSignatureVerifier,
                     new HttpReleaseProviderOptions(
                         uri,
                         uri));
@@ -66,7 +82,8 @@ internal sealed class ManifestReleaseProviderFactory
         }
 
         return CreateFileProvider(
-            Path.GetFullPath(source));
+            Path.GetFullPath(
+                source));
     }
 
     private IReleaseProvider CreateFileProvider(
@@ -74,6 +91,7 @@ internal sealed class ManifestReleaseProviderFactory
     {
         return new FileReleaseProvider(
             _manifestReader,
+            _manifestSignatureVerifier,
             new FileReleaseProviderOptions(
                 path,
                 path));

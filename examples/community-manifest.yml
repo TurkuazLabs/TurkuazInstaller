@@ -1,9 +1,12 @@
 # 📄 Dosya Yolu: /examples/community-manifest.yml
 # 📌 Amac: TurkuazInstaller Community Stable v1 manifest contracti icin calisabilir ornek paket tanimlamak
 # 📌 Modul - YAML
-# Version: 1.1.0
-# Aciklama: Full Velopack Setup, SHA-256, optional Authenticode, Windows prerequisite, relative preserve path ve rollback alanlarini ornekler
+# Version: 1.1.1
+# Aciklama: Detached .p7s manifest trust ile kullanilan full Velopack Setup, SHA-256, optional Authenticode, Windows prerequisite, preserve path ve rollback alanlarini ornekler
 # Bagimli Oldugu Katman: Config
+
+# Bu dosya raw byte'lari ile imzalanmali ve yaninda community-manifest.yml.p7s publish edilmelidir.
+# Manifest signer trust bilgisi bu manifestin icinde degil external manifest-trust.yml store'unda tutulur.
 
 schema_version: 1
 
