@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/services/WinUiInstallerRuntimeService.cs
 // 📌 Amac: Presentation requestlerini signed provider, resumable workflow, repository ve Velopack runtime operasyonlarina baglar
 // 📌 Modul - Service CSharp
-// Version: 1.2.0
-// Aciklama: Manual install/update/repair/rollback/uninstall ile reboot sonrasi journal-validated resume akisini koordine eder
+// Version: 1.3.0
+// Aciklama: Manual mutationlari ve AwaitingReboot/RebootResumeArmed journal-validated resume akisini koordine eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -415,8 +415,9 @@ internal sealed class WinUiInstallerRuntimeService
                 .ConfigureAwait(false);
 
         if (
-            journal?.Phase ==
-            InstallerOperationPhase.AwaitingReboot)
+            journal?.Phase is
+                InstallerOperationPhase.AwaitingReboot or
+                InstallerOperationPhase.RebootResumeArmed)
         {
             throw new InvalidOperationException(
                 PendingRebootMessage);
@@ -432,7 +433,9 @@ internal sealed class WinUiInstallerRuntimeService
             resumeRequest.PackageId != requestedPackageId ||
             journal.PackageId != requestedPackageId ||
             resumeRequest.Operation != journal.Operation ||
-            journal.Phase != InstallerOperationPhase.AwaitingReboot ||
+            journal.Phase is not
+                InstallerOperationPhase.AwaitingReboot and not
+                InstallerOperationPhase.RebootResumeArmed ||
             string.IsNullOrWhiteSpace(
                 journal.PendingPrerequisiteId) ||
             !string.Equals(
