@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerOperationContext.cs
 // 📌 Amac: Bir installer operasyonunun crash journal ve structured log checkpoint yasam dongusunu koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.3.0
-// Aciklama: Diagnostics storage hatalarini izole eder; reboot prerequisite checkpointini korur, resume eder ve temizler
+// Version: 1.4.0
+// Aciklama: Diagnostics storage hatalarini izole eder; pre-execution resume arm, reboot wait, resume ve clear checkpointlerini yonetir
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -120,6 +120,32 @@ internal sealed class InstallerOperationContext
             .ConfigureAwait(false);
     }
 
+    public async Task ArmRebootResumeAsync(
+        string prerequisiteId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            prerequisiteId);
+
+        _entry =
+            _entry with
+            {
+                Phase = InstallerOperationPhase.RebootResumeArmed,
+                UpdatedAtUtc = DateTimeOffset.UtcNow,
+                Failure = null,
+                PendingPrerequisiteId =
+                    prerequisiteId.Trim()
+            };
+
+        await PersistBestEffortAsync(
+                InstallerEventLevel.Information,
+                "operation.reboot_resume_armed",
+                "Prerequisite execution armed for reboot-safe resume.",
+                null,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
     public async Task AwaitRebootAsync(
         string prerequisiteId,
         string message,
@@ -160,7 +186,9 @@ internal sealed class InstallerOperationContext
         _entry =
             _entry with
             {
+                Phase = InstallerOperationPhase.ValidatingPrerequisites,
                 UpdatedAtUtc = DateTimeOffset.UtcNow,
+                Failure = null,
                 PendingPrerequisiteId = null
             };
 
