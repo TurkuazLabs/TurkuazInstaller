@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Domain/Operations/InstallerOperationPhase.cs
 // 📌 Amac: Installer operation journal checkpoint asamalarini typed olarak tanimlar
 // 📌 Modul - Domain CSharp
-// Version: 1.1.0
-// Aciklama: Crash recovery ve diagnostics icin operasyonun hangi checkpointte kaldigini kalici olarak ifade eder
+// Version: 1.2.0
+// Aciklama: Crash/reboot recovery ve diagnostics icin operasyonun hangi checkpointte kaldigini kalici olarak ifade eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -20,5 +20,6 @@ public enum InstallerOperationPhase
     RemovingState = 7,
     Completed = 8,
     Cancelled = 9,
-    Failed = 10
+    Failed = 10,
+    AwaitingReboot = 11
 }
