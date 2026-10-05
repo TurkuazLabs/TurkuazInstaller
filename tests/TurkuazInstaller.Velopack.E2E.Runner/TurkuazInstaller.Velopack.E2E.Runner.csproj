@@ -1,0 +1,24 @@
+<!--
+# 📄 Dosya Yolu: /tests/TurkuazInstaller.Velopack.E2E.Runner/TurkuazInstaller.Velopack.E2E.Runner.csproj
+# 📌 Amac: TurkuazInstaller VelopackPackageEngine adapterini gercek Setup.exe ve Update.exe ile calistiran Windows E2E runner projesini tanimlar
+# 📌 Modul - Test Project XML
+# Version: 1.0.0
+# Aciklama: Install, update, repair, rollback ve uninstall zincirini fake process kullanmadan gercek Windows processleriyle dogrular
+
+Bagimli Oldugu Katman: Service | Tool
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RootNamespace>TurkuazInstaller.Velopack.E2E.Runner</RootNamespace>
+    <AssemblyName>TurkuazInstaller.Velopack.E2E.Runner</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
+    <ProjectReference Include="../../src/TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
+    <ProjectReference Include="../../src/TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
