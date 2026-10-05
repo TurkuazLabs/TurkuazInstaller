@@ -12,6 +12,7 @@ using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Domain.Artifacts;
+using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Plans;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
@@ -56,6 +57,51 @@ public sealed class InstallerWorkflowServiceTests
 
         Assert.True(
             operationLock.LeaseDisposed);
+    }
+
+    [Fact]
+    public async Task InstallAsync_WithDiagnostics_ClearsJournalAndLogsCompletion()
+    {
+        var journal =
+            new StubOperationJournal();
+
+        var logger =
+            new StubEventLogger();
+
+        var release =
+            CreateRelease();
+
+        var service =
+            new InstallerWorkflowService(
+                new StubDownloader(),
+                new StubVerifier(),
+                new StubPackageEngine(),
+                new StubStateRepository(),
+                operationJournal: journal,
+                eventLogger: logger);
+
+        await service.InstallAsync(
+            release,
+            "C:/Apps/Example",
+            "C:/Temp/TurkuazInstaller",
+            null,
+            CancellationToken.None);
+
+        Assert.Null(
+            journal.CurrentEntry);
+
+        Assert.True(
+            journal.SaveCalls >= 5);
+
+        Assert.Equal(
+            1,
+            journal.DeleteCalls);
+
+        Assert.Contains(
+            logger.Events,
+            entry =>
+                entry.EventName ==
+                "operation.completed");
     }
 
     [Fact]
@@ -170,6 +216,61 @@ public sealed class InstallerWorkflowServiceTests
             UninstallPlan plan,
             CancellationToken cancellationToken)
         {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StubOperationJournal
+        : IInstallerOperationJournalRepository
+    {
+        public int SaveCalls { get; private set; }
+
+        public int DeleteCalls { get; private set; }
+
+        public InstallerOperationJournalEntry? CurrentEntry
+        {
+            get;
+            private set;
+        }
+
+        public Task<InstallerOperationJournalEntry?> GetAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(
+                CurrentEntry);
+        }
+
+        public Task SaveAsync(
+            InstallerOperationJournalEntry entry,
+            CancellationToken cancellationToken)
+        {
+            SaveCalls++;
+            CurrentEntry = entry;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            DeleteCalls++;
+            CurrentEntry = null;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StubEventLogger
+        : IInstallerEventLogger
+    {
+        public List<InstallerEventEntry> Events { get; } =
+            new();
+
+        public Task WriteAsync(
+            InstallerEventEntry entry,
+            CancellationToken cancellationToken)
+        {
+            Events.Add(entry);
             return Task.CompletedTask;
         }
     }
