@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/JsonOperationJournalRepositoryTests.cs
 // 📌 Amac: JSON operation journal repository atomic save/read/delete davranisini unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
-// Aciklama: Crash recovery checkpointinin typed Domain modele geri okunabildigini ve tamamlaninca silinebildigini dogrular
+// Version: 1.2.0
+// Aciklama: Crash/reboot checkpointi, pending prerequisite roundtrip ve tamamlaninca silme davranisini dogrular
 //
 // Bagimli Oldugu Katman: Repo
 
@@ -42,10 +42,11 @@ public sealed class JsonOperationJournalRepositoryTests
                     InstallerOperationType.Update,
                     "2.0.0",
                     "C:/Apps/Example",
-                    InstallerOperationPhase.Applying,
+                    InstallerOperationPhase.AwaitingReboot,
                     started,
                     started.AddSeconds(3),
-                    null);
+                    null,
+                    "dotnet-desktop-runtime");
 
             await repository
                 .SaveAsync(
@@ -66,11 +67,14 @@ public sealed class JsonOperationJournalRepositoryTests
                 packageId,
                 loaded.PackageId);
             Assert.Equal(
-                InstallerOperationPhase.Applying,
+                InstallerOperationPhase.AwaitingReboot,
                 loaded.Phase);
             Assert.Equal(
                 "2.0.0",
                 loaded.Version);
+            Assert.Equal(
+                "dotnet-desktop-runtime",
+                loaded.PendingPrerequisiteId);
         }
         finally
         {
