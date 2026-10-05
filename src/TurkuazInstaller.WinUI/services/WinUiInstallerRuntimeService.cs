@@ -1,13 +1,15 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/services/WinUiInstallerRuntimeService.cs
-// 📌 Amac: Presentation desktop requestlerini gercek provider, workflow, repository ve Velopack runtime operasyonlarina baglar
+// 📌 Amac: Presentation requestlerini signed provider, resumable workflow, repository ve Velopack runtime operasyonlarina baglar
 // 📌 Modul - Service CSharp
-// Version: 1.0.0
-// Aciklama: Install target fallback, install/update/repair/rollback ve manifestsiz uninstall requestlerini Application workflow uzerinden calistirir
+// Version: 1.2.0
+// Aciklama: Manual install/update/repair/rollback/uninstall ile reboot sonrasi journal-validated resume akisini koordine eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.State;
+using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Domain.State;
@@ -34,20 +36,35 @@ internal sealed class WinUiInstallerRuntimeService
     private const string InstalledStateNotFoundMessage =
         "Installed package state was not found.";
 
+    private const string ResumeRequestNotFoundMessage =
+        "Persisted reboot resume request was not found.";
+
+    private const string ResumeJournalNotFoundMessage =
+        "AwaitingReboot operation journal was not found.";
+
+    private const string PendingRebootMessage =
+        "This package has an operation waiting for Windows reboot and must resume before another mutation can start.";
+
     private readonly ManifestReleaseProviderFactory _providerFactory;
     private readonly InstallerWorkflowService _workflowService;
     private readonly IInstallStateRepository _stateRepository;
+    private readonly IInstallerOperationJournalRepository _operationJournal;
+    private readonly IInstallerResumeRequestRepository _resumeRequestRepository;
     private readonly DesktopRuntimeOptions _options;
 
     public WinUiInstallerRuntimeService(
         ManifestReleaseProviderFactory providerFactory,
         InstallerWorkflowService workflowService,
         IInstallStateRepository stateRepository,
+        IInstallerOperationJournalRepository operationJournal,
+        IInstallerResumeRequestRepository resumeRequestRepository,
         DesktopRuntimeOptions options)
     {
         _providerFactory = providerFactory;
         _workflowService = workflowService;
         _stateRepository = stateRepository;
+        _operationJournal = operationJournal;
+        _resumeRequestRepository = resumeRequestRepository;
         _options = options;
     }
 
@@ -56,9 +73,88 @@ internal sealed class WinUiInstallerRuntimeService
         IProgress<InstallerOperationProgress> progress,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(progress);
+        ArgumentNullException.ThrowIfNull(
+            request);
+        ArgumentNullException.ThrowIfNull(
+            progress);
 
+        var packageId =
+            PackageId.Parse(
+                request.PackageId);
+
+        await EnsureNoPendingRebootAsync(
+                packageId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await ExecuteInternalAsync(
+                request,
+                progress,
+                cancellationToken,
+                null,
+                null)
+            .ConfigureAwait(false);
+    }
+
+    public async Task ResumeAsync(
+        PackageId packageId,
+        IProgress<InstallerOperationProgress> progress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(
+            packageId);
+        ArgumentNullException.ThrowIfNull(
+            progress);
+
+        var resumeRequest =
+            await _resumeRequestRepository
+                .GetAsync(
+                    packageId,
+                    cancellationToken)
+                .ConfigureAwait(false)
+            ?? throw new InvalidOperationException(
+                ResumeRequestNotFoundMessage);
+
+        var journal =
+            await _operationJournal
+                .GetAsync(
+                    packageId,
+                    cancellationToken)
+                .ConfigureAwait(false)
+            ?? throw new InvalidOperationException(
+                ResumeJournalNotFoundMessage);
+
+        ValidateResumeCheckpoint(
+            packageId,
+            resumeRequest,
+            journal);
+
+        var desktopRequest =
+            new InstallerDesktopRequest(
+                MapOperationKind(
+                    resumeRequest.Operation),
+                packageId.Value,
+                resumeRequest.Channel,
+                resumeRequest.ManifestSource,
+                resumeRequest.RollbackManifestSource,
+                journal.TargetPath);
+
+        await ExecuteInternalAsync(
+                desktopRequest,
+                progress,
+                cancellationToken,
+                journal,
+                resumeRequest)
+            .ConfigureAwait(false);
+    }
+
+    private async Task ExecuteInternalAsync(
+        InstallerDesktopRequest request,
+        IProgress<InstallerOperationProgress> progress,
+        CancellationToken cancellationToken,
+        InstallerOperationJournalEntry? resumeEntry,
+        InstallerResumeRequest? expectedResumeRequest)
+    {
         var packageId =
             PackageId.Parse(
                 request.PackageId);
@@ -67,6 +163,12 @@ internal sealed class WinUiInstallerRuntimeService
             request.Operation ==
             InstallerOperationKind.Uninstall)
         {
+            if (resumeEntry is not null)
+            {
+                throw new InvalidOperationException(
+                    "Uninstall cannot resume from a prerequisite reboot checkpoint.");
+            }
+
             await _workflowService
                 .UninstallAsync(
                     await RequireInstalledStateAsync(
@@ -102,45 +204,88 @@ internal sealed class WinUiInstallerRuntimeService
             switch (request.Operation)
             {
                 case InstallerOperationKind.Install:
-                    await _workflowService
-                        .InstallAsync(
-                            release,
-                            ResolveInstallTarget(
-                                request.TargetPath,
+                    ValidateExpectedResumeRelease(
+                        expectedResumeRequest,
+                        release);
+
+                    await ExecuteResumableAsync(
+                            CreateResumeRequest(
+                                request,
+                                InstallerOperationType.Install,
                                 release),
-                            operationStagingRoot,
-                            progress,
+                            () =>
+                                _workflowService.InstallAsync(
+                                    release,
+                                    ResolveInstallTarget(
+                                        request.TargetPath,
+                                        release),
+                                    operationStagingRoot,
+                                    progress,
+                                    cancellationToken,
+                                    resumeEntry),
                             cancellationToken)
                         .ConfigureAwait(false);
                     break;
 
                 case InstallerOperationKind.Update:
-                    await _workflowService
-                        .UpdateAsync(
-                            release,
-                            await RequireInstalledStateAsync(
-                                    packageId,
-                                    cancellationToken)
-                                .ConfigureAwait(false),
-                            operationStagingRoot,
-                            progress,
+                {
+                    ValidateExpectedResumeRelease(
+                        expectedResumeRequest,
+                        release);
+
+                    var state =
+                        await RequireInstalledStateAsync(
+                                packageId,
+                                cancellationToken)
+                            .ConfigureAwait(false);
+
+                    await ExecuteResumableAsync(
+                            CreateResumeRequest(
+                                request,
+                                InstallerOperationType.Update,
+                                release),
+                            () =>
+                                _workflowService.UpdateAsync(
+                                    release,
+                                    state,
+                                    operationStagingRoot,
+                                    progress,
+                                    cancellationToken,
+                                    resumeEntry),
                             cancellationToken)
                         .ConfigureAwait(false);
                     break;
+                }
 
                 case InstallerOperationKind.Repair:
-                    await _workflowService
-                        .RepairAsync(
-                            release,
-                            await RequireInstalledStateAsync(
-                                    packageId,
-                                    cancellationToken)
-                                .ConfigureAwait(false),
-                            operationStagingRoot,
-                            progress,
+                {
+                    ValidateExpectedResumeRelease(
+                        expectedResumeRequest,
+                        release);
+
+                    var state =
+                        await RequireInstalledStateAsync(
+                                packageId,
+                                cancellationToken)
+                            .ConfigureAwait(false);
+
+                    await ExecuteResumableAsync(
+                            CreateResumeRequest(
+                                request,
+                                InstallerOperationType.Repair,
+                                release),
+                            () =>
+                                _workflowService.RepairAsync(
+                                    release,
+                                    state,
+                                    operationStagingRoot,
+                                    progress,
+                                    cancellationToken,
+                                    resumeEntry),
                             cancellationToken)
                         .ConfigureAwait(false);
                     break;
+                }
 
                 case InstallerOperationKind.Rollback:
                     await ExecuteRollbackAsync(
@@ -149,7 +294,9 @@ internal sealed class WinUiInstallerRuntimeService
                             release,
                             operationStagingRoot,
                             progress,
-                            cancellationToken)
+                            cancellationToken,
+                            resumeEntry,
+                            expectedResumeRequest)
                         .ConfigureAwait(false);
                     break;
 
@@ -171,7 +318,9 @@ internal sealed class WinUiInstallerRuntimeService
         PackageRelease currentRelease,
         string operationStagingRoot,
         IProgress<InstallerOperationProgress> progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        InstallerOperationJournalEntry? resumeEntry,
+        InstallerResumeRequest? expectedResumeRequest)
     {
         if (request.RollbackManifestSource is null)
         {
@@ -193,21 +342,161 @@ internal sealed class WinUiInstallerRuntimeService
             ?? throw new InvalidOperationException(
                 RollbackReleaseNotFoundMessage);
 
+        ValidateExpectedResumeRelease(
+            expectedResumeRequest,
+            previousRelease);
+
         var state =
             await RequireInstalledStateAsync(
                     packageId,
                     cancellationToken)
                 .ConfigureAwait(false);
 
-        await _workflowService
-            .RollbackAsync(
-                currentRelease,
-                previousRelease,
-                state,
-                operationStagingRoot,
-                progress,
+        await ExecuteResumableAsync(
+                CreateResumeRequest(
+                    request,
+                    InstallerOperationType.Rollback,
+                    previousRelease),
+                () =>
+                    _workflowService.RollbackAsync(
+                        currentRelease,
+                        previousRelease,
+                        state,
+                        operationStagingRoot,
+                        progress,
+                        cancellationToken,
+                        resumeEntry),
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private async Task ExecuteResumableAsync(
+        InstallerResumeRequest resumeRequest,
+        Func<Task> operation,
+        CancellationToken cancellationToken)
+    {
+        await _resumeRequestRepository
+            .SaveAsync(
+                resumeRequest,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await operation()
+                .ConfigureAwait(false);
+        }
+        catch (InstallerRebootRequiredException)
+        {
+            throw;
+        }
+        catch
+        {
+            await DeleteResumeRequestBestEffortAsync(
+                    resumeRequest.PackageId)
+                .ConfigureAwait(false);
+            throw;
+        }
+
+        await DeleteResumeRequestBestEffortAsync(
+                resumeRequest.PackageId)
+            .ConfigureAwait(false);
+    }
+
+    private async Task EnsureNoPendingRebootAsync(
+        PackageId packageId,
+        CancellationToken cancellationToken)
+    {
+        var journal =
+            await _operationJournal
+                .GetAsync(
+                    packageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (
+            journal?.Phase ==
+            InstallerOperationPhase.AwaitingReboot)
+        {
+            throw new InvalidOperationException(
+                PendingRebootMessage);
+        }
+    }
+
+    private static void ValidateResumeCheckpoint(
+        PackageId requestedPackageId,
+        InstallerResumeRequest resumeRequest,
+        InstallerOperationJournalEntry journal)
+    {
+        if (
+            resumeRequest.PackageId != requestedPackageId ||
+            journal.PackageId != requestedPackageId ||
+            resumeRequest.Operation != journal.Operation ||
+            journal.Phase != InstallerOperationPhase.AwaitingReboot ||
+            string.IsNullOrWhiteSpace(
+                journal.PendingPrerequisiteId) ||
+            !string.Equals(
+                journal.Version,
+                resumeRequest.ExpectedVersion.ToString(),
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Persisted reboot resume request does not match the operation journal.");
+        }
+    }
+
+    private static void ValidateExpectedResumeRelease(
+        InstallerResumeRequest? expectedResumeRequest,
+        PackageRelease resolvedRelease)
+    {
+        if (expectedResumeRequest is null)
+        {
+            return;
+        }
+
+        if (
+            !resolvedRelease.Version.Equals(
+                expectedResumeRequest.ExpectedVersion) ||
+            !string.Equals(
+                resolvedRelease.Artifact.Digest.Sha256,
+                expectedResumeRequest.ExpectedArtifactDigest.Sha256,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Signed manifest release changed while the installer was waiting for reboot.");
+        }
+    }
+
+    private static InstallerResumeRequest CreateResumeRequest(
+        InstallerDesktopRequest request,
+        InstallerOperationType operation,
+        PackageRelease expectedRelease)
+    {
+        return new InstallerResumeRequest(
+            expectedRelease.PackageId,
+            operation,
+            expectedRelease.Version,
+            expectedRelease.Artifact.Digest,
+            request.Channel,
+            request.ManifestSource,
+            request.RollbackManifestSource,
+            DateTimeOffset.UtcNow);
+    }
+
+    private async Task DeleteResumeRequestBestEffortAsync(
+        PackageId packageId)
+    {
+        try
+        {
+            await _resumeRequestRepository
+                .DeleteAsync(
+                    packageId,
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        catch
+        {
+        }
     }
 
     private async Task<InstalledPackageState>
@@ -253,8 +542,29 @@ internal sealed class WinUiInstallerRuntimeService
                 Guid.NewGuid()
                     .ToString("N"));
 
-        Directory.CreateDirectory(path);
+        Directory.CreateDirectory(
+            path);
+
         return path;
+    }
+
+    private static InstallerOperationKind MapOperationKind(
+        InstallerOperationType operation)
+    {
+        return operation switch
+        {
+            InstallerOperationType.Install =>
+                InstallerOperationKind.Install,
+            InstallerOperationType.Update =>
+                InstallerOperationKind.Update,
+            InstallerOperationType.Repair =>
+                InstallerOperationKind.Repair,
+            InstallerOperationType.Rollback =>
+                InstallerOperationKind.Rollback,
+            _ =>
+                throw new InvalidOperationException(
+                    "Persisted reboot resume operation is not supported.")
+        };
     }
 
     private static void TryDeleteDirectory(
