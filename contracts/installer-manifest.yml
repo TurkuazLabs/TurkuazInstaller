@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /contracts/installer-manifest.yml
 # 📌 Amac: TurkuazInstaller Community Stable v1 paket manifest contract alanlarini ve guvenlik invariantlarini tanimlamak
 # 📌 Modul - YAML
-# Version: 1.3.0
-# Aciklama: Detached trust, prerequisite auto-install ve reboot checkpoint contractini runtime ile birebir sabitler
+# Version: 1.4.0
+# Aciklama: Detached trust, prerequisite auto-install ve persisted RunOnce reboot/resume contractini runtime ile birebir sabitler
 # Bagimli Oldugu Katman: Application | Port | Adapter | Config
 
 schema_version: 1
@@ -93,7 +93,18 @@ install:
       requires_elevation:
         type: boolean
       post_install_reprobe_required: true
-      reboot_required_exit: checkpoint_and_stop_before_package_apply
+      reboot_required_exit: persist_request_schedule_runonce_reprobe_resume
+      resume:
+        journal_phase: awaiting_reboot
+        persisted_request_required: true
+        relaunch: hkcu_runonce_bootstrap
+        deferred_delete_value_prefix: true
+        signed_manifest_revalidation_required: true
+        expected_version_pin_required: true
+        expected_artifact_sha256_pin_required: true
+        pending_prerequisite_reprobe_required: true
+        repeat_same_installer_when_still_unsatisfied: false
+        manual_mutation_while_awaiting_reboot: deny
   preserve_paths:
     type: array
     relative_to_install_root: true
@@ -120,3 +131,5 @@ security:
   prerequisite_hash_failure: deny
   prerequisite_signature_failure: deny
   prerequisite_post_install_unsatisfied: deny
+  resume_journal_mismatch: deny
+  resume_release_identity_mismatch: deny
