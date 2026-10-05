@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.0.0
-// Aciklama: Manifest install policy, optional Authenticode, preserve paths ve uninstall state davranisini gercek runtime akisina baglar
+// Version: 1.1.0
+// Aciklama: Manifest policy, publisher-pinned Authenticode, package operation lock, preserve paths ve uninstall state davranisini gercek runtime akisina baglar
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Contracts.Artifacts;
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Contracts.System;
@@ -52,6 +53,7 @@ public sealed class InstallerWorkflowService
     private readonly IInstallStateRepository _stateRepository;
     private readonly IArtifactSignatureVerifier? _signatureVerifier;
     private readonly ISystemPrerequisiteProbe? _prerequisiteProbe;
+    private readonly IInstallerOperationLock? _operationLock;
 
     public InstallerWorkflowService(
         IArtifactDownloader artifactDownloader,
@@ -59,7 +61,8 @@ public sealed class InstallerWorkflowService
         IPackageEngine packageEngine,
         IInstallStateRepository stateRepository,
         IArtifactSignatureVerifier? signatureVerifier = null,
-        ISystemPrerequisiteProbe? prerequisiteProbe = null)
+        ISystemPrerequisiteProbe? prerequisiteProbe = null,
+        IInstallerOperationLock? operationLock = null)
     {
         _artifactDownloader = artifactDownloader;
         _artifactVerifier = artifactVerifier;
@@ -67,6 +70,7 @@ public sealed class InstallerWorkflowService
         _stateRepository = stateRepository;
         _signatureVerifier = signatureVerifier;
         _prerequisiteProbe = prerequisiteProbe;
+        _operationLock = operationLock;
     }
 
     public async Task InstallAsync(
@@ -78,6 +82,12 @@ public sealed class InstallerWorkflowService
     {
         ArgumentNullException.ThrowIfNull(release);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+
+        await using var operationLease =
+            await AcquireOperationLockAsync(
+                    release.PackageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         await ValidatePrerequisitesAsync(
                 release,
@@ -128,6 +138,12 @@ public sealed class InstallerWorkflowService
     {
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(currentState);
+
+        await using var operationLease =
+            await AcquireOperationLockAsync(
+                    release.PackageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         if (release.PackageId != currentState.PackageId)
         {
@@ -191,6 +207,12 @@ public sealed class InstallerWorkflowService
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(currentState);
 
+        await using var operationLease =
+            await AcquireOperationLockAsync(
+                    release.PackageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
         if (
             release.PackageId != currentState.PackageId ||
             !release.Version.Equals(
@@ -242,6 +264,12 @@ public sealed class InstallerWorkflowService
         ArgumentNullException.ThrowIfNull(currentRelease);
         ArgumentNullException.ThrowIfNull(previousRelease);
         ArgumentNullException.ThrowIfNull(currentState);
+
+        await using var operationLease =
+            await AcquireOperationLockAsync(
+                    currentRelease.PackageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         if (
             currentRelease.PackageId != currentState.PackageId ||
@@ -304,6 +332,12 @@ public sealed class InstallerWorkflowService
     {
         ArgumentNullException.ThrowIfNull(currentState);
 
+        await using var operationLease =
+            await AcquireOperationLockAsync(
+                    currentState.PackageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
         Report(
             progress,
             InstallerProgressStage.Uninstalling,
@@ -332,6 +366,22 @@ public sealed class InstallerWorkflowService
             .ConfigureAwait(false);
 
         ReportCompleted(progress);
+    }
+
+    private async Task<IAsyncDisposable> AcquireOperationLockAsync(
+        TurkuazInstaller.Domain.Products.PackageId packageId,
+        CancellationToken cancellationToken)
+    {
+        if (_operationLock is null)
+        {
+            return NoopAsyncDisposable.Instance;
+        }
+
+        return await _operationLock
+            .AcquireAsync(
+                packageId,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private async Task<PackageStage> PrepareStageAsync(
@@ -505,5 +555,17 @@ public sealed class InstallerWorkflowService
             new InstallerOperationProgress(
                 stage,
                 percent));
+    }
+
+    private sealed class NoopAsyncDisposable
+        : IAsyncDisposable
+    {
+        public static NoopAsyncDisposable Instance { get; } =
+            new();
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
+        }
     }
 }

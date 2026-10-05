@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopPathDefaults.cs
-// 📌 Amac: WinUI desktop runtime varsayilan state, staging ve install root yollarini merkezi config katmaninda uretir
+// 📌 Amac: WinUI desktop runtime varsayilan state, staging, lock ve install root yollarini merkezi config katmaninda uretir
 // 📌 Modul - Config CSharp
-// Version: 0.7.0
-// Aciklama: LocalApplicationData altindaki TurkuazInstaller dizin politikasini inline path stringlerinden ayirir
+// Version: 1.1.0
+// Aciklama: LocalApplicationData altindaki TurkuazInstaller storage politikasini inline path stringlerinden ayirir
 //
 // Bagimli Oldugu Katman: Config
 
@@ -13,6 +13,7 @@ internal static class DesktopPathDefaults
     private const string ProductDirectory = "TurkuazInstaller";
     private const string StateDirectory = "state";
     private const string StagingDirectory = "staging";
+    private const string LockDirectory = "locks";
     private const string AppsDirectory = "TurkuazApps";
 
     public static DesktopRuntimeOptions CreateRuntimeOptions()
@@ -30,7 +31,10 @@ internal static class DesktopPathDefaults
                 StateDirectory),
             Path.Combine(
                 productRoot,
-                StagingDirectory));
+                StagingDirectory),
+            Path.Combine(
+                productRoot,
+                LockDirectory));
     }
 
     public static string CreateDefaultInstallRoot()

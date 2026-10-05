@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Stable v1 full install, Authenticode, prerequisite, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -25,6 +25,9 @@ EXPECTED_CHANNELS = {"stable", "beta"}
 EXPECTED_INSTALL_MODES = {"full"}
 EXPECTED_URI_SCHEMES = {"https", "file"}
 EXPECTED_SIGNATURE_ALGORITHMS = {"authenticode"}
+REQUIRED_SIGNATURE_POLICY_FIELDS = {
+    "publisher_subject",
+}
 EXPECTED_PREREQUISITES = {
     "windows-build",
     "architecture",
@@ -115,6 +118,34 @@ if signature_algorithms != EXPECTED_SIGNATURE_ALGORITHMS:
         f"{sorted(signature_algorithms)}"
     )
 
+signature_policy = (
+    manifest
+    .get("artifact", {})
+    .get("signature", {})
+)
+
+missing_signature_fields = {
+    field
+    for field in REQUIRED_SIGNATURE_POLICY_FIELDS
+    if field not in signature_policy
+}
+
+if missing_signature_fields:
+    fail(
+        "signature policy fields missing: "
+        f"{sorted(missing_signature_fields)}"
+    )
+
+if (
+    signature_policy
+    .get("publisher_subject", {})
+    .get("required_when_present")
+    is not True
+):
+    fail(
+        "Authenticode publisher_subject must be required when signature is present"
+    )
+
 prerequisites = set(
     manifest
     .get("install", {})
@@ -132,6 +163,9 @@ security = manifest.get("security", {})
 for key in (
     "checksum_failure",
     "invalid_signature",
+    "publisher_mismatch",
+    "certificate_pin_mismatch",
+    "concurrent_package_operation",
     "transport_http_remote",
     "path_escape",
     "unsupported_prerequisite",

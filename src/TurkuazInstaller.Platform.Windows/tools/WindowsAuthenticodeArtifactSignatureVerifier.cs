@@ -1,12 +1,14 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsAuthenticodeArtifactSignatureVerifier.cs
-// 📌 Amac: Manifestte Authenticode zorunlu olan artifactin Windows trust policy ile imza dogrulamasini yapar
+// 📌 Amac: Authenticode artifactin Windows trust zinciri, publisher subject ve optional certificate SHA-256 pinini dogrular
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
-// Aciklama: WinVerifyTrust Generic Verify V2 kullanarak signature ve certificate trust zincirini UI olmadan fail-closed dogrular
+// Version: 1.1.0
+// Aciklama: WinVerifyTrust sonrasinda embedded signer certificate kimligini manifestte beklenen publisher policy ile fail-closed karsilastirir
 //
 // Bagimli Oldugu Katman: Tool | Service
 
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using TurkuazInstaller.Contracts.Artifacts;
 using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Verification;
@@ -63,20 +65,96 @@ public sealed class WindowsAuthenticodeArtifactSignatureVerifier
                     "Artifact file does not exist."));
         }
 
+        var fullPath =
+            Path.GetFullPath(
+                artifactPath);
+
         var status =
             VerifyFile(
-                Path.GetFullPath(
-                    artifactPath));
+                fullPath);
 
-        return Task.FromResult(
-            status == 0
-                ? VerificationResult.Passed()
-                : VerificationResult.Failed(
+        if (status != 0)
+        {
+            return Task.FromResult(
+                VerificationResult.Failed(
                     VerificationFailure.SignatureInvalid,
                     string.Format(
                         System.Globalization.CultureInfo.InvariantCulture,
                         "Authenticode verification failed with status 0x{0:X8}.",
                         status)));
+        }
+
+        try
+        {
+            var identity =
+                ReadSignerIdentity(
+                    fullPath);
+
+            if (
+                !string.Equals(
+                    identity.Subject,
+                    expectedSignature.PublisherSubject,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return Task.FromResult(
+                    VerificationResult.Failed(
+                        VerificationFailure.SignatureInvalid,
+                        string.Concat(
+                            "Authenticode publisher mismatch. Expected '",
+                            expectedSignature.PublisherSubject,
+                            "', actual '",
+                            identity.Subject,
+                            "'.")));
+            }
+
+            if (
+                expectedSignature.CertificateSha256 is not null &&
+                !string.Equals(
+                    identity.CertificateSha256,
+                    expectedSignature.CertificateSha256,
+                    StringComparison.Ordinal))
+            {
+                return Task.FromResult(
+                    VerificationResult.Failed(
+                        VerificationFailure.SignatureInvalid,
+                        "Authenticode certificate SHA-256 pin mismatch."));
+            }
+
+            return Task.FromResult(
+                VerificationResult.Passed());
+        }
+        catch (CryptographicException exception)
+        {
+            return Task.FromResult(
+                VerificationResult.Failed(
+                    VerificationFailure.SignatureInvalid,
+                    string.Concat(
+                        "Authenticode signer certificate could not be read: ",
+                        exception.Message)));
+        }
+    }
+
+    private static SignerIdentity ReadSignerIdentity(
+        string artifactPath)
+    {
+#pragma warning disable SYSLIB0057
+        using var certificate =
+            X509Certificate.CreateFromSignedFile(
+                artifactPath);
+#pragma warning restore SYSLIB0057
+
+        var subject =
+            certificate.Subject;
+
+        var certificateSha256 =
+            certificate
+                .GetCertHashString(
+                    HashAlgorithmName.SHA256)
+                .ToLowerInvariant();
+
+        return new SignerIdentity(
+            subject,
+            certificateSha256);
     }
 
     private static int VerifyFile(
@@ -186,6 +264,10 @@ public sealed class WindowsAuthenticodeArtifactSignatureVerifier
                 filePathPointer);
         }
     }
+
+    private sealed record SignerIdentity(
+        string Subject,
+        string CertificateSha256);
 
     [DllImport(
         "wintrust.dll",

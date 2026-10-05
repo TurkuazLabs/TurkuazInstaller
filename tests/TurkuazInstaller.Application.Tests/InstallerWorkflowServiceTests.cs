@@ -1,13 +1,14 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerWorkflowServiceTests.cs
 // 📌 Amac: InstallerWorkflowService install pipeline sirasi ve state kaydini fake portlarla unit test eder
 // 📌 Modul - Test CSharp
-// Version: 0.7.0
+// Version: 1.1.0
 // Aciklama: Download, verify, stage, apply ve state save koordinasyonunu dis sistem kullanmadan dogrular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Contracts.Artifacts;
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Domain.Artifacts;
@@ -24,6 +25,38 @@ public sealed class InstallerWorkflowServiceTests
 {
     private const string Digest =
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    [Fact]
+    public async Task InstallAsync_AcquiresPackageOperationLock()
+    {
+        var operationLock =
+            new StubOperationLock();
+
+        var release =
+            CreateRelease();
+
+        var service =
+            new InstallerWorkflowService(
+                new StubDownloader(),
+                new StubVerifier(),
+                new StubPackageEngine(),
+                new StubStateRepository(),
+                operationLock: operationLock);
+
+        await service.InstallAsync(
+            release,
+            "C:/Apps/Example",
+            "C:/Temp/TurkuazInstaller",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal(
+            release.PackageId,
+            operationLock.AcquiredPackageId);
+
+        Assert.True(
+            operationLock.LeaseDisposed);
+    }
 
     [Fact]
     public async Task InstallAsync_SavesInstalledState()
@@ -138,6 +171,52 @@ public sealed class InstallerWorkflowServiceTests
             CancellationToken cancellationToken)
         {
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StubOperationLock
+        : IInstallerOperationLock
+    {
+        public PackageId? AcquiredPackageId
+        {
+            get;
+            private set;
+        }
+
+        public bool LeaseDisposed
+        {
+            get;
+            private set;
+        }
+
+        public Task<IAsyncDisposable> AcquireAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            AcquiredPackageId =
+                packageId;
+
+            return Task.FromResult<IAsyncDisposable>(
+                new StubLease(
+                    this));
+        }
+
+        private sealed class StubLease
+            : IAsyncDisposable
+        {
+            private readonly StubOperationLock _owner;
+
+            public StubLease(
+                StubOperationLock owner)
+            {
+                _owner = owner;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                _owner.LeaseDisposed = true;
+                return ValueTask.CompletedTask;
+            }
         }
     }
 

@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/ProviderTestData.cs
 // 📌 Amac: Provider contract testlerinde ortak Stable v1 manifest ve digest verilerini tek noktada tanimlar
 // 📌 Modul - Test Config CSharp
-// Version: 1.0.0
+// Version: 1.1.0
 // Aciklama: Install policy, prerequisite, preserve path, rollback ve Authenticode alanlarini parser testlerine saglar
 //
 // Bagimli Oldugu Katman: Tool
@@ -42,6 +42,7 @@ artifact:
   size_bytes: 1024
   signature:
     algorithm: authenticode
+    publisher_subject: "CN=Example Software"
 install:
   mode: full
   target: C:/Apps/Example
