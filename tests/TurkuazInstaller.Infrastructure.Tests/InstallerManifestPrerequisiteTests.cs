@@ -1,13 +1,12 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/InstallerManifestPrerequisiteTests.cs
 // 📌 Amac: Manifest prerequisite auto-install policy parsing ve signature zorunlulugunu unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Signed installer artifact, argument/elevation mapping ve unsigned auto-install fail-closed davranisini kapsar
 //
 // Bagimli Oldugu Katman: Tool | Service
 
 using TurkuazInstaller.Domain.Artifacts;
-using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Infrastructure.Manifests;
 using Xunit;
 
@@ -18,6 +17,50 @@ public sealed class InstallerManifestPrerequisiteTests
     private const string PrerequisiteDigest =
         "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
 
+    private const string SignatureBlock =
+        """
+          signature:
+            algorithm: authenticode
+            publisher_subject: "CN=Microsoft Corporation"
+""";
+
+    private const string SignedManifest =
+        """
+schema_version: 1
+package:
+  id: example-app
+  version: 2.4.0
+  channel: stable
+artifact:
+  uri: https://downloads.example.invalid/example-app/2.4.0/Example-Setup.exe
+  sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  size_bytes: 1024
+install:
+  mode: full
+  target: C:/Apps/Example
+  prerequisites:
+    - id: dotnet-desktop-runtime
+      version: ">=10.0.0"
+      install:
+        artifact:
+          uri: https://downloads.example.invalid/windowsdesktop-runtime.exe
+          sha256: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
+          size_bytes: 2048
+          signature:
+            algorithm: authenticode
+            publisher_subject: "CN=Microsoft Corporation"
+        arguments:
+          - "/install"
+          - "/quiet"
+          - "/norestart"
+        requires_elevation: true
+  preserve_paths:
+    - UserData
+rollback:
+  supported: true
+  previous_version_required: true
+""";
+
     [Fact]
     public void Read_MapsPrerequisiteAutoInstallPolicy()
     {
@@ -26,11 +69,7 @@ public sealed class InstallerManifestPrerequisiteTests
 
         var release =
             reader.Read(
-                AddAutoInstallPolicy(
-                    ProviderTestData.Manifest(
-                        ReleaseChannel.Stable,
-                        "2.4.0"),
-                    includeSignature: true));
+                SignedManifest);
 
         var prerequisite =
             Assert.Single(
@@ -78,63 +117,15 @@ public sealed class InstallerManifestPrerequisiteTests
         var reader =
             new InstallerManifestReader();
 
-        var yaml =
-            AddAutoInstallPolicy(
-                ProviderTestData.Manifest(
-                    ReleaseChannel.Stable,
-                    "2.4.0"),
-                includeSignature: false);
+        var unsignedManifest =
+            SignedManifest.Replace(
+                SignatureBlock,
+                string.Empty,
+                StringComparison.Ordinal);
 
         Assert.Throws<FormatException>(
             () =>
                 reader.Read(
-                    yaml));
-    }
-
-    private static string AddAutoInstallPolicy(
-        string manifest,
-        bool includeSignature)
-    {
-        const string prerequisite =
-            """
-    - id: windows-build
-      version: ">=17763"
-""";
-
-        var signature =
-            includeSignature
-                ? """
-        signature:
-          algorithm: authenticode
-          publisher_subject: "CN=Microsoft Corporation"
-"""
-                : string.Empty;
-
-        var replacement =
-            string.Concat(
-                prerequisite.TrimEnd(),
-                Environment.NewLine,
-                """
-      install:
-        artifact:
-          uri: https://downloads.example.invalid/windowsdesktop-runtime.exe
-          sha256: fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210
-          size_bytes: 2048
-""",
-                Environment.NewLine,
-                signature,
-                """
-        arguments:
-          - "/install"
-          - "/quiet"
-          - "/norestart"
-        requires_elevation: true
-""",
-                Environment.NewLine);
-
-        return manifest.Replace(
-            prerequisite,
-            replacement,
-            StringComparison.Ordinal);
+                    unsignedManifest));
     }
 }
