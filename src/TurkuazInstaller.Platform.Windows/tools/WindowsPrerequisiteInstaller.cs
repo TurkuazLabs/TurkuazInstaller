@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsPrerequisiteInstaller.cs
 // 📌 Amac: Dogrulanmis prerequisite installer executable dosyasini normal veya explicit UAC elevation ile calistirir
 // 📌 Modul - Tool CSharp
-// Version: 1.1.0
-// Aciklama: Shell-free argument listesi kullanir, non-zero exit code ve reboot-required sonucunu fail-closed dondurur
+// Version: 1.1.1
+// Aciklama: Yalniz dogrudan EXE calistirir, shell-free argument listesi kullanir ve reboot-required sonucunu fail-closed dondurur
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -54,6 +54,17 @@ public sealed class WindowsPrerequisiteInstaller
             throw new FileNotFoundException(
                 "Verified prerequisite installer file was not found.",
                 fullPath);
+        }
+
+        if (
+            !string.Equals(
+                Path.GetExtension(
+                    fullPath),
+                ".exe",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Prerequisite auto-install only supports direct EXE artifacts.");
         }
 
         var workingDirectory =
