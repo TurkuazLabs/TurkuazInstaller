@@ -1,0 +1,76 @@
+# 📄 Dosya Yolu: /.github/workflows/stable-readiness.yml
+# 📌 Amac: Stable Community release oncesinde Windows publish ve dagitim archive reproducibility ile recovery test kapilarini calistirir
+# 📌 Modul - CI YAML
+# Version: 1.0.2
+# Aciklama: PR ve main final commitlerinde iki temiz publish agacini, deterministic ZIP packaging'i ve Core recovery testlerini dogrular
+# Bagimli Oldugu Katman: Tool
+
+name: Stable Readiness CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  stable-readiness:
+    runs-on: windows-2025
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Restore
+        run: dotnet restore TurkuazInstaller.Windows.slnx
+
+      - name: Run Core and recovery tests
+        run: dotnet test TurkuazInstaller.slnx --configuration Release
+
+      - name: Publish reproducibility pass A
+        shell: pwsh
+        run: |
+          dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/repro/a/bootstrap
+          dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/repro/a/winui
+
+      - name: Clean generated output
+        run: dotnet clean TurkuazInstaller.Windows.slnx --configuration Release
+
+      - name: Publish reproducibility pass B
+        shell: pwsh
+        run: |
+          dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/repro/b/bootstrap
+          dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/repro/b/winui
+
+      - name: Compare bootstrap publish trees
+        shell: pwsh
+        run: ./tools/Compare-PublishTrees.ps1 -FirstRoot artifacts/repro/a/bootstrap -SecondRoot artifacts/repro/b/bootstrap
+
+      - name: Compare WinUI publish trees
+        shell: pwsh
+        run: ./tools/Compare-PublishTrees.ps1 -FirstRoot artifacts/repro/a/winui -SecondRoot artifacts/repro/b/winui
+
+      - name: Validate deterministic bootstrap archive
+        shell: pwsh
+        run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/repro/a/bootstrap -OutputPath artifacts/repro/TurkuazInstaller-Bootstrapper-win-x64.zip -PackagerPath tools/release/package_release.py
+
+      - name: Validate deterministic WinUI archive
+        shell: pwsh
+        run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/repro/a/winui -OutputPath artifacts/repro/TurkuazInstaller-WinUI-win-x64.zip -PackagerPath tools/release/package_release.py

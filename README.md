@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
-# 📌 Amac: TurkuazInstaller projesinin ana tanitim ve gelistirme giris dokumani
+# 📌 Amac: TurkuazInstaller projesinin ana tanitim, kullanim ve release durumu giris dokumani
 # 📌 Modul - Markdown
-# Version: 0.7.0
-# Aciklama: Tamamlanan Core, Provider, Package Engine, Windows Bootstrap ve WinUI 3 fazlarini ozetler
+# Version: 1.0.1
+# Aciklama: Stable Community kod kapsamlarini, deterministic dagitimi ve production signing release gate durumunu ozetler
 
 Bagimli Oldugu Katman: View
 
@@ -14,50 +14,52 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum ve guncel
 
 - Modern WinUI 3 kullanici arayuzu
 - .NET runtime gerektirmeyen NativeAOT Windows bootstrapper
-- Install, update, repair, rollback ve uninstall akislari
+- Install, update, repair ve rollback akislari
 - GitHub, Gitea, generic HTTPS ve local file release provider modeli
 - Paket motorundan bagimsiz Core
 - Velopack Package Engine adapteri
 - SHA-256 artifact dogrulamasi
 - Stable ve beta release kanallari
 - Community ve Pro katmanlarinin ayni Core kontratlarini kullanmasi
-- GUI ve CLI uzerinden ayni Application use-case katmaninin calismasi
+- GUI ve CLI tarafinda ayni Application use-case katmaninin kullanilabilmesi
 
 ## Mimari
 
-```text
 View -> Controller -> Presentation Service -> Application Use Case -> Port -> Adapter
-                                                |
-                                              Domain
-```
 
-Windows platform detaylari ayri `TurkuazInstaller.Platform.Windows` projesinde tutulur.
+Application Use Case -> Domain
 
-## Edition modeli
+Windows platform detaylari ayri TurkuazInstaller.Platform.Windows projesinde tutulur.
 
-Community temel guvenlik, install/update, repair ve rollback ozelliklerini eksiksiz tasir.
+## Stable Community Durumu
 
-Pro; private feed, lisans ve cihaz yetkilendirme, staged rollout, merkezi yonetim, analytics ve enterprise deployment gibi operasyonel moduller ekler.
+Kod hedefi: v1.0.0 Stable Community.
 
-## Durum
+Tamamlanan release kalite katmanlari:
 
-Aktif gelistirme: v0.7.0 WinUI 3 tamamlandi.
+- Core ve Windows CI
+- contract validation
+- iki temiz publish agaci SHA-256 reproducibility dogrulamasi
+- deterministic release ZIP packaging
+- install ve rollback recovery testleri
+- security review
+- OIDC tabanli Azure Artifact Signing release workflow
+- SignTool Authenticode verification
+- signing sonrasi SHA-256 release checksum manifesti
+- GitHub artifact attestation provenance
+- user ve release dokumani
 
-Tamamlanan masaustu fazi:
+Production v1.0.0 tag'i, Azure Artifact Signing identity ve certificate profile repository'ye baglanmadan olusturulmamalidir.
 
-- Windows App SDK 2.5.1 stable / WinUI 3
-- unpackaged self-contained desktop publish
-- framework bagimsiz Presentation ViewModel katmani
-- ince Controller -> Service request akisi
-- install/update/repair/rollback ekran ve eventleri
-- progress, cancel, retry ve error recovery UX
-- gercek Application InstallerWorkflowService
-- HTTPS/file artifact downloader
-- SHA-256 ve size verification
-- JSON installed-state repository
-- mevcut Velopack Package Engine runtime baglantisi
-- Windows CI WinUI artifact publish
+Unsigned production fallback yoktur.
 
-Sonraki roadmap adimi: v1.0.0 Stable Community.
+## Dokuman
 
-WinUI mimari kararlari `docs/WINUI_DESKTOP.md` icinde tutulur.
+- docs/ARCHITECTURE.md
+- docs/SECURITY_MODEL.md
+- docs/SECURITY_REVIEW_v1.0.0.md
+- docs/RELEASE_SIGNING.md
+- docs/RELEASE_CHECKLIST.md
+- docs/WINDOWS_BOOTSTRAP.md
+- docs/WINUI_DESKTOP.md
+- docs/USER_GUIDE.md
