@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.3.0
-// Aciklama: Detached trust, generic prerequisite detector registry, auto-install Tool, package lock, journal, log ve Velopack runtime adapterlarini baglar
+// Version: 1.4.0
+// Aciklama: Signed trust, prerequisite engine, RunOnce reboot resume, journal/resume repo ve Velopack runtime adapterlarini baglar
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
 
@@ -27,8 +27,11 @@ namespace TurkuazInstaller.WinUI.Config;
 
 internal static class DesktopCompositionRoot
 {
-    public static MainWindow CreateMainWindow()
+    public static MainWindow CreateMainWindow(
+        IReadOnlyList<string> startupArguments)
     {
+        ArgumentNullException.ThrowIfNull(
+            startupArguments);
         var runtimeOptions =
             DesktopPathDefaults.CreateRuntimeOptions();
 
@@ -67,6 +70,18 @@ internal static class DesktopCompositionRoot
                 new JsonLinesInstallerEventLoggerOptions(
                     runtimeOptions.LogRoot));
 
+        var resumeRequestRepository =
+            new JsonInstallerResumeRequestRepository(
+                new JsonInstallerResumeRequestRepositoryOptions(
+                    runtimeOptions.ResumeRoot));
+
+        var rebootResumeScheduler =
+            new WindowsRunOnceRebootResumeScheduler(
+                new WindowsRegistryRunOnceStore(),
+                new WindowsRunOnceRebootResumeSchedulerOptions(
+                    runtimeOptions.BootstrapExecutablePath,
+                    runtimeOptions.RebootResumeValueNamePrefix));
+
         var processRunner =
             new SystemProcessRunner();
 
@@ -97,7 +112,8 @@ internal static class DesktopCompositionRoot
                 operationLock,
                 operationJournal,
                 eventLogger,
-                prerequisiteInstaller);
+                prerequisiteInstaller,
+                rebootResumeScheduler);
 
         var runtimeService =
             new WinUiInstallerRuntimeService(
@@ -107,6 +123,8 @@ internal static class DesktopCompositionRoot
                     manifestSignatureVerifier),
                 workflowService,
                 stateRepository,
+                operationJournal,
+                resumeRequestRepository,
                 runtimeOptions);
 
         var viewModel =
@@ -115,7 +133,8 @@ internal static class DesktopCompositionRoot
         var desktopService =
             new InstallerDesktopService(
                 viewModel,
-                runtimeService);
+                runtimeService,
+                new InstallerResumeLaunchParser());
 
         var controller =
             new MainWindowController(
@@ -124,6 +143,7 @@ internal static class DesktopCompositionRoot
         return new MainWindow(
             viewModel,
             controller,
-            desktopService);
+            desktopService,
+            startupArguments);
     }
 }
