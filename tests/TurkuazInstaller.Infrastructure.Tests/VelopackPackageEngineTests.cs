@@ -232,6 +232,53 @@ public sealed class VelopackPackageEngineTests
     }
 
     [Fact]
+    public async Task UninstallAsync_UsesOfficialUninstallCommand()
+    {
+        using var fixture =
+            new PackageEngineFixture();
+
+        fixture.CreateUpdater();
+
+        var engine =
+            new VelopackPackageEngine(
+                fixture.ProcessRunner);
+
+        var plan =
+            new UninstallPlan(
+                PackageId.Parse("example-app"),
+                SemanticVersion.Parse("1.0.0"),
+                fixture.InstallDirectory);
+
+        await engine.UninstallAsync(
+            plan,
+            CancellationToken.None);
+
+        var command =
+            Assert.IsType<ProcessCommand>(
+                fixture.ProcessRunner.LastCommand);
+
+        var installRoot =
+            Path.GetFullPath(
+                fixture.InstallDirectory);
+
+        Assert.Equal(
+            Path.Combine(
+                installRoot,
+                "Update.exe"),
+            command.FileName);
+
+        Assert.Equal(
+            new[]
+            {
+                "--silent",
+                "--rootDir",
+                installRoot,
+                "uninstall"
+            },
+            command.Arguments);
+    }
+
+    [Fact]
     public async Task ApplyAsync_RejectsPreservePathInsideCurrent()
     {
         using var fixture = new PackageEngineFixture();
