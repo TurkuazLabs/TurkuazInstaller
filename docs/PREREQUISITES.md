@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/PREREQUISITES.md
 # 📌 Amac: TurkuazInstaller prerequisite detection ve guvenli auto-install mimarisini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: Detector registry, signed installer verification, explicit elevation ve post-install re-probe kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Tool | Config
 
@@ -35,6 +35,7 @@ Bir prerequisite eksikse auto-install yalniz manifestte explicit install policy 
 Auto-install artifacti su alanlari tasir:
 
 - HTTPS veya file URI
+- direct .exe artifact
 - SHA-256
 - size_bytes
 - Authenticode signature policy
@@ -56,11 +57,12 @@ Prerequisite installer executable calistirilmadan once:
 5. Authenticode WinVerifyTrust kosar
 6. publisher subject birebir kontrol edilir
 7. certificate_sha256 tanimliysa certificate pin kontrol edilir
-8. installer shell kullanmadan argument listesi ile calistirilir
-9. requires_elevation=true ise yalniz bu process icin UAC istenir
-10. process exit code 0 olmadan basarili kabul edilmez
-11. ayni detector yeniden kosar
-12. prerequisite hala saglanmiyorsa ana paket stage/apply baslamaz
+8. indirilen dosyanin direct .exe oldugu dogrulanir
+9. installer shell kullanmadan argument listesi ile calistirilir
+10. requires_elevation=true ise yalniz bu process icin UAC istenir
+11. process exit code 0 olmadan basarili kabul edilmez
+12. ayni detector yeniden kosar
+13. prerequisite hala saglanmiyorsa ana paket stage/apply baslamaz
 
 Bu zincirde hash veya signature dogrulamasi atlanamaz.
 
