@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/WINDOWS_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller Windows NativeAOT bootstrap startup, app launch ve self-update mimarisini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.0.0
-# Aciklama: Combined distribution, prerequisite, explicit self-update begin/complete ve least-privilege process sinirlarini tanimlar
+# Version: 1.1.0
+# Aciklama: Combined distribution, prerequisite, reboot resume forwarding, self-update ve least-privilege process sinirlarini tanimlar
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 # Windows Bootstrap
@@ -28,6 +28,18 @@ Normal akis:
 4. app/TurkuazInstaller.WinUI.exe yolu distribution root containment ile cozulur
 5. WinUI process unelevated ve shell kullanmadan baslatilir
 6. kullanici islemlerini WinUI/Application workflow devam ettirir
+
+Bootstrap kendisine verilen normal application argumentlarini shell kullanmadan WinUI processine aktarir.
+
+Prerequisite reboot resume icin internal protocol:
+
+```text
+TurkuazInstaller.Bootstrapper.exe --resume-package <package-id>
+```
+
+Bu argument RunOnce tarafindan yalniz package kimligini tasir. Manifest source, target path veya install command registry icinde tasinmaz.
+
+WinUI bu package id ile persisted resume request ve AwaitingReboot journal kaydini tekrar dogrular.
 
 Stable v1 release target win-x64 olarak sabitlenmistir.
 
