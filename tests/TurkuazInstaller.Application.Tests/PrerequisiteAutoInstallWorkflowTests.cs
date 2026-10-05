@@ -144,6 +144,122 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
     }
 
     [Fact]
+    public async Task InstallAsync_ResumeAfterReboot_ReprobesWithoutReinstalling()
+    {
+        var probe =
+            new SequencedPrerequisiteProbe(
+                true);
+
+        var prerequisiteInstaller =
+            new TrackingPrerequisiteInstaller();
+
+        var packageEngine =
+            new TrackingPackageEngine();
+
+        var release =
+            CreateRelease(
+                includeInstallAction: true);
+
+        var service =
+            CreateService(
+                probe,
+                prerequisiteInstaller,
+                packageEngine);
+
+        var now =
+            DateTimeOffset.UtcNow;
+
+        await service.InstallAsync(
+            release,
+            "C:/Apps/Example",
+            "C:/Temp/TurkuazInstaller",
+            null,
+            CancellationToken.None,
+            new InstallerOperationJournalEntry(
+                Guid.NewGuid(),
+                release.PackageId,
+                InstallerOperationType.Install,
+                release.Version.ToString(),
+                "C:/Apps/Example",
+                InstallerOperationPhase.AwaitingReboot,
+                now,
+                now,
+                null,
+                PrerequisiteIds.DotNetDesktopRuntime));
+
+        Assert.Equal(
+            1,
+            probe.Calls);
+
+        Assert.Equal(
+            0,
+            prerequisiteInstaller.Calls);
+
+        Assert.Equal(
+            1,
+            packageEngine.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task InstallAsync_ResumeAfterRebootStillUnsatisfied_DoesNotReinstall()
+    {
+        var probe =
+            new SequencedPrerequisiteProbe(
+                false);
+
+        var prerequisiteInstaller =
+            new TrackingPrerequisiteInstaller();
+
+        var packageEngine =
+            new TrackingPackageEngine();
+
+        var release =
+            CreateRelease(
+                includeInstallAction: true);
+
+        var service =
+            CreateService(
+                probe,
+                prerequisiteInstaller,
+                packageEngine);
+
+        var now =
+            DateTimeOffset.UtcNow;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                service.InstallAsync(
+                    release,
+                    "C:/Apps/Example",
+                    "C:/Temp/TurkuazInstaller",
+                    null,
+                    CancellationToken.None,
+                    new InstallerOperationJournalEntry(
+                        Guid.NewGuid(),
+                        release.PackageId,
+                        InstallerOperationType.Install,
+                        release.Version.ToString(),
+                        "C:/Apps/Example",
+                        InstallerOperationPhase.AwaitingReboot,
+                        now,
+                        now,
+                        null,
+                        PrerequisiteIds.DotNetDesktopRuntime)));
+
+        Assert.Equal(
+            1,
+            probe.Calls);
+
+        Assert.Equal(
+            0,
+            prerequisiteInstaller.Calls);
+
+        Assert.Equal(
+            0,
+            packageEngine.ApplyCalls);
+    }
+
+    [Fact]
     public async Task InstallAsync_MissingPrerequisiteWithoutInstallPolicy_StopsBeforeApply()
     {
         var probe =
