@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.1
-# Aciklama: Detached manifest trust, hash, Authenticode, prerequisite, path, staging, process, state ve rollback guvenlik kurallarini sabitler
+# Version: 1.1.2
+# Aciklama: Detached trust, artifact ve prerequisite installer verification, detector registry, path, process, state ve rollback kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -21,7 +21,9 @@ Community baseline:
 - package-scoped cross-process operation lock
 - crash operation journal
 - HTTPS remote transport
-- fail-closed prerequisite kontrolu
+- fail-closed generic prerequisite detector registry
+- prerequisite auto-install icin zorunlu SHA-256 + Authenticode
+- prerequisite install sonrasi zorunlu re-probe
 - path traversal engelleme
 - atomic staging
 - shell-free process invocation
@@ -72,13 +74,34 @@ Signature deklarasyonu olmayan artifact SHA-256 baseline ile calisir.
 
 ## Prerequisites
 
-Stable v1 built-in prerequisite id degerleri:
+Community v1.1 built-in prerequisite id degerleri:
 
 - windows-build
 - architecture
 - dotnet-desktop-runtime
 
+Detection Application katmanindaki detector registry uzerinden yapilir.
+
+Her detector tek prerequisite id sahibidir.
+
 Bilinmeyen prerequisite false kabul edilir ve operasyon durur.
+
+Eksik prerequisite manifestte auto-install policy tasiyorsa:
+
+1. installer artifact HTTPS veya file URI uzerinden alinir
+2. artifact size ve SHA-256 dogrulanir
+3. Authenticode signature zorunlu tutulur
+4. publisher_subject birebir eslestirilir
+5. certificate_sha256 varsa certificate pin birebir eslestirilir
+6. installer shell-free argument listesi ile calistirilir
+7. elevation yalniz requires_elevation=true ise explicit UAC ile istenir
+8. installer exit code 0 olmadan basarili kabul edilmez
+9. kurulumdan sonra ayni detector zorunlu olarak yeniden kosar
+10. requirement hala saglanmiyorsa ana package stage/apply baslamaz
+
+Prerequisite auto-install artifacti unsigned calistirilamaz.
+
+Exit code 1641 veya 3010 reboot gerektirdigi icin reboot/resume orchestration tamamlanana kadar fail-closed reddedilir.
 
 ## Preserve Data
 
