@@ -102,7 +102,7 @@ WinUI Service:
 
 Bu kontrollerden biri basarisizsa package staging/apply baslamaz.
 
-## Reboot Dongusu Koruması
+## Reboot Dongusu Korumasi
 
 Pending prerequisite reboot sonrasinda hala saglanmiyorsa ayni prerequisite installer tekrar calistirilmaz.
 
