@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.1.0
-# Aciklama: Bootstrap orchestration, prerequisite Tool adapter testleri ve combined distribution layoutunu Windows runner uzerinde dogrular
+# Version: 1.2.0
+# Aciklama: Bootstrap, Windows adapter, CLI/silent testleri ve bootstrap+WinUI+CLI combined distribution layoutunu dogrular
 # Bagimli Oldugu Katman: Tool
 
 name: Windows Desktop CI
@@ -46,21 +46,28 @@ jobs:
       - name: Test Windows prerequisite adapters
         run: dotnet test tests/TurkuazInstaller.Platform.Windows.Tests/TurkuazInstaller.Platform.Windows.Tests.csproj --configuration Release --no-restore
 
+      - name: Test CLI silent mode
+        run: dotnet test tests/TurkuazInstaller.Cli.Tests/TurkuazInstaller.Cli.Tests.csproj --configuration Release --no-restore
+
       - name: Publish NativeAOT bootstrap
         run: dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/bootstrap/win-x64
 
       - name: Publish WinUI desktop
         run: dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/winui/win-x64
 
+      - name: Publish CLI
+        run: dotnet publish src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/cli/win-x64
+
       - name: Build combined distribution
         shell: pwsh
-        run: ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/publish/bootstrap/win-x64 -WinUiRoot artifacts/publish/winui/win-x64 -OutputRoot artifacts/distribution/win-x64
+        run: ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/publish/bootstrap/win-x64 -WinUiRoot artifacts/publish/winui/win-x64 -CliRoot artifacts/publish/cli/win-x64 -OutputRoot artifacts/distribution/win-x64
 
       - name: Verify combined startup layout
         shell: pwsh
         run: |
           $bootstrap = "artifacts/distribution/win-x64/TurkuazInstaller.Bootstrapper.exe"
           $desktop = "artifacts/distribution/win-x64/app/TurkuazInstaller.WinUI.exe"
+          $cli = "artifacts/distribution/win-x64/cli/TurkuazInstaller.Cli.exe"
 
           if (-not (Test-Path -LiteralPath $bootstrap)) {
             throw "Combined distribution bootstrap executable was not produced."
@@ -68,6 +75,10 @@ jobs:
 
           if (-not (Test-Path -LiteralPath $desktop)) {
             throw "Combined distribution WinUI executable was not produced."
+          }
+
+          if (-not (Test-Path -LiteralPath $cli)) {
+            throw "Combined distribution CLI executable was not produced."
           }
 
       - name: Upload combined distribution
