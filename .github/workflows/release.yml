@@ -75,8 +75,11 @@ jobs:
       - name: Restore
         run: dotnet restore TurkuazInstaller.Windows.slnx
 
-      - name: Test
+      - name: Test Core
         run: dotnet test TurkuazInstaller.slnx --configuration Release
+
+      - name: Test CLI silent mode
+        run: dotnet test tests/TurkuazInstaller.Cli.Tests/TurkuazInstaller.Cli.Tests.csproj --configuration Release --no-restore
 
       - name: Publish release binaries
         shell: pwsh
