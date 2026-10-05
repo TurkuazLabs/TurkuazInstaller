@@ -317,6 +317,13 @@ public sealed class InstallerRecoveryTests
 
             return Task.CompletedTask;
         }
+
+        public Task UninstallAsync(
+            UninstallPlan plan,
+            CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class TrackingStateRepository
@@ -346,6 +353,14 @@ public sealed class InstallerRecoveryTests
         {
             SaveCalls++;
             CurrentState = state;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            CurrentState = null;
             return Task.CompletedTask;
         }
     }
