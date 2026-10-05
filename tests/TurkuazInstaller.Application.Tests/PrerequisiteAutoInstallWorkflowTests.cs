@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/PrerequisiteAutoInstallWorkflowTests.cs
 // 📌 Amac: Eksik prerequisite auto-install, verification ve zorunlu post-install re-probe akisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Guvenli prerequisite install basarisi, policy eksigi ve re-probe basarisizligi durumlarinda package apply sinirini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -92,6 +92,40 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
                 service.InstallAsync(
                     CreateRelease(
                         includeInstallAction: false),
+                    "C:/Apps/Example",
+                    "C:/Temp/TurkuazInstaller",
+                    null,
+                    CancellationToken.None));
+
+        Assert.Equal(
+            0,
+            prerequisiteInstaller.Calls);
+
+        Assert.Equal(
+            0,
+            packageEngine.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task InstallAsync_UnsupportedPrerequisite_DoesNotExecuteAutoInstall()
+    {
+        var prerequisiteInstaller =
+            new TrackingPrerequisiteInstaller();
+
+        var packageEngine =
+            new TrackingPackageEngine();
+
+        var service =
+            CreateService(
+                new UnsupportedPrerequisiteProbe(),
+                prerequisiteInstaller,
+                packageEngine);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () =>
+                service.InstallAsync(
+                    CreateRelease(
+                        includeInstallAction: true),
                     "C:/Apps/Example",
                     "C:/Temp/TurkuazInstaller",
                     null,
@@ -220,6 +254,24 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
                 "/norestart"
             },
             requiresElevation: true);
+    }
+
+    private sealed class UnsupportedPrerequisiteProbe
+        : ISystemPrerequisiteProbe
+    {
+        public bool Supports(
+            string prerequisiteId)
+        {
+            return false;
+        }
+
+        public Task<bool> IsSatisfiedAsync(
+            Prerequisite prerequisite,
+            CancellationToken cancellationToken)
+        {
+            throw new InvalidOperationException(
+                "Unsupported prerequisite must not be evaluated.");
+        }
     }
 
     private sealed class SequencedPrerequisiteProbe
