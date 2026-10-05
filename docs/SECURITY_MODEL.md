@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.2.0
-# Aciklama: Detached trust, prerequisite verification, reboot checkpoint, path, process, state ve rollback guvenlik kurallarini sabitler
+# Version: 1.3.0
+# Aciklama: Detached trust, prerequisite verification, persisted reboot resume, path, process, state ve rollback guvenlik kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -102,7 +102,19 @@ Eksik prerequisite manifestte auto-install policy tasiyorsa:
 
 Prerequisite auto-install artifacti unsigned calistirilamaz.
 
-Exit code 1641 veya 3010 typed reboot sonucu olarak ele alinir. Workflow AwaitingReboot checkpointini kalici tutar, failure yazmaz ve ana package apply adimini reboot sonrasindaki resume akisi tamamlanana kadar baslatmaz.
+Exit code 1641 veya 3010 typed reboot sonucu olarak ele alinir.
+
+Prerequisite process baslamadan once resume request kalici yazilmis ve HKCU RunOnce bootstrap relaunch kaydi olusturulmus olmalidir.
+
+Workflow AwaitingReboot checkpointini ve pending prerequisite id degerini kalici tutar, failure yazmaz ve package apply adimini reboot sonrasindaki resume akisi tamamlanana kadar baslatmaz.
+
+Resume sirasinda journal/request package, operation ve version degerleri eslesmelidir. Signed manifest yeniden dogrulanir; resolved version ve package artifact SHA-256 persisted expected identity ile eslesmezse operasyon durur.
+
+Pending prerequisite reboot sonrasinda hala saglanmiyorsa ayni installer tekrar calistirilmaz.
+
+AwaitingReboot durumundaki package icin normal manual mutation baslatilamaz.
+
+Detay: docs/REBOOT_RESUME.md
 
 ## Preserve Data
 
