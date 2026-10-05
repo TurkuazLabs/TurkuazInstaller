@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
-# 📌 Amac: v1 ve sonrasi tag'lerde reproducible Windows binary uretir, production environment uzerinden Azure Artifact Signing ile imzalar, attest eder ve GitHub Release yayinlar
+# 📌 Amac: Stable tag'lerde tek combined Windows dagitimini build, production sign, attest ve GitHub Release olarak yayinlar
 # 📌 Modul - CI YAML
-# Version: 1.0.2
-# Aciklama: Immutable OIDC production environment, deterministic archive, Authenticode verify, SHA-256 checksum ve GitHub provenance attestation release kapisidir
+# Version: 1.1.0
+# Aciklama: Bootstrap root + app/WinUI layoutunu OIDC Azure Artifact Signing, deterministic ZIP, checksum ve provenance kapilarindan gecirir
 # Bagimli Oldugu Katman: Tool | Config
 
 name: Signed Release
@@ -81,8 +81,9 @@ jobs:
       - name: Publish release binaries
         shell: pwsh
         run: |
-          dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/release/bootstrap
-          dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/release/winui
+          dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/bootstrap
+          dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/winui
+          ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/publish/bootstrap -WinUiRoot artifacts/publish/winui -OutputRoot artifacts/release/distribution
 
       - name: Azure login with OIDC
         uses: azure/login@v3
@@ -91,13 +92,13 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Sign release binaries
+      - name: Sign combined release binaries
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
           signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
           certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_CERT_PROFILE_NAME }}
-          files-folder: ${{ github.workspace }}\artifacts\release
+          files-folder: ${{ github.workspace }}\artifacts\release\distribution
           files-folder-filter: TurkuazInstaller*.exe,TurkuazInstaller*.dll
           files-folder-recurse: true
           file-digest: SHA256
@@ -106,27 +107,23 @@ jobs:
 
       - name: Verify Authenticode signatures
         shell: pwsh
-        run: ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release
+        run: ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/distribution
 
-      - name: Create deterministic bootstrap release archive
+      - name: Build deterministic combined archive
         shell: pwsh
-        run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/release/bootstrap -OutputPath artifacts/release-assets/TurkuazInstaller-Bootstrapper-win-x64.zip -PackagerPath tools/release/package_release.py
-
-      - name: Create deterministic WinUI release archive
-        shell: pwsh
-        run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/release/winui -OutputPath artifacts/release-assets/TurkuazInstaller-WinUI-win-x64.zip -PackagerPath tools/release/package_release.py
+        run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/release/distribution -OutputPath artifacts/release-assets/TurkuazInstaller-win-x64.zip -PackagerPath tools/release/package_release.py
 
       - name: Create checksums
         shell: pwsh
         run: ./tools/New-ReleaseChecksums.ps1 -AssetDirectory artifacts/release-assets -OutputPath artifacts/release-assets/SHA256SUMS.txt
 
-      - name: Attest release archives
+      - name: Attest release archive
         uses: actions/attest@v4
         with:
-          subject-path: artifacts/release-assets/*.zip
+          subject-path: artifacts/release-assets/TurkuazInstaller-win-x64.zip
 
       - name: Publish GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" "artifacts/release-assets/TurkuazInstaller-Bootstrapper-win-x64.zip" "artifacts/release-assets/TurkuazInstaller-WinUI-win-x64.zip" "artifacts/release-assets/SHA256SUMS.txt" --verify-tag --title "TurkuazInstaller ${{ github.ref_name }}" --generate-notes
+        run: gh release create "${{ github.ref_name }}" "artifacts/release-assets/TurkuazInstaller-win-x64.zip" "artifacts/release-assets/SHA256SUMS.txt" --verify-tag --title "TurkuazInstaller ${{ github.ref_name }}" --generate-notes

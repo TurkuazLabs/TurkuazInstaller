@@ -1,92 +1,70 @@
 # 📄 Dosya Yolu: /docs/WINDOWS_BOOTSTRAP.md
-# 📌 Amac: TurkuazInstaller Windows NativeAOT bootstrap mimarisini, self-update ve UAC sinirlarini dokumante etmek
+# 📌 Amac: TurkuazInstaller Windows NativeAOT bootstrap startup, app launch ve self-update mimarisini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 0.6.0
-# Aciklama: Native runtime, prerequisite, iki-process handoff ve least-privilege elevation modelini tanimlar
+# Version: 1.0.0
+# Aciklama: Combined distribution, prerequisite, explicit self-update begin/complete ve least-privilege process sinirlarini tanimlar
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 # Windows Bootstrap
 
-TurkuazInstaller bootstrap executable .NET 10 NativeAOT olarak publish edilir.
+TurkuazInstaller kullanicinin calistirdigi tek giris executable dosyasi olarak NativeAOT bootstrap kullanir.
 
-NativeAOT sonucu self-contained native Windows executable uretilir ve hedef makinede ayrica .NET runtime kurulumu zorunlu olmaz.
-
-## Platform Baseline
-
-Bootstrap prerequisite policy:
-
-- Windows zorunlu
-- minimum Windows 10 1809
-- minimum build 17763
-- x64 ve Arm64 OS mimarileri kabul edilir
-
-Bu baseline sonraki WinUI 3 ve Windows App SDK fazi ile uyumludur.
-
-## Native Publish
-
-Windows CI win-x64 NativeAOT publish yapar:
+Stable v1 combined distribution:
 
 ```text
-dotnet publish ... --runtime win-x64 --self-contained true
+TurkuazInstaller.Bootstrapper.exe
+app/
+  TurkuazInstaller.WinUI.exe
+  ...
 ```
 
-Bootstrap projectte `PublishAot=true` sabittir.
+## Normal Startup
 
-Linux Core CI Windows native publish yapmaz. Windows bootstrap ayri Windows kalite kapisina sahiptir.
+Normal akis:
 
-## Prerequisite Boundary
+1. staged self-update cleanup varsa best-effort temizlenir
+2. Windows prerequisite kontrolu yapilir
+3. desteklenmeyen OS/build/architecture typed exit code ile reddedilir
+4. app/TurkuazInstaller.WinUI.exe yolu distribution root containment ile cozulur
+5. WinUI process unelevated ve shell kullanmadan baslatilir
+6. kullanici islemlerini WinUI/Application workflow devam ettirir
 
-`BootstrapPrerequisiteService` platform API kullanmaz.
+Stable v1 release target win-x64 olarak sabitlenmistir.
 
-Runtime bilgisi:
+ARM64 native release sonraki minor faza birakilmistir; desteklenmeyen architecture bootstrap tarafinda acikca reddedilir.
+
+## Self-update Start
+
+Daha once SHA-256/signature verification katmanindan gecmis replacement bootstrap icin internal protocol:
 
 ```text
-BootstrapPrerequisiteService
-    -> IBootstrapEnvironmentProbe
-        -> WindowsBootstrapEnvironmentProbe
+TurkuazInstaller.Bootstrapper.exe --self-update-replacement <verified-replacement.exe> [app arguments]
 ```
 
-Bu sayede prerequisite kararlari unit test ile Windows disinda da dogrulanabilir.
+Bootstrap:
 
-## Self-update Handoff
+1. current executable yolunu Tool portundan alir
+2. SelfUpdateStartRequest olusturur
+3. WindowsSelfUpdateHandoff.BeginAsync cagirir
+4. replacement process complete-self-update modunda baslatilir
+5. current bootstrap kapanir
 
-Bootstrap kendi calisan executable dosyasini dogrudan overwrite etmeye calismaz.
+Bu internal arguman son kullanici update kaynagi degildir; replacement artifacti bu asamaya gelmeden once dogrulanmis olmalidir.
 
-Akis:
+## Self-update Completion
 
-1. dogrulanmis yeni bootstrap staged executable olarak hazirlanir
-2. current bootstrap replacement executable'i handoff modunda baslatir
-3. current process kapanir
-4. replacement process parent exit bekler
-5. target executable retry policy ile degistirilir
-6. target executable yeniden baslatilir
-7. yeni target process staged source icin best-effort cleanup yapar
+Replacement process:
 
-Self-update handoff otomatik elevation yapmaz.
+1. parent process exit bekler
+2. target bootstrap dosyasini retry ile degistirir
+3. yeni target bootstrap'i resume argumentlariyla baslatir
+4. yeni target process staged source cleanup yapar
+5. normal prerequisite + WinUI launch akisina devam eder
 
-Source ve target executable dosya adlari ayni olmak zorundadir.
+## Process Boundary
 
-Complete handoff source path degeri calisan replacement process ile birebir eslesmelidir.
+Bootstrap ve WinUI varsayilan olarak admin baslatilmaz.
 
-## Elevation Boundary
+Application launch UseShellExecute=false kullanir.
 
-Normal process calistirma unelevated kalir.
-
-Administrator hakki gereken ilerideki operasyonlar yalniz:
-
-```text
-IElevatedProcessRunner
-    -> WindowsElevatedProcessRunner
-```
-
-uzerinden calistirilir.
-
-Windows adapter `runas` verb'i ile UAC consent ister.
-
-Kullanici UAC dialogunu iptal ederse bu durum exception yerine typed `ElevationStatus.Cancelled` olarak dondurulur.
-
-Tum bootstrap veya UI processi varsayilan olarak admin baslatilmaz.
-
-## Sonraki Faz
-
-v0.7.0 WinUI 3 fazi bootstrap prerequisite kontrolunden sonra GUI processini baslatacak ve install/update/repair/rollback use-case durumlarini gosterecek.
+Administrator hakki gereken gelecekteki explicit operasyonlar IElevatedProcessRunner sinirindan gecmelidir.

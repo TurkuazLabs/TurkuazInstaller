@@ -1,10 +1,10 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/controllers/Program.cs
 // 📌 Amac: Native bootstrap process girisini alir, dependency composition yapar ve runtime servisini cagirir
 // 📌 Modul - Controller CSharp
-// Version: 0.6.0
-// Aciklama: Controller yalniz argument requestini parsera ve is akisini service katmanina aktarir
+// Version: 1.0.0
+// Aciklama: Controller argument requestini parsera aktarir ve Service katmanini Windows launch/self-update Tool adapterlariyla compose eder
 //
-// Bagimli Oldugu Katman: Service | Tool | Config
+// Bagimli Oldugu Katman: Controller | Service | Tool | Config
 
 using TurkuazInstaller.Application.Bootstrap;
 using TurkuazInstaller.Bootstrapper.Config;
@@ -21,8 +21,11 @@ internal static class Program
     {
         try
         {
-            var parser = new BootstrapCommandParser();
-            var invocation = parser.Parse(args);
+            var parser =
+                new BootstrapCommandParser();
+
+            var invocation =
+                parser.Parse(args);
 
             var environmentProbe =
                 new WindowsBootstrapEnvironmentProbe();
@@ -30,30 +33,39 @@ internal static class Program
             var prerequisiteService =
                 new BootstrapPrerequisiteService(
                     environmentProbe,
-                    BootstrapDefaults.CreateRequirements());
+                    BootstrapDefaults
+                        .CreateRequirements());
 
             var runtimeService =
                 new BootstrapRuntimeService(
                     prerequisiteService,
                     new WindowsSelfUpdateHandoff(
-                        BootstrapDefaults.CreateSelfUpdateOptions()),
-                    new WindowsBootstrapFileCleaner());
+                        BootstrapDefaults
+                            .CreateSelfUpdateOptions()),
+                    new WindowsBootstrapFileCleaner(),
+                    new WindowsBootstrapProcessContext(),
+                    new WindowsBootstrapApplicationLauncher(),
+                    BootstrapDefaults
+                        .CreateRuntimeOptions());
 
-            var exitCode = await runtimeService
-                .ExecuteAsync(
-                    invocation,
-                    CancellationToken.None)
-                .ConfigureAwait(false);
+            var exitCode =
+                await runtimeService
+                    .ExecuteAsync(
+                        invocation,
+                        CancellationToken.None)
+                    .ConfigureAwait(false);
 
             return (int)exitCode;
         }
         catch (FormatException)
         {
-            return (int)BootstrapExitCode.InvalidInvocation;
+            return (int)
+                BootstrapExitCode.InvalidInvocation;
         }
         catch (Exception)
         {
-            return (int)BootstrapExitCode.RuntimeFailure;
+            return (int)
+                BootstrapExitCode.RuntimeFailure;
         }
     }
 }
