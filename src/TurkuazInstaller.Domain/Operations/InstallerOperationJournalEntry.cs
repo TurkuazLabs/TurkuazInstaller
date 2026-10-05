@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Domain/Operations/InstallerOperationJournalEntry.cs
 // 📌 Amac: Devam eden veya yarim kalmis installer operasyonunun kalici journal snapshotini tasir
 // 📌 Modul - Domain CSharp
-// Version: 1.1.0
-// Aciklama: Package, operation, version, target, phase, timestamp ve failure bilgisini immutable typed modelde toplar
+// Version: 1.2.0
+// Aciklama: Package, operation, version, target, phase, reboot prerequisite, timestamp ve failure bilgisini immutable modelde toplar
 //
 // Bagimli Oldugu Katman: Service | Repo
 
@@ -19,4 +19,5 @@ public sealed record InstallerOperationJournalEntry(
     InstallerOperationPhase Phase,
     DateTimeOffset StartedAtUtc,
     DateTimeOffset UpdatedAtUtc,
-    string? Failure);
+    string? Failure,
+    string? PendingPrerequisiteId = null);
