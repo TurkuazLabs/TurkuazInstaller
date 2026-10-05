@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim ve gelistirme giris dokumani
 # 📌 Modul - Markdown
-# Version: 0.6.0
-# Aciklama: Tamamlanan Core, Provider, Package Engine ve Windows NativeAOT Bootstrap fazlarini ozetler
+# Version: 0.7.0
+# Aciklama: Tamamlanan Core, Provider, Package Engine, Windows Bootstrap ve WinUI 3 fazlarini ozetler
 
 Bagimli Oldugu Katman: View
 
@@ -18,7 +18,7 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum ve guncel
 - GitHub, Gitea, generic HTTPS ve local file release provider modeli
 - Paket motorundan bagimsiz Core
 - Velopack Package Engine adapteri
-- SHA-256 ve dijital imza dogrulamasi
+- SHA-256 artifact dogrulamasi
 - Stable ve beta release kanallari
 - Community ve Pro katmanlarinin ayni Core kontratlarini kullanmasi
 - GUI ve CLI uzerinden ayni Application use-case katmaninin calismasi
@@ -26,9 +26,9 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum ve guncel
 ## Mimari
 
 ```text
-View -> ViewModel -> Application Use Case -> Port -> Adapter
-                         |
-                       Domain
+View -> Controller -> Presentation Service -> Application Use Case -> Port -> Adapter
+                                                |
+                                              Domain
 ```
 
 Windows platform detaylari ayri `TurkuazInstaller.Platform.Windows` projesinde tutulur.
@@ -41,19 +41,23 @@ Pro; private feed, lisans ve cihaz yetkilendirme, staged rollout, merkezi yoneti
 
 ## Durum
 
-Aktif gelistirme: v0.6.0 Windows Bootstrap tamamlandi.
+Aktif gelistirme: v0.7.0 WinUI 3 tamamlandi.
 
-Tamamlanan bu faz:
+Tamamlanan masaustu fazi:
 
-- .NET 10 NativeAOT WinExe bootstrap
-- Windows 10 1809 / build 17763 minimum prerequisite
-- x64 ve Arm64 environment detection
-- iki-process self-update handoff
-- staged replacement cleanup
-- explicit UAC elevation portu
-- Windows platform adapter katmani
-- gercek Windows runner uzerinde NativeAOT publish CI
+- Windows App SDK 2.5.1 stable / WinUI 3
+- unpackaged self-contained desktop publish
+- framework bagimsiz Presentation ViewModel katmani
+- ince Controller -> Service request akisi
+- install/update/repair/rollback ekran ve eventleri
+- progress, cancel, retry ve error recovery UX
+- gercek Application InstallerWorkflowService
+- HTTPS/file artifact downloader
+- SHA-256 ve size verification
+- JSON installed-state repository
+- mevcut Velopack Package Engine runtime baglantisi
+- Windows CI WinUI artifact publish
 
-Sonraki roadmap adimi: v0.7.0 WinUI 3.
+Sonraki roadmap adimi: v1.0.0 Stable Community.
 
-Windows bootstrap kararlari `docs/WINDOWS_BOOTSTRAP.md` icinde tutulur.
+WinUI mimari kararlari `docs/WINUI_DESKTOP.md` icinde tutulur.

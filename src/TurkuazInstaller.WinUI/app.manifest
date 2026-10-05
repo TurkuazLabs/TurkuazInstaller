@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+# 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/app.manifest
+# 📌 Amac: TurkuazInstaller WinUI executable Windows compatibility ve execution level ayarlarini tanimlar
+# 📌 Modul - Config XML
+# Version: 0.7.0
+# Aciklama: Uygulamayi varsayilan unelevated asInvoker seviyesinde ve Windows 10/11 uyumlu calistirir
+
+Bagimli Oldugu Katman: Config
+-->
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="TurkuazInstaller.WinUI.app"/>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{4f476546-9371-4f5a-a11a-4e1d2901a02a}"/>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+</assembly>

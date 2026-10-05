@@ -2,8 +2,8 @@
 # 📄 Dosya Yolu: /Directory.Packages.props
 # 📌 Amac: NuGet paket surumlerini merkezi olarak yonetir
 # 📌 Modul - XML
-# Version: 0.4.0
-# Aciklama: Provider manifest parseri ve test altyapisi icin merkezi paket surumlerini tanimlar
+# Version: 0.7.0
+# Aciklama: WinUI 3 stable Windows App SDK ve test paketlerini merkezi surum politikasinda tutar
 
 Bagimli Oldugu Katman: Tool
 -->
@@ -12,6 +12,7 @@ Bagimli Oldugu Katman: Tool
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
