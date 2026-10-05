@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Operations/JsonOperationJournalRepository.cs
 // 📌 Amac: Package bazli installer operation journal snapshotini atomik JSON dosyasinda saklar
 // 📌 Modul - Repo CSharp
-// Version: 1.1.1
-// Aciklama: Domain value objectlerini explicit DTO ile serialize ederek crash/reboot sonrasi yarim kalmis operation checkpointini geri okuyabilir
+// Version: 1.2.0
+// Aciklama: Domain value objectlerini explicit DTO ile serialize eder ve reboot prerequisite checkpointini geri okuyabilir
 //
 // Bagimli Oldugu Katman: Repo
 
@@ -82,7 +82,8 @@ public sealed class JsonOperationJournalRepository
             document.Phase,
             document.StartedAtUtc,
             document.UpdatedAtUtc,
-            document.Failure);
+            document.Failure,
+            document.PendingPrerequisiteId);
     }
 
     public async Task SaveAsync(
@@ -114,7 +115,9 @@ public sealed class JsonOperationJournalRepository
                 Phase = entry.Phase,
                 StartedAtUtc = entry.StartedAtUtc,
                 UpdatedAtUtc = entry.UpdatedAtUtc,
-                Failure = entry.Failure
+                Failure = entry.Failure,
+                PendingPrerequisiteId =
+                    entry.PendingPrerequisiteId
             };
 
         await using (
@@ -197,5 +200,7 @@ public sealed class JsonOperationJournalRepository
         public DateTimeOffset UpdatedAtUtc { get; init; }
 
         public string? Failure { get; init; }
+
+        public string? PendingPrerequisiteId { get; init; }
     }
 }
