@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.3.1
-# Aciklama: Detached CMS trust, Authenticode, detector registry, prerequisite auto-install, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.4.0
+# Aciklama: Detached trust, prerequisite auto-install, reboot checkpoint, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -269,10 +269,10 @@ if (
 if (
     auto_install_policy
     .get("reboot_required_exit")
-    != "deny_until_resume_supported"
+    != "checkpoint_and_stop_before_package_apply"
 ):
     fail(
-        "reboot-required prerequisite result must fail closed until resume support exists"
+        "reboot-required prerequisite result must checkpoint and stop before package apply"
     )
 
 security = manifest.get("security", {})
