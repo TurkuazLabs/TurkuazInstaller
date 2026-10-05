@@ -108,9 +108,7 @@ internal sealed class InstallerOperationContext
             {
                 Phase = phase,
                 UpdatedAtUtc = DateTimeOffset.UtcNow,
-                Failure = null,
-                PendingPrerequisiteId =
-                    prerequisiteId.Trim()
+                Failure = null
             };
 
         await PersistBestEffortAsync(
@@ -137,7 +135,9 @@ internal sealed class InstallerOperationContext
             {
                 Phase = InstallerOperationPhase.AwaitingReboot,
                 UpdatedAtUtc = DateTimeOffset.UtcNow,
-                Failure = null
+                Failure = null,
+                PendingPrerequisiteId =
+                    prerequisiteId.Trim()
             };
 
         await PersistBestEffortAsync(
