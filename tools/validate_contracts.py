@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.3.0
+# Version: 1.3.1
 # Aciklama: Detached CMS trust, Authenticode, detector registry, prerequisite auto-install, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -226,6 +226,15 @@ if set(
 ) != EXPECTED_URI_SCHEMES:
     fail(
         "prerequisite installer URI schemes must match artifact policy"
+    )
+
+if (
+    prerequisite_artifact_policy
+    .get("file_extension")
+    != ".exe"
+):
+    fail(
+        "prerequisite auto-install must remain restricted to direct EXE artifacts"
     )
 
 for key in (
