@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
-# 📌 Amac: v1 ve sonrasi tag'lerde reproducible Windows binary uretir, Azure Artifact Signing ile imzalar ve GitHub Release yayinlar
+# 📌 Amac: v1 ve sonrasi tag'lerde reproducible Windows binary uretir, Azure Artifact Signing ile imzalar, attest eder ve GitHub Release yayinlar
 # 📌 Modul - CI YAML
-# Version: 1.0.0
-# Aciklama: OIDC tabanli production signing, Authenticode verify, SHA-256 checksum ve release asset yayinlama kapisidir
+# Version: 1.0.1
+# Aciklama: OIDC production signing, deterministic archive, Authenticode verify, SHA-256 checksum ve GitHub provenance attestation release kapisidir
 # Bagimli Oldugu Katman: Tool | Config
 
 name: Signed Release
@@ -15,6 +15,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  attestations: write
 
 jobs:
   signed-release:
@@ -29,6 +30,11 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
 
       - name: Validate tag version
         shell: pwsh
@@ -97,16 +103,22 @@ jobs:
         shell: pwsh
         run: ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release
 
-      - name: Create release archives
+      - name: Create deterministic bootstrap release archive
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path artifacts/release-assets -Force | Out-Null
-          Compress-Archive -Path artifacts/release/bootstrap/* -DestinationPath artifacts/release-assets/TurkuazInstaller-Bootstrapper-win-x64.zip -CompressionLevel Optimal
-          Compress-Archive -Path artifacts/release/winui/* -DestinationPath artifacts/release-assets/TurkuazInstaller-WinUI-win-x64.zip -CompressionLevel Optimal
+        run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/release/bootstrap -OutputPath artifacts/release-assets/TurkuazInstaller-Bootstrapper-win-x64.zip -PackagerPath tools/release/package_release.py
+
+      - name: Create deterministic WinUI release archive
+        shell: pwsh
+        run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/release/winui -OutputPath artifacts/release-assets/TurkuazInstaller-WinUI-win-x64.zip -PackagerPath tools/release/package_release.py
 
       - name: Create checksums
         shell: pwsh
         run: ./tools/New-ReleaseChecksums.ps1 -AssetDirectory artifacts/release-assets -OutputPath artifacts/release-assets/SHA256SUMS.txt
+
+      - name: Attest release archives
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/release-assets/*.zip
 
       - name: Publish GitHub Release
         shell: pwsh

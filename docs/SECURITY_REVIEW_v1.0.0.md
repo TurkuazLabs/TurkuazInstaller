@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_REVIEW_v1.0.0.md
 # 📌 Amac: TurkuazInstaller 1.0.0 Stable Community guvenlik incelemesi kapsam, bulgu ve release kapilarini kaydetmek
 # 📌 Modul - Markdown
-# Version: 1.0.0
-# Aciklama: Transport, integrity, process, path, state, rollback, signing ve secret boundary incelemesini release oncesi dokumante eder
+# Version: 1.0.1
+# Aciklama: Transport, integrity, process, path, state, rollback, signing, provenance ve secret boundary incelemesini release oncesi dokumante eder
 # Bagimli Oldugu Katman: Service | Repo | Tool | View | Config
 
 # Security Review - v1.0.0
@@ -21,6 +21,8 @@ Inceleme su sinirlari kapsar:
 - UAC elevation siniri
 - WinUI input siniri
 - release signing
+- deterministic release packaging
+- GitHub artifact provenance
 - CI secret siniri
 
 ## Sonuc
@@ -66,7 +68,7 @@ Stable tag yayinlamadan once Azure Artifact Signing production identity baglanti
 - Velopack current altinda preserve path reddedilir
 - manifest dosya adi Path.GetFileName ile normalize edilir
 
-### Release Signing
+### Release Signing ve Provenance
 
 Production release workflow:
 
@@ -76,6 +78,17 @@ Production release workflow:
 - RFC3161 SHA-256 timestamp kullanir
 - release oncesi SignTool /pa ile Authenticode verification yapar
 - signing config eksikse release fail olur; unsigned fallback yoktur
+- imzalanmis ayni input byte'lari deterministic ZIP metadata ile paketlenir
+- ayni input icin iki ZIP SHA-256 degeri esit degilse release fail olur
+- release ZIP assetleri GitHub artifact attestation provenance kaydi alir
+
+## Reproducibility Notu
+
+Iki temiz publish agaci signing oncesinde SHA-256 ile birebir karsilastirilir.
+
+RFC3161 timestamp farkli signing calistirmalarinda zaman bilgisi degistirdigi icin imzali binary byte'larinin iki ayri production run arasinda birebir olmasi beklenmez.
+
+Deterministic ZIP garantisi ayni signed input byte seti icin gecerlidir.
 
 ## Kabul Edilen Sinirlar
 

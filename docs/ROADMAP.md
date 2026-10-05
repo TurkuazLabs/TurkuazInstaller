@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 1.0.0
-# Aciklama: Stable Community kod ve production release gate durumunu ayri olarak takip eder
+# Version: 1.0.1
+# Aciklama: Stable Community kod, deterministic dagitim ve production release gate durumunu ayri olarak takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
 # Roadmap
@@ -68,7 +68,9 @@
 ## v1.0.0 - Stable Community Code
 
 - [x] signed release pipeline
-- [x] reproducible package validation
+- [x] reproducible publish validation
+- [x] deterministic release ZIP packaging
+- [x] GitHub artifact attestation provenance
 - [x] installer recovery tests
 - [x] security review
 - [x] documentation
@@ -77,6 +79,7 @@
 
 - [ ] Azure Artifact Signing OIDC identity connected
 - [ ] production certificate profile configured
-- [ ] Stable Readiness CI green on release commit
+- [x] Stable Readiness CI green on release candidate branch
+- [ ] Stable Readiness CI green on final release commit
 - [ ] signed v1.0.0 tag workflow green
 - [ ] GitHub Release published

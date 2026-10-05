@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/RELEASE_SIGNING.md
-# 📌 Amac: TurkuazInstaller production release signing ve GitHub configuration adimlarini tanimlamak
+# 📌 Amac: TurkuazInstaller production release signing, deterministic packaging, attestation ve GitHub configuration adimlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.0
-# Aciklama: Azure Artifact Signing OIDC identity, repository secret/variable isimleri ve signed tag akislarini dokumante eder
+# Version: 1.0.1
+# Aciklama: Azure Artifact Signing OIDC identity, repository configuration, signed tag ve provenance akislarini dokumante eder
 # Bagimli Oldugu Katman: Tool | Config
 
 # Release Signing
@@ -54,14 +54,28 @@ Genel subscription owner veya contributor yetkisi verilmemelidir.
 8. TurkuazInstaller EXE ve DLL dosyalari SHA-256 ile imzalanir.
 9. RFC3161 SHA-256 timestamp uygulanir.
 10. SignTool Authenticode verification yapar.
-11. ZIP release assetleri olusturulur.
-12. Signing sonrasinda SHA256SUMS.txt uretilir.
-13. GitHub Release yayinlanir.
+11. Imzalanmis publish klasorleri sabit ZIP metadata ile deterministic olarak paketlenir.
+12. Ayni inputtan uretilen iki ZIP SHA-256 degeri birebir esit degilse release durur.
+13. Signing sonrasinda SHA256SUMS.txt uretilir.
+14. Release ZIP dosyalari GitHub artifact attestation ile provenance kaydi alir.
+15. GitHub Release yayinlanir.
 
 Unsigned production fallback yoktur.
+
+## Reproducibility Siniri
+
+Stable Readiness iki temiz unsigned publish agacini dosya listesi, boyut ve SHA-256 ile karsilastirir.
+
+Release ZIP packager ayni input byte'larindan ayni ZIP byte'larini uretir.
+
+RFC3161 timestamp zaman bilgisi tasidigi icin farkli production signing calistirmalarinin imzali binary byte'larinin birbirine esit olmasi beklenmez. Reproducibility iddiasi signing oncesi publish agaci ve ayni signed input icin deterministic archive katmanlariyla sinirlidir.
 
 ## Imza Dogrulama
 
 Release binary dogrulamasinda Windows Default Authentication Policy kullanilir.
 
 Release ZIP hash dogrulamasi icin GitHub Release icindeki SHA256SUMS.txt kullanilir.
+
+GitHub provenance dogrulamasi icin:
+
+gh attestation verify <artifact> -R TurkuazLabs/TurkuazInstaller

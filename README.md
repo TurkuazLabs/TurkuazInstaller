@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim, kullanim ve release durumu giris dokumani
 # 📌 Modul - Markdown
-# Version: 1.0.0
-# Aciklama: Stable Community kod kapsamlarini ve production signing release gate durumunu ozetler
+# Version: 1.0.1
+# Aciklama: Stable Community kod kapsamlarini, deterministic dagitimi ve production signing release gate durumunu ozetler
 
 Bagimli Oldugu Katman: View
 
@@ -39,12 +39,14 @@ Tamamlanan release kalite katmanlari:
 
 - Core ve Windows CI
 - contract validation
-- iki publish agaci SHA-256 reproducibility dogrulamasi
+- iki temiz publish agaci SHA-256 reproducibility dogrulamasi
+- deterministic release ZIP packaging
 - install ve rollback recovery testleri
 - security review
 - OIDC tabanli Azure Artifact Signing release workflow
 - SignTool Authenticode verification
 - signing sonrasi SHA-256 release checksum manifesti
+- GitHub artifact attestation provenance
 - user ve release dokumani
 
 Production v1.0.0 tag'i, Azure Artifact Signing identity ve certificate profile repository'ye baglanmadan olusturulmamalidir.
