@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/InstallerDesktopServiceTests.cs
 // 📌 Amac: InstallerDesktopService progress, success ve recovery state davranisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 0.7.1
-// Aciklama: Fake runtime ile ViewModel state gecislerini gercek WinUI penceresi acmadan test eder
+// Version: 1.0.0
+// Aciklama: Progress event sirasi ve terminal completed state'inin gec callback ile geriye sarilmadigini framework bagimsiz test eder
 //
 // Bagimli Oldugu Katman: Service | View
 
@@ -62,7 +62,7 @@ public sealed class InstallerDesktopServiceTests
     }
 
     [Fact]
-    public async Task RunAsync_ReportsProgress()
+    public async Task RunAsync_ReportsProgressWithoutOverwritingCompletedState()
     {
         var viewModel = CreateViewModel();
         var runtime = new StubRuntimeService
@@ -80,6 +80,9 @@ public sealed class InstallerDesktopServiceTests
             InstallerOperationKind.Repair);
 
         Assert.Equal(100, viewModel.ProgressValue);
+        Assert.Equal(
+            InstallerUiLabels.Completed,
+            viewModel.StatusMessage);
     }
 
     private static MainWindowViewModel CreateViewModel()

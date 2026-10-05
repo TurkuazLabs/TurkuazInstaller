@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
 // 📌 Amac: Ana pencere request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 0.7.1
-// Aciklama: Controller logic tutmadan ViewModel state'ini gercek runtime operasyonlariyla koordine eder
+// Version: 1.0.0
+// Aciklama: Progress eventlerini sirali drain ederek terminal success/error/cancel state'inin gec callback'lerle bozulmasini engeller
 //
 // Bagimli Oldugu Katman: Service | View | Language
 
@@ -129,7 +129,7 @@ public sealed class InstallerDesktopService : IDisposable
             new CancellationTokenSource();
 
         var progress =
-            new Progress<InstallerOperationProgress>(
+            new OrderedProgress<InstallerOperationProgress>(
                 ReportProgress);
 
         try
@@ -141,6 +141,10 @@ public sealed class InstallerDesktopService : IDisposable
                     _operationCancellation.Token)
                 .ConfigureAwait(true);
 
+            await progress
+                .DrainAsync()
+                .ConfigureAwait(true);
+
             _viewModel.ProgressValue = 100;
             _viewModel.StatusMessage =
                 InstallerUiLabels.Completed;
@@ -148,12 +152,20 @@ public sealed class InstallerDesktopService : IDisposable
         }
         catch (OperationCanceledException)
         {
+            await progress
+                .DrainAsync()
+                .ConfigureAwait(true);
+
             _viewModel.StatusMessage =
                 InstallerUiLabels.Cancelled;
             _viewModel.CanRetry = true;
         }
         catch (Exception exception)
         {
+            await progress
+                .DrainAsync()
+                .ConfigureAwait(true);
+
             ShowFailure(exception);
         }
         finally
