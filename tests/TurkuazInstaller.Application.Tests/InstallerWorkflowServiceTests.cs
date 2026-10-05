@@ -132,6 +132,13 @@ public sealed class InstallerWorkflowServiceTests
         {
             return Task.CompletedTask;
         }
+
+        public Task UninstallAsync(
+            UninstallPlan plan,
+            CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class StubStateRepository
@@ -152,6 +159,14 @@ public sealed class InstallerWorkflowServiceTests
             CancellationToken cancellationToken)
         {
             SavedState = state;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            SavedState = null;
             return Task.CompletedTask;
         }
     }
