@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /contracts/installer-manifest.yml
 # 📌 Amac: TurkuazInstaller Community Stable v1 paket manifest contract alanlarini ve guvenlik invariantlarini tanimlamak
 # 📌 Modul - YAML
-# Version: 1.2.1
-# Aciklama: Detached manifest trust, publisher-pinned artifact ve guvenli prerequisite detection/auto-install contractini runtime ile birebir sabitler
+# Version: 1.3.0
+# Aciklama: Detached trust, prerequisite auto-install ve reboot checkpoint contractini runtime ile birebir sabitler
 # Bagimli Oldugu Katman: Application | Port | Adapter | Config
 
 schema_version: 1
@@ -93,7 +93,7 @@ install:
       requires_elevation:
         type: boolean
       post_install_reprobe_required: true
-      reboot_required_exit: deny_until_resume_supported
+      reboot_required_exit: checkpoint_and_stop_before_package_apply
   preserve_paths:
     type: array
     relative_to_install_root: true
