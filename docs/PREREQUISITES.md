@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/PREREQUISITES.md
 # 📌 Amac: TurkuazInstaller prerequisite detection ve guvenli auto-install mimarisini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.2.0
+# Version: 1.2.1
 # Aciklama: Detector registry, signed installer verification, persisted RunOnce reboot resume ve post-reboot re-probe kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Tool | Config
 
@@ -75,11 +75,11 @@ Typed sonuc uretilir:
 - 3010: RebootRequired
 - 1641: RebootInitiated
 
-Prerequisite installer calismadan once package-scoped resume request kalici yazilir ve HKCU RunOnce bootstrap relaunch kaydi olusturulur.
+Prerequisite installer calismadan once package-scoped resume request kalici yazilir, HKCU RunOnce bootstrap relaunch kaydi olusturulur ve journal RebootResumeArmed checkpointine alinir.
 
 Application workflow reboot sonucu aldiginda:
 
-1. journal phase degerini AwaitingReboot olarak kalici yazar
+1. pre-execution RebootResumeArmed phase degerini AwaitingReboot olarak ilerletir
 2. pending prerequisite id degerini journal icinde saklar
 3. operation.awaiting_reboot structured eventini yazar
 4. prerequisite post-install re-probe adimini reboot sonrasina birakir
