@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/PROJECT_INTEGRATION.md
 # 📌 Amac: TurkuazInstaller'i NSIS yerine kullanacak projeler icin ortak entegrasyon ve migration standardini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.0
+# Version: 1.1.1
 # Aciklama: Signed manifest trust, Velopack full package, prerequisite, preserve path, rollback, uninstall ve kabul testlerini tum projeler icin standartlastirir
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -124,13 +124,35 @@ Program Files gerektiren urunlar ayri elevation policy ile degerlendirilmelidir.
 
 ## Prerequisites
 
-Stable v1 built-in prerequisite id degerleri:
+Community v1.1 built-in prerequisite id degerleri:
 
 - windows-build
 - architecture
 - dotnet-desktop-runtime
 
 Desteklenmeyen prerequisite sessizce atlanmaz.
+
+Eksik prerequisite otomatik kurulacaksa manifestte explicit install policy tanimlanir.
+
+Prerequisite installer icin:
+
+- HTTPS veya file URI
+- gercek SHA-256 ve size
+- Authenticode signature
+- exact publisher subject
+- optional certificate SHA-256 pin
+- shell-free argument listesi
+- explicit elevation policy
+
+zorunlu guvenlik siniridir.
+
+Installer calistiktan sonra prerequisite tekrar detect edilir. Re-probe basarisizsa ana paket kurulmaz.
+
+Reboot gerektiren installer sonucu reboot/resume P1 tamamlanana kadar fail-closed durur.
+
+Detay:
+
+docs/PREREQUISITES.md
 
 ## Preserve Paths
 
@@ -199,6 +221,8 @@ Bir proje TurkuazInstaller'a gecmis kabul edilmek icin:
 - manifest certificate SHA-256 pin external trust policy ile eslesiyor
 - artifact SHA-256 gercek artifact ile eslesiyor
 - unsupported prerequisite fail-closed
+- auto-install prerequisite varsa installer SHA-256 + Authenticode valid
+- auto-install prerequisite post-install re-probe basarili
 - CI release artifacti uretiyor
 
 ## Sonraki Proje
