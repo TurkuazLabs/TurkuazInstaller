@@ -8,10 +8,12 @@
 
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Contracts.Artifacts;
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Contracts.System;
 using TurkuazInstaller.Domain.Artifacts;
+using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Plans;
 using TurkuazInstaller.Domain.Prerequisites;
 using TurkuazInstaller.Domain.Products;
@@ -85,11 +87,15 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
         var packageEngine =
             new TrackingPackageEngine();
 
+        var journal =
+            new TrackingOperationJournal();
+
         var service =
             CreateService(
                 probe,
                 prerequisiteInstaller,
-                packageEngine);
+                packageEngine,
+                journal);
 
         var exception =
             await Assert.ThrowsAsync<InstallerRebootRequiredException>(
@@ -121,6 +127,20 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
         Assert.Equal(
             0,
             packageEngine.ApplyCalls);
+
+        Assert.NotNull(
+            journal.CurrentEntry);
+
+        Assert.Equal(
+            InstallerOperationPhase.AwaitingReboot,
+            journal.CurrentEntry!.Phase);
+
+        Assert.Null(
+            journal.CurrentEntry.Failure);
+
+        Assert.Equal(
+            0,
+            journal.DeleteCalls);
     }
 
     [Fact]
@@ -241,7 +261,8 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
     private static InstallerWorkflowService CreateService(
         ISystemPrerequisiteProbe prerequisiteProbe,
         IPrerequisiteInstaller prerequisiteInstaller,
-        TrackingPackageEngine packageEngine)
+        TrackingPackageEngine packageEngine,
+        IInstallerOperationJournalRepository? operationJournal = null)
     {
         return new InstallerWorkflowService(
             new StubDownloader(),
@@ -252,6 +273,8 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
                 new StubSignatureVerifier(),
             prerequisiteProbe:
                 prerequisiteProbe,
+            operationJournal:
+                operationJournal,
             prerequisiteInstaller:
                 prerequisiteInstaller);
     }
@@ -471,6 +494,43 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
             UninstallPlan plan,
             CancellationToken cancellationToken)
         {
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TrackingOperationJournal
+        : IInstallerOperationJournalRepository
+    {
+        public InstallerOperationJournalEntry? CurrentEntry
+        {
+            get;
+            private set;
+        }
+
+        public int DeleteCalls { get; private set; }
+
+        public Task<InstallerOperationJournalEntry?> GetAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(
+                CurrentEntry);
+        }
+
+        public Task SaveAsync(
+            InstallerOperationJournalEntry entry,
+            CancellationToken cancellationToken)
+        {
+            CurrentEntry = entry;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            DeleteCalls++;
+            CurrentEntry = null;
             return Task.CompletedTask;
         }
     }
