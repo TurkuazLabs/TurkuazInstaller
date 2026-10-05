@@ -85,5 +85,8 @@ public sealed class UpdateCheckServiceTests
 
         public Task SaveAsync(InstalledPackageState state, CancellationToken cancellationToken)
             => Task.CompletedTask;
+
+        public Task DeleteAsync(PackageId packageId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
     }
 }
