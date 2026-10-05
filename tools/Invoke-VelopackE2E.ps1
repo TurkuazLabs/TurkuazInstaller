@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Invoke-VelopackE2E.ps1
 # 📌 Amac: Gercek vpk toolu ile iki Velopack release uretir ve TurkuazInstaller E2E runnerini calistirir
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.1
+# Version: 1.0.2
 # Aciklama: Local tool install, fixture publish, v1/v2 package uretimi ve install-update-repair-rollback-uninstall zincirini tek kalite kapisinda koordine eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -65,9 +65,15 @@ function Invoke-Pack {
 
     Set-Content -LiteralPath $markerPath -Value $Version -NoNewline -Encoding utf8
 
-    & $vpkPath --legacyConsole true --yes true --skip-updates true --verbose true pack --runtime win-x64 --packId $config.PackId --packTitle $config.PackTitle --packVersion $Version --packDir $payloadRoot --mainExe $config.MainExecutable --outputDir $releaseRoot --delta none --skipVeloAppCheck true
+    $packOutput = & $vpkPath --legacyConsole true --yes true --skip-updates true --verbose true pack --runtime win-x64 --packId $config.PackId --packTitle $config.PackTitle --packVersion $Version --packDir $payloadRoot --mainExe $config.MainExecutable --outputDir $releaseRoot --delta none --skipVeloAppCheck true 2>&1
+    $packExitCode = $LASTEXITCODE
 
-    if ($LASTEXITCODE -ne 0) {
+    $packOutput |
+        ForEach-Object {
+            Write-Host $_
+        }
+
+    if ($packExitCode -ne 0) {
         throw ("vpk pack failed for version {0}." -f $Version)
     }
 
@@ -91,7 +97,7 @@ function Invoke-Pack {
         throw ("Velopack full nupkg was not produced for version {0}." -f $Version)
     }
 
-    return @{
+    return [pscustomobject]@{
         Setup = $setup.FullName
         Full = $full.FullName
     }
