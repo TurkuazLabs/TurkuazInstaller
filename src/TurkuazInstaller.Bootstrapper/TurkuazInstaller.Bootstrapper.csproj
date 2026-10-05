@@ -2,8 +2,8 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj
 # 📌 Amac: TurkuazInstaller Windows NativeAOT bootstrap executable projesini tanimlar
 # 📌 Modul - Project XML
-# Version: 0.6.0
-# Aciklama: .NET runtime gerektirmeyen WinExe bootstrap binary'sini Windows 10 1809 ve sonrasi icin publish eder
+# Version: 1.0.1
+# Aciklama: Stable release NativeAOT binary'sini debug PDB olmadan ve reproducible Windows linker modu ile publish eder
 
 Bagimli Oldugu Katman: Service | Tool | Config
 -->
@@ -18,7 +18,11 @@ Bagimli Oldugu Katman: Service | Tool | Config
     <InvariantGlobalization>true</InvariantGlobalization>
     <RootNamespace>TurkuazInstaller.Bootstrapper</RootNamespace>
     <AssemblyName>TurkuazInstaller.Bootstrapper</AssemblyName>
+    <DebugType Condition="'$(Configuration)' == 'Release'">none</DebugType>
   </PropertyGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Release'">
+    <LinkerArg Include="/Brepro" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../TurkuazInstaller.Application/TurkuazInstaller.Application.csproj" />
     <ProjectReference Include="../TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
