@@ -1,0 +1,77 @@
+# 📄 Dosya Yolu: /.github/workflows/signing-tooling-validation.yml
+# 📌 Amac: Production signing bootstrap script ve config dosyalarinin secretsiz statik kalite kontrolunu yapar
+# 📌 Modul - CI YAML
+# Version: 1.0.0
+# Aciklama: PowerShell parser, immutable repository ID config ve release environment sabitlerini PR/main seviyesinde dogrular
+# Bagimli Oldugu Katman: Tool | Config
+
+name: Signing Tooling Validation
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  signing-tooling:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate PowerShell syntax
+        shell: pwsh
+        run: |
+          $scripts = @(
+            "tools/release/Initialize-ProductionSigning.ps1"
+          )
+
+          foreach ($script in $scripts) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
+
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "PowerShell syntax validation failed: $script"
+            }
+          }
+
+      - name: Validate signing config invariants
+        shell: pwsh
+        run: |
+          $config = Import-PowerShellDataFile "config/release-signing.psd1"
+
+          if ($config.RepositoryOwner -cne "TurkuazLabs") {
+            throw "Unexpected repository owner."
+          }
+
+          if ($config.RepositoryOwnerId -cne "326224284") {
+            throw "Unexpected immutable repository owner id."
+          }
+
+          if ($config.RepositoryName -cne "TurkuazInstaller") {
+            throw "Unexpected repository name."
+          }
+
+          if ($config.RepositoryId -cne "1388165383") {
+            throw "Unexpected immutable repository id."
+          }
+
+          if ($config.EnvironmentName -cne "production") {
+            throw "Production environment name changed unexpectedly."
+          }
+
+          if (-not $config.RegionEndpoints.ContainsKey("westeurope")) {
+            throw "Artifact Signing region endpoint map is incomplete."
+          }
