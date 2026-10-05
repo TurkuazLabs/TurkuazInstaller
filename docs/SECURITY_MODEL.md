@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.3
-# Aciklama: Detached trust, artifact ve prerequisite installer verification, detector registry, path, process, state ve rollback kurallarini sabitler
+# Version: 1.2.0
+# Aciklama: Detached trust, prerequisite verification, reboot checkpoint, path, process, state ve rollback guvenlik kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -102,7 +102,7 @@ Eksik prerequisite manifestte auto-install policy tasiyorsa:
 
 Prerequisite auto-install artifacti unsigned calistirilamaz.
 
-Exit code 1641 veya 3010 reboot gerektirdigi icin reboot/resume orchestration tamamlanana kadar fail-closed reddedilir.
+Exit code 1641 veya 3010 typed reboot sonucu olarak ele alinir. Workflow AwaitingReboot checkpointini kalici tutar, failure yazmaz ve ana package apply adimini reboot sonrasindaki resume akisi tamamlanana kadar baslatmaz.
 
 ## Preserve Data
 
