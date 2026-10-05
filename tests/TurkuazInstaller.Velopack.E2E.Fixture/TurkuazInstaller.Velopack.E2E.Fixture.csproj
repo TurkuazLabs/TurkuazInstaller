@@ -1,0 +1,19 @@
+<!--
+# 📄 Dosya Yolu: /tests/TurkuazInstaller.Velopack.E2E.Fixture/TurkuazInstaller.Velopack.E2E.Fixture.csproj
+# 📌 Amac: Gercek Velopack install/update testlerinde paketlenecek minimal Windows fixture executable projesini tanimlar
+# 📌 Modul - Test Project XML
+# Version: 1.0.0
+# Aciklama: Framework-dependent kucuk executable ile vpk Setup.exe ve full nupkg paketlerinin hizli uretilmesini saglar
+
+Bagimli Oldugu Katman: Tool
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.17763.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RootNamespace>TurkuazInstaller.Velopack.E2E.Fixture</RootNamespace>
+    <AssemblyName>TurkuazInstaller.Velopack.E2E.Fixture</AssemblyName>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,45 @@
+# 📄 Dosya Yolu: /.github/workflows/velopack-e2e.yml
+# 📌 Amac: TurkuazInstaller Velopack adapterini gercek vpk paketleri ve Windows installer processleriyle uctan uca dogrular
+# 📌 Modul - CI YAML
+# Version: 1.0.0
+# Aciklama: Setup install, full update, repair, rollback ve uninstall zincirini fake process kullanmadan Windows hosted runnerda calistirir
+# Bagimli Oldugu Katman: Tool | Config
+
+name: Velopack E2E
+
+on:
+  push:
+    branches:
+      - main
+      - "test/**"
+      - "feat/**"
+      - "fix/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: velopack-e2e-\${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  velopack-e2e:
+    runs-on: windows-2025
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Run real Velopack E2E
+        shell: pwsh
+        run: ./tools/Invoke-VelopackE2E.ps1
