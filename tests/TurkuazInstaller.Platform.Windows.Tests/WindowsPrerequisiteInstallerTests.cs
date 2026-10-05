@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Platform.Windows.Tests/WindowsPrerequisiteInstallerTests.cs
 // 📌 Amac: Windows prerequisite installer normal process, UAC ve reboot fail-closed davranislarini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: ArgumentList aktarimi, explicit elevation, UAC iptali ve reboot-required exit kodlarini kapsar
 //
 // Bagimli Oldugu Katman: Tool | Service
@@ -72,6 +72,50 @@ public sealed class WindowsPrerequisiteInstallerTests
         finally
         {
             File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_NonExeArtifact_FailsClosed()
+    {
+        var installer =
+            new WindowsPrerequisiteInstaller(
+                new StubProcessRunner(
+                    new ProcessResult(
+                        0,
+                        string.Empty,
+                        string.Empty)),
+                new StubElevatedProcessRunner(
+                    new ElevationResult(
+                        ElevationStatus.Completed,
+                        0)));
+
+        var path =
+            CreateTemporaryExecutable();
+
+        var nonExePath =
+            Path.ChangeExtension(
+                path,
+                ".cmd");
+
+        File.Move(
+            path,
+            nonExePath);
+
+        try
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(
+                () =>
+                    installer.InstallAsync(
+                        nonExePath,
+                        CreateInstallAction(
+                            requiresElevation: true),
+                        CancellationToken.None));
+        }
+        finally
+        {
+            File.Delete(
+                nonExePath);
         }
     }
 
