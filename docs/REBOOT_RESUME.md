@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/REBOOT_RESUME.md
 # 📌 Amac: TurkuazInstaller prerequisite reboot ve otomatik resume guvenilirlik modelini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.0
-# Aciklama: Persisted request, RebootResumeArmed/AwaitingReboot journal, HKCU RunOnce ve post-reboot trust/re-probe zincirini sabitler
+# Version: 1.2.0
+# Aciklama: Persisted request, pre-execution arm, HKCU RunOnce, post-reboot trust/re-probe ve scheduler cleanup zincirini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | View | Config
 
 # Reboot Resume
@@ -130,6 +130,8 @@ Operation normal tamamlanirsa:
 - operation journal silinir
 - resume request best-effort temizlenir
 - prerequisite installer reboot istemediyse RunOnce kaydi process icinde iptal edilir
+- prerequisite installer hata verirse stale RunOnce kaydi temizlenir
+- 3010/1641 donerse RunOnce kaydi reboot sonrasindaki tek seferlik relaunch icin korunur
 
 Reboot bekleniyorsa journal ve resume request korunur.
 
