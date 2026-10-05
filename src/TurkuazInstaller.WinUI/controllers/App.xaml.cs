@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/controllers/App.xaml.cs
 // 📌 Amac: WinUI launch requestini alir ve desktop composition root tarafindan uretilen ana pencereyi acar
 // 📌 Modul - Controller CSharp
-// Version: 0.7.1
-// Aciklama: Application controller is kurali tutmadan XAML initialize, composition ve View activation akisini baslatir
+// Version: 0.7.2
+// Aciklama: Application namespace cakismasini onleyerek XAML initialize, composition ve View activation akisini baslatir
 //
 // Bagimli Oldugu Katman: Controller | Config | View
 
@@ -11,7 +11,7 @@ using TurkuazInstaller.WinUI.Config;
 
 namespace TurkuazInstaller.WinUI;
 
-public partial class App : Application
+public partial class App : Microsoft.UI.Xaml.Application
 {
     private Window? _window;
 
