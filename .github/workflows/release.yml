@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
 # 📌 Amac: Stable tag'lerde tek combined Windows dagitimini build, production sign, attest ve GitHub Release olarak yayinlar
 # 📌 Modul - CI YAML
-# Version: 1.1.0
-# Aciklama: Bootstrap root + app/WinUI layoutunu OIDC Azure Artifact Signing, deterministic ZIP, checksum ve provenance kapilarindan gecirir
+# Version: 1.2.0
+# Aciklama: Bootstrap + app/WinUI + cli layoutunu signing, deterministic ZIP, checksum ve provenance kapilarindan gecirir
 # Bagimli Oldugu Katman: Tool | Config
 
 name: Signed Release
@@ -83,7 +83,8 @@ jobs:
         run: |
           dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/bootstrap
           dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/winui
-          ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/publish/bootstrap -WinUiRoot artifacts/publish/winui -OutputRoot artifacts/release/distribution
+          dotnet publish src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/cli
+          ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/publish/bootstrap -WinUiRoot artifacts/publish/winui -CliRoot artifacts/publish/cli -OutputRoot artifacts/release/distribution
 
       - name: Azure login with OIDC
         uses: azure/login@v3
