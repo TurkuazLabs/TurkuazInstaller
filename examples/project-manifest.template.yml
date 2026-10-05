@@ -1,9 +1,13 @@
 # 📄 Dosya Yolu: /examples/project-manifest.template.yml
 # 📌 Amac: TurkuazInstaller'a gececek projeler icin reusable Stable v1 manifest sablonu saglar
 # 📌 Modul - Config YAML
-# Version: 1.1.0
-# Aciklama: Full install, SHA-256, optional Authenticode, prerequisite, preserve path ve rollback alanlarini proje migration'i icin standartlastirir
+# Version: 1.1.1
+# Aciklama: Detached .p7s manifest trust, full install, SHA-256, optional Authenticode, prerequisite, preserve path ve rollback alanlarini migration icin standartlastirir
 # Bagimli Oldugu Katman: Config
+
+# Release pipeline bu dosyanin raw byte'larini CMS/PKCS#7 detached olarak imzalamali.
+# Sidecar adi: <manifest-file>.p7s
+# Signer publisher/certificate SHA-256 trust anchor external manifest-trust.yml store'unda provision edilir.
 
 schema_version: 1
 
@@ -19,7 +23,7 @@ artifact:
   signature:
     algorithm: authenticode
     publisher_subject: "__PUBLISHER_SUBJECT__"
-    # certificate_sha256: "__OPTIONAL_CERTIFICATE_SHA256_PIN__"
+    # certificate_sha256: "__OPTIONAL_ARTIFACT_CERTIFICATE_SHA256_PIN__"
 
 install:
   mode: full

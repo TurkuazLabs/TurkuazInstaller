@@ -1,0 +1,36 @@
+# 📄 Dosya Yolu: /contracts/manifest-trust.yml
+# 📌 Amac: Detached installer manifest signature ve dis trust store guvenlik kontratini tanimlamak
+# 📌 Modul - YAML
+# Version: 1.1.0
+# Aciklama: CMS/PKCS#7 detached signature, tek signer, package-scoped publisher subject ve zorunlu sertifika SHA-256 pin invariantlarini sabitler
+# Bagimli Oldugu Katman: Service | Repo | Tool | Config
+
+schema_version: 1
+
+signature:
+  format: cms-pkcs7-detached
+  detached_suffix: ".p7s"
+  signer_count: 1
+  signs_raw_manifest_bytes: true
+  signer_certificate_embedded: true
+
+trust_store:
+  external_to_manifest: true
+  package_scoped: true
+  publisher_subject:
+    required: true
+    comparison: case_insensitive_exact
+  certificate_sha256:
+    required: true
+    format: hex
+    length: 64
+
+security:
+  unsigned_manifest: deny
+  missing_package_trust: deny
+  invalid_cms_signature: deny
+  multiple_signers: deny
+  publisher_mismatch: deny
+  certificate_pin_mismatch: deny
+  expired_signer_certificate: deny
+  parse_before_verification: deny

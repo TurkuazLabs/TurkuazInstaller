@@ -1,11 +1,12 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Providers/File/FileReleaseProvider.cs
-// 📌 Amac: Air-gapped ve local test senaryolari icin dosyadan installer manifesti okur
+// 📌 Amac: Air-gapped ve local test senaryolari icin dosyadan signed installer manifesti okur
 // 📌 Modul - Tool CSharp
-// Version: 0.4.0
-// Aciklama: Stable ve beta local manifestlerini ortak parser uzerinden typed release modeline donusturur
+// Version: 1.1.0
+// Aciklama: Local manifestin yanindaki .p7s detached signature dosyasini zorunlu tutar ve verification sonrasi typed release modeline donusturur
 //
 // Bagimli Oldugu Katman: Tool | Service
 
+using TurkuazInstaller.Contracts.Manifests;
 using TurkuazInstaller.Contracts.Releases;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
@@ -15,13 +16,32 @@ namespace TurkuazInstaller.Infrastructure.Providers.File;
 
 public sealed class FileReleaseProvider : IReleaseProvider
 {
-    private readonly FileReleaseProviderOptions _options;
-    private readonly InstallerManifestReader _manifestReader;
+    private const string SignatureMissingMessage =
+        "Detached installer manifest signature is required.";
 
-    public FileReleaseProvider(InstallerManifestReader manifestReader, FileReleaseProviderOptions options)
+    private readonly FileReleaseProviderOptions _options;
+    private readonly VerifiedManifestReader
+        _verifiedManifestReader;
+
+    public FileReleaseProvider(
+        InstallerManifestReader manifestReader,
+        IManifestSignatureVerifier signatureVerifier,
+        FileReleaseProviderOptions options)
     {
-        _manifestReader = manifestReader;
-        _options = options;
+        ArgumentNullException.ThrowIfNull(
+            manifestReader);
+        ArgumentNullException.ThrowIfNull(
+            signatureVerifier);
+        ArgumentNullException.ThrowIfNull(
+            options);
+
+        _verifiedManifestReader =
+            new VerifiedManifestReader(
+                manifestReader,
+                signatureVerifier);
+
+        _options =
+            options;
     }
 
     public async Task<PackageRelease?> GetLatestReleaseAsync(
@@ -29,17 +49,53 @@ public sealed class FileReleaseProvider : IReleaseProvider
         ReleaseChannel channel,
         CancellationToken cancellationToken)
     {
-        var path = channel == ReleaseChannel.Stable
-            ? _options.StableManifestPath
-            : _options.BetaManifestPath;
+        var path =
+            channel == ReleaseChannel.Stable
+                ? _options.StableManifestPath
+                : _options.BetaManifestPath;
 
         if (!System.IO.File.Exists(path))
         {
             return null;
         }
 
-        var yaml = await System.IO.File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
-        var parsed = _manifestReader.Read(yaml);
-        return ProviderValidation.MatchRequest(parsed, packageId, channel);
+        var signaturePath =
+            ManifestSignatureConventions
+                .GetDetachedSignaturePath(
+                    path);
+
+        if (!System.IO.File.Exists(signaturePath))
+        {
+            throw new InvalidDataException(
+                SignatureMissingMessage);
+        }
+
+        var manifestContent =
+            await System.IO.File
+                .ReadAllBytesAsync(
+                    path,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        var detachedSignature =
+            await System.IO.File
+                .ReadAllBytesAsync(
+                    signaturePath,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        var parsed =
+            await _verifiedManifestReader
+                .ReadAsync(
+                    manifestContent,
+                    detachedSignature,
+                    packageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        return ProviderValidation.MatchRequest(
+            parsed,
+            packageId,
+            channel);
     }
 }

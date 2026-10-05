@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
-# 📌 Amac: TurkuazInstaller Community manifest, provider ve guvenlik contract invariantlarini statik dogrulamak
+# 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.1.0
-# Aciklama: Stable v1 full install, Authenticode, prerequisite, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.2.0
+# Aciklama: Detached CMS trust, Stable v1 full install, Authenticode, prerequisite, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -15,6 +15,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 MANIFEST = ROOT / "contracts" / "installer-manifest.yml"
+MANIFEST_TRUST = ROOT / "contracts" / "manifest-trust.yml"
 PROVIDER = ROOT / "contracts" / "release-provider.yml"
 EXAMPLE = ROOT / "examples" / "community-manifest.yml"
 SECURITY = ROOT / "docs" / "SECURITY_MODEL.md"
@@ -25,6 +26,8 @@ EXPECTED_CHANNELS = {"stable", "beta"}
 EXPECTED_INSTALL_MODES = {"full"}
 EXPECTED_URI_SCHEMES = {"https", "file"}
 EXPECTED_SIGNATURE_ALGORITHMS = {"authenticode"}
+EXPECTED_MANIFEST_SIGNATURE_FORMAT = "cms-pkcs7-detached"
+EXPECTED_MANIFEST_SIGNATURE_SUFFIX = ".p7s"
 REQUIRED_SIGNATURE_POLICY_FIELDS = {
     "publisher_subject",
 }
@@ -67,6 +70,27 @@ manifest = load_yaml(MANIFEST)
 if manifest.get("schema_version") != 1:
     fail(
         "installer manifest schema_version must be 1"
+    )
+
+manifest_trust_reference = manifest.get(
+    "manifest_trust",
+    {},
+)
+
+if (
+    manifest_trust_reference.get("contract")
+    != MANIFEST_TRUST.name
+):
+    fail(
+        "installer manifest must reference manifest-trust.yml"
+    )
+
+if (
+    manifest_trust_reference.get("required_before_parse")
+    is not True
+):
+    fail(
+        "manifest trust must be required before YAML parsing"
     )
 
 channels = set(
@@ -161,6 +185,8 @@ if prerequisites != EXPECTED_PREREQUISITES:
 security = manifest.get("security", {})
 
 for key in (
+    "unsigned_manifest",
+    "missing_manifest_trust",
     "checksum_failure",
     "invalid_signature",
     "publisher_mismatch",
@@ -186,6 +212,115 @@ if (
     fail(
         "SHA-256 must be required before install"
     )
+
+manifest_trust = load_yaml(MANIFEST_TRUST)
+
+if manifest_trust.get("schema_version") != 1:
+    fail(
+        "manifest trust schema_version must be 1"
+    )
+
+manifest_signature = manifest_trust.get(
+    "signature",
+    {},
+)
+
+if (
+    manifest_signature.get("format")
+    != EXPECTED_MANIFEST_SIGNATURE_FORMAT
+):
+    fail(
+        "manifest signature format must be cms-pkcs7-detached"
+    )
+
+if (
+    manifest_signature.get("detached_suffix")
+    != EXPECTED_MANIFEST_SIGNATURE_SUFFIX
+):
+    fail(
+        "manifest detached signature suffix must be .p7s"
+    )
+
+if manifest_signature.get("signer_count") != 1:
+    fail(
+        "manifest detached signature must have exactly one signer"
+    )
+
+if (
+    manifest_signature.get("signs_raw_manifest_bytes")
+    is not True
+):
+    fail(
+        "manifest signature must cover raw manifest bytes"
+    )
+
+if (
+    manifest_signature.get("signer_certificate_embedded")
+    is not True
+):
+    fail(
+        "manifest signature must embed signer certificate"
+    )
+
+trust_store = manifest_trust.get(
+    "trust_store",
+    {},
+)
+
+if trust_store.get("external_to_manifest") is not True:
+    fail(
+        "manifest trust store must remain external to manifest"
+    )
+
+if trust_store.get("package_scoped") is not True:
+    fail(
+        "manifest trust store must remain package scoped"
+    )
+
+publisher_subject = trust_store.get(
+    "publisher_subject",
+    {},
+)
+
+if publisher_subject.get("required") is not True:
+    fail(
+        "manifest publisher subject pin must be required"
+    )
+
+certificate_sha256 = trust_store.get(
+    "certificate_sha256",
+    {},
+)
+
+if certificate_sha256.get("required") is not True:
+    fail(
+        "manifest certificate SHA-256 pin must be required"
+    )
+
+if certificate_sha256.get("length") != 64:
+    fail(
+        "manifest certificate SHA-256 pin must be 64 hex characters"
+    )
+
+manifest_trust_security = manifest_trust.get(
+    "security",
+    {},
+)
+
+for key in (
+    "unsigned_manifest",
+    "missing_package_trust",
+    "invalid_cms_signature",
+    "multiple_signers",
+    "publisher_mismatch",
+    "certificate_pin_mismatch",
+    "expired_signer_certificate",
+    "parse_before_verification",
+):
+    if manifest_trust_security.get(key) != "deny":
+        fail(
+            f"manifest trust invariant must deny: {key}"
+        )
 
 provider = load_yaml(PROVIDER)
 
@@ -293,6 +428,8 @@ security_text = SECURITY.read_text(
 )
 
 for required in (
+    "CMS/PKCS#7",
+    "manifest-trust.yml",
     "SHA-256",
     "path traversal",
     "HTTPS",

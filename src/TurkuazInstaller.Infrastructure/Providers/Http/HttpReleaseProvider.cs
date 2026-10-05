@@ -1,11 +1,12 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Providers/Http/HttpReleaseProvider.cs
-// 📌 Amac: Generic HTTPS manifest endpointlerinden typed release bilgisi saglar
+// 📌 Amac: Generic HTTPS manifest endpointlerinden verified typed release bilgisi saglar
 // 📌 Modul - Tool CSharp
-// Version: 0.4.0
-// Aciklama: Stable ve beta manifest adreslerini config uzerinden secen provider adapteridir
+// Version: 1.1.0
+// Aciklama: Stable ve beta manifest adreslerini config uzerinden secer ve detached signature verification zorunlulugunu ortak loadera uygular
 //
 // Bagimli Oldugu Katman: Tool | Service
 
+using TurkuazInstaller.Contracts.Manifests;
 using TurkuazInstaller.Contracts.Releases;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
@@ -21,10 +22,17 @@ public sealed class HttpReleaseProvider : IReleaseProvider
     public HttpReleaseProvider(
         HttpClient httpClient,
         InstallerManifestReader manifestReader,
+        IManifestSignatureVerifier signatureVerifier,
         HttpReleaseProviderOptions options)
     {
-        _options = options;
-        _manifestLoader = new RemoteManifestLoader(httpClient, manifestReader);
+        _options =
+            options;
+
+        _manifestLoader =
+            new RemoteManifestLoader(
+                httpClient,
+                manifestReader,
+                signatureVerifier);
     }
 
     public async Task<PackageRelease?> GetLatestReleaseAsync(
@@ -32,11 +40,22 @@ public sealed class HttpReleaseProvider : IReleaseProvider
         ReleaseChannel channel,
         CancellationToken cancellationToken)
     {
-        var manifestUri = channel == ReleaseChannel.Stable
-            ? _options.StableManifestUri
-            : _options.BetaManifestUri;
+        var manifestUri =
+            channel == ReleaseChannel.Stable
+                ? _options.StableManifestUri
+                : _options.BetaManifestUri;
 
-        var parsed = await _manifestLoader.LoadAsync(manifestUri, cancellationToken).ConfigureAwait(false);
-        return ProviderValidation.MatchRequest(parsed, packageId, channel);
+        var parsed =
+            await _manifestLoader
+                .LoadAsync(
+                    manifestUri,
+                    packageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        return ProviderValidation.MatchRequest(
+            parsed,
+            packageId,
+            channel);
     }
 }

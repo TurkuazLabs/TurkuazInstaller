@@ -1,0 +1,13 @@
+# 📄 Dosya Yolu: /examples/manifest-trust.template.yml
+# 📌 Amac: TurkuazInstaller package manifest signer pinlerini proje entegrasyonunda tanimlamak icin reusable trust store sablonu saglar
+# 📌 Modul - Config YAML
+# Version: 1.1.0
+# Aciklama: Manifestin disinda tutulan package id, publisher subject ve zorunlu sertifika SHA-256 trust anchor alanlarini ornekler
+# Bagimli Oldugu Katman: Repo | Config
+
+schema_version: 1
+
+packages:
+  - id: example-app
+    publisher_subject: "CN=Example Software"
+    certificate_sha256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa

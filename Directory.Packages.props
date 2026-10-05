@@ -2,8 +2,8 @@
 # 📄 Dosya Yolu: /Directory.Packages.props
 # 📌 Amac: NuGet paket surumlerini merkezi olarak yonetir
 # 📌 Modul - XML
-# Version: 0.7.0
-# Aciklama: WinUI 3 stable Windows App SDK ve test paketlerini merkezi surum politikasinda tutar
+# Version: 1.1.0
+# Aciklama: WinUI, YAML, CMS/PKCS#7 ve test paketlerini merkezi surum politikasinda tutar
 
 Bagimli Oldugu Katman: Tool
 -->
@@ -14,6 +14,7 @@ Bagimli Oldugu Katman: Tool
   <ItemGroup>
     <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.12" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageVersion Include="xunit" Version="2.9.3" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
