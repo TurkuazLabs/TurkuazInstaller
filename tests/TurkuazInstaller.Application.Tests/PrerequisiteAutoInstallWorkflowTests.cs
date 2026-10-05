@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/PrerequisiteAutoInstallWorkflowTests.cs
 // 📌 Amac: Eksik prerequisite auto-install, verification ve zorunlu post-install re-probe akisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.1
-// Aciklama: Guvenli prerequisite install basarisi, policy eksigi ve re-probe basarisizligi durumlarinda package apply sinirini test eder
+// Version: 1.2.0
+// Aciklama: Guvenli prerequisite install, reboot checkpoint ve re-probe sinirlarini package apply oncesinde test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -65,6 +65,61 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
 
         Assert.Equal(
             1,
+            packageEngine.ApplyCalls);
+    }
+
+    [Fact]
+    public async Task InstallAsync_RebootRequired_StopsBeforeReprobeAndApply()
+    {
+        var probe =
+            new SequencedPrerequisiteProbe(
+                false,
+                true);
+
+        var prerequisiteInstaller =
+            new TrackingPrerequisiteInstaller(
+                new PrerequisiteInstallResult(
+                    PrerequisiteInstallDisposition.RebootRequired,
+                    3010));
+
+        var packageEngine =
+            new TrackingPackageEngine();
+
+        var service =
+            CreateService(
+                probe,
+                prerequisiteInstaller,
+                packageEngine);
+
+        var exception =
+            await Assert.ThrowsAsync<InstallerRebootRequiredException>(
+                () =>
+                    service.InstallAsync(
+                        CreateRelease(
+                            includeInstallAction: true),
+                        "C:/Apps/Example",
+                        "C:/Temp/TurkuazInstaller",
+                        null,
+                        CancellationToken.None));
+
+        Assert.Equal(
+            PrerequisiteIds.DotNetDesktopRuntime,
+            exception.PrerequisiteId);
+
+        Assert.Equal(
+            3010,
+            exception.ExitCode);
+
+        Assert.Equal(
+            1,
+            probe.Calls);
+
+        Assert.Equal(
+            1,
+            prerequisiteInstaller.Calls);
+
+        Assert.Equal(
+            0,
             packageEngine.ApplyCalls);
     }
 
@@ -306,15 +361,26 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
     private sealed class TrackingPrerequisiteInstaller
         : IPrerequisiteInstaller
     {
+        private readonly PrerequisiteInstallResult _result;
+
+        public TrackingPrerequisiteInstaller(
+            PrerequisiteInstallResult? result = null)
+        {
+            _result =
+                result
+                ?? PrerequisiteInstallResult.Completed();
+        }
+
         public int Calls { get; private set; }
 
-        public Task InstallAsync(
+        public Task<PrerequisiteInstallResult> InstallAsync(
             string verifiedInstallerPath,
             PrerequisiteInstallAction installAction,
             CancellationToken cancellationToken)
         {
             Calls++;
-            return Task.CompletedTask;
+            return Task.FromResult(
+                _result);
         }
     }
 
