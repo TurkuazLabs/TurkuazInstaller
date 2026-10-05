@@ -93,10 +93,13 @@ internal sealed class CliInstallerRuntimeService
             return;
         }
 
+        var manifestSource =
+            invocation.ManifestSource;
+
         if (
             invocation.Operation is null ||
             string.IsNullOrWhiteSpace(
-                invocation.ManifestSource))
+                manifestSource))
         {
             throw new InvalidOperationException(
                 "CLI mutation invocation is incomplete.");
@@ -104,7 +107,7 @@ internal sealed class CliInstallerRuntimeService
 
         var release =
             await ResolveReleaseAsync(
-                    invocation.ManifestSource,
+                    manifestSource,
                     invocation.PackageId,
                     invocation.Channel,
                     cancellationToken)
@@ -367,8 +370,11 @@ internal sealed class CliInstallerRuntimeService
         InstallerOperationJournalEntry? resumeEntry,
         InstallerResumeRequest? expectedResumeRequest)
     {
+        var rollbackManifestSource =
+            invocation.RollbackManifestSource;
+
         if (string.IsNullOrWhiteSpace(
-                invocation.RollbackManifestSource))
+                rollbackManifestSource))
         {
             throw new InvalidOperationException(
                 "Rollback manifest source is required.");
@@ -376,7 +382,7 @@ internal sealed class CliInstallerRuntimeService
 
         var previousRelease =
             await ResolveReleaseAsync(
-                    invocation.RollbackManifestSource,
+                    rollbackManifestSource,
                     invocation.PackageId,
                     invocation.Channel,
                     cancellationToken)
