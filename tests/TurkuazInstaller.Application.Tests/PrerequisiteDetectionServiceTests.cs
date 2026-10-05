@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/PrerequisiteDetectionServiceTests.cs
 // 📌 Amac: Generic prerequisite detector registry yonlendirme ve fail-closed davranisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Bilinen detector, bilinmeyen id ve duplicate detector id senaryolarini kapsar
 //
 // Bagimli Oldugu Katman: Service | Tool
@@ -30,6 +30,10 @@ public sealed class PrerequisiteDetectionServiceTests
                     detector
                 });
 
+        Assert.True(
+            service.Supports(
+                "example-runtime"));
+
         var result =
             await service.IsSatisfiedAsync(
                 new Prerequisite(
@@ -49,6 +53,10 @@ public sealed class PrerequisiteDetectionServiceTests
         var service =
             new PrerequisiteDetectionService(
                 Array.Empty<IPrerequisiteDetector>());
+
+        Assert.False(
+            service.Supports(
+                "unknown-runtime"));
 
         var result =
             await service.IsSatisfiedAsync(
