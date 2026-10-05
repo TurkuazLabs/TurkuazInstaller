@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Cli/tools/CliConsoleReporter.cs
 // 📌 Amac: CLI progress ve terminal mesajlarini Console dis dunya adapterina yazar
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
-// Aciklama: Silent modda stdout/stderr cikisini bastirir, normal modda typed progress ve hata metnini yazar
+// Version: 1.0.1
+// Aciklama: Silent modda cikisi bastirir, normal modda progress'i senkron yazar ve process kapanisinda event kaybini onler
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -22,22 +22,8 @@ public sealed class CliConsoleReporter
 
     public IProgress<InstallerOperationProgress> CreateProgress()
     {
-        return new Progress<InstallerOperationProgress>(
-            progress =>
-            {
-                if (_silent)
-                {
-                    return;
-                }
-
-                Console.Out.WriteLine(
-                    string.Concat(
-                        progress.Stage.ToString(),
-                        " ",
-                        progress.Percent.ToString(
-                            System.Globalization.CultureInfo.InvariantCulture),
-                        "%"));
-            });
+        return new ConsoleProgress(
+            _silent);
     }
 
     public void WriteError(
@@ -49,5 +35,37 @@ public sealed class CliConsoleReporter
         }
 
         Console.Error.WriteLine(message);
+    }
+
+    private sealed class ConsoleProgress
+        : IProgress<InstallerOperationProgress>
+    {
+        private readonly bool _silent;
+
+        public ConsoleProgress(
+            bool silent)
+        {
+            _silent = silent;
+        }
+
+        public void Report(
+            InstallerOperationProgress value)
+        {
+            ArgumentNullException.ThrowIfNull(
+                value);
+
+            if (_silent)
+            {
+                return;
+            }
+
+            Console.Out.WriteLine(
+                string.Concat(
+                    value.Stage.ToString(),
+                    " ",
+                    value.Percent.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture),
+                    "%"));
+        }
     }
 }
