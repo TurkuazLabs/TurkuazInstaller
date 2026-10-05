@@ -1,13 +1,16 @@
 # 📄 Dosya Yolu: /.github/workflows/stable-readiness.yml
 # 📌 Amac: Stable Community release oncesinde Windows publish ve dagitim archive reproducibility ile recovery test kapilarini calistirir
 # 📌 Modul - CI YAML
-# Version: 1.0.1
-# Aciklama: Iki temiz publish agacini SHA-256 ile karsilastirir, deterministic ZIP packaging'i ve tum Core recovery testlerini dogrular
+# Version: 1.0.2
+# Aciklama: PR ve main final commitlerinde iki temiz publish agacini, deterministic ZIP packaging'i ve Core recovery testlerini dogrular
 # Bagimli Oldugu Katman: Tool
 
 name: Stable Readiness CI
 
 on:
+  push:
+    branches:
+      - main
   pull_request:
     branches:
       - main
