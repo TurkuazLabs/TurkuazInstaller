@@ -1,97 +1,77 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
-# 📌 Amac: TurkuazInstaller Community install, update, repair ve rollback guvenlik invariantlarini tanimlamak
+# 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 0.5.0
-# Aciklama: Hash, imza, path, staging, process, download ve rollback guvenlik kurallarini Community Core icin sabitler
+# Version: 1.0.0
+# Aciklama: Hash, optional Authenticode, prerequisite, path, staging, process, state ve rollback guvenlik kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
 
-## Community'de Zorunlu Guvenlik
+## Zorunlu Baseline
 
-Asagidaki davranislar Pro ozelligi degildir:
+Community baseline:
 
 - SHA-256 artifact dogrulamasi
-- dijital imza dogrulama kontrati
-- path traversal ve archive escape engelleme
+- manifest signature deklarasyonu varsa Authenticode dogrulamasi
+- HTTPS remote transport
+- fail-closed prerequisite kontrolu
+- path traversal engelleme
 - atomic staging
-- install oncesi preflight
-- repair integrity kontrolu
-- rollback guvenligi
-- HTTPS remote transport baseline
+- shell-free process invocation
+- apply sonrasi state commit
+- rollback policy kontrolu
+- uninstall basarisi sonrasi state delete
 - secret degerlerin manifest icine yazilmamasi
-
-## Download
-
-Remote artifact varsayilan olarak HTTPS kullanir.
-
-Local test ve air-gapped senaryo icin `file:` URI kullanilabilir.
-
-Remote plain HTTP Community Core tarafinda reddedilir.
 
 ## Artifact Verification
 
-Install veya update apply edilmeden once:
+Apply oncesi:
 
-1. beklenen size policy kontrol edilir
+1. size kontrol edilir
 2. SHA-256 hesaplanir
-3. manifest SHA-256 ile esitlik dogrulanir
-4. product policy imza istiyorsa imza dogrulanir
-5. staging alani disina yazma girisimi reddedilir
+3. digest manifest ile karsilastirilir
+4. signature deklarasyonu varsa Windows WinVerifyTrust calisir
+5. verification basarisizsa stage/apply baslamaz
 
-Hash veya gerekli imza dogrulanamazsa apply baslamaz.
+Signature deklarasyonu olmayan artifact SHA-256 baseline ile calisir.
 
-## Atomic Staging
+## Prerequisites
 
-Verified artifact dogrudan active install rootundan calistirilmaz.
+Stable v1 built-in prerequisite id degerleri:
 
-Package Engine:
+- windows-build
+- architecture
+- dotnet-desktop-runtime
 
-1. benzersiz staging operasyon klasoru olusturur
-2. dosyayi `.partial` olarak kopyalar
-3. ayni klasor icinde atomic rename yapar
-4. package id ve version bilgisi ile typed `PackageStage` uretir
+Bilinmeyen prerequisite false kabul edilir ve operasyon durur.
 
-Apply, repair ve rollback yalniz staged artifact kabul eder.
+## Preserve Data
 
-## Process Boundary
+preserve_paths:
 
-Velopack executable cagirilari shell uzerinden string command olarak calistirilmaz.
-
-Her argument process API `ArgumentList` alanina ayri deger olarak verilir.
-
-Non-zero exit code basarili apply olarak kabul edilmez.
+- install rootuna gore relative olmalidir
+- target root disina cikamaz
+- Velopack current altinda olamaz
 
 ## Rollback
 
 Rollback:
 
-- onceki version metadata'sini korur
-- yarim uygulanmis yeni paketi active state olarak isaretlemez
-- veri klasorlerini product preserve policy disinda silmez
-- rollback artifacti icin de integrity verification zorunludur
-- staged artifact package id ve version degeri previous release ile eslesmelidir
+- current manifest rollback.supported=true olmadan baslamaz
+- previous artifact ayni integrity/signature pipeline'indan gecer
+- staged package id ve version previous release ile eslesir
+- engine basarisizsa mevcut state korunur
 
-## Preserve Data
+## Uninstall
 
-Kalici application verisi Velopack `current` klasoru disinda tutulur.
+Uninstall installed state uzerinden hedef rootu bulur.
 
-Preserve path:
+Velopack uninstall non-zero exit ile biterse state korunur.
 
-- install rootuna gore relative olmalidir
-- target root disina cikamaz
-- `current` altinda olamaz
-
-Bu sinir executable payload ile kalici veriyi birbirinden ayirir.
+State yalniz successful package engine sonucundan sonra silinir.
 
 ## Secret Boundary
 
-Manifest veya public config su degerleri tasimaz:
+Manifest veya public config private signing key, access token, private feed credential veya production certificate private key tasimaz.
 
-- private signing key
-- access token
-- private feed credential
-- entitlement credential
-- production certificate private key
-
-Authentication secret Adapter tarafinda environment, OS credential store veya secret provider uzerinden gelir.
+Authentication secret Adapter/credential store sinirinda kalir.

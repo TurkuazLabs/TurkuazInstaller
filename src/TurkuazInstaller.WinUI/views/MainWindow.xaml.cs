@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve pencere gorunumunu baslatir
 // 📌 Modul - View CSharp
-// Version: 0.7.1
-// Aciklama: View code-behind is kurali tutmadan click eventlerini Controller'a delege eder
+// Version: 1.0.0
+// Aciklama: View code-behind is kurali tutmadan install/update/repair/rollback/uninstall eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
 
@@ -73,6 +73,15 @@ public sealed partial class MainWindow : Window
             .ConfigureAwait(true);
     }
 
+    private async void Uninstall_Click(
+        object sender,
+        RoutedEventArgs e)
+    {
+        await _controller
+            .UninstallAsync()
+            .ConfigureAwait(true);
+    }
+
     private async void Retry_Click(
         object sender,
         RoutedEventArgs e)
@@ -99,18 +108,21 @@ public sealed partial class MainWindow : Window
     private void ResizeWindow()
     {
         var windowHandle =
-            WinRT.Interop.WindowNative.GetWindowHandle(this);
+            WinRT.Interop.WindowNative
+                .GetWindowHandle(this);
 
         var windowId =
             Microsoft.UI.Win32Interop
-                .GetWindowIdFromWindow(windowHandle);
+                .GetWindowIdFromWindow(
+                    windowHandle);
 
         var appWindow =
-            AppWindow.GetFromWindowId(windowId);
+            AppWindow.GetFromWindowId(
+                windowId);
 
         appWindow.Resize(
             new SizeInt32(
                 1100,
-                760));
+                800));
     }
 }

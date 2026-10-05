@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/repositories/JsonInstallStateRepository.cs
-// 📌 Amac: InstalledPackageState verisini paket bazli JSON dosyalarinda atomik olarak saklar
+// 📌 Amac: InstalledPackageState verisini paket bazli JSON dosyalarinda atomik olarak saklar ve siler
 // 📌 Modul - Repo CSharp
-// Version: 0.7.0
-// Aciklama: Application state portunu dosya sistemi storage adapteriyle uygular
+// Version: 1.0.0
+// Aciklama: Application state portunu dosya sistemi storage adapteriyle Get, Save ve Delete davranislariyla uygular
 //
 // Bagimli Oldugu Katman: Repo
 
@@ -14,7 +14,8 @@ using TurkuazInstaller.Domain.State;
 
 namespace TurkuazInstaller.Infrastructure.Repositories;
 
-public sealed class JsonInstallStateRepository : IInstallStateRepository
+public sealed class JsonInstallStateRepository
+    : IInstallStateRepository
 {
     private const string JsonExtension = ".json";
     private const string TemporarySuffix = ".tmp";
@@ -46,20 +47,23 @@ public sealed class JsonInstallStateRepository : IInstallStateRepository
             return null;
         }
 
-        await using var stream = new FileStream(
-            path,
-            FileMode.Open,
-            FileAccess.Read,
-            FileShare.Read,
-            4096,
-            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using var stream =
+            new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                4096,
+                FileOptions.Asynchronous |
+                FileOptions.SequentialScan);
 
-        var document = await JsonSerializer
-            .DeserializeAsync<StateDocument>(
-                stream,
-                SerializerOptions,
-                cancellationToken)
-            .ConfigureAwait(false);
+        var document =
+            await JsonSerializer
+                .DeserializeAsync<StateDocument>(
+                    stream,
+                    SerializerOptions,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         if (document is null)
         {
@@ -68,8 +72,10 @@ public sealed class JsonInstallStateRepository : IInstallStateRepository
         }
 
         return new InstalledPackageState(
-            PackageId.Parse(document.PackageId),
-            SemanticVersion.Parse(document.Version),
+            PackageId.Parse(
+                document.PackageId),
+            SemanticVersion.Parse(
+                document.Version),
             document.Channel,
             document.TargetPath);
     }
@@ -83,26 +89,37 @@ public sealed class JsonInstallStateRepository : IInstallStateRepository
         Directory.CreateDirectory(
             _options.RootDirectory);
 
-        var path = GetStatePath(state.PackageId);
-        var temporaryPath = string.Concat(
-            path,
-            TemporarySuffix);
+        var path =
+            GetStatePath(
+                state.PackageId);
 
-        var document = new StateDocument
-        {
-            PackageId = state.PackageId.Value,
-            Version = state.Version.ToString(),
-            Channel = state.Channel,
-            TargetPath = state.TargetPath
-        };
+        var temporaryPath =
+            string.Concat(
+                path,
+                TemporarySuffix);
 
-        await using (var stream = new FileStream(
-            temporaryPath,
-            FileMode.Create,
-            FileAccess.Write,
-            FileShare.None,
-            4096,
-            FileOptions.Asynchronous))
+        var document =
+            new StateDocument
+            {
+                PackageId =
+                    state.PackageId.Value,
+                Version =
+                    state.Version.ToString(),
+                Channel =
+                    state.Channel,
+                TargetPath =
+                    state.TargetPath
+            };
+
+        await using (
+            var stream =
+                new FileStream(
+                    temporaryPath,
+                    FileMode.Create,
+                    FileAccess.Write,
+                    FileShare.None,
+                    4096,
+                    FileOptions.Asynchronous))
         {
             await JsonSerializer
                 .SerializeAsync(
@@ -113,7 +130,8 @@ public sealed class JsonInstallStateRepository : IInstallStateRepository
                 .ConfigureAwait(false);
 
             await stream
-                .FlushAsync(cancellationToken)
+                .FlushAsync(
+                    cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -121,6 +139,25 @@ public sealed class JsonInstallStateRepository : IInstallStateRepository
             temporaryPath,
             path,
             overwrite: true);
+    }
+
+    public Task DeleteAsync(
+        PackageId packageId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(packageId);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var path =
+            GetStatePath(
+                packageId);
+
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+
+        return Task.CompletedTask;
     }
 
     private string GetStatePath(
@@ -135,12 +172,15 @@ public sealed class JsonInstallStateRepository : IInstallStateRepository
 
     private sealed class StateDocument
     {
-        public string PackageId { get; init; } = string.Empty;
+        public string PackageId { get; init; } =
+            string.Empty;
 
-        public string Version { get; init; } = string.Empty;
+        public string Version { get; init; } =
+            string.Empty;
 
         public ReleaseChannel Channel { get; init; }
 
-        public string TargetPath { get; init; } = string.Empty;
+        public string TargetPath { get; init; } =
+            string.Empty;
     }
 }

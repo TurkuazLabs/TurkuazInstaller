@@ -1,93 +1,57 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 1.0.2
-# Aciklama: Stable Community kod, signing bootstrap ve production release gate durumunu ayri olarak takip eder
+# Version: 1.0.3
+# Aciklama: Stable Community runtime completion, bootstrap/E2E ve production signing gate durumunu ayri takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
 # Roadmap
 
-## v0.2.0 - Contract Foundation
+## v0.2.0 - v0.7.0 Foundation
 
-- [x] Community / Pro dependency direction
-- [x] Installer manifest contract
-- [x] Release provider contract
-- [x] Community security model
-- [x] Architecture boundary
-- [x] Contract validator CI
-- [x] Domain project
-- [x] Application project
-- [x] Port interfaces
-
-## v0.3.0 - Core Domain
-
-- [x] typed package/version/channel models
-- [x] install/update/repair/rollback plans
-- [x] verification result model
-- [x] unit tests
-
-## v0.4.0 - Providers
-
-- [x] GitHub adapter
-- [x] Gitea adapter
-- [x] generic HTTPS adapter
-- [x] local file adapter
-- [x] provider contract tests
-
-## v0.5.0 - Package Engine
-
-- [x] package engine port
-- [x] Velopack adapter
+- [x] contract-first Domain/Application/Port
+- [x] GitHub, Gitea, HTTPS ve local file providerlari
+- [x] Velopack package engine
 - [x] atomic staging
-- [x] apply
-- [x] repair
-- [x] rollback
-- [x] process runner port
-- [x] package engine contract tests
+- [x] NativeAOT bootstrap baseline
+- [x] WinUI 3 desktop
+- [x] install/update/repair/rollback
+- [x] JSON state repository
+- [x] recovery UX
 
-## v0.6.0 - Windows Bootstrap
+## v1.0.0 - Runtime Completion
 
-- [x] NativeAOT bootstrapper
-- [x] prerequisite detection
-- [x] self-update handoff
-- [x] process elevation boundary
-- [x] Windows NativeAOT CI
-
-## v0.7.0 - WinUI 3
-
-- [x] ViewModel
-- [x] install/update/repair/rollback UI
-- [x] progress/events
-- [x] error/recovery UX
-- [x] real Application workflow wiring
-- [x] HTTPS/file artifact download
-- [x] SHA-256 runtime verification
-- [x] JSON install state repository
-- [x] self-contained WinUI Windows CI
-
-## v1.0.0 - Stable Community Code
-
-- [x] signed release pipeline
-- [x] reproducible publish validation
-- [x] deterministic release ZIP packaging
-- [x] GitHub artifact attestation provenance
-- [x] installer recovery tests
+- [x] manifest install policy runtime mapping
+- [x] full install mode contract
+- [x] Windows prerequisite runtime probe
+- [x] preserve_paths runtime wiring
+- [x] rollback manifest policy enforcement
+- [x] optional Authenticode artifact verification
+- [x] uninstall Domain -> Service -> Repo -> Tool -> View
+- [x] manifest-driven default target
 - [x] progress ordering race fix
-- [x] security review
-- [x] documentation
+- [ ] bootstrap -> WinUI launch orchestration
+- [ ] bootstrap self-update start orchestration
+- [ ] real Velopack install/update/repair/rollback/uninstall E2E
+- [ ] x64/ARM64 release strategy finalization
+
+## v1.0.0 - Release Supply Chain
+
+- [x] deterministic publish validation
+- [x] deterministic release ZIP
+- [x] GitHub artifact attestation
 - [x] production signing bootstrap tooling
-- [x] immutable GitHub OIDC production environment design
+- [x] immutable GitHub OIDC design
 - [x] production signing preflight workflow
-
-## v1.0.0 - Production Release Gate
-
-- [ ] Azure Artifact Signing account created
-- [ ] identity validation completed
-- [ ] production certificate profile active
-- [ ] Azure OIDC federated identity connected
-- [ ] minimum signer RBAC assigned
-- [ ] GitHub production environment configured
+- [ ] Azure identity/certificate registration
 - [ ] Production Signing Preflight green
-- [x] Stable Readiness CI green on final main commit
 - [ ] signed v1.0.0 tag workflow green
 - [ ] GitHub Release published
+
+## v1.1 Sonrasi
+
+- [ ] CLI View/Controller
+- [ ] private GitHub/Gitea credential adapters
+- [ ] installed-app catalog/list UI
+- [ ] richer update discovery UX
+- [ ] optional delta optimization behind Package Engine

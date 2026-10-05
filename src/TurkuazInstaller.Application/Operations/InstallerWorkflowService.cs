@@ -1,14 +1,15 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
-// 📌 Amac: Download, verification, staging, apply ve state kaydi adimlarini install/update/repair/rollback use-case'lerinde koordine eder
+// 📌 Amac: Download, prerequisite, verification, staging, package mutation ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 0.7.1
-// Aciklama: UI ve CLI'nin ayni gercek installer workflow servisini kullanmasini saglar
+// Version: 1.0.0
+// Aciklama: Manifest install policy, optional Authenticode, preserve paths ve uninstall state davranisini gercek runtime akisina baglar
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Contracts.Artifacts;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
+using TurkuazInstaller.Contracts.System;
 using TurkuazInstaller.Domain.Plans;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Domain.State;
@@ -26,28 +27,46 @@ public sealed class InstallerWorkflowService
 
     private const string UpdatePackageMismatch =
         "Update release package id does not match installed state.";
+
     private const string UpdateVersionInvalid =
         "Update release must be newer than the installed version.";
+
     private const string RepairReleaseMismatch =
         "Repair release must match the installed package and version.";
+
     private const string CurrentReleaseMismatch =
         "Current release must match the installed package state.";
+
+    private const string RollbackDisabled =
+        "Rollback is disabled by the current release manifest.";
+
+    private const string SignatureVerifierMissing =
+        "Artifact signature is required but no signature verifier is configured.";
+
+    private const string PrerequisiteProbeMissing =
+        "Manifest prerequisites are declared but no prerequisite probe is configured.";
 
     private readonly IArtifactDownloader _artifactDownloader;
     private readonly IArtifactVerifier _artifactVerifier;
     private readonly IPackageEngine _packageEngine;
     private readonly IInstallStateRepository _stateRepository;
+    private readonly IArtifactSignatureVerifier? _signatureVerifier;
+    private readonly ISystemPrerequisiteProbe? _prerequisiteProbe;
 
     public InstallerWorkflowService(
         IArtifactDownloader artifactDownloader,
         IArtifactVerifier artifactVerifier,
         IPackageEngine packageEngine,
-        IInstallStateRepository stateRepository)
+        IInstallStateRepository stateRepository,
+        IArtifactSignatureVerifier? signatureVerifier = null,
+        ISystemPrerequisiteProbe? prerequisiteProbe = null)
     {
         _artifactDownloader = artifactDownloader;
         _artifactVerifier = artifactVerifier;
         _packageEngine = packageEngine;
         _stateRepository = stateRepository;
+        _signatureVerifier = signatureVerifier;
+        _prerequisiteProbe = prerequisiteProbe;
     }
 
     public async Task InstallAsync(
@@ -59,6 +78,11 @@ public sealed class InstallerWorkflowService
     {
         ArgumentNullException.ThrowIfNull(release);
         ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+
+        await ValidatePrerequisitesAsync(
+                release,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         var stage = await PrepareStageAsync(
                 release,
@@ -75,8 +99,8 @@ public sealed class InstallerWorkflowService
         var plan = new InstallPlan(
             release,
             targetPath,
-            Array.Empty<TurkuazInstaller.Domain.Prerequisites.Prerequisite>(),
-            Array.Empty<string>());
+            release.Install.Prerequisites,
+            release.Install.PreservePaths);
 
         await _packageEngine
             .ApplyAsync(
@@ -117,6 +141,11 @@ public sealed class InstallerWorkflowService
                 UpdateVersionInvalid);
         }
 
+        await ValidatePrerequisitesAsync(
+                release,
+                cancellationToken)
+            .ConfigureAwait(false);
+
         var stage = await PrepareStageAsync(
                 release,
                 stagingDirectory,
@@ -132,8 +161,8 @@ public sealed class InstallerWorkflowService
         var plan = new InstallPlan(
             release,
             currentState.TargetPath,
-            Array.Empty<TurkuazInstaller.Domain.Prerequisites.Prerequisite>(),
-            Array.Empty<string>());
+            release.Install.Prerequisites,
+            release.Install.PreservePaths);
 
         await _packageEngine
             .ApplyAsync(
@@ -162,12 +191,19 @@ public sealed class InstallerWorkflowService
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(currentState);
 
-        if (release.PackageId != currentState.PackageId
-            || !release.Version.Equals(currentState.Version))
+        if (
+            release.PackageId != currentState.PackageId ||
+            !release.Version.Equals(
+                currentState.Version))
         {
             throw new InvalidOperationException(
                 RepairReleaseMismatch);
         }
+
+        await ValidatePrerequisitesAsync(
+                release,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         var stage = await PrepareStageAsync(
                 release,
@@ -207,12 +243,25 @@ public sealed class InstallerWorkflowService
         ArgumentNullException.ThrowIfNull(previousRelease);
         ArgumentNullException.ThrowIfNull(currentState);
 
-        if (currentRelease.PackageId != currentState.PackageId
-            || !currentRelease.Version.Equals(currentState.Version))
+        if (
+            currentRelease.PackageId != currentState.PackageId ||
+            !currentRelease.Version.Equals(
+                currentState.Version))
         {
             throw new InvalidOperationException(
                 CurrentReleaseMismatch);
         }
+
+        if (!currentRelease.Rollback.Supported)
+        {
+            throw new InvalidOperationException(
+                RollbackDisabled);
+        }
+
+        await ValidatePrerequisitesAsync(
+                previousRelease,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         var stage = await PrepareStageAsync(
                 previousRelease,
@@ -248,6 +297,43 @@ public sealed class InstallerWorkflowService
         ReportCompleted(progress);
     }
 
+    public async Task UninstallAsync(
+        InstalledPackageState currentState,
+        IProgress<InstallerOperationProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(currentState);
+
+        Report(
+            progress,
+            InstallerProgressStage.Uninstalling,
+            ApplyPercent);
+
+        var plan = new UninstallPlan(
+            currentState.PackageId,
+            currentState.Version,
+            currentState.TargetPath);
+
+        await _packageEngine
+            .UninstallAsync(
+                plan,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        Report(
+            progress,
+            InstallerProgressStage.RemovingState,
+            SavePercent);
+
+        await _stateRepository
+            .DeleteAsync(
+                currentState.PackageId,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        ReportCompleted(progress);
+    }
+
     private async Task<PackageStage> PrepareStageAsync(
         PackageRelease release,
         string stagingDirectory,
@@ -259,30 +345,38 @@ public sealed class InstallerWorkflowService
             InstallerProgressStage.Downloading,
             DownloadPercent);
 
-        var downloadedPath = await _artifactDownloader
-            .DownloadAsync(
-                release.Artifact,
-                stagingDirectory,
-                cancellationToken)
-            .ConfigureAwait(false);
+        var downloadedPath =
+            await _artifactDownloader
+                .DownloadAsync(
+                    release.Artifact,
+                    stagingDirectory,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         Report(
             progress,
             InstallerProgressStage.Verifying,
             VerifyPercent);
 
-        var verification = await _artifactVerifier
-            .VerifyAsync(
-                downloadedPath,
-                release.Artifact,
-                cancellationToken)
-            .ConfigureAwait(false);
+        var verification =
+            await _artifactVerifier
+                .VerifyAsync(
+                    downloadedPath,
+                    release.Artifact,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         if (!verification.IsValid)
         {
             throw new InvalidDataException(
                 verification.Message);
         }
+
+        await VerifySignatureAsync(
+                release,
+                downloadedPath,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         Report(
             progress,
@@ -296,6 +390,79 @@ public sealed class InstallerWorkflowService
                 stagingDirectory,
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private async Task VerifySignatureAsync(
+        PackageRelease release,
+        string artifactPath,
+        CancellationToken cancellationToken)
+    {
+        var signature =
+            release.Artifact.Signature;
+
+        if (signature is null)
+        {
+            return;
+        }
+
+        if (_signatureVerifier is null)
+        {
+            throw new InvalidDataException(
+                SignatureVerifierMissing);
+        }
+
+        var result =
+            await _signatureVerifier
+                .VerifyAsync(
+                    artifactPath,
+                    signature,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (!result.IsValid)
+        {
+            throw new InvalidDataException(
+                result.Message);
+        }
+    }
+
+    private async Task ValidatePrerequisitesAsync(
+        PackageRelease release,
+        CancellationToken cancellationToken)
+    {
+        if (
+            release.Install.Prerequisites.Count == 0)
+        {
+            return;
+        }
+
+        if (_prerequisiteProbe is null)
+        {
+            throw new InvalidOperationException(
+                PrerequisiteProbeMissing);
+        }
+
+        foreach (
+            var prerequisite in
+            release.Install.Prerequisites)
+        {
+            var satisfied =
+                await _prerequisiteProbe
+                    .IsSatisfiedAsync(
+                        prerequisite,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (!satisfied)
+            {
+                throw new InvalidOperationException(
+                    string.Concat(
+                        "Required prerequisite is not satisfied: ",
+                        prerequisite.Id,
+                        " ",
+                        prerequisite.VersionExpression));
+            }
+        }
     }
 
     private async Task SaveStateAsync(

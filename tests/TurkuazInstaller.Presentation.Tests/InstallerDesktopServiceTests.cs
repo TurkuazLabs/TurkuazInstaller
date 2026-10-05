@@ -85,6 +85,37 @@ public sealed class InstallerDesktopServiceTests
             viewModel.StatusMessage);
     }
 
+    [Fact]
+    public async Task RunAsync_Uninstall_DoesNotRequireManifestOrTarget()
+    {
+        var viewModel =
+            new MainWindowViewModel
+            {
+                PackageIdText = "example-app"
+            };
+
+        var runtime =
+            new StubRuntimeService();
+
+        using var service =
+            new InstallerDesktopService(
+                viewModel,
+                runtime);
+
+        await service.RunAsync(
+            InstallerOperationKind.Uninstall);
+
+        Assert.False(
+            viewModel.HasError);
+
+        Assert.NotNull(
+            runtime.LastRequest);
+
+        Assert.Equal(
+            InstallerOperationKind.Uninstall,
+            runtime.LastRequest.Operation);
+    }
+
     private static MainWindowViewModel CreateViewModel()
     {
         return new MainWindowViewModel
@@ -103,11 +134,15 @@ public sealed class InstallerDesktopServiceTests
 
         public InstallerOperationProgress? Progress { get; init; }
 
+        public InstallerDesktopRequest? LastRequest { get; private set; }
+
         public Task ExecuteAsync(
             InstallerDesktopRequest request,
             IProgress<InstallerOperationProgress> progress,
             CancellationToken cancellationToken)
         {
+            LastRequest = request;
+
             if (Progress is not null)
             {
                 progress.Report(Progress);

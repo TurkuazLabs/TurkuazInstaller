@@ -2,8 +2,8 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 0.7.1
-# Aciklama: Paket kaynagi, install/update/repair/rollback islemleri, progress, error ve recovery UX'ini tek pencerede sunar
+# Version: 1.0.0
+# Aciklama: Manifest-driven install target, install/update/repair/rollback/uninstall, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
 -->
@@ -78,7 +78,8 @@ Bagimli Oldugu Katman: View | Controller | Language
 
                             <TextBox
                                 Header="{Binding TargetPathLabel}"
-                                Text="{Binding TargetPath, Mode=TwoWay}" />
+                                Text="{Binding TargetPath, Mode=TwoWay}"
+                                PlaceholderText="{Binding TargetPathPlaceholder}" />
                         </StackPanel>
                     </Border>
 
@@ -115,6 +116,11 @@ Bagimli Oldugu Katman: View | Controller | Language
                                     IsEnabled="{Binding CanRun}"
                                     HorizontalAlignment="Stretch"
                                     Click="Rollback_Click" />
+                                <Button
+                                    Content="{Binding UninstallLabel}"
+                                    IsEnabled="{Binding CanRun}"
+                                    HorizontalAlignment="Stretch"
+                                    Click="Uninstall_Click" />
                             </StackPanel>
                         </Border>
 

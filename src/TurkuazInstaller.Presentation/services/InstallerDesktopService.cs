@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
-// 📌 Amac: Ana pencere request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
+// 📌 Amac: Ana pencere request validation, progress, uninstall, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.0.0
-// Aciklama: Progress eventlerini sirali drain ederek terminal success/error/cancel state'inin gec callback'lerle bozulmasini engeller
+// Version: 1.0.1
+// Aciklama: Uninstall icin yalniz package id ister; install target manifest defaultuna birakilabilir ve progress eventleri sirali calisir
 //
 // Bagimli Oldugu Katman: Service | View | Language
 
@@ -13,7 +13,8 @@ using TurkuazInstaller.Presentation.ViewModels;
 
 namespace TurkuazInstaller.Presentation.Services;
 
-public sealed class InstallerDesktopService : IDisposable
+public sealed class InstallerDesktopService
+    : IDisposable
 {
     private readonly MainWindowViewModel _viewModel;
     private readonly IInstallerRuntimeService _runtimeService;
@@ -40,29 +41,35 @@ public sealed class InstallerDesktopService : IDisposable
 
         try
         {
-            request = CreateRequest(operation);
+            request =
+                CreateRequest(
+                    operation);
         }
         catch (Exception exception)
         {
-            ShowFailure(exception);
+            ShowFailure(
+                exception);
             return;
         }
 
         _lastRequest = request;
 
-        await ExecuteRequestAsync(request)
+        await ExecuteRequestAsync(
+                request)
             .ConfigureAwait(true);
     }
 
     public async Task RetryAsync()
     {
-        if (_viewModel.IsBusy
-            || _lastRequest is null)
+        if (
+            _viewModel.IsBusy ||
+            _lastRequest is null)
         {
             return;
         }
 
-        await ExecuteRequestAsync(_lastRequest)
+        await ExecuteRequestAsync(
+                _lastRequest)
             .ConfigureAwait(true);
     }
 
@@ -79,42 +86,44 @@ public sealed class InstallerDesktopService : IDisposable
     private InstallerDesktopRequest CreateRequest(
         InstallerOperationKind operation)
     {
-        if (string.IsNullOrWhiteSpace(_viewModel.PackageIdText))
+        if (
+            string.IsNullOrWhiteSpace(
+                _viewModel.PackageIdText))
         {
             throw new InvalidOperationException(
                 InstallerUiLabels.PackageIdRequired);
         }
 
-        if (string.IsNullOrWhiteSpace(_viewModel.ManifestSource))
+        if (
+            operation != InstallerOperationKind.Uninstall &&
+            string.IsNullOrWhiteSpace(
+                _viewModel.ManifestSource))
         {
             throw new InvalidOperationException(
                 InstallerUiLabels.ManifestRequired);
         }
 
-        if (string.IsNullOrWhiteSpace(_viewModel.TargetPath))
-        {
-            throw new InvalidOperationException(
-                InstallerUiLabels.TargetPathRequired);
-        }
-
-        if (operation == InstallerOperationKind.Rollback
-            && string.IsNullOrWhiteSpace(
+        if (
+            operation == InstallerOperationKind.Rollback &&
+            string.IsNullOrWhiteSpace(
                 _viewModel.RollbackManifestSource))
         {
             throw new InvalidOperationException(
                 InstallerUiLabels.RollbackManifestRequired);
         }
 
-        var channel = _viewModel.SelectedChannelIndex == 1
-            ? ReleaseChannel.Beta
-            : ReleaseChannel.Stable;
+        var channel =
+            _viewModel.SelectedChannelIndex == 1
+                ? ReleaseChannel.Beta
+                : ReleaseChannel.Stable;
 
         return new InstallerDesktopRequest(
             operation,
             _viewModel.PackageIdText.Trim(),
             channel,
             _viewModel.ManifestSource.Trim(),
-            string.IsNullOrWhiteSpace(_viewModel.RollbackManifestSource)
+            string.IsNullOrWhiteSpace(
+                _viewModel.RollbackManifestSource)
                 ? null
                 : _viewModel.RollbackManifestSource.Trim(),
             _viewModel.TargetPath.Trim());
@@ -166,7 +175,8 @@ public sealed class InstallerDesktopService : IDisposable
                 .DrainAsync()
                 .ConfigureAwait(true);
 
-            ShowFailure(exception);
+            ShowFailure(
+                exception);
         }
         finally
         {
@@ -191,17 +201,21 @@ public sealed class InstallerDesktopService : IDisposable
         Exception exception)
     {
         _viewModel.HasError = true;
-        _viewModel.ErrorMessage = string.Concat(
-            InstallerUiLabels.OperationFailedPrefix,
-            " ",
-            exception.Message);
-        _viewModel.CanRetry = _lastRequest is not null;
+        _viewModel.ErrorMessage =
+            string.Concat(
+                InstallerUiLabels.OperationFailedPrefix,
+                " ",
+                exception.Message);
+        _viewModel.CanRetry =
+            _lastRequest is not null;
     }
 
     private void ReportProgress(
         InstallerOperationProgress progress)
     {
-        _viewModel.ProgressValue = progress.Percent;
+        _viewModel.ProgressValue =
+            progress.Percent;
+
         _viewModel.StatusMessage =
             progress.Stage switch
             {
@@ -213,11 +227,16 @@ public sealed class InstallerDesktopService : IDisposable
                     InstallerUiLabels.Staging,
                 InstallerProgressStage.Applying =>
                     InstallerUiLabels.Applying,
+                InstallerProgressStage.Uninstalling =>
+                    InstallerUiLabels.Uninstalling,
                 InstallerProgressStage.SavingState =>
                     InstallerUiLabels.SavingState,
+                InstallerProgressStage.RemovingState =>
+                    InstallerUiLabels.RemovingState,
                 InstallerProgressStage.Completed =>
                     InstallerUiLabels.Completed,
-                _ => InstallerUiLabels.Preparing
+                _ =>
+                    InstallerUiLabels.Preparing
             };
     }
 }

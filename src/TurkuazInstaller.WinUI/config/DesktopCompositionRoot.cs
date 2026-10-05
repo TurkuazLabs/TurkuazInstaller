@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 0.7.0
-// Aciklama: Concrete adapter secimini UI View ve Controller katmanlarindan ayirir
+// Version: 1.0.0
+// Aciklama: SHA-256, Authenticode, Windows prerequisite ve Velopack runtime adapterlarini gercek desktop workflow'una baglar
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
 
@@ -12,6 +12,7 @@ using TurkuazInstaller.Infrastructure.Manifests;
 using TurkuazInstaller.Infrastructure.Packages.Velopack;
 using TurkuazInstaller.Infrastructure.Processes;
 using TurkuazInstaller.Infrastructure.Repositories;
+using TurkuazInstaller.Platform.Windows.Tools;
 using TurkuazInstaller.Presentation.Controllers;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
@@ -28,7 +29,9 @@ internal static class DesktopCompositionRoot
         var runtimeOptions =
             DesktopPathDefaults.CreateRuntimeOptions();
 
-        var httpClient = new HttpClient();
+        var httpClient =
+            new HttpClient();
+
         var manifestReader =
             new InstallerManifestReader();
 
@@ -44,7 +47,9 @@ internal static class DesktopCompositionRoot
                 new Sha256ArtifactVerifier(),
                 new VelopackPackageEngine(
                     new SystemProcessRunner()),
-                stateRepository);
+                stateRepository,
+                new WindowsAuthenticodeArtifactSignatureVerifier(),
+                new WindowsSystemPrerequisiteProbe());
 
         var runtimeService =
             new WinUiInstallerRuntimeService(
@@ -55,11 +60,8 @@ internal static class DesktopCompositionRoot
                 stateRepository,
                 runtimeOptions);
 
-        var viewModel = new MainWindowViewModel
-        {
-            TargetPath =
-                DesktopPathDefaults.CreateDefaultInstallRoot()
-        };
+        var viewModel =
+            new MainWindowViewModel();
 
         var desktopService =
             new InstallerDesktopService(

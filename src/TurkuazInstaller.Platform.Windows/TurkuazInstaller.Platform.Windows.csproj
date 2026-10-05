@@ -1,8 +1,8 @@
 <!--
 # 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/TurkuazInstaller.Platform.Windows.csproj
-# 📌 Amac: Windows bootstrap environment, elevation ve self-update Tool adapterlarini derler
+# 📌 Amac: Windows bootstrap, prerequisite, Authenticode, elevation ve self-update Tool adapterlarini derler
 # 📌 Modul - Project XML
-# Version: 0.6.0
+# Version: 1.0.0
 # Aciklama: Windows runtime detaylarini Core Infrastructure ve Application katmanlarindan ayiran platform projesidir
 
 Bagimli Oldugu Katman: Tool
@@ -16,5 +16,6 @@ Bagimli Oldugu Katman: Tool
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
+    <ProjectReference Include="../TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
   </ItemGroup>
 </Project>

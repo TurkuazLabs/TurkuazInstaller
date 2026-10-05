@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /examples/community-manifest.yml
-# 📌 Amac: TurkuazInstaller Community manifest contracti icin guvenli ornek paket tanimlamak
+# 📌 Amac: TurkuazInstaller Community Stable v1 manifest contracti icin calisabilir ornek paket tanimlamak
 # 📌 Modul - YAML
-# Version: 0.2.0
-# Aciklama: Stable full-package, SHA-256, prerequisite, preserve path ve rollback alanlarini ornekler
+# Version: 1.0.0
+# Aciklama: Full Velopack Setup, SHA-256, optional Authenticode, Windows prerequisite, relative preserve path ve rollback alanlarini ornekler
 # Bagimli Oldugu Katman: Config
 
 schema_version: 1
@@ -13,21 +13,22 @@ package:
   channel: stable
 
 artifact:
-  uri: https://downloads.example.invalid/example-app/1.2.3/package.zip
+  uri: https://downloads.example.invalid/example-app/1.2.3/ExampleApp-Setup.exe
   sha256: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   size_bytes: 1048576
   signature:
-    algorithm: ed25519-detached
-    uri: https://downloads.example.invalid/example-app/1.2.3/package.zip.sig
+    algorithm: authenticode
 
 install:
   mode: full
   target: "%LOCALAPPDATA%/Programs/ExampleApp"
   prerequisites:
-    - id: dotnet-desktop-runtime
-      version: ">=8.0"
+    - id: windows-build
+      version: ">=17763"
+    - id: architecture
+      version: "x64"
   preserve_paths:
-    - "%LOCALAPPDATA%/ExampleApp/data"
+    - "UserData"
 
 rollback:
   supported: true
