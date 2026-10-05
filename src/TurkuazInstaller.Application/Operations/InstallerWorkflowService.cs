@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.2.0
+// Version: 1.2.1
 // Aciklama: Publisher-pinned verification, prerequisite auto-install/re-probe, package lock ve crash journal/log checkpointlerini uygular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -688,6 +688,16 @@ public sealed class InstallerWorkflowService
             var prerequisite in
             release.Install.Prerequisites)
         {
+            if (
+                !_prerequisiteProbe.Supports(
+                    prerequisite.Id))
+            {
+                throw new InvalidOperationException(
+                    string.Concat(
+                        "Unsupported prerequisite id: ",
+                        prerequisite.Id));
+            }
+
             var satisfied =
                 await _prerequisiteProbe
                     .IsSatisfiedAsync(
