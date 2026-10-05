@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Prerequisites/PrerequisiteDetectionService.cs
 // 📌 Amac: Manifest prerequisite kimliklerini kayitli detector Tool adapterlarina yonlendiren generic detection motorunu uygular
 // 📌 Modul - Service CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Detector registry ile yeni prerequisite turlerini Application akisini degistirmeden eklenebilir yapar ve bilinmeyen kimlikleri fail-closed reddeder
 //
 // Bagimli Oldugu Katman: Service | Tool
@@ -45,6 +45,16 @@ public sealed class PrerequisiteDetectionService
         }
 
         _detectors = registry;
+    }
+
+    public bool Supports(
+        string prerequisiteId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            prerequisiteId);
+
+        return _detectors.ContainsKey(
+            prerequisiteId.Trim());
     }
 
     public Task<bool> IsSatisfiedAsync(
