@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/WINUI_DESKTOP.md
 # 📌 Amac: TurkuazInstaller WinUI 3 desktop mimarisi, runtime composition ve recovery UX kararlarini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 0.7.0
-# Aciklama: Presentation siniri, self-contained deployment, gercek workflow baglantisi ve UI durum modelini tanimlar
+# Version: 1.0.0
+# Aciklama: Manifest policy, Windows verification, uninstall ve gercek workflow baglantisini tanimlar
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
 # WinUI Desktop
@@ -25,50 +25,42 @@ View code-behind is kurali tasimaz.
 
 Controller yalniz kullanici requestini Presentation Service katmanina aktarir.
 
-Progress, validation, cancel ve retry state'i Presentation Service ve ViewModel katmaninda tutulur.
+## Runtime Composition
 
-## Deployment
+Desktop composition:
 
-WinUI uygulamasi unpackaged ve self-contained olarak publish edilir.
-
-Project ayarlari:
-
-- `WindowsPackageType=None`
-- `WindowsAppSDKSelfContained=true`
-- `SelfContained=true`
-- Windows App SDK 2.5.1 stable
-
-Bu model Windows App SDK runtime dosyalarini publish outputuna dahil eder.
-
-## Gercek Operasyonlar
-
-UI butonlari mock operasyon calistirmaz.
-
-Runtime composition:
-
-- manifest source -> HTTPS veya local file provider
+- manifest -> HTTPS veya local file provider
 - artifact -> HTTPS veya file downloader
-- verification -> size + SHA-256
-- package apply -> Velopack Package Engine
+- integrity -> size + SHA-256
+- signature -> Windows WinVerifyTrust Authenticode verifier
+- prerequisites -> Windows system prerequisite probe
+- package engine -> Velopack
 - state -> atomic JSON repository
-- workflow -> Application InstallerWorkflowService
+- workflow -> InstallerWorkflowService
 
-Install:
+## Operasyonlar
 
-1. release resolve
-2. artifact download
-3. SHA-256 verification
-4. atomic staging
-5. Velopack apply
-6. installed state save
+UI gercek olarak:
 
-Update ayni pipeline'i daha yeni release zorunlulugu ile calistirir.
+- install
+- update
+- repair
+- rollback
+- uninstall
 
-Repair kurulu surumle birebir eslesen release artifactini tekrar uygular.
+operasyonlarini calistirir.
 
-Rollback current manifest ile onceki surum manifestini ayri kaynaklardan alir ve onceki release artifactini uygular.
+Uninstall manifest gerektirmez ve installed state uzerinden calisir.
 
-## Error Recovery
+## Manifest-driven Target
+
+Install target ekranda override edilebilir.
+
+Ekran bos birakilirsa manifest install.target degeri Environment variable expansion sonrasinda kullanilir.
+
+Update, repair, rollback ve uninstall mevcut installed state icindeki gercek target path ile devam eder.
+
+## Progress
 
 UI su state'leri gosterir:
 
@@ -78,7 +70,9 @@ UI su state'leri gosterir:
 - verifying
 - staging
 - applying
+- uninstalling
 - saving state
+- removing state
 - completed
 - cancelled
 - failed
@@ -87,24 +81,10 @@ Failure sonrasi Retry aktif olur.
 
 Calisan operasyon Cancel ile CancellationToken uzerinden iptal edilebilir.
 
-## Manifest Source
-
-v0.7 desktop ekraninda kullanici dogrudan:
-
-- HTTPS `installer-manifest.yml` URL
-- local manifest dosya yolu
-- `file:` URI
-
-girebilir.
-
-GitHub ve Gitea adapterlari Core'da mevcut kalir. Desktop UI icin dogrudan manifest URL girisi en basit ortak runtime siniridir.
-
 ## State
 
 Installed package state kullanici LocalApplicationData dizini altinda paket bazli JSON dosyasinda tutulur.
 
-State write atomic temp-file replace ile tamamlanir.
+State save atomic temp-file replace ile tamamlanir.
 
-## Sonraki Adim
-
-v1.0.0 fazinda signed release pipeline, recovery integration testleri, security review ve son kullanici dokumani tamamlanacak.
+Uninstall state delete yalniz Package Engine basarili olduktan sonra yapilir.
