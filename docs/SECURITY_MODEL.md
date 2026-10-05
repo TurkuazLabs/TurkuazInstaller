@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.2
+# Version: 1.1.3
 # Aciklama: Detached trust, artifact ve prerequisite installer verification, detector registry, path, process, state ve rollback kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -93,11 +93,12 @@ Eksik prerequisite manifestte auto-install policy tasiyorsa:
 3. Authenticode signature zorunlu tutulur
 4. publisher_subject birebir eslestirilir
 5. certificate_sha256 varsa certificate pin birebir eslestirilir
-6. installer shell-free argument listesi ile calistirilir
-7. elevation yalniz requires_elevation=true ise explicit UAC ile istenir
-8. installer exit code 0 olmadan basarili kabul edilmez
-9. kurulumdan sonra ayni detector zorunlu olarak yeniden kosar
-10. requirement hala saglanmiyorsa ana package stage/apply baslamaz
+6. installer dosyasi direct .exe degilse reddedilir
+7. installer shell-free argument listesi ile calistirilir
+8. elevation yalniz requires_elevation=true ise explicit UAC ile istenir
+9. installer exit code 0 olmadan basarili kabul edilmez
+10. kurulumdan sonra ayni detector zorunlu olarak yeniden kosar
+11. requirement hala saglanmiyorsa ana package stage/apply baslamaz
 
 Prerequisite auto-install artifacti unsigned calistirilamaz.
 
