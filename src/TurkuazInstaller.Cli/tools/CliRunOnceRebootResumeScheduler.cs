@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Cli/tools/CliRunOnceRebootResumeScheduler.cs
 // 📌 Amac: Silent CLI operasyonlarini reboot sonrasinda ayni CLI executable ile tek seferlik yeniden baslatir
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: Package-scoped HKCU RunOnce komutunu --resume-package ve --silent protokoluyle olusturur
 //
 // Bagimli Oldugu Katman: Tool | Service | Config
@@ -56,9 +56,9 @@ internal sealed class CliRunOnceRebootResumeScheduler
 
         var commandLine =
             string.Concat(
-                """,
+                "\"",
                 _executablePath,
-                "" ",
+                "\" ",
                 CliArguments.InternalResumePackageOption,
                 " ",
                 packageId.Value,
