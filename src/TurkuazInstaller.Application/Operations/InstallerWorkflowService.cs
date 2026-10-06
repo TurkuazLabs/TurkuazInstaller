@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.7.0
-// Aciklama: Prerequisite/version policy zincirine package-owned Windows integration reconcile ve safe uninstall cleanup ekler
+// Version: 1.8.0
+// Aciklama: Package mutation sonrasi Windows integration reconcile basarisini state commit onkosulu yapar ve safe uninstall cleanup davranisini korur
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -180,17 +180,17 @@ public sealed class InstallerWorkflowService
                         cancellationToken)
                     .ConfigureAwait(false);
 
-                await SaveStateAsync(
+                await ApplyWindowsIntegrationsAsync(
                         release,
                         targetPath,
-                        progress,
                         operation,
                         cancellationToken)
                     .ConfigureAwait(false);
 
-                await ApplyWindowsIntegrationsAsync(
+                await SaveStateAsync(
                         release,
                         targetPath,
+                        progress,
                         operation,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -279,17 +279,17 @@ public sealed class InstallerWorkflowService
                             cancellationToken)
                         .ConfigureAwait(false);
 
-                    await SaveStateAsync(
+                    await ApplyWindowsIntegrationsAsync(
                             release,
                             currentState.TargetPath,
-                            progress,
                             operation,
                             cancellationToken)
                         .ConfigureAwait(false);
 
-                    await ApplyWindowsIntegrationsAsync(
+                    await SaveStateAsync(
                             release,
                             currentState.TargetPath,
+                            progress,
                             operation,
                             cancellationToken)
                         .ConfigureAwait(false);
@@ -453,17 +453,17 @@ public sealed class InstallerWorkflowService
                         cancellationToken)
                     .ConfigureAwait(false);
 
-                await SaveStateAsync(
+                await ApplyWindowsIntegrationsAsync(
                         previousRelease,
                         currentState.TargetPath,
-                        progress,
                         operation,
                         cancellationToken)
                     .ConfigureAwait(false);
 
-                await ApplyWindowsIntegrationsAsync(
+                await SaveStateAsync(
                         previousRelease,
                         currentState.TargetPath,
+                        progress,
                         operation,
                         cancellationToken)
                     .ConfigureAwait(false);
