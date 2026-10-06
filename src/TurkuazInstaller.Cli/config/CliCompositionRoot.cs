@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Cli/config/CliCompositionRoot.cs
 // 📌 Amac: CLI Controller, Service, Repo ve Windows Tool bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.0.0
-// Aciklama: WinUI ile ayni trust/state/journal zincirini GUI bagimliligi olmadan silent runtime'a baglar
+// Version: 1.1.0
+// Aciklama: WinUI ile ayni proxy/trust/state/journal zincirini GUI bagimliligi olmadan silent runtime'a baglar
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | Config
 
@@ -18,6 +18,7 @@ using TurkuazInstaller.Infrastructure.Operations;
 using TurkuazInstaller.Infrastructure.Packages.Velopack;
 using TurkuazInstaller.Infrastructure.Processes;
 using TurkuazInstaller.Infrastructure.Repositories;
+using TurkuazInstaller.Platform.Windows.Config;
 using TurkuazInstaller.Platform.Windows.Tools;
 
 namespace TurkuazInstaller.Cli.Config;
@@ -29,8 +30,15 @@ internal static class CliCompositionRoot
         var options =
             CliPathDefaults.CreateRuntimeOptions();
 
+        var networkProxyOptions =
+            new WindowsNetworkProxyOptionsReader(
+                WindowsNetworkProxyDefaults
+                    .CreateConfigPath())
+                .Read();
+
         var httpClient =
-            new HttpClient();
+            WindowsHttpClientFactory.Create(
+                networkProxyOptions);
 
         var manifestReader =
             new InstallerManifestReader();
