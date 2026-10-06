@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsIntegrationReceiptStore.cs
 // 📌 Amac: Windows integration receipt bilgisini package-scoped atomik JSON dosyasinda saklar
 // 📌 Modul - Repo CSharp
-// Version: 1.0.0
-// Aciklama: Apply/reconcile ve uninstall cleanup icin shortcut hash ve protocol scheme listesini kalici tutar
+// Version: 1.1.0
+// Aciklama: Apply/reconcile ve uninstall cleanup icin shortcut ownership ve strict validated protocol scheme listesini kalici tutar
 //
 // Bagimli Oldugu Katman: Repo | Tool
 
 using System.Text.Json;
+using TurkuazInstaller.Domain.Integrations;
 using TurkuazInstaller.Domain.Products;
 
 namespace TurkuazInstaller.Platform.Windows.Tools;
@@ -95,9 +96,7 @@ public sealed class WindowsIntegrationReceiptStore
                 .ToArray(),
             document.ProtocolSchemes
                 .Select(
-                    value =>
-                        value.Trim()
-                            .ToLowerInvariant())
+                    NormalizeProtocolScheme)
                 .Distinct(
                     StringComparer.OrdinalIgnoreCase)
                 .ToArray());
@@ -146,9 +145,7 @@ public sealed class WindowsIntegrationReceiptStore
                 ProtocolSchemes =
                     receipt.ProtocolSchemes
                         .Select(
-                            value =>
-                                value.Trim()
-                                    .ToLowerInvariant())
+                            NormalizeProtocolScheme)
                         .Distinct(
                             StringComparer.OrdinalIgnoreCase)
                         .ToList()
@@ -215,6 +212,27 @@ public sealed class WindowsIntegrationReceiptStore
             string.Concat(
                 packageId.Value,
                 ".json"));
+    }
+
+    private static string NormalizeProtocolScheme(
+        string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            value);
+
+        try
+        {
+            return new WindowsProtocolIntegration(
+                    value,
+                    "TurkuazInstallerReceiptTarget.exe")
+                .Scheme;
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidDataException(
+                "Windows integration receipt protocol scheme is invalid.",
+                exception);
+        }
     }
 
     private static string NormalizeSha256(
