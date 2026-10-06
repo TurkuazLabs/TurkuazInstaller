@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.13.0
+# Version: 1.14.0
 # Aciklama: Detached trust, private credentials, proxy, discovery, version policy, safe Windows integration ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -1666,14 +1666,27 @@ for key in (
             f"windows shortcut collision must deny: {key}"
         )
 
+shortcut_cleanup = windows_shortcuts.get(
+    "cleanup",
+    {},
+)
+
 if (
-    windows_shortcuts
-    .get("cleanup", {})
+    shortcut_cleanup
     .get("delete_only_when_sha256_matches_receipt")
     is not True
 ):
     fail(
         "windows shortcut cleanup must require receipt hash match"
+    )
+
+if (
+    shortcut_cleanup
+    .get("path_must_match_supported_location")
+    is not True
+):
+    fail(
+        "windows shortcut cleanup must validate the package-owned shortcut location"
     )
 
 windows_protocols = windows_integration.get(
@@ -1740,14 +1753,27 @@ if protocol_claim.get("existing_foreign_owner") != "deny":
         "windows protocol foreign owner overwrite must be denied"
     )
 
+protocol_cleanup = windows_protocols.get(
+    "cleanup",
+    {},
+)
+
 if (
-    windows_protocols
-    .get("cleanup", {})
+    protocol_cleanup
     .get("delete_only_when_owner_marker_matches")
     is not True
 ):
     fail(
         "windows protocol cleanup must require owner marker match"
+    )
+
+if (
+    protocol_cleanup
+    .get("scheme_validation_required")
+    is not True
+):
+    fail(
+        "windows protocol cleanup must validate receipt scheme values"
     )
 
 windows_workflow = windows_integration.get(
@@ -1798,6 +1824,8 @@ for key in (
     "reparse_point_executable",
     "shell_command_interpretation",
     "machine_wide_registry",
+    "corrupt_receipt_path_escape",
+    "invalid_receipt_protocol_scheme",
 ):
     if windows_security.get(key) != "deny":
         fail(
