@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/viewmodels/MainWindowViewModel.cs
 // 📌 Amac: TurkuazInstaller ana penceresinin bind edilebilir UI state modelini tasir
 // 📌 Modul - ViewModel CSharp
-// Version: 1.2.0
-// Aciklama: Form/progress/recovery state'ine ek olarak kurulu uygulama katalog ve read-only update discovery state'ini yonetir
+// Version: 1.3.0
+// Aciklama: Form/progress/recovery state'ine ek olarak katalog, manual update discovery ve session background update state'ini yonetir
 //
 // Bagimli Oldugu Katman: View | Language
 
@@ -47,6 +47,11 @@ public sealed class MainWindowViewModel
     private bool _hasUpdateDiscoveryError;
     private bool _hasUpdateAvailable;
     private bool _isCheckingUpdate;
+
+    private string _backgroundUpdateStatus =
+        InstallerUiLabels.BackgroundUpdatesDisabled;
+
+    private bool _isBackgroundUpdateCheckRunning;
 
     private string _packageIdText = string.Empty;
     private string _manifestSource = string.Empty;
@@ -95,6 +100,9 @@ public sealed class MainWindowViewModel
 
     public string LatestVersionLabel =>
         InstallerUiLabels.LatestVersion;
+
+    public string BackgroundUpdatesTitle =>
+        InstallerUiLabels.BackgroundUpdatesTitle;
 
     public string PackageIdLabel =>
         InstallerUiLabels.PackageId;
@@ -323,15 +331,43 @@ public sealed class MainWindowViewModel
         }
     }
 
+    public bool IsBackgroundUpdateCheckRunning
+    {
+        get => _isBackgroundUpdateCheckRunning;
+        set
+        {
+            if (
+                SetProperty(
+                    ref _isBackgroundUpdateCheckRunning,
+                    value))
+            {
+                OnPropertyChanged(
+                    nameof(CanRun));
+                OnPropertyChanged(
+                    nameof(CanCheckUpdate));
+            }
+        }
+    }
+
+    public string BackgroundUpdateStatus
+    {
+        get => _backgroundUpdateStatus;
+        set => SetProperty(
+            ref _backgroundUpdateStatus,
+            value);
+    }
+
     public bool CanRun =>
         !IsBusy &&
-        !IsCheckingUpdate;
+        !IsCheckingUpdate &&
+        !IsBackgroundUpdateCheckRunning;
 
     public bool CanCancel => IsBusy;
 
     public bool CanCheckUpdate =>
         !IsBusy &&
-        !IsCheckingUpdate;
+        !IsCheckingUpdate &&
+        !IsBackgroundUpdateCheckRunning;
 
     public string InstalledVersionText
     {
