@@ -2,7 +2,7 @@
 # 📌 Amac: Bootstrap self-update discovery, download, trust ve handoff guvenlik invariantlarini contract-first sabitler
 # 📌 Modul - YAML
 # Version: 1.2.0
-# Aciklama: GitHub latest stable release trust kurallarina automatic update hata fallback ve explicit fail-closed sinirini ekler
+# Aciklama: Automatic self-update hatalarinda current launch availability'sini korurken explicit trust zincirini fail-closed tutar
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 schema_version: 1
@@ -45,10 +45,12 @@ availability:
   network_failure: continue_current_bootstrap
   unsigned_current_bootstrap: continue_without_auto_update
   malformed_newer_release: continue_current_bootstrap
-  automatic_download_failure: continue_current_bootstrap
-  automatic_replacement_trust_failure: continue_current_bootstrap
-  staged_failed_replacement_cleanup: required
+  download_failure: continue_current_bootstrap
+  untrusted_replacement: continue_current_bootstrap
+  automatic_handoff_failure: continue_current_bootstrap
   caller_cancellation: propagate
+  explicit_replacement_failure: deny
+  completion_source_failure: deny
 
 handoff:
   mode: two_process
