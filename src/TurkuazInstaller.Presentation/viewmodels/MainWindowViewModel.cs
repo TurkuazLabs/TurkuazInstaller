@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/viewmodels/MainWindowViewModel.cs
 // 📌 Amac: TurkuazInstaller ana penceresinin bind edilebilir UI state modelini tasir
 // 📌 Modul - ViewModel CSharp
-// Version: 1.1.0
-// Aciklama: Form/progress/recovery state'ine ek olarak salt-okunur kurulu uygulama katalog ve katalog hata state'ini yonetir
+// Version: 1.2.0
+// Aciklama: Form/progress/recovery state'ine ek olarak kurulu uygulama katalog ve read-only update discovery state'ini yonetir
 //
 // Bagimli Oldugu Katman: View | Language
 
@@ -31,6 +31,22 @@ public sealed class MainWindowViewModel
         string.Empty;
 
     private bool _hasCatalogError;
+
+    private string _installedVersionText =
+        InstallerUiLabels.VersionUnavailable;
+
+    private string _latestVersionText =
+        InstallerUiLabels.VersionUnavailable;
+
+    private string _updateDiscoveryStatus =
+        InstallerUiLabels.UpdateNotChecked;
+
+    private string _updateDiscoveryErrorMessage =
+        string.Empty;
+
+    private bool _hasUpdateDiscoveryError;
+    private bool _hasUpdateAvailable;
+    private bool _isCheckingUpdate;
 
     private string _packageIdText = string.Empty;
     private string _manifestSource = string.Empty;
@@ -67,6 +83,18 @@ public sealed class MainWindowViewModel
             InstallerUiLabels.InstalledAppsCountPrefix,
             " ",
             InstalledApps.Count);
+
+    public string UpdateDiscoveryTitle =>
+        InstallerUiLabels.UpdateDiscoveryTitle;
+
+    public string CheckUpdatesLabel =>
+        InstallerUiLabels.CheckUpdates;
+
+    public string InstalledVersionLabel =>
+        InstallerUiLabels.InstalledVersion;
+
+    public string LatestVersionLabel =>
+        InstallerUiLabels.LatestVersion;
 
     public string PackageIdLabel =>
         InstallerUiLabels.PackageId;
@@ -167,17 +195,31 @@ public sealed class MainWindowViewModel
     public string PackageIdText
     {
         get => _packageIdText;
-        set => SetProperty(
-            ref _packageIdText,
-            value);
+        set
+        {
+            if (
+                SetProperty(
+                    ref _packageIdText,
+                    value))
+            {
+                ResetUpdateDiscovery();
+            }
+        }
     }
 
     public string ManifestSource
     {
         get => _manifestSource;
-        set => SetProperty(
-            ref _manifestSource,
-            value);
+        set
+        {
+            if (
+                SetProperty(
+                    ref _manifestSource,
+                    value))
+            {
+                ResetUpdateDiscovery();
+            }
+        }
     }
 
     public string RollbackManifestSource
@@ -199,9 +241,16 @@ public sealed class MainWindowViewModel
     public int SelectedChannelIndex
     {
         get => _selectedChannelIndex;
-        set => SetProperty(
-            ref _selectedChannelIndex,
-            value);
+        set
+        {
+            if (
+                SetProperty(
+                    ref _selectedChannelIndex,
+                    value))
+            {
+                ResetUpdateDiscovery();
+            }
+        }
     }
 
     public int ProgressValue
@@ -250,13 +299,87 @@ public sealed class MainWindowViewModel
                     nameof(CanRun));
                 OnPropertyChanged(
                     nameof(CanCancel));
+                OnPropertyChanged(
+                    nameof(CanCheckUpdate));
             }
         }
     }
 
-    public bool CanRun => !IsBusy;
+    public bool IsCheckingUpdate
+    {
+        get => _isCheckingUpdate;
+        set
+        {
+            if (
+                SetProperty(
+                    ref _isCheckingUpdate,
+                    value))
+            {
+                OnPropertyChanged(
+                    nameof(CanRun));
+                OnPropertyChanged(
+                    nameof(CanCheckUpdate));
+            }
+        }
+    }
+
+    public bool CanRun =>
+        !IsBusy &&
+        !IsCheckingUpdate;
 
     public bool CanCancel => IsBusy;
+
+    public bool CanCheckUpdate =>
+        !IsBusy &&
+        !IsCheckingUpdate;
+
+    public string InstalledVersionText
+    {
+        get => _installedVersionText;
+        set => SetProperty(
+            ref _installedVersionText,
+            value);
+    }
+
+    public string LatestVersionText
+    {
+        get => _latestVersionText;
+        set => SetProperty(
+            ref _latestVersionText,
+            value);
+    }
+
+    public string UpdateDiscoveryStatus
+    {
+        get => _updateDiscoveryStatus;
+        set => SetProperty(
+            ref _updateDiscoveryStatus,
+            value);
+    }
+
+    public string UpdateDiscoveryErrorMessage
+    {
+        get => _updateDiscoveryErrorMessage;
+        set => SetProperty(
+            ref _updateDiscoveryErrorMessage,
+            value);
+    }
+
+    public bool HasUpdateDiscoveryError
+    {
+        get => _hasUpdateDiscoveryError;
+        set => SetProperty(
+            ref _hasUpdateDiscoveryError,
+            value);
+    }
+
+    public bool HasUpdateAvailable
+    {
+        get => _hasUpdateAvailable;
+        set => SetProperty(
+            ref _hasUpdateAvailable,
+            value);
+    }
 
     public void SetInstalledApps(
         IReadOnlyList<InstalledAppListItemViewModel> items)
@@ -275,6 +398,24 @@ public sealed class MainWindowViewModel
         set => SetProperty(
             ref _canRetry,
             value);
+    }
+
+    private void ResetUpdateDiscovery()
+    {
+        InstalledVersionText =
+            InstallerUiLabels.VersionUnavailable;
+
+        LatestVersionText =
+            InstallerUiLabels.VersionUnavailable;
+
+        UpdateDiscoveryStatus =
+            InstallerUiLabels.UpdateNotChecked;
+
+        UpdateDiscoveryErrorMessage =
+            string.Empty;
+
+        HasUpdateDiscoveryError = false;
+        HasUpdateAvailable = false;
     }
 
     private bool SetProperty<T>(
