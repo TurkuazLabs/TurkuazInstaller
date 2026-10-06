@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.4.1
-# Aciklama: Detached trust, prerequisite/reboot resume, bootstrap self-update trust, path, process, state ve rollback guvenlik kurallarini sabitler
+# Version: 1.5.0
+# Aciklama: Detached trust, private provider credentials, prerequisite/reboot resume, bootstrap self-update, path, process, state ve rollback kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -32,6 +32,7 @@ Community baseline:
 - uninstall basarisi sonrasi state delete
 - secret degerlerin manifest icine yazilmamasi
 - bootstrap self-update icin GitHub SHA-256 asset digest + current-signer Authenticode identity pinning
+- private GitHub/Gitea tokenlari icin Windows Credential Manager + host-scoped Authorization
 
 ## Manifest Trust
 
@@ -144,6 +145,32 @@ Basarili GitHub response daha yeni release ilan ettigi halde required asset/dige
 Internal explicit replacement path ve complete-self-update source executable ayni signer verification zincirini atlayamaz.
 
 Detay: docs/BOOTSTRAP_SELF_UPDATE.md
+
+## Private Provider Credentials
+
+Private GitHub/Gitea tokenlari manifest veya public config icinde tutulmaz.
+
+Windows Credential Manager Generic Credential target formati:
+
+`TurkuazInstaller/provider/{provider}/{authority}`
+
+Provider credential resolver credential bulamazsa public/anonymous davranisa geri doner.
+
+Credential varsa:
+
+- GitHub Authorization scheme Bearer
+- Gitea Authorization scheme token
+- header yalniz HTTPS ve explicit authority allow-list eslesmesinde eklenir
+- release metadata icindeki arbitrary asset host allow-liste otomatik eklenmez
+- manifest ve detached .p7s requestleri ayni host-scoped policy'den gecer
+- token query string, manifest veya log icine yazilmaz
+- URI userinfo credential authority/origin olarak reddedilir
+
+Transport authentication, signed manifest trust zincirini gevsetmez.
+
+Private manifest yine CMS/PKCS#7, publisher subject ve certificate SHA-256 kontrollerinden gecmeden parse edilmez.
+
+Detay: docs/PRIVATE_PROVIDER_CREDENTIALS.md
 
 ## Preserve Data
 
