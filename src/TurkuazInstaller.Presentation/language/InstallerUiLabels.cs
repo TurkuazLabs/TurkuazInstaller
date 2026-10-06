@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiLabels.cs
 // 📌 Amac: TurkuazInstaller masaustu arayuzundeki kullanici metinlerini merkezi Language katmaninda tanimlar
 // 📌 Modul - Language CSharp
-// Version: 1.1.0
-// Aciklama: Install, update, repair, rollback, uninstall ve reboot resume UX metinlerini tek katalogda tutar
+// Version: 1.2.0
+// Aciklama: Install/update/recovery metinlerine ek olarak kurulu uygulama katalog ve refresh UX metinlerini tek katalogda tutar
 //
 // Bagimli Oldugu Katman: Language
 
@@ -33,6 +33,7 @@ public static class InstallerUiLabels
     public const string Uninstall = "Kaldir";
     public const string Retry = "Tekrar Dene";
     public const string Cancel = "Iptal";
+    public const string RefreshInstalledApps = "Yenile";
 
     public const string Ready = "Hazir";
     public const string Preparing =
@@ -68,6 +69,13 @@ public static class InstallerUiLabels
         "Kurulum dizini girilmedi ve manifest install.target tanimlamiyor.";
     public const string OperationFailedPrefix =
         "Islem basarisiz:";
+
+    public const string InstalledAppsTitle =
+        "Kurulu Uygulamalar";
+    public const string InstalledAppsCountPrefix =
+        "Kurulu paket:";
+    public const string CatalogLoadFailedPrefix =
+        "Kurulu uygulama listesi yuklenemedi:";
 
     public const string StatusTitle = "Durum";
     public const string SourceTitle = "Paket Kaynagi";
