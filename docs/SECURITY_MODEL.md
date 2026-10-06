@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.7.0
-# Aciklama: Detached trust, private credentials, proxy, read-only update discovery, reboot resume, bootstrap self-update, path, process ve state kurallarini sabitler
+# Version: 1.8.0
+# Aciklama: Detached trust, private credentials, proxy, manual/background update discovery, reboot resume, bootstrap self-update, path, process ve state kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -35,6 +35,7 @@ Community baseline:
 - private GitHub/Gitea tokenlari icin Windows Credential Manager + host-scoped Authorization
 - tum Windows HTTP clientleri icin ortak system/direct/custom proxy policy
 - update discovery icin signed-manifest-only read-only karar siniri
+- background update policy icin session-only, no-auto-download/no-auto-install siniri
 
 ## Manifest Trust
 
@@ -228,6 +229,39 @@ Update discovery ile installer mutation ayni anda calistirilmaz.
 Discovery error ana installer operation error state'inden ayridir.
 
 Detay: docs/UPDATE_DISCOVERY.md
+
+## Background Update Policy
+
+Background update policy WinUI session icinde calisan read-only discovery mekanizmasidir.
+
+Config:
+
+`%LOCALAPPDATA%/TurkuazInstaller/config/background-updates.json`
+
+Dosya yoksa policy disabled kabul edilir.
+
+Enabled policy:
+
+- minimum 15 dakika
+- maximum 1440 dakika
+- en fazla 100 package/channel entry
+- startup sonrasi bir kez
+- configured interval ile periyodik
+- app kapaninca durur
+
+Her entry mevcut signed manifest pipeline'i ve committed install state repository'sini kullanir.
+
+Background cycle artifact download, prerequisite install, stage/apply, state write, journal write veya resume write yapamaz.
+
+Automatic download ve automatic install yoktur.
+
+Installer mutation, manual discovery veya onceki background cycle aktifse yeni cycle baslatilmaz.
+
+Persistent HTTPS manifest source userinfo, query veya fragment tasiyamaz; secret config icine gomulmez.
+
+Bir entry hatasi diger entry'leri durdurmaz.
+
+Detay: docs/BACKGROUND_UPDATES.md
 
 ## Preserve Data
 
