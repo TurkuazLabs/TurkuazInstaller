@@ -7,6 +7,7 @@
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Application.Updates;
 using TurkuazInstaller.Contracts.Artifacts;
 using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
