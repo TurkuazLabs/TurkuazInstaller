@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/MainWindowBrandingTests.cs
 // 📌 Amac: MainWindowViewModel branding/localization override ve fallback davranisini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Typed UI profile ile branding ve label override uygulanirken tanimsiz alanlarin built-in Language metnine dondugunu dogrular
+// Version: 1.1.0
+// Aciklama: Branding, channel, placeholder ve runtime initial state override davranisini built-in fallback ile birlikte dogrular
 //
 // Bagimli Oldugu Katman: View | Language | Config
 
@@ -31,7 +31,17 @@ public sealed class MainWindowBrandingTests
                     [InstallerUiLabelKey.Install] =
                         "Install",
                     [InstallerUiLabelKey.Update] =
-                        "Update"
+                        "Update",
+                    [InstallerUiLabelKey.Ready] =
+                        "Ready",
+                    [InstallerUiLabelKey.Stable] =
+                        "Stable EN",
+                    [InstallerUiLabelKey.Beta] =
+                        "Beta EN",
+                    [InstallerUiLabelKey.ManifestPlaceholder] =
+                        "https://example.test/manifest.yml",
+                    [InstallerUiLabelKey.InstalledAppsCountPrefix] =
+                        "Installed packages:"
                 });
 
         var viewModel =
@@ -59,5 +69,25 @@ public sealed class MainWindowBrandingTests
         Assert.Equal(
             InstallerUiLabels.Repair,
             viewModel.RepairLabel);
+
+        Assert.Equal(
+            "Ready",
+            viewModel.StatusMessage);
+
+        Assert.Equal(
+            new[]
+            {
+                "Stable EN",
+                "Beta EN"
+            },
+            viewModel.ChannelOptions);
+
+        Assert.Equal(
+            "https://example.test/manifest.yml",
+            viewModel.ManifestPlaceholder);
+
+        Assert.Equal(
+            "Installed packages: 0",
+            viewModel.InstalledAppsCountText);
     }
 }
