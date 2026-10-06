@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsShellLinkShortcutStore.cs
 // 📌 Amac: Package-owned Desktop/Start Menu .lnk shortcutlarini Windows ShellLink COM ile guvenli olusturur ve temizler
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
-// Aciklama: Existing dosya yalniz onceki receipt SHA-256 eslesirse overwrite edilir; cleanup yalniz hash eslesirse siler
+// Version: 1.1.0
+// Aciklama: Existing dosya receipt hash ile korunur; cleanup ayrica package-scoped Desktop/Start Menu path allow-listini zorunlu tutar
 //
 // Bagimli Oldugu Katman: Tool
 
@@ -101,16 +101,20 @@ public sealed class WindowsShellLinkShortcutStore
     }
 
     public Task RemoveOwnedAsync(
+        PackageId packageId,
         WindowsShortcutReceipt receipt,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(
+            packageId);
         ArgumentNullException.ThrowIfNull(
             receipt);
 
         cancellationToken.ThrowIfCancellationRequested();
 
         var path =
-            Path.GetFullPath(
+            ValidateOwnedShortcutPath(
+                packageId,
                 receipt.Path);
 
         if (
@@ -127,6 +131,87 @@ public sealed class WindowsShellLinkShortcutStore
         }
 
         return Task.CompletedTask;
+    }
+
+    private static string ValidateOwnedShortcutPath(
+        PackageId packageId,
+        string receiptPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            receiptPath);
+
+        var path =
+            Path.GetFullPath(
+                receiptPath);
+
+        if (
+            !string.Equals(
+                Path.GetExtension(
+                    path),
+                ".lnk",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                "Windows shortcut receipt path must target a .lnk file.");
+        }
+
+        var directory =
+            Path.GetDirectoryName(
+                path)
+            ?? throw new InvalidDataException(
+                "Windows shortcut receipt directory could not be resolved.");
+
+        var desktop =
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.DesktopDirectory);
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                desktop) &&
+            string.Equals(
+                Path.GetFullPath(
+                    desktop),
+                Path.GetFullPath(
+                    directory),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return path;
+        }
+
+        var applicationData =
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.ApplicationData);
+
+        if (string.IsNullOrWhiteSpace(
+                applicationData))
+        {
+            throw new InvalidDataException(
+                "Windows Start Menu root could not be resolved for shortcut receipt validation.");
+        }
+
+        var packageStartMenuRoot =
+            Path.GetFullPath(
+                Path.Combine(
+                    applicationData,
+                    "Microsoft",
+                    "Windows",
+                    "Start Menu",
+                    "Programs",
+                    "TurkuazInstaller",
+                    packageId.Value));
+
+        if (
+            string.Equals(
+                packageStartMenuRoot,
+                Path.GetFullPath(
+                    directory),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return path;
+        }
+
+        throw new InvalidDataException(
+            "Windows shortcut receipt path is outside the supported package-owned locations.");
     }
 
     private static string ResolveShortcutPath(
