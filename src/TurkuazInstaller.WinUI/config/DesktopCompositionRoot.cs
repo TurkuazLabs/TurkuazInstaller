@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.5.0
-// Aciklama: Signed trust, proxy-aware HTTP, prerequisite, reboot resume, journal/resume repo ve Velopack runtime adapterlarini baglar
+// Version: 1.6.0
+// Aciklama: Signed trust, proxy-aware HTTP, committed install catalog, prerequisite, reboot resume ve Velopack runtime adapterlarini baglar
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
 
@@ -142,7 +142,9 @@ internal static class DesktopCompositionRoot
             new InstallerDesktopService(
                 viewModel,
                 runtimeService,
-                new InstallerResumeLaunchParser());
+                new InstallerResumeLaunchParser(),
+                new InstalledAppCatalogService(
+                    stateRepository));
 
         var controller =
             new MainWindowController(
