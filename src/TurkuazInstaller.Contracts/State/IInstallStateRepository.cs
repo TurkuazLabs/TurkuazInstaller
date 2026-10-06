@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Contracts/State/IInstallStateRepository.cs
 // 📌 Amac: Kurulu paket state storage okuma, yazma ve silme islemleri icin repository portunu tanimlar
 // 📌 Modul - Repo CSharp
-// Version: 1.0.0
-// Aciklama: Application katmanini registry, JSON veya baska storage implementasyonlarindan ayirir
+// Version: 1.1.0
+// Aciklama: Application/Presentation katmanini storage implementasyonundan ayirir; package Get/Save/Delete yaninda kurulu paket listesi saglar
 //
 // Bagimli Oldugu Katman: Repo
 
@@ -15,6 +15,9 @@ public interface IInstallStateRepository
 {
     Task<InstalledPackageState?> GetAsync(
         PackageId packageId,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<InstalledPackageState>> ListAsync(
         CancellationToken cancellationToken);
 
     Task SaveAsync(

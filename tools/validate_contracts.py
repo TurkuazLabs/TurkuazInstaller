@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.8.0
-# Aciklama: Detached trust, private credentials, proxy policy, reboot resume, bootstrap self-update, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.9.0
+# Aciklama: Detached trust, private credentials, proxy policy, installed app catalog, reboot resume, bootstrap self-update ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -19,6 +19,7 @@ MANIFEST_TRUST = ROOT / "contracts" / "manifest-trust.yml"
 BOOTSTRAP_SELF_UPDATE = ROOT / "contracts" / "bootstrap-self-update.yml"
 PROVIDER = ROOT / "contracts" / "release-provider.yml"
 NETWORK = ROOT / "contracts" / "network.yml"
+INSTALLED_APP_CATALOG = ROOT / "contracts" / "installed-app-catalog.yml"
 EXAMPLE = ROOT / "examples" / "community-manifest.yml"
 SECURITY = ROOT / "docs" / "SECURITY_MODEL.md"
 ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
@@ -916,6 +917,129 @@ for key in (
     if network_security.get(key) != "deny":
         fail(
             f"network proxy security invariant must deny: {key}"
+        )
+
+installed_app_catalog = load_yaml(
+    INSTALLED_APP_CATALOG
+)
+
+if installed_app_catalog.get("schema_version") != 1:
+    fail(
+        "installed app catalog schema_version must be 1"
+    )
+
+catalog_source = installed_app_catalog.get(
+    "source",
+    {},
+)
+
+if catalog_source.get("repository") != "install_state":
+    fail(
+        "installed app catalog must use install_state repository"
+    )
+
+if catalog_source.get("committed_state_only") is not True:
+    fail(
+        "installed app catalog must use committed state only"
+    )
+
+if catalog_source.get("direct_view_filesystem_access") is not False:
+    fail(
+        "installed app catalog View must not read filesystem directly"
+    )
+
+catalog_list = installed_app_catalog.get(
+    "list",
+    {},
+)
+
+if catalog_list.get("sort_by") != "package_id":
+    fail(
+        "installed app catalog must sort by package_id"
+    )
+
+if catalog_list.get("sort_order") != "ascending":
+    fail(
+        "installed app catalog sort order must remain ascending"
+    )
+
+if set(catalog_list.get("fields", [])) != {
+    "package_id",
+    "version",
+    "channel",
+    "target_path",
+}:
+    fail(
+        "installed app catalog fields drifted"
+    )
+
+if catalog_list.get("read_only") is not True:
+    fail(
+        "installed app catalog must remain read-only"
+    )
+
+catalog_refresh = installed_app_catalog.get(
+    "refresh",
+    {},
+)
+
+for key in (
+    "startup",
+    "manual",
+    "after_successful_mutation",
+    "after_successful_resume",
+):
+    if catalog_refresh.get(key) is not True:
+        fail(
+            f"installed app catalog refresh invariant missing: {key}"
+        )
+
+if catalog_refresh.get("while_operation_busy") != "deny":
+    fail(
+        "installed app catalog refresh while operation busy must be denied"
+    )
+
+catalog_error_boundary = installed_app_catalog.get(
+    "error_boundary",
+    {},
+)
+
+if (
+    catalog_error_boundary
+    .get("catalog_error_separate_from_operation_error")
+    is not True
+):
+    fail(
+        "catalog error must remain separate from installer operation error"
+    )
+
+if (
+    catalog_error_boundary
+    .get("catalog_failure_marks_installer_operation_failed")
+    is not False
+):
+    fail(
+        "catalog failure must not mark installer operation failed"
+    )
+
+if catalog_error_boundary.get("malformed_state") != "reject":
+    fail(
+        "malformed install state must be rejected"
+    )
+
+catalog_security = installed_app_catalog.get(
+    "security",
+    {},
+)
+
+for key in (
+    "infer_manifest_source_from_state",
+    "mutate_state_from_catalog_view",
+    "bypass_repository",
+):
+    if catalog_security.get(key) != "deny":
+        fail(
+            f"installed app catalog security invariant must deny: {key}"
         )
 
 example = load_yaml(EXAMPLE)

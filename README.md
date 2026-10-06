@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim, kullanim ve release durumu giris dokumani
 # 📌 Modul - Markdown
-# Version: 1.2.0
-# Aciklama: Stable Community kod durumunu, signed trust, private provider credentials, shared proxy policy ve production signing dis bagimliligini ozetler
+# Version: 1.3.0
+# Aciklama: Stable Community kod durumunu, signed trust, private credentials, shared proxy policy, installed app catalog ve production signing durumunu ozetler
 
 Bagimli Oldugu Katman: View
 
@@ -18,6 +18,7 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum, guncelle
 - GitHub, Gitea, generic HTTPS ve local file release provider modeli
 - Windows Credential Manager tabanli private GitHub/Gitea credentials
 - ortak system/direct/custom HTTP proxy policy
+- committed install state tabanli kurulu uygulama katalog/list UI
 - Paket motorundan bagimsiz Core
 - Velopack Package Engine adapteri
 - CMS/PKCS#7 detached manifest signature
@@ -158,6 +159,7 @@ Bir proje TurkuazInstaller'a gecmeden once signed manifest, install, update, rep
 - docs/CLI.md
 - docs/PRIVATE_PROVIDER_CREDENTIALS.md
 - docs/PROXY.md
+- docs/INSTALLED_APP_CATALOG.md
 - docs/VELOPACK_E2E.md
 - docs/AZURE_SIGNING_BOOTSTRAP.md
 - docs/RELEASE_SIGNING.md
