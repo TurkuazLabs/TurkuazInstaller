@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.5.1
-# Aciklama: Detached trust, prerequisite auto-install, persisted reboot resume, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.6.0
+# Aciklama: Detached trust, reboot resume, bootstrap self-update digest/signer, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 MANIFEST = ROOT / "contracts" / "installer-manifest.yml"
 MANIFEST_TRUST = ROOT / "contracts" / "manifest-trust.yml"
+BOOTSTRAP_SELF_UPDATE = ROOT / "contracts" / "bootstrap-self-update.yml"
 PROVIDER = ROOT / "contracts" / "release-provider.yml"
 EXAMPLE = ROOT / "examples" / "community-manifest.yml"
 SECURITY = ROOT / "docs" / "SECURITY_MODEL.md"
@@ -450,6 +451,191 @@ for key in (
     if manifest_trust_security.get(key) != "deny":
         fail(
             f"manifest trust invariant must deny: {key}"
+        )
+
+bootstrap_self_update = load_yaml(
+    BOOTSTRAP_SELF_UPDATE
+)
+
+if bootstrap_self_update.get("schema_version") != 1:
+    fail(
+        "bootstrap self-update schema_version must be 1"
+    )
+
+bootstrap_discovery = bootstrap_self_update.get(
+    "discovery",
+    {},
+)
+
+expected_bootstrap_discovery = {
+    "provider": "github_latest_release",
+    "stable_only": True,
+    "newer_version_only": True,
+    "asset_name": "TurkuazInstaller.Bootstrapper.exe",
+}
+
+for key, expected_value in expected_bootstrap_discovery.items():
+    if bootstrap_discovery.get(key) != expected_value:
+        fail(
+            f"bootstrap self-update discovery invariant mismatch: {key}"
+        )
+
+bootstrap_asset = bootstrap_discovery.get(
+    "asset",
+    {},
+)
+
+if bootstrap_asset.get("scheme") != "https":
+    fail(
+        "bootstrap self-update asset must require HTTPS"
+    )
+
+if bootstrap_asset.get("host") != "github.com":
+    fail(
+        "bootstrap self-update asset host must remain github.com"
+    )
+
+if bootstrap_asset.get("state") != "uploaded":
+    fail(
+        "bootstrap self-update asset must require uploaded state"
+    )
+
+if bootstrap_asset.get("size_required") is not True:
+    fail(
+        "bootstrap self-update asset size must be required"
+    )
+
+bootstrap_digest = bootstrap_asset.get(
+    "digest",
+    {},
+)
+
+if (
+    bootstrap_digest.get("algorithm") != "sha256"
+    or bootstrap_digest.get("required") is not True
+):
+    fail(
+        "bootstrap self-update must require GitHub SHA-256 asset digest"
+    )
+
+bootstrap_download = bootstrap_self_update.get(
+    "download",
+    {},
+)
+
+for key in (
+    "exact_size_required",
+    "exact_sha256_required",
+):
+    if bootstrap_download.get(key) is not True:
+        fail(
+            f"bootstrap self-update download invariant missing: {key}"
+        )
+
+for key in (
+    "oversize_stream",
+    "hash_mismatch",
+):
+    if bootstrap_download.get(key) != "deny":
+        fail(
+            f"bootstrap self-update download must deny: {key}"
+        )
+
+bootstrap_trust = bootstrap_self_update.get(
+    "trust",
+    {},
+)
+
+if (
+    bootstrap_trust
+    .get("current_bootstrap", {})
+    .get("authenticode_required_for_auto_update")
+    is not True
+):
+    fail(
+        "bootstrap self-update current executable must require Authenticode"
+    )
+
+replacement_trust = bootstrap_trust.get(
+    "replacement",
+    {},
+)
+
+for key in (
+    "authenticode_required",
+    "win_verify_trust_required",
+    "publisher_subject_must_match_current",
+    "certificate_sha256_must_match_current",
+):
+    if replacement_trust.get(key) is not True:
+        fail(
+            f"bootstrap replacement trust invariant missing: {key}"
+        )
+
+if (
+    bootstrap_trust
+    .get("explicit_replacement_path", {})
+    .get("same_trust_verification_required")
+    is not True
+):
+    fail(
+        "explicit bootstrap replacement path must not bypass signer verification"
+    )
+
+bootstrap_handoff = bootstrap_self_update.get(
+    "handoff",
+    {},
+)
+
+if bootstrap_handoff.get("mode") != "two_process":
+    fail(
+        "bootstrap self-update handoff must remain two_process"
+    )
+
+for key in (
+    "replacement_name_must_match_current",
+    "resume_arguments_preserved",
+    "cleanup_staged_source_after_resume",
+):
+    if bootstrap_handoff.get(key) is not True:
+        fail(
+            f"bootstrap self-update handoff invariant missing: {key}"
+        )
+
+bootstrap_release = bootstrap_self_update.get(
+    "release",
+    {},
+)
+
+for key in (
+    "standalone_bootstrap_asset_required",
+    "signed_before_publish",
+    "github_asset_digest_required",
+    "provenance_attestation_required",
+):
+    if bootstrap_release.get(key) is not True:
+        fail(
+            f"bootstrap self-update release invariant missing: {key}"
+        )
+
+bootstrap_security = bootstrap_self_update.get(
+    "security",
+    {},
+)
+
+for key in (
+    "plain_http",
+    "missing_digest",
+    "invalid_digest",
+    "invalid_size",
+    "invalid_authenticode",
+    "signer_subject_mismatch",
+    "signer_certificate_mismatch",
+    "unverified_explicit_handoff",
+):
+    if bootstrap_security.get(key) != "deny":
+        fail(
+            f"bootstrap self-update security invariant must deny: {key}"
         )
 
 provider = load_yaml(PROVIDER)
