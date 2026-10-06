@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.6.0
-# Aciklama: Detached trust, private credentials, proxy policy, prerequisite/reboot resume, bootstrap self-update, path, process, state ve rollback kurallarini sabitler
+# Version: 1.7.0
+# Aciklama: Detached trust, private credentials, proxy, read-only update discovery, reboot resume, bootstrap self-update, path, process ve state kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -34,6 +34,7 @@ Community baseline:
 - bootstrap self-update icin GitHub SHA-256 asset digest + current-signer Authenticode identity pinning
 - private GitHub/Gitea tokenlari icin Windows Credential Manager + host-scoped Authorization
 - tum Windows HTTP clientleri icin ortak system/direct/custom proxy policy
+- update discovery icin signed-manifest-only read-only karar siniri
 
 ## Manifest Trust
 
@@ -200,6 +201,33 @@ Ayni policy bootstrap self-update, WinUI manifest/artifact ve CLI manifest/artif
 Malformed mevcut config sessizce system moda dusmez; runtime fail-closed durur.
 
 Detay: docs/PROXY.md
+
+## Update Discovery
+
+Desktop update discovery read-only use-case'tir.
+
+Girdi:
+
+- package id
+- channel
+- signed manifest source
+
+Kaynaklar:
+
+- latest release: mevcut signed manifest provider/trust pipeline
+- installed version: committed install state repository
+
+Discovery sirasinda artifact download, staging, package apply, install-state write, operation journal write veya reboot-resume request write yapilmaz.
+
+Unsigned veya external package trust policy'yi gecemeyen manifest discovery sonucu uretemez.
+
+Discovery sonucu kendi basina update mutation baslatamaz.
+
+Update discovery ile installer mutation ayni anda calistirilmaz.
+
+Discovery error ana installer operation error state'inden ayridir.
+
+Detay: docs/UPDATE_DISCOVERY.md
 
 ## Preserve Data
 
