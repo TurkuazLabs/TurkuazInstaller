@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 1.3.0
+# Version: 1.3.1
 # Aciklama: Kurulu uygulama katalogu, read-only update discovery, installer operations, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
@@ -282,7 +282,9 @@ Bagimli Oldugu Katman: View | Controller | Language
                                     Severity="Error"
                                     Message="{Binding UpdateDiscoveryErrorMessage}" />
 
-                                <Separator />
+                                <Border
+                                    Height="1"
+                                    Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
                                 <StackPanel Spacing="4">
                                     <TextBlock
