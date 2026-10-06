@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/UPDATE_DISCOVERY.md
 # 📌 Amac: Masaustu read-only update discovery UX veri akisini, sonuc durumlarini ve mutation sinirlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Signed manifest latest release ile committed installed state karsilastirmasini ve WinUI gorunumunu aciklar
 # Bagimli Oldugu Katman: Service | Repo | Tool | View | Language
 
