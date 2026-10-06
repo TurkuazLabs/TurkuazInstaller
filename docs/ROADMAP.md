@@ -92,7 +92,7 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [x] proxy support
 - [x] installed-app catalog/list UI
 - [x] richer update discovery UX
-- [ ] background update policy (session-only signed read-only checks, strict config, timer/concurrency guards, tests ve contract implemented; CI validation pending)
+- [x] background update policy
 - [ ] version skip/pinning (strict JSON repo, discovery states, shared WinUI/CLI/resume mutation guard, tests ve contract implemented; CI validation pending)
 - [ ] safe Windows integration actions
 - [ ] branding/localization extensions
