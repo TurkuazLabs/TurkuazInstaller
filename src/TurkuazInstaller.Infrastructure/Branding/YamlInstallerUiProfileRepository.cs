@@ -98,10 +98,28 @@ public sealed class YamlInstallerUiProfileRepository
 
         try
         {
-            return CultureInfo
-                .GetCultureInfo(
-                    normalized)
-                .Name;
+            var culture =
+                CultureInfo.GetCultureInfo(
+                    normalized);
+
+            var isKnownCulture =
+                CultureInfo
+                    .GetCultures(
+                        CultureTypes.AllCultures)
+                    .Any(
+                        candidate =>
+                            string.Equals(
+                                candidate.Name,
+                                culture.Name,
+                                StringComparison.OrdinalIgnoreCase));
+
+            if (!isKnownCulture)
+            {
+                throw new FormatException(
+                    "Installer UI profile culture is not supported.");
+            }
+
+            return culture.Name;
         }
         catch (CultureNotFoundException exception)
         {
