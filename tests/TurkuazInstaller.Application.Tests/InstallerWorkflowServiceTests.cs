@@ -334,6 +334,21 @@ public sealed class InstallerWorkflowServiceTests
                 null);
         }
 
+        public Task<IReadOnlyList<InstalledPackageState>> ListAsync(
+            CancellationToken cancellationToken)
+        {
+            IReadOnlyList<InstalledPackageState> states =
+                SavedState is null
+                    ? Array.Empty<InstalledPackageState>()
+                    : new[]
+                    {
+                        SavedState
+                    };
+
+            return Task.FromResult(
+                states);
+        }
+
         public Task SaveAsync(
             InstalledPackageState state,
             CancellationToken cancellationToken)
