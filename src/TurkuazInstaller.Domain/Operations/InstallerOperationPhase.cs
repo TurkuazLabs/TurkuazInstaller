@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Domain/Operations/InstallerOperationPhase.cs
 // 📌 Amac: Installer operation journal checkpoint asamalarini typed olarak tanimlar
 // 📌 Modul - Domain CSharp
-// Version: 1.3.0
-// Aciklama: Crash/reboot recovery icin pre-execution resume arm ve AwaitingReboot checkpointlerini kalici ifade eder
+// Version: 1.4.0
+// Aciklama: Crash/reboot recovery checkpointlerine package apply sonrasi Windows integration reconcile asamasini ekler
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -22,5 +22,6 @@ public enum InstallerOperationPhase
     Cancelled = 9,
     Failed = 10,
     AwaitingReboot = 11,
-    RebootResumeArmed = 12
+    RebootResumeArmed = 12,
+    ApplyingIntegrations = 13
 }
