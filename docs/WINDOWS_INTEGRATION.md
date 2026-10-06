@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/WINDOWS_INTEGRATION.md
 # 📌 Amac: TurkuazInstaller signed Windows shortcut ve URL protocol integration action guvenlik modelini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.0
-# Aciklama: HKCU-only protocol ownership, shortcut hash receipt, install-root executable containment ve uninstall cleanup davranislarini sabitler
+# Version: 1.2.0
+# Aciklama: Ownership guvenligine ek olarak install/update/rollback state commit noktasini integration reconcile basarisindan sonraya sabitler
 # Bagimli Oldugu Katman: Domain | Service | Repo | Tool | Config
 
 # Safe Windows Integration Actions
@@ -134,9 +134,11 @@ Stale action:
 
 - yalniz package-owned ise cleanup
 
-Integration apply state commit sonrasinda calisir.
+Install, update ve rollback akislari icin integration reconcile package mutation basarisindan sonra fakat state commit'ten once calisir.
 
-Integration reconcile hata verirse operation failed olarak raporlanir; working receipt daha sonra safe retry icin sahiplik bilgisini korur.
+Committed install state yalniz integration reconcile da basarili olduktan sonra yeni surume gecirilir. Boylece integration hata verirse operation failed olarak raporlanir, working receipt safe retry icin sahiplik bilgisini korur ve onceki committed state degismez.
+
+Repair state commit yapmadigi icin integration reconcile package repair basarisindan hemen sonra calisir.
 
 ## Uninstall
 
