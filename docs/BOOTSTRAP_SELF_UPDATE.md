@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/BOOTSTRAP_SELF_UPDATE.md
 # 📌 Amac: TurkuazInstaller bootstrap self-update discovery, download, trust ve handoff modelini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: GitHub latest release discovery, asset digest/size, current-signer Authenticode pinning ve two-process replacement akislarini sabitler
 # Bagimli Oldugu Katman: Service | Tool | Config
 
@@ -84,6 +84,8 @@ Eski internal/debug --begin-self-update <path> yolu korunur.
 Bu yol artik trust bypass degildir.
 
 Explicit replacement da current bootstrap ile ayni Authenticode publisher subject ve certificate SHA-256 kimligini tasimadan handoff baslatamaz.
+
+Complete-self-update source executable da target bootstrap'a karsi ayni signer verification zincirinden gecmeden overwrite yapamaz.
 
 ## Release Asset
 
