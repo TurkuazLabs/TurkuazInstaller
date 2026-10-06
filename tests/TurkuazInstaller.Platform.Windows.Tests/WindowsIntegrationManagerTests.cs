@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Platform.Windows.Tests/WindowsIntegrationManagerTests.cs
 // 📌 Amac: Windows integration manager receipt reconcile ve uninstall cleanup davranisini deterministik seam'lerle test eder
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Reconcile/remove davranisina ek olarak cleanup failure sonrasi ownership receipt'inin korundugunu dogrular
 //
 // Bagimli Oldugu Katman: Tool | Repo | Service
@@ -344,6 +344,7 @@ public sealed class WindowsIntegrationManagerTests
         }
 
         public Task RemoveOwnedAsync(
+            PackageId packageId,
             WindowsShortcutReceipt receipt,
             CancellationToken cancellationToken)
         {
