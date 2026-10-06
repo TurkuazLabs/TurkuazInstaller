@@ -1,11 +1,12 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/InstalledAppCatalogServiceTests.cs
 // 📌 Amac: Committed install state listesinin Presentation katalog satirlarina dogru map edilmesini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Package id sirasi, semantic version, channel label ve target path mappingini framework bagimsiz dogrular
+// Version: 1.1.0
+// Aciklama: Package id sirasi, semantic version, localized channel label ve target path mappingini framework bagimsiz dogrular
 //
 // Bagimli Oldugu Katman: Service | Repo | View | Language
 
+using TurkuazInstaller.Contracts.Branding;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
@@ -72,6 +73,48 @@ public sealed class InstalledAppCatalogServiceTests
         Assert.Equal(
             InstallerUiLabels.Beta,
             items[1].Channel);
+    }
+
+    [Fact]
+    public async Task LoadAsync_UsesLocalizedChannelLabels()
+    {
+        var repository =
+            new StubStateRepository(
+                new[]
+                {
+                    new InstalledPackageState(
+                        PackageId.Parse(
+                            "example-app"),
+                        SemanticVersion.Parse(
+                            "1.0.0"),
+                        ReleaseChannel.Beta,
+                        "C:/Apps/Example")
+                });
+
+        var catalog =
+            new InstallerUiCatalog(
+                new InstallerUiProfile(
+                    "en-US",
+                    InstallerBrandingProfile.Empty,
+                    new Dictionary<InstallerUiLabelKey, string>
+                    {
+                        [InstallerUiLabelKey.Beta] =
+                            "Preview"
+                    }));
+
+        var service =
+            new InstalledAppCatalogService(
+                repository,
+                catalog);
+
+        var item =
+            Assert.Single(
+                await service.LoadAsync(
+                    CancellationToken.None));
+
+        Assert.Equal(
+            "Preview",
+            item.Channel);
     }
 
     private sealed class StubStateRepository
