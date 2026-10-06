@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/WINDOWS_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller Windows NativeAOT bootstrap startup, app launch ve self-update mimarisini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.1.0
-# Aciklama: Combined distribution, prerequisite, reboot resume forwarding, self-update ve least-privilege process sinirlarini tanimlar
+# Version: 1.2.1
+# Aciklama: Combined distribution, prerequisite, reboot resume forwarding, trusted self-update discovery/download ve least-privilege process sinirlarini tanimlar
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 # Windows Bootstrap
@@ -25,9 +25,14 @@ Normal akis:
 1. staged self-update cleanup varsa best-effort temizlenir
 2. Windows prerequisite kontrolu yapilir
 3. desteklenmeyen OS/build/architecture typed exit code ile reddedilir
-4. app/TurkuazInstaller.WinUI.exe yolu distribution root containment ile cozulur
-5. WinUI process unelevated ve shell kullanmadan baslatilir
-6. kullanici islemlerini WinUI/Application workflow devam ettirir
+4. signed current bootstrap self-update icin uygun mu kontrol edilir
+5. GitHub latest stable release uzerinden daha yeni bootstrap kesfedilir
+6. replacement size + GitHub SHA-256 digest ile dogrulanir
+7. replacement Authenticode signer current bootstrap signer subject + certificate SHA-256 ile eslestirilir
+8. update varsa two-process handoff baslatilir ve app argumentlari korunur
+9. update yoksa app/TurkuazInstaller.WinUI.exe yolu distribution root containment ile cozulur
+10. WinUI process unelevated ve shell kullanmadan baslatilir
+11. kullanici islemlerini WinUI/Application workflow devam ettirir
 
 Bootstrap kendisine verilen normal application argumentlarini shell kullanmadan WinUI processine aktarir.
 
@@ -45,9 +50,25 @@ Stable v1 release target win-x64 olarak sabitlenmistir.
 
 ARM64 native release sonraki minor faza birakilmistir; desteklenmeyen architecture bootstrap tarafinda acikca reddedilir.
 
+## Self-update Discovery
+
+Automatic discovery GitHub latest stable release endpointini kullanir.
+
+Yalniz current assembly SemVer degerinden daha yeni release kabul edilir.
+
+Required asset:
+
+TurkuazInstaller.Bootstrapper.exe
+
+Asset icin GitHub size ve sha256 digest zorunludur. Download URL yalniz github.com HTTPS olabilir.
+
+Unsigned veya Windows trust kontrolunden gecmeyen current bootstrap auto-update yapmaz.
+
+Detay: docs/BOOTSTRAP_SELF_UPDATE.md
+
 ## Self-update Start
 
-Daha once SHA-256/signature verification katmanindan gecmis replacement bootstrap icin internal protocol:
+Automatic discovery/download veya explicit internal replacement icin internal protocol:
 
 ```text
 TurkuazInstaller.Bootstrapper.exe --self-update-replacement <verified-replacement.exe> [app arguments]
@@ -61,11 +82,15 @@ Bootstrap:
 4. replacement process complete-self-update modunda baslatilir
 5. current bootstrap kapanir
 
-Bu internal arguman son kullanici update kaynagi degildir; replacement artifacti bu asamaya gelmeden once dogrulanmis olmalidir.
+Bu internal arguman son kullanici update kaynagi degildir.
+
+Explicit replacement yolu da artik current bootstrap ile ayni trusted Authenticode publisher subject ve certificate SHA-256 kimligini tasimadan handoff baslatamaz.
 
 ## Self-update Completion
 
-Replacement process:
+Replacement process once target mevcut bootstrap ile source replacement signer kimligini tekrar dogrular.
+
+Ardindan:
 
 1. parent process exit bekler
 2. target bootstrap dosyasini retry ile degistirir
