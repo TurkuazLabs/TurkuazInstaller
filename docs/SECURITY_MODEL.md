@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 2.0.1
-# Aciklama: Detached trust, private credentials, proxy, discovery, version policy, safe Windows integration, reboot resume ve mutation guvenlik kurallarini sabitler
+# Version: 2.0.2
+# Aciklama: Trust, provider ve mutation kurallarina retry-guvenli Windows integration commit sinirini dahil eder
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -27,7 +27,7 @@ Community baseline:
 - path traversal engelleme
 - atomic staging
 - shell-free process invocation
-- apply sonrasi state commit
+- package apply ve zorunlu Windows integration reconcile basarisi sonrasi state commit
 - rollback policy kontrolu
 - uninstall basarisi sonrasi state delete
 - secret degerlerin manifest icine yazilmamasi
@@ -38,6 +38,7 @@ Community baseline:
 - background update policy icin session-only, no-auto-download/no-auto-install siniri
 - version skip/pinning icin shared workflow pre-mutation guard
 - signed Windows shortcut/protocol actionlari icin package-scoped ownership receipt + HKCU-only registry siniri
+- install/update/rollback integration failure durumunda onceki committed state'i koruyan retry-guvenli commit siniri
 
 ## Manifest Trust
 
