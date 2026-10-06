@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
 // 📌 Amac: Ana pencere startup resume, request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.5.0
-// Aciklama: Manual/resume operasyonlari, catalog, manual discovery ve session background update concurrency/lifecycle akislarini koordine eder
+// Version: 1.6.0
+// Aciklama: Manual/resume, catalog, background update ve version-policy-aware discovery/mutation UX akislarini koordine eder
 //
 // Bagimli Oldugu Katman: Service | View | Language
 
@@ -478,6 +478,10 @@ public sealed class InstallerDesktopService
                     InstallerUiLabels.UpdateAvailable,
                 UpdateAvailability.Current =>
                     InstallerUiLabels.UpdateCurrent,
+                UpdateAvailability.Skipped =>
+                    InstallerUiLabels.UpdateSkipped,
+                UpdateAvailability.Pinned =>
+                    InstallerUiLabels.UpdatePinned,
                 _ =>
                     InstallerUiLabels.UpdateNotChecked
             };
