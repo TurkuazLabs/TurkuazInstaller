@@ -1,0 +1,59 @@
+# 📄 Dosya Yolu: /contracts/update-discovery.yml
+# 📌 Amac: Read-only desktop update discovery veri kaynagi, availability ve guvenlik invariantlarini contract-first tanimlar
+# 📌 Modul - YAML
+# Version: 1.0.0
+# Aciklama: Signed manifest latest release ile committed install state karsilastirmasini mutation baslatmadan sabitler
+# Bagimli Oldugu Katman: Service | Repo | Tool | View | Language
+
+schema_version: 1
+
+inputs:
+  required:
+    - package_id
+    - channel
+    - manifest_source
+
+sources:
+  release:
+    provider: signed_manifest
+    detached_signature_required: true
+    external_trust_policy_required: true
+  installed:
+    repository: install_state
+    committed_state_only: true
+
+availability:
+  allowed:
+    - release_not_found
+    - current
+    - available
+
+result:
+  fields:
+    - availability
+    - installed_version
+    - latest_version
+
+ux:
+  manual_check: true
+  reset_on_package_change: true
+  reset_on_channel_change: true
+  reset_on_manifest_source_change: true
+  separate_error_state: true
+  not_installed_is_not_update_available: true
+  concurrent_installer_mutation: deny
+
+read_only:
+  artifact_download: false
+  package_stage: false
+  package_apply: false
+  install_state_write: false
+  operation_journal_write: false
+  resume_request_write: false
+  background_update_start: false
+
+security:
+  unsigned_manifest: deny
+  untrusted_manifest_signer: deny
+  direct_state_mutation: deny
+  mutation_from_discovery_result: deny
