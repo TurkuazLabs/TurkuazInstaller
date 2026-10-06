@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
 // 📌 Amac: Ana pencere startup resume, request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.4.0
-// Aciklama: Manual/resume operasyonlari, catalog refresh ve read-only update discovery state'ini ayri hata sinirlariyla koordine eder
+// Version: 1.5.0
+// Aciklama: Manual/resume operasyonlari, catalog, manual discovery ve session background update concurrency/lifecycle akislarini koordine eder
 //
 // Bagimli Oldugu Katman: Service | View | Language
 
@@ -22,6 +22,7 @@ public sealed class InstallerDesktopService
     private readonly IInstallerRuntimeService _runtimeService;
     private readonly InstallerResumeLaunchParser _resumeLaunchParser;
     private readonly InstalledAppCatalogService? _catalogService;
+    private readonly BackgroundUpdateService? _backgroundUpdateService;
     private CancellationTokenSource? _operationCancellation;
     private InstallerDesktopRequest? _lastRequest;
 
@@ -33,6 +34,7 @@ public sealed class InstallerDesktopService
             viewModel,
             runtimeService,
             resumeLaunchParser,
+            null,
             null)
     {
     }
@@ -42,11 +44,27 @@ public sealed class InstallerDesktopService
         IInstallerRuntimeService runtimeService,
         InstallerResumeLaunchParser resumeLaunchParser,
         InstalledAppCatalogService? catalogService)
+        : this(
+            viewModel,
+            runtimeService,
+            resumeLaunchParser,
+            catalogService,
+            null)
+    {
+    }
+
+    public InstallerDesktopService(
+        MainWindowViewModel viewModel,
+        IInstallerRuntimeService runtimeService,
+        InstallerResumeLaunchParser resumeLaunchParser,
+        InstalledAppCatalogService? catalogService,
+        BackgroundUpdateService? backgroundUpdateService)
     {
         _viewModel = viewModel;
         _runtimeService = runtimeService;
         _resumeLaunchParser = resumeLaunchParser;
         _catalogService = catalogService;
+        _backgroundUpdateService = backgroundUpdateService;
     }
 
     public async Task StartAsync(
@@ -90,12 +108,25 @@ public sealed class InstallerDesktopService
             .ConfigureAwait(true);
     }
 
+    public TimeSpan? BackgroundUpdateInterval =>
+        _backgroundUpdateService?.IsEnabled == true
+            ? _backgroundUpdateService.Interval
+            : null;
+
+    public Task RunBackgroundUpdateCheckAsync()
+    {
+        return _backgroundUpdateService
+            ?.RunOnceAsync()
+            ?? Task.CompletedTask;
+    }
+
     public async Task RunAsync(
         InstallerOperationKind operation)
     {
         if (
             _viewModel.IsBusy ||
-            _viewModel.IsCheckingUpdate)
+            _viewModel.IsCheckingUpdate ||
+            _viewModel.IsBackgroundUpdateCheckRunning)
         {
             return;
         }
@@ -126,7 +157,8 @@ public sealed class InstallerDesktopService
     {
         if (
             _viewModel.IsBusy ||
-            _viewModel.IsCheckingUpdate)
+            _viewModel.IsCheckingUpdate ||
+            _viewModel.IsBackgroundUpdateCheckRunning)
         {
             return;
         }
@@ -177,7 +209,8 @@ public sealed class InstallerDesktopService
     {
         if (
             _viewModel.IsBusy ||
-            _viewModel.IsCheckingUpdate)
+            _viewModel.IsCheckingUpdate ||
+            _viewModel.IsBackgroundUpdateCheckRunning)
         {
             return;
         }
@@ -192,6 +225,7 @@ public sealed class InstallerDesktopService
         if (
             _viewModel.IsBusy ||
             _viewModel.IsCheckingUpdate ||
+            _viewModel.IsBackgroundUpdateCheckRunning ||
             _lastRequest is null)
         {
             return;
@@ -210,6 +244,7 @@ public sealed class InstallerDesktopService
     public void Dispose()
     {
         _operationCancellation?.Dispose();
+        _backgroundUpdateService?.Dispose();
     }
 
     private InstallerUpdateCheckRequest CreateUpdateCheckRequest()
