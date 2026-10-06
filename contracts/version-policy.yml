@@ -1,0 +1,73 @@
+# 📄 Dosya Yolu: /contracts/version-policy.yml
+# 📌 Amac: Package/channel version skip ve maximum-version pinning invariantlarini contract-first tanimlar
+# 📌 Modul - YAML
+# Version: 1.0.0
+# Aciklama: Latest signed candidate release'i kabul/engelleme, mutation guard ve no-downgrade kurallarini sabitler
+# Bagimli Oldugu Katman: Service | Repo | Tool | Config
+
+schema_version: 1
+
+runtime_config:
+  format: json
+  path: "%LOCALAPPDATA%/TurkuazInstaller/config/version-policy.json"
+  missing_config: no_policy
+  unknown_property: deny
+  maximum_entries: 100
+  maximum_skipped_versions_per_entry: 100
+
+entry:
+  identity:
+    - package_id
+    - channel
+  channels:
+    - stable
+    - beta
+  duplicate_package_channel: deny
+  at_least_one_policy_required: true
+  fields:
+    maximum_version:
+      optional: true
+      semantics: maximum_accepted_version
+    skipped_versions:
+      optional: true
+      semantics: exact_candidate_versions
+
+evaluation:
+  skipped_version_precedence: true
+  maximum_version_is_ceiling: true
+  policy_applies_to_installed_updates_only: true
+  latest_release_source: signed_provider
+  historic_release_fetch: false
+  fabricated_release: false
+  automatic_downgrade: false
+
+discovery:
+  availability:
+    - release_not_found
+    - current
+    - available
+    - skipped
+    - pinned
+  show_latest_version_when_blocked: true
+  mutation_from_result: false
+
+mutation:
+  enforce_in_shared_workflow: true
+  consumers:
+    - winui
+    - cli
+    - reboot_resume
+  block_before:
+    - operation_lock
+    - journal
+    - artifact_download
+    - staging
+    - package_apply
+
+security:
+  bypass_policy_from_cli: deny
+  bypass_policy_from_winui: deny
+  bypass_policy_from_resume: deny
+  auto_downgrade: deny
+  fetch_unverified_historic_release: deny
+  fabricate_pinned_release: deny
