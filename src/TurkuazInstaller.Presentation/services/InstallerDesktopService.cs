@@ -76,8 +76,6 @@ public sealed class InstallerDesktopService
         {
             ClearUpdateDiscoveryResult();
 
-            ClearUpdateDiscoveryResult();
-
             await RefreshInstalledAppsCoreAsync(
                     CancellationToken.None)
                 .ConfigureAwait(true);
@@ -309,6 +307,8 @@ public sealed class InstallerDesktopService
                     progress)
                 .ConfigureAwait(true);
 
+            ClearUpdateDiscoveryResult();
+
             await RefreshInstalledAppsCoreAsync(
                     CancellationToken.None)
                 .ConfigureAwait(true);
@@ -370,6 +370,8 @@ public sealed class InstallerDesktopService
             await CompleteUiAsync(
                     progress)
                 .ConfigureAwait(true);
+
+            ClearUpdateDiscoveryResult();
 
             await RefreshInstalledAppsCoreAsync(
                     CancellationToken.None)
