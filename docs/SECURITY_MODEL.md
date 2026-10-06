@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 2.0.2
-# Aciklama: Trust, provider ve mutation kurallarina retry-guvenli Windows integration commit sinirini dahil eder
+# Version: 2.0.3
+# Aciklama: Trust ve mutation kurallarina retry-guvenli integration ile fail-safe automatic bootstrap availability sinirini dahil eder
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -144,9 +144,11 @@ Daha yeni release icin:
 10. replacement certificate SHA-256 current bootstrap ile birebir ayni olmalidir
 11. ancak bundan sonra two-process handoff baslatilir
 
-Network discovery availability hatasi current trusted bootstrap ile normal startup'i engellemez.
+Automatic self-update discovery, metadata, download, integrity, replacement trust veya handoff hatasi current trusted bootstrap ile normal startup'i engellemez.
 
-Basarili GitHub response daha yeni release ilan ettigi halde required asset/digest metadata bozuksa update fail-closed durur.
+Bu fallback yalniz availability davranisidir: dogrulanmamis replacement calistirilmaz ve automatic update denemesi reddedilir.
+
+Caller cancellation propagate edilir. Internal explicit replacement path ve complete-self-update source executable trust failure durumunda fail-closed kalir.
 
 Internal explicit replacement path ve complete-self-update source executable ayni signer verification zincirini atlayamaz.
 
