@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsBackgroundUpdatePolicyReader.cs
 // 📌 Amac: LocalAppData background-updates.json dosyasini strict typed session policy modeline donusturur
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
-// Aciklama: Missing config disabled defaulttir; interval, entry sayisi, channel, package id ve manifest source fail-closed dogrulanir
+// Version: 1.0.1
+// Aciklama: Missing config disabled defaulttir; interval/entry/channel/source strict dogrulanir ve persistent HTTPS source secret-bearing URI parcalari reddedilir
 //
 // Bagimli Oldugu Katman: Tool | Config | Service
 
@@ -282,10 +282,14 @@ public sealed class WindowsBackgroundUpdatePolicyReader
             {
                 if (
                     !string.IsNullOrEmpty(
-                        uri.UserInfo))
+                        uri.UserInfo) ||
+                    !string.IsNullOrEmpty(
+                        uri.Query) ||
+                    !string.IsNullOrEmpty(
+                        uri.Fragment))
                 {
                     throw new InvalidDataException(
-                        "Background update HTTPS manifest source must not contain userinfo.");
+                        "Background update HTTPS manifest source must not contain userinfo, query or fragment.");
                 }
 
                 return source;
