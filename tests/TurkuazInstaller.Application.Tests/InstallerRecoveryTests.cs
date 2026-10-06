@@ -399,6 +399,21 @@ public sealed class InstallerRecoveryTests
                 CurrentState);
         }
 
+        public Task<IReadOnlyList<InstalledPackageState>> ListAsync(
+            CancellationToken cancellationToken)
+        {
+            IReadOnlyList<InstalledPackageState> states =
+                CurrentState is null
+                    ? Array.Empty<InstalledPackageState>()
+                    : new[]
+                    {
+                        CurrentState
+                    };
+
+            return Task.FromResult(
+                states);
+        }
+
         public Task SaveAsync(
             InstalledPackageState state,
             CancellationToken cancellationToken)
