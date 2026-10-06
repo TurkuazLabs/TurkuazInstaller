@@ -1,0 +1,23 @@
+# 📄 Dosya Yolu: /examples/ui-profile.yml
+# 📌 Amac: Branding ve localization extension icin kopyalanabilir ornek UI profili sunar
+# 📌 Modul - Config YAML
+# Version: 1.0.0
+# Aciklama: Varsayilan TurkuazInstaller metinlerini degistirmeden desteklenen override alanlarini gosterir
+# Bagimli Oldugu Katman: Config | Repo | View | Language
+
+schema_version: 1
+culture: tr-TR
+
+branding:
+  window_title: TurkuazInstaller
+  header_title: Turkuaz Installer
+  header_subtitle: Kurulum ve guncelleme merkezi
+  footer: TurkuazLabs Community
+
+labels:
+  install: Kur
+  update: Guncelle
+  repair: Onar
+  rollback: Geri Al
+  uninstall: Kaldir
+  check_updates: Guncellemeyi Kontrol Et
