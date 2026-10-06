@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 1.8.0
-# Aciklama: Stable Community ve v1.2 session background update policy gelistirme durumunu takip eder
+# Version: 1.9.0
+# Aciklama: Stable Community ve v1.2 version skip/pinning gelistirme durumunu takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
 # Roadmap
@@ -93,7 +93,7 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [x] installed-app catalog/list UI
 - [x] richer update discovery UX
 - [ ] background update policy (session-only signed read-only checks, strict config, timer/concurrency guards, tests ve contract implemented; CI validation pending)
-- [ ] version skip/pinning
+- [ ] version skip/pinning (strict JSON repo, discovery states, shared WinUI/CLI/resume mutation guard, tests ve contract implemented; CI validation pending)
 - [ ] safe Windows integration actions
 - [ ] branding/localization extensions
 - [ ] optional delta optimization behind Package Engine
