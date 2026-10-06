@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
 # 📌 Amac: Stable tag'lerde tek combined Windows dagitimini build, production sign, attest ve GitHub Release olarak yayinlar
 # 📌 Modul - CI YAML
-# Version: 1.2.0
-# Aciklama: Bootstrap + app/WinUI + cli layoutunu signing, deterministic ZIP, checksum ve provenance kapilarindan gecirir
+# Version: 1.3.0
+# Aciklama: Bootstrap + app/WinUI + cli layoutunu sign eder; deterministic ZIP ve standalone signed bootstrap self-update assetini checksum/provenance ile yayinlar
 # Bagimli Oldugu Katman: Tool | Config
 
 name: Signed Release
@@ -113,6 +113,12 @@ jobs:
         shell: pwsh
         run: ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/distribution
 
+      - name: Stage signed bootstrap self-update asset
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/release-assets -Force | Out-Null
+          Copy-Item -LiteralPath artifacts/release/distribution/TurkuazInstaller.Bootstrapper.exe -Destination artifacts/release-assets/TurkuazInstaller.Bootstrapper.exe -Force
+
       - name: Build deterministic combined archive
         shell: pwsh
         run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/release/distribution -OutputPath artifacts/release-assets/TurkuazInstaller-win-x64.zip -PackagerPath tools/release/package_release.py
@@ -126,8 +132,13 @@ jobs:
         with:
           subject-path: artifacts/release-assets/TurkuazInstaller-win-x64.zip
 
+      - name: Attest bootstrap self-update binary
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/release-assets/TurkuazInstaller.Bootstrapper.exe
+
       - name: Publish GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" "artifacts/release-assets/TurkuazInstaller-win-x64.zip" "artifacts/release-assets/SHA256SUMS.txt" --verify-tag --title "TurkuazInstaller ${{ github.ref_name }}" --generate-notes
+        run: gh release create "${{ github.ref_name }}" "artifacts/release-assets/TurkuazInstaller-win-x64.zip" "artifacts/release-assets/TurkuazInstaller.Bootstrapper.exe" "artifacts/release-assets/SHA256SUMS.txt" --verify-tag --title "TurkuazInstaller ${{ github.ref_name }}" --generate-notes
