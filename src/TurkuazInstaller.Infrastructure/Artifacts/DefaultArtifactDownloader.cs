@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Artifacts/DefaultArtifactDownloader.cs
 // 📌 Amac: HTTPS ve file artifactlarini staging alanina atomik olarak indiren Tool adapterini uygular
 // 📌 Modul - Tool CSharp
-// Version: 0.7.1
-// Aciklama: Remote ve local artifact kopyasini .partial dosyasi uzerinden tamamlayip verified pipeline'a teslim eder
+// Version: 0.8.0
+// Aciklama: Remote ve local artifacti imzali metadata size_bytes degerine gore bounded/exact streaming ile .partial dosyasina alip verified pipeline'a teslim eder
 //
 // Bagimli Oldugu Katman: Tool
 
@@ -57,6 +57,7 @@ public sealed class DefaultArtifactDownloader : IArtifactDownloader
                 await CopyFileAsync(
                         artifact.Uri.LocalPath,
                         partialPath,
+                        artifact.SizeBytes,
                         cancellationToken)
                     .ConfigureAwait(false);
             }
@@ -65,6 +66,7 @@ public sealed class DefaultArtifactDownloader : IArtifactDownloader
                 await DownloadHttpsAsync(
                         artifact.Uri,
                         partialPath,
+                        artifact.SizeBytes,
                         cancellationToken)
                     .ConfigureAwait(false);
             }
@@ -90,6 +92,7 @@ public sealed class DefaultArtifactDownloader : IArtifactDownloader
     private async Task DownloadHttpsAsync(
         Uri uri,
         string destinationPath,
+        long expectedSizeBytes,
         CancellationToken cancellationToken)
     {
         using var response = await _httpClient
@@ -101,28 +104,32 @@ public sealed class DefaultArtifactDownloader : IArtifactDownloader
 
         response.EnsureSuccessStatusCode();
 
-        await using var source = await response.Content
-            .ReadAsStreamAsync(cancellationToken)
-            .ConfigureAwait(false);
+        if (
+            response.Content.Headers.ContentLength is long contentLength &&
+            contentLength != expectedSizeBytes)
+        {
+            throw new InvalidDataException(
+                "Artifact Content-Length does not match signed release metadata.");
+        }
 
-        await using var destination = CreateDestination(
-            destinationPath);
+        await using var source =
+            await response.Content
+                .ReadAsStreamAsync(
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-        await source
-            .CopyToAsync(
-                destination,
-                BufferSize,
+        await CopyExactAsync(
+                source,
+                destinationPath,
+                expectedSizeBytes,
                 cancellationToken)
-            .ConfigureAwait(false);
-
-        await destination
-            .FlushAsync(cancellationToken)
             .ConfigureAwait(false);
     }
 
     private static async Task CopyFileAsync(
         string sourcePath,
         string destinationPath,
+        long expectedSizeBytes,
         CancellationToken cancellationToken)
     {
         await using var source = new FileStream(
@@ -133,18 +140,78 @@ public sealed class DefaultArtifactDownloader : IArtifactDownloader
             BufferSize,
             FileOptions.Asynchronous | FileOptions.SequentialScan);
 
-        await using var destination = CreateDestination(
-            destinationPath);
+        if (source.Length != expectedSizeBytes)
+        {
+            throw new InvalidDataException(
+                "Local artifact size does not match signed release metadata.");
+        }
 
-        await source
-            .CopyToAsync(
-                destination,
-                BufferSize,
+        await CopyExactAsync(
+                source,
+                destinationPath,
+                expectedSizeBytes,
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private static async Task CopyExactAsync(
+        Stream source,
+        string destinationPath,
+        long expectedSizeBytes,
+        CancellationToken cancellationToken)
+    {
+        await using var destination =
+            CreateDestination(
+                destinationPath);
+
+        var buffer =
+            new byte[
+                BufferSize];
+
+        long totalBytes = 0;
+
+        while (true)
+        {
+            var read =
+                await source
+                    .ReadAsync(
+                        buffer.AsMemory(
+                            0,
+                            buffer.Length),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (read == 0)
+            {
+                break;
+            }
+
+            totalBytes += read;
+
+            if (totalBytes > expectedSizeBytes)
+            {
+                throw new InvalidDataException(
+                    "Artifact exceeded the size declared by signed release metadata.");
+            }
+
+            await destination
+                .WriteAsync(
+                    buffer.AsMemory(
+                        0,
+                        read),
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        if (totalBytes != expectedSizeBytes)
+        {
+            throw new InvalidDataException(
+                "Artifact size does not match signed release metadata.");
+        }
 
         await destination
-            .FlushAsync(cancellationToken)
+            .FlushAsync(
+                cancellationToken)
             .ConfigureAwait(false);
     }
 
