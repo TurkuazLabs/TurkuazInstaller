@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/BackgroundUpdateService.cs
 // 📌 Amac: WinUI session icinde configured package'lar icin periyodik read-only signed update check cycle'ini koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.0.1
+// Version: 1.0.2
 // Aciklama: Mutation/artifact download baslatmaz; entry hatalarini izole eder ve cycle ozetini ViewModel state'ine yazar
 //
 // Bagimli Oldugu Katman: Service | View | Config
@@ -169,7 +169,9 @@ public sealed class BackgroundUpdateService
 
     public void Dispose()
     {
-        _lifetimeCancellation.Cancel();
-        _lifetimeCancellation.Dispose();
+        if (!_lifetimeCancellation.IsCancellationRequested)
+        {
+            _lifetimeCancellation.Cancel();
+        }
     }
 }
