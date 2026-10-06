@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Bootstrapper.Tests/BootstrapRuntimeServiceTests.cs
 // 📌 Amac: Bootstrap Runtime Service startup, prerequisite, cleanup ve trusted self-update orchestration davranisini unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Normal launch, explicit handoff trust, automatic discovery/download ve completion akislarini dogrular
 //
 // Bagimli Oldugu Katman: Service | Tool | Config
@@ -349,6 +349,51 @@ public sealed class BootstrapRuntimeServiceTests
 
         Assert.Null(
             launcher.ExecutablePath);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_SelfUpdateCompletion_UntrustedSourceDoesNotComplete()
+    {
+        var handoff =
+            new StubSelfUpdateHandoff();
+
+        var trustVerifier =
+            new StubSelfUpdateTrustVerifier
+            {
+                Verification =
+                    VerificationResult.Failed(
+                        VerificationFailure.SignatureInvalid,
+                        "Signer mismatch.")
+            };
+
+        var service =
+            CreateService(
+                BootstrapCpuArchitecture.X64,
+                handoff,
+                new StubFileCleaner(),
+                new StubApplicationLauncher(),
+                trustVerifier:
+                    trustVerifier);
+
+        var complete =
+            new SelfUpdateCompleteRequest(
+                ReplacementPath,
+                BootstrapPath,
+                42,
+                Array.Empty<string>());
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () =>
+                service.ExecuteAsync(
+                    new BootstrapInvocation(
+                        complete,
+                        null,
+                        null,
+                        Array.Empty<string>()),
+                    CancellationToken.None));
+
+        Assert.Null(
+            handoff.CompleteRequest);
     }
 
     [Fact]
