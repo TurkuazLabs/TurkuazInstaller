@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.9.0
-# Aciklama: Detached trust, private credentials, proxy policy, installed app catalog, reboot resume, bootstrap self-update ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.10.0
+# Aciklama: Detached trust, private credentials, proxy policy, installed app catalog, update discovery, reboot resume ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -20,6 +20,7 @@ BOOTSTRAP_SELF_UPDATE = ROOT / "contracts" / "bootstrap-self-update.yml"
 PROVIDER = ROOT / "contracts" / "release-provider.yml"
 NETWORK = ROOT / "contracts" / "network.yml"
 INSTALLED_APP_CATALOG = ROOT / "contracts" / "installed-app-catalog.yml"
+UPDATE_DISCOVERY = ROOT / "contracts" / "update-discovery.yml"
 EXAMPLE = ROOT / "examples" / "community-manifest.yml"
 SECURITY = ROOT / "docs" / "SECURITY_MODEL.md"
 ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
@@ -1040,6 +1041,149 @@ for key in (
     if catalog_security.get(key) != "deny":
         fail(
             f"installed app catalog security invariant must deny: {key}"
+        )
+
+update_discovery = load_yaml(
+    UPDATE_DISCOVERY
+)
+
+if update_discovery.get("schema_version") != 1:
+    fail(
+        "update discovery schema_version must be 1"
+    )
+
+if set(
+    update_discovery
+    .get("inputs", {})
+    .get("required", [])
+) != {
+    "package_id",
+    "channel",
+    "manifest_source",
+}:
+    fail(
+        "update discovery inputs drifted"
+    )
+
+update_sources = update_discovery.get(
+    "sources",
+    {},
+)
+
+release_source = update_sources.get(
+    "release",
+    {},
+)
+
+expected_release_source = {
+    "provider": "signed_manifest",
+    "detached_signature_required": True,
+    "external_trust_policy_required": True,
+}
+
+for key, expected_value in expected_release_source.items():
+    if release_source.get(key) != expected_value:
+        fail(
+            f"update discovery release source invariant mismatch: {key}"
+        )
+
+installed_source = update_sources.get(
+    "installed",
+    {},
+)
+
+if installed_source.get("repository") != "install_state":
+    fail(
+        "update discovery must read installed state from install_state repository"
+    )
+
+if installed_source.get("committed_state_only") is not True:
+    fail(
+        "update discovery must use committed installed state only"
+    )
+
+if set(
+    update_discovery
+    .get("availability", {})
+    .get("allowed", [])
+) != {
+    "release_not_found",
+    "current",
+    "available",
+}:
+    fail(
+        "update discovery availability values drifted"
+    )
+
+if set(
+    update_discovery
+    .get("result", {})
+    .get("fields", [])
+) != {
+    "availability",
+    "installed_version",
+    "latest_version",
+}:
+    fail(
+        "update discovery result fields drifted"
+    )
+
+update_ux = update_discovery.get(
+    "ux",
+    {},
+)
+
+for key in (
+    "manual_check",
+    "reset_on_package_change",
+    "reset_on_channel_change",
+    "reset_on_manifest_source_change",
+    "separate_error_state",
+    "not_installed_is_not_update_available",
+):
+    if update_ux.get(key) is not True:
+        fail(
+            f"update discovery UX invariant missing: {key}"
+        )
+
+if update_ux.get("concurrent_installer_mutation") != "deny":
+    fail(
+        "update discovery must deny concurrent installer mutation"
+    )
+
+update_read_only = update_discovery.get(
+    "read_only",
+    {},
+)
+
+for key in (
+    "artifact_download",
+    "package_stage",
+    "package_apply",
+    "install_state_write",
+    "operation_journal_write",
+    "resume_request_write",
+    "background_update_start",
+):
+    if update_read_only.get(key) is not False:
+        fail(
+            f"update discovery must remain read-only: {key}"
+        )
+
+update_security = update_discovery.get(
+    "security",
+    {},
+)
+
+for key in (
+    "unsigned_manifest",
+    "untrusted_manifest_signer",
+    "direct_state_mutation",
+    "mutation_from_discovery_result",
+):
+    if update_security.get(key) != "deny":
+        fail(
+            f"update discovery security invariant must deny: {key}"
         )
 
 example = load_yaml(EXAMPLE)
