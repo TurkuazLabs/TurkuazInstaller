@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsIntegrationManager.cs
 // 📌 Amac: Signed Windows integration policy'yi package-scoped receipt ownership ile reconcile eder
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
+// Version: 1.1.0
 // Aciklama: Yeni shortcut/protocol aksiyonlarini uygular, receipt'i adim adim persist eder ve stale owned aksiyonlari guvenli temizler
 //
 // Bagimli Oldugu Katman: Tool | Repo | Service
@@ -173,6 +173,7 @@ public sealed class WindowsIntegrationManager
         {
             await _shortcutStore
                 .RemoveOwnedAsync(
+                    packageId,
                     staleShortcut,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -246,6 +247,7 @@ public sealed class WindowsIntegrationManager
             {
                 await _shortcutStore
                     .RemoveOwnedAsync(
+                        packageId,
                         shortcut,
                         cancellationToken)
                     .ConfigureAwait(false);
