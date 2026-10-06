@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Branding/YamlInstallerUiProfileRepository.cs
 // 📌 Amac: Local YAML UI profilini okuyup typed branding/localization contractina donusturur
 // 📌 Modul - Repo CSharp
-// Version: 1.0.0
-// Aciklama: Schema, culture, branding ve desteklenen label anahtarlarini fail-closed dogrular
+// Version: 1.1.0
+// Aciklama: Schema, culture, branding ve tum typed label anahtarlarini enumdan uretilen contract isimleriyle fail-closed dogrular
 //
 // Bagimli Oldugu Katman: Repo | Tool | Language
 
@@ -18,55 +18,13 @@ public sealed class YamlInstallerUiProfileRepository
 {
     private const int SupportedSchemaVersion = 1;
 
-    private const string PackageIdKey = "package_id";
-    private const string ChannelKey = "channel";
-    private const string ManifestSourceKey = "manifest_source";
-    private const string RollbackManifestSourceKey = "rollback_manifest_source";
-    private const string TargetPathKey = "target_path";
-    private const string InstallKey = "install";
-    private const string UpdateKey = "update";
-    private const string RepairKey = "repair";
-    private const string RollbackKey = "rollback";
-    private const string UninstallKey = "uninstall";
-    private const string RetryKey = "retry";
-    private const string CancelKey = "cancel";
-    private const string RefreshInstalledAppsKey = "refresh_installed_apps";
-    private const string CheckUpdatesKey = "check_updates";
-    private const string UpdateDiscoveryTitleKey = "update_discovery_title";
-    private const string BackgroundUpdatesTitleKey = "background_updates_title";
-    private const string InstalledAppsTitleKey = "installed_apps_title";
-    private const string StatusTitleKey = "status_title";
-    private const string SourceTitleKey = "source_title";
-    private const string OperationsTitleKey = "operations_title";
-    private const string RecoveryTitleKey = "recovery_title";
-
     private static readonly IReadOnlyDictionary<string, InstallerUiLabelKey>
         SupportedLabelKeys =
-            new Dictionary<string, InstallerUiLabelKey>(
-                StringComparer.Ordinal)
-            {
-                [PackageIdKey] = InstallerUiLabelKey.PackageId,
-                [ChannelKey] = InstallerUiLabelKey.Channel,
-                [ManifestSourceKey] = InstallerUiLabelKey.ManifestSource,
-                [RollbackManifestSourceKey] = InstallerUiLabelKey.RollbackManifestSource,
-                [TargetPathKey] = InstallerUiLabelKey.TargetPath,
-                [InstallKey] = InstallerUiLabelKey.Install,
-                [UpdateKey] = InstallerUiLabelKey.Update,
-                [RepairKey] = InstallerUiLabelKey.Repair,
-                [RollbackKey] = InstallerUiLabelKey.Rollback,
-                [UninstallKey] = InstallerUiLabelKey.Uninstall,
-                [RetryKey] = InstallerUiLabelKey.Retry,
-                [CancelKey] = InstallerUiLabelKey.Cancel,
-                [RefreshInstalledAppsKey] = InstallerUiLabelKey.RefreshInstalledApps,
-                [CheckUpdatesKey] = InstallerUiLabelKey.CheckUpdates,
-                [UpdateDiscoveryTitleKey] = InstallerUiLabelKey.UpdateDiscoveryTitle,
-                [BackgroundUpdatesTitleKey] = InstallerUiLabelKey.BackgroundUpdatesTitle,
-                [InstalledAppsTitleKey] = InstallerUiLabelKey.InstalledAppsTitle,
-                [StatusTitleKey] = InstallerUiLabelKey.StatusTitle,
-                [SourceTitleKey] = InstallerUiLabelKey.SourceTitle,
-                [OperationsTitleKey] = InstallerUiLabelKey.OperationsTitle,
-                [RecoveryTitleKey] = InstallerUiLabelKey.RecoveryTitle
-            };
+            Enum.GetValues<InstallerUiLabelKey>()
+                .ToDictionary(
+                    ToContractKey,
+                    key => key,
+                    StringComparer.Ordinal);
 
     private readonly string _path;
     private readonly IDeserializer _deserializer;
@@ -175,6 +133,39 @@ public sealed class YamlInstallerUiProfileRepository
         }
 
         return result;
+    }
+
+    private static string ToContractKey(
+        InstallerUiLabelKey key)
+    {
+        var name =
+            key.ToString();
+
+        var builder =
+            new System.Text.StringBuilder(
+                name.Length + 8);
+
+        for (var index = 0;
+             index < name.Length;
+             index++)
+        {
+            var character =
+                name[index];
+
+            if (
+                index > 0 &&
+                char.IsUpper(character))
+            {
+                builder.Append(
+                    '_');
+            }
+
+            builder.Append(
+                char.ToLowerInvariant(
+                    character));
+        }
+
+        return builder.ToString();
     }
 
     private static string? NormalizeOptional(
