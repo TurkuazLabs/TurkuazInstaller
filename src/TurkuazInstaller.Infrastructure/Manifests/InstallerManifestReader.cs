@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Manifests/InstallerManifestReader.cs
 // 📌 Amac: Community installer manifest YAML metnini tam typed PackageRelease modeline donusturur
 // 📌 Modul - Tool CSharp
-// Version: 1.2.0
-// Aciklama: Package, artifact, Authenticode, prerequisite detector ve guvenli auto-install alanlarini typed runtime modeline tasir
+// Version: 1.3.0
+// Aciklama: Package/artifact/prerequisite alanlarina ek olarak signed Windows shortcut/protocol policy'yi typed runtime modeline tasir
 //
 // Bagimli Oldugu Katman: Tool | Service
 
 using TurkuazInstaller.Domain.Artifacts;
+using TurkuazInstaller.Domain.Integrations;
 using TurkuazInstaller.Domain.Prerequisites;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
@@ -101,7 +102,9 @@ public sealed class InstallerManifestReader
                     document.Install.Mode),
                 document.Install.Target,
                 prerequisites,
-                preservePaths);
+                preservePaths,
+                ParseWindowsIntegration(
+                    document.Install.Windows));
 
         var rollback =
             new PackageRollbackPolicy(
@@ -164,6 +167,60 @@ public sealed class InstallerManifestReader
             _ =>
                 throw new FormatException(
                     "Installer manifest install mode is not supported by Stable v1.")
+        };
+    }
+
+    private static WindowsIntegrationPolicy ParseWindowsIntegration(
+        WindowsIntegrationSection? windows)
+    {
+        if (windows is null)
+        {
+            return WindowsIntegrationPolicy.Empty;
+        }
+
+        var shortcuts =
+            windows.Shortcuts
+                .Select(
+                    shortcut =>
+                        new WindowsShortcutIntegration(
+                            shortcut.Id,
+                            shortcut.Name,
+                            ParseShortcutLocation(
+                                shortcut.Location),
+                            shortcut.Executable))
+                .ToArray();
+
+        var protocols =
+            windows.Protocols
+                .Select(
+                    protocol =>
+                        new WindowsProtocolIntegration(
+                            protocol.Scheme,
+                            protocol.Executable))
+                .ToArray();
+
+        return new WindowsIntegrationPolicy(
+            shortcuts,
+            protocols);
+    }
+
+    private static WindowsShortcutLocation ParseShortcutLocation(
+        string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            value);
+
+        return value
+            .Trim()
+            .ToLowerInvariant() switch
+        {
+            "desktop" =>
+                WindowsShortcutLocation.Desktop,
+            "start_menu" =>
+                WindowsShortcutLocation.StartMenu,
+            _ =>
+                throw new FormatException(
+                    "Windows shortcut location is not supported.")
         };
     }
 
@@ -310,6 +367,41 @@ public sealed class InstallerManifestReader
 
         public List<string> PreservePaths { get; init; } =
             new();
+
+        public WindowsIntegrationSection? Windows { get; init; }
+    }
+
+    private sealed class WindowsIntegrationSection
+    {
+        public List<WindowsShortcutSection> Shortcuts { get; init; } =
+            new();
+
+        public List<WindowsProtocolSection> Protocols { get; init; } =
+            new();
+    }
+
+    private sealed class WindowsShortcutSection
+    {
+        public string Id { get; init; } =
+            string.Empty;
+
+        public string Name { get; init; } =
+            string.Empty;
+
+        public string Location { get; init; } =
+            string.Empty;
+
+        public string Executable { get; init; } =
+            string.Empty;
+    }
+
+    private sealed class WindowsProtocolSection
+    {
+        public string Scheme { get; init; } =
+            string.Empty;
+
+        public string Executable { get; init; } =
+            string.Empty;
     }
 
     private sealed class PrerequisiteSection
