@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/controllers/Program.cs
 // 📌 Amac: Native bootstrap process girisini alir, dependency composition yapar ve runtime servisini cagirir
 // 📌 Modul - Controller CSharp
-// Version: 1.0.0
-// Aciklama: Controller argument requestini parsera aktarir ve Service katmanini Windows launch/self-update Tool adapterlariyla compose eder
+// Version: 1.1.0
+// Aciklama: Controller argument requestini parsera aktarir ve Service katmanini discovery/download/trust/handoff Windows Tool adapterlariyla compose eder
 //
 // Bagimli Oldugu Katman: Controller | Service | Tool | Config
 
@@ -36,17 +36,44 @@ internal static class Program
                     BootstrapDefaults
                         .CreateRequirements());
 
+            var selfUpdateOptions =
+                BootstrapDefaults
+                    .CreateSelfUpdateDiscoveryOptions();
+
+            using var discoveryHttpClient =
+                new HttpClient
+                {
+                    Timeout =
+                        selfUpdateOptions
+                            .DiscoveryTimeout
+                };
+
+            using var downloadHttpClient =
+                new HttpClient
+                {
+                    Timeout =
+                        selfUpdateOptions
+                            .DownloadTimeout
+                };
+
             var runtimeService =
                 new BootstrapRuntimeService(
                     prerequisiteService,
                     new WindowsSelfUpdateHandoff(
                         BootstrapDefaults
                             .CreateSelfUpdateOptions()),
+                    new GitHubBootstrapSelfUpdateDiscovery(
+                        discoveryHttpClient,
+                        selfUpdateOptions),
+                    new HttpBootstrapSelfUpdateDownloader(
+                        downloadHttpClient),
+                    new WindowsBootstrapSelfUpdateTrustVerifier(),
                     new WindowsBootstrapFileCleaner(),
                     new WindowsBootstrapProcessContext(),
                     new WindowsBootstrapApplicationLauncher(),
                     BootstrapDefaults
-                        .CreateRuntimeOptions());
+                        .CreateRuntimeOptions(),
+                    selfUpdateOptions);
 
             var exitCode =
                 await runtimeService
