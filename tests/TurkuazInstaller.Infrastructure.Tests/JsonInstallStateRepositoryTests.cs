@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/JsonInstallStateRepositoryTests.cs
 // 📌 Amac: JSON install state repository atomic save ve roundtrip davranisini gercek dosya sistemiyle test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: State update sonrasinda temp dosya kalmadigini ve son committed versionun tekrar okunabildigini dogrular
+// Version: 1.1.0
+// Aciklama: Atomic roundtrip/delete davranisina ek olarak committed state listesinin deterministic package id sirasini dogrular
 //
 // Bagimli Oldugu Katman: Repo
 
@@ -52,6 +52,79 @@ public sealed class JsonInstallStateRepositoryTests
                     CancellationToken.None);
 
             Assert.Null(loaded);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(
+                    root,
+                    recursive: true);
+            }
+        }
+    }
+
+
+    [Fact]
+    public async Task ListAsync_ReturnsCommittedStatesInPackageIdOrder()
+    {
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "TurkuazInstallerStateTests",
+            Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var repository =
+                new JsonInstallStateRepository(
+                    new JsonInstallStateRepositoryOptions(
+                        root));
+
+            await repository.SaveAsync(
+                new InstalledPackageState(
+                    PackageId.Parse(
+                        "zeta-app"),
+                    SemanticVersion.Parse(
+                        "2.0.0"),
+                    ReleaseChannel.Beta,
+                    "C:/Apps/Zeta"),
+                CancellationToken.None);
+
+            await repository.SaveAsync(
+                new InstalledPackageState(
+                    PackageId.Parse(
+                        "alpha-app"),
+                    SemanticVersion.Parse(
+                        "1.0.0"),
+                    ReleaseChannel.Stable,
+                    "C:/Apps/Alpha"),
+                CancellationToken.None);
+
+            var states =
+                await repository.ListAsync(
+                    CancellationToken.None);
+
+            Assert.Equal(
+                new[]
+                {
+                    "alpha-app",
+                    "zeta-app"
+                },
+                states
+                    .Select(
+                        state =>
+                            state.PackageId.Value)
+                    .ToArray());
+
+            Assert.Equal(
+                "1.0.0",
+                states[0]
+                    .Version
+                    .ToString());
+
+            Assert.Equal(
+                ReleaseChannel.Beta,
+                states[1].Channel);
         }
         finally
         {
