@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsRegistryProtocolRegistrationStore.cs
 // 📌 Amac: Package-owned URL protocol kayitlarini HKCU Software Classes altinda ownership marker ile guvenli yonetir
 // 📌 Modul - Tool CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Existing third-party scheme overwrite edilmez; remove yalniz owner marker package id ile eslesirse calisir
 //
 // Bagimli Oldugu Katman: Tool
@@ -170,7 +170,7 @@ public sealed class WindowsRegistryProtocolRegistrationStore
                 string.Concat(
                     ClassesRoot,
                     "\\",
-                    scheme);
+                    normalizedScheme);
 
             using var existing =
                 Registry.CurrentUser
