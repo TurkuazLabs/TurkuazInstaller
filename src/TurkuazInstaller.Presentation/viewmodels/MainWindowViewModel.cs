@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/viewmodels/MainWindowViewModel.cs
 // 📌 Amac: TurkuazInstaller ana penceresinin bind edilebilir UI state modelini tasir
 // 📌 Modul - ViewModel CSharp
-// Version: 1.4.0
-// Aciklama: Runtime state'e ek olarak typed branding/localization UI profilini fallback-guvenli uygular
+// Version: 1.5.0
+// Aciklama: Branding, channel, placeholder ve runtime state metinlerini tek typed localization katalogundan fallback-guvenli cozer
 //
 // Bagimli Oldugu Katman: View | Language
 
@@ -18,13 +18,8 @@ public sealed class MainWindowViewModel
 {
     private readonly InstallerUiCatalog _ui;
 
-    private static readonly IReadOnlyList<string> ChannelItems =
-        Array.AsReadOnly(
-            new[]
-            {
-                InstallerUiLabels.Stable,
-                InstallerUiLabels.Beta
-            });
+    private readonly IReadOnlyList<string>
+        _channelItems;
 
     private IReadOnlyList<InstalledAppListItemViewModel>
         _installedApps =
@@ -35,14 +30,11 @@ public sealed class MainWindowViewModel
 
     private bool _hasCatalogError;
 
-    private string _installedVersionText =
-        InstallerUiLabels.VersionUnavailable;
+    private string _installedVersionText;
 
-    private string _latestVersionText =
-        InstallerUiLabels.VersionUnavailable;
+    private string _latestVersionText;
 
-    private string _updateDiscoveryStatus =
-        InstallerUiLabels.UpdateNotChecked;
+    private string _updateDiscoveryStatus;
 
     private string _updateDiscoveryErrorMessage =
         string.Empty;
@@ -51,8 +43,7 @@ public sealed class MainWindowViewModel
     private bool _hasUpdateAvailable;
     private bool _isCheckingUpdate;
 
-    private string _backgroundUpdateStatus =
-        InstallerUiLabels.BackgroundUpdatesDisabled;
+    private string _backgroundUpdateStatus;
 
     private bool _isBackgroundUpdateCheckRunning;
 
@@ -62,8 +53,7 @@ public sealed class MainWindowViewModel
     private string _targetPath = string.Empty;
     private int _selectedChannelIndex;
     private int _progressValue;
-    private string _statusMessage =
-        InstallerUiLabels.Ready;
+    private string _statusMessage;
     private string _errorMessage = string.Empty;
     private bool _hasError;
     private bool _isBusy;
@@ -77,10 +67,50 @@ public sealed class MainWindowViewModel
 
     public MainWindowViewModel(
         InstallerUiProfile uiProfile)
-    {
-        _ui =
+        : this(
             new InstallerUiCatalog(
-                uiProfile);
+                uiProfile))
+    {
+    }
+
+    public MainWindowViewModel(
+        InstallerUiCatalog uiCatalog)
+    {
+        ArgumentNullException.ThrowIfNull(
+            uiCatalog);
+
+        _ui =
+            uiCatalog;
+
+        _channelItems =
+            Array.AsReadOnly(
+                new[]
+                {
+                    _ui.Resolve(
+                        InstallerUiLabelKey.Stable),
+                    _ui.Resolve(
+                        InstallerUiLabelKey.Beta)
+                });
+
+        _installedVersionText =
+            _ui.Resolve(
+                InstallerUiLabelKey.VersionUnavailable);
+
+        _latestVersionText =
+            _ui.Resolve(
+                InstallerUiLabelKey.VersionUnavailable);
+
+        _updateDiscoveryStatus =
+            _ui.Resolve(
+                InstallerUiLabelKey.UpdateNotChecked);
+
+        _backgroundUpdateStatus =
+            _ui.Resolve(
+                InstallerUiLabelKey.BackgroundUpdatesDisabled);
+
+        _statusMessage =
+            _ui.Resolve(
+                InstallerUiLabelKey.Ready);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -96,135 +126,120 @@ public sealed class MainWindowViewModel
 
     public string InstalledAppsTitle =>
         _ui.Resolve(
-            InstallerUiLabelKey.InstalledAppsTitle,
-            InstallerUiLabels.InstalledAppsTitle);
+            InstallerUiLabelKey.InstalledAppsTitle);
 
     public string RefreshInstalledAppsLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.RefreshInstalledApps,
-            InstallerUiLabels.RefreshInstalledApps);
+            InstallerUiLabelKey.RefreshInstalledApps);
 
     public string InstalledAppsCountText =>
         string.Concat(
-            InstallerUiLabels.InstalledAppsCountPrefix,
+            _ui.Resolve(
+                InstallerUiLabelKey.InstalledAppsCountPrefix),
             " ",
             InstalledApps.Count);
 
     public string UpdateDiscoveryTitle =>
         _ui.Resolve(
-            InstallerUiLabelKey.UpdateDiscoveryTitle,
-            InstallerUiLabels.UpdateDiscoveryTitle);
+            InstallerUiLabelKey.UpdateDiscoveryTitle);
 
     public string CheckUpdatesLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.CheckUpdates,
-            InstallerUiLabels.CheckUpdates);
+            InstallerUiLabelKey.CheckUpdates);
 
     public string InstalledVersionLabel =>
-        InstallerUiLabels.InstalledVersion;
+        _ui.Resolve(
+            InstallerUiLabelKey.InstalledVersion);
 
     public string LatestVersionLabel =>
-        InstallerUiLabels.LatestVersion;
+        _ui.Resolve(
+            InstallerUiLabelKey.LatestVersion);
 
     public string BackgroundUpdatesTitle =>
         _ui.Resolve(
-            InstallerUiLabelKey.BackgroundUpdatesTitle,
-            InstallerUiLabels.BackgroundUpdatesTitle);
+            InstallerUiLabelKey.BackgroundUpdatesTitle);
 
     public string PackageIdLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.PackageId,
-            InstallerUiLabels.PackageId);
+            InstallerUiLabelKey.PackageId);
 
     public string ChannelLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.Channel,
-            InstallerUiLabels.Channel);
+            InstallerUiLabelKey.Channel);
 
     public string ManifestSourceLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.ManifestSource,
-            InstallerUiLabels.ManifestSource);
+            InstallerUiLabelKey.ManifestSource);
 
     public string RollbackManifestSourceLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.RollbackManifestSource,
-            InstallerUiLabels.RollbackManifestSource);
+            InstallerUiLabelKey.RollbackManifestSource);
 
     public string TargetPathLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.TargetPath,
-            InstallerUiLabels.TargetPath);
+            InstallerUiLabelKey.TargetPath);
 
     public string InstallLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.Install,
-            InstallerUiLabels.Install);
+            InstallerUiLabelKey.Install);
 
     public string UpdateLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.Update,
-            InstallerUiLabels.Update);
+            InstallerUiLabelKey.Update);
 
     public string RepairLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.Repair,
-            InstallerUiLabels.Repair);
+            InstallerUiLabelKey.Repair);
 
     public string RollbackLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.Rollback,
-            InstallerUiLabels.Rollback);
+            InstallerUiLabelKey.Rollback);
 
     public string UninstallLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.Uninstall,
-            InstallerUiLabels.Uninstall);
+            InstallerUiLabelKey.Uninstall);
 
     public string RetryLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.Retry,
-            InstallerUiLabels.Retry);
+            InstallerUiLabelKey.Retry);
 
     public string CancelLabel =>
         _ui.Resolve(
-            InstallerUiLabelKey.Cancel,
-            InstallerUiLabels.Cancel);
+            InstallerUiLabelKey.Cancel);
 
     public string StatusTitle =>
         _ui.Resolve(
-            InstallerUiLabelKey.StatusTitle,
-            InstallerUiLabels.StatusTitle);
+            InstallerUiLabelKey.StatusTitle);
 
     public string SourceTitle =>
         _ui.Resolve(
-            InstallerUiLabelKey.SourceTitle,
-            InstallerUiLabels.SourceTitle);
+            InstallerUiLabelKey.SourceTitle);
 
     public string OperationsTitle =>
         _ui.Resolve(
-            InstallerUiLabelKey.OperationsTitle,
-            InstallerUiLabels.OperationsTitle);
+            InstallerUiLabelKey.OperationsTitle);
 
     public string RecoveryTitle =>
         _ui.Resolve(
-            InstallerUiLabelKey.RecoveryTitle,
-            InstallerUiLabels.RecoveryTitle);
+            InstallerUiLabelKey.RecoveryTitle);
 
     public string ManifestPlaceholder =>
-        InstallerUiLabels.ManifestPlaceholder;
+        _ui.Resolve(
+            InstallerUiLabelKey.ManifestPlaceholder);
 
     public string RollbackManifestPlaceholder =>
-        InstallerUiLabels.RollbackManifestPlaceholder;
+        _ui.Resolve(
+            InstallerUiLabelKey.RollbackManifestPlaceholder);
 
     public string TargetPathPlaceholder =>
-        InstallerUiLabels.TargetPathPlaceholder;
+        _ui.Resolve(
+            InstallerUiLabelKey.TargetPathPlaceholder);
 
     public string FooterLabel =>
         _ui.Footer;
 
     public IReadOnlyList<string> ChannelOptions =>
-        ChannelItems;
+        _channelItems;
 
     public IReadOnlyList<InstalledAppListItemViewModel>
         InstalledApps
@@ -498,13 +513,16 @@ public sealed class MainWindowViewModel
     private void ResetUpdateDiscovery()
     {
         InstalledVersionText =
-            InstallerUiLabels.VersionUnavailable;
+            _ui.Resolve(
+                InstallerUiLabelKey.VersionUnavailable);
 
         LatestVersionText =
-            InstallerUiLabels.VersionUnavailable;
+            _ui.Resolve(
+                InstallerUiLabelKey.VersionUnavailable);
 
         UpdateDiscoveryStatus =
-            InstallerUiLabels.UpdateNotChecked;
+            _ui.Resolve(
+                InstallerUiLabelKey.UpdateNotChecked);
 
         UpdateDiscoveryErrorMessage =
             string.Empty;
