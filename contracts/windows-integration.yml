@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /contracts/windows-integration.yml
 # 📌 Amac: Windows shortcut/protocol entegrasyon action, ownership ve cleanup guvenlik invariantlarini contract-first tanimlar
 # 📌 Modul - YAML
-# Version: 1.1.0
-# Aciklama: Shortcut hash+lokasyon ownershipi, strict protocol receipt scheme, HKCU owner marker ve package-scoped cleanup kurallarini sabitler
+# Version: 1.2.0
+# Aciklama: Ownership ve cleanup kurallarina retry-guvenli integration-before-state commit sinirini ekler
 # Bagimli Oldugu Katman: Domain | Service | Repo | Tool | Config
 
 schema_version: 1
@@ -67,10 +67,12 @@ protocols:
     scheme_validation_required: true
 
 workflow:
-  install_reconcile_after_state_commit: true
-  update_reconcile_after_state_commit: true
+  install_reconcile_before_state_commit: true
+  update_reconcile_before_state_commit: true
   repair_reconcile_after_package_repair: true
-  rollback_reconcile_after_state_commit: true
+  rollback_reconcile_before_state_commit: true
+  state_commit_after_successful_reconcile: true
+  integration_failure_preserves_committed_state: true
   uninstall_cleanup_after_package_uninstall: true
   uninstall_cleanup_failure:
     package_state_delete_continues: true
