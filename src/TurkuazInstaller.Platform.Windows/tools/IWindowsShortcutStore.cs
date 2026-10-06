@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/IWindowsShortcutStore.cs
 // 📌 Amac: Windows .lnk create/remove sahiplik davranisini integration managerdan ayiran test seam tanimlar
 // 📌 Modul - Tool Port CSharp
-// Version: 1.0.0
-// Aciklama: Existing receipt hash eslesmeden overwrite/delete yapilmasini engelleyen shortcut adapter kontratidir
+// Version: 1.1.0
+// Aciklama: Cleanup sirasinda package id + receipt path/hash sahipligini birlikte zorunlu tutan shortcut adapter kontratidir
 //
 // Bagimli Oldugu Katman: Tool
 
@@ -21,6 +21,7 @@ public interface IWindowsShortcutStore
         CancellationToken cancellationToken);
 
     Task RemoveOwnedAsync(
+        PackageId packageId,
         WindowsShortcutReceipt receipt,
         CancellationToken cancellationToken);
 }
