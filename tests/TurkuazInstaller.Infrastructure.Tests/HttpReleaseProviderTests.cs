@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/HttpReleaseProviderTests.cs
 // 📌 Amac: Generic HTTPS providerin kanal bazli signed manifest secimini contract testiyle dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
-// Aciklama: Manifest + .p7s fetch, verifier cagrisi, missing signature ve plain HTTP reddi senaryolarini kapsar
+// Version: 1.2.0
+// Aciklama: Manifest + .p7s fetch, verifier cagrisi, remote byte limitleri, missing signature ve plain HTTP reddi senaryolarini kapsar
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -67,6 +67,96 @@ public sealed class HttpReleaseProviderTests
 
         Assert.Equal(
             1,
+            signatureVerifier.CallCount);
+    }
+
+    [Fact]
+    public async Task GetLatestReleaseAsync_RejectsOversizedRemoteManifestBeforeVerification()
+    {
+        using var client =
+            new HttpClient(
+                new StubHttpMessageHandler(
+                    new Dictionary<string, string>
+                    {
+                        [StableUri.AbsoluteUri] =
+                            new string(
+                                'a',
+                                ManifestContentLimits.MaximumManifestBytes +
+                                1),
+                        [string.Concat(
+                            StableUri.AbsoluteUri,
+                            ManifestSignatureConventions.DetachedSignatureSuffix)] =
+                            ProviderTestData.DetachedSignature
+                    }));
+
+        var signatureVerifier =
+            new FakeManifestSignatureVerifier();
+
+        var provider =
+            new HttpReleaseProvider(
+                client,
+                new InstallerManifestReader(),
+                signatureVerifier,
+                new HttpReleaseProviderOptions(
+                    StableUri,
+                    BetaUri));
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () =>
+                provider.GetLatestReleaseAsync(
+                    PackageId.Parse(
+                        ProviderTestData.PackageId),
+                    ReleaseChannel.Stable,
+                    CancellationToken.None));
+
+        Assert.Equal(
+            0,
+            signatureVerifier.CallCount);
+    }
+
+    [Fact]
+    public async Task GetLatestReleaseAsync_RejectsOversizedRemoteSignatureBeforeVerification()
+    {
+        using var client =
+            new HttpClient(
+                new StubHttpMessageHandler(
+                    new Dictionary<string, string>
+                    {
+                        [StableUri.AbsoluteUri] =
+                            ProviderTestData.Manifest(
+                                ReleaseChannel.Stable,
+                                "2.0.0"),
+                        [string.Concat(
+                            StableUri.AbsoluteUri,
+                            ManifestSignatureConventions.DetachedSignatureSuffix)] =
+                            new string(
+                                'a',
+                                ManifestContentLimits.MaximumDetachedSignatureBytes +
+                                1)
+                    }));
+
+        var signatureVerifier =
+            new FakeManifestSignatureVerifier();
+
+        var provider =
+            new HttpReleaseProvider(
+                client,
+                new InstallerManifestReader(),
+                signatureVerifier,
+                new HttpReleaseProviderOptions(
+                    StableUri,
+                    BetaUri));
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () =>
+                provider.GetLatestReleaseAsync(
+                    PackageId.Parse(
+                        ProviderTestData.PackageId),
+                    ReleaseChannel.Stable,
+                    CancellationToken.None));
+
+        Assert.Equal(
+            0,
             signatureVerifier.CallCount);
     }
 
