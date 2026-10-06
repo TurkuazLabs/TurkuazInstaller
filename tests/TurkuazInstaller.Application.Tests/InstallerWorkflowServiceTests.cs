@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerWorkflowServiceTests.cs
 // 📌 Amac: InstallerWorkflowService install pipeline sirasi ve state kaydini fake portlarla unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
-// Aciklama: Download, verify, stage, apply ve state save koordinasyonunu dis sistem kullanmadan dogrular
+// Version: 1.2.0
+// Aciklama: Download/verify/apply zincirine ek olarak version-policy-blocked update'in journal/download baslatmadigini dogrular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -11,6 +11,7 @@ using TurkuazInstaller.Contracts.Artifacts;
 using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
+using TurkuazInstaller.Contracts.Updates;
 using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Plans;
@@ -132,6 +133,86 @@ public sealed class InstallerWorkflowServiceTests
             stateRepository.SavedState.Version);
     }
 
+
+    [Fact]
+    public async Task UpdateAsync_SkippedVersion_BlocksBeforeJournalAndDownload()
+    {
+        var downloader =
+            new StubDownloader();
+
+        var journal =
+            new StubOperationJournal();
+
+        var packageId =
+            PackageId.Parse(
+                "example-app");
+
+        var currentState =
+            new InstalledPackageState(
+                packageId,
+                SemanticVersion.Parse(
+                    "1.0.0"),
+                ReleaseChannel.Stable,
+                "C:/Apps/Example");
+
+        var release =
+            new PackageRelease(
+                packageId,
+                SemanticVersion.Parse(
+                    "1.1.0"),
+                ReleaseChannel.Stable,
+                new ArtifactDescriptor(
+                    new Uri(
+                        "https://example.invalid/Example-Setup.exe"),
+                    ArtifactDigest.ParseSha256(
+                        Digest),
+                    1024));
+
+        var policy =
+            new VersionUpdatePolicy(
+                packageId,
+                ReleaseChannel.Stable,
+                null,
+                new[]
+                {
+                    SemanticVersion.Parse(
+                        "1.1.0")
+                });
+
+        var service =
+            new InstallerWorkflowService(
+                downloader,
+                new StubVerifier(),
+                new StubPackageEngine(),
+                new StubStateRepository(),
+                operationJournal: journal,
+                versionPolicyRepository:
+                    new StubVersionPolicyRepository(
+                        policy));
+
+        var exception =
+            await Assert.ThrowsAsync<InstallerVersionPolicyException>(
+                () =>
+                    service.UpdateAsync(
+                        release,
+                        currentState,
+                        "C:/Temp/TurkuazInstaller",
+                        null,
+                        CancellationToken.None));
+
+        Assert.Equal(
+            VersionUpdatePolicyDecision.Skipped,
+            exception.Decision);
+
+        Assert.Equal(
+            0,
+            downloader.DownloadCalls);
+
+        Assert.Equal(
+            0,
+            journal.SaveCalls);
+    }
+
     private static PackageRelease CreateRelease()
     {
         return new PackageRelease(
@@ -148,11 +229,19 @@ public sealed class InstallerWorkflowServiceTests
     private sealed class StubDownloader
         : IArtifactDownloader
     {
+        public int DownloadCalls
+        {
+            get;
+            private set;
+        }
+
         public Task<string> DownloadAsync(
             ArtifactDescriptor artifact,
             string stagingDirectory,
             CancellationToken cancellationToken)
         {
+            DownloadCalls++;
+
             return Task.FromResult(
                 "C:/Temp/Example-Setup.exe");
         }
@@ -318,6 +407,27 @@ public sealed class InstallerWorkflowServiceTests
                 _owner.LeaseDisposed = true;
                 return ValueTask.CompletedTask;
             }
+        }
+    }
+
+    private sealed class StubVersionPolicyRepository
+        : IVersionUpdatePolicyRepository
+    {
+        private readonly VersionUpdatePolicy? _policy;
+
+        public StubVersionPolicyRepository(
+            VersionUpdatePolicy? policy)
+        {
+            _policy = policy;
+        }
+
+        public Task<VersionUpdatePolicy?> GetAsync(
+            PackageId packageId,
+            ReleaseChannel channel,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(
+                _policy);
         }
     }
 
