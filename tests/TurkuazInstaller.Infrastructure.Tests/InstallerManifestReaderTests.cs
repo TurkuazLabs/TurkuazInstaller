@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/InstallerManifestReaderTests.cs
 // 📌 Amac: YAML installer manifest parserinin Stable v1 typed Domain sonucunu dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.2.0
+// Version: 1.2.1
 // Aciklama: Package/artifact/install alanlarina ek olarak signed Windows shortcut/protocol policy mappingini test eder
 //
 // Bagimli Oldugu Katman: Tool | Service
@@ -100,6 +100,8 @@ public sealed class InstallerManifestReaderTests
                 .Manifest(
                     ReleaseChannel.Stable,
                     "2.5.0")
+                .ReplaceLineEndings(
+                    "\n")
                 .Replace(
                     "  preserve_paths:\n    - UserData",
                     """
@@ -159,6 +161,8 @@ public sealed class InstallerManifestReaderTests
                 .Manifest(
                     ReleaseChannel.Stable,
                     "2.5.0")
+                .ReplaceLineEndings(
+                    "\n")
                 .Replace(
                     "  preserve_paths:\n    - UserData",
                     """
