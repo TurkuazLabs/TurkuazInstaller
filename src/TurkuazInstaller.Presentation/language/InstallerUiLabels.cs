@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiLabels.cs
 // 📌 Amac: TurkuazInstaller masaustu arayuzundeki kullanici metinlerini merkezi Language katmaninda tanimlar
 // 📌 Modul - Language CSharp
-// Version: 1.2.0
-// Aciklama: Install/update/recovery metinlerine ek olarak kurulu uygulama katalog ve refresh UX metinlerini tek katalogda tutar
+// Version: 1.3.0
+// Aciklama: Install/update/recovery metinlerine ek olarak kurulu uygulama katalog ve read-only update discovery UX metinlerini tek katalogda tutar
 //
 // Bagimli Oldugu Katman: Language
 
@@ -34,6 +34,7 @@ public static class InstallerUiLabels
     public const string Retry = "Tekrar Dene";
     public const string Cancel = "Iptal";
     public const string RefreshInstalledApps = "Yenile";
+    public const string CheckUpdates = "Guncellemeyi Kontrol Et";
 
     public const string Ready = "Hazir";
     public const string Preparing =
@@ -69,6 +70,29 @@ public static class InstallerUiLabels
         "Kurulum dizini girilmedi ve manifest install.target tanimlamiyor.";
     public const string OperationFailedPrefix =
         "Islem basarisiz:";
+
+    public const string UpdateDiscoveryTitle =
+        "Guncelleme Durumu";
+    public const string InstalledVersion =
+        "Kurulu surum";
+    public const string LatestVersion =
+        "Son surum";
+    public const string UpdateNotChecked =
+        "Kontrol edilmedi";
+    public const string CheckingForUpdates =
+        "Guncelleme kontrol ediliyor";
+    public const string UpdateAvailable =
+        "Yeni surum mevcut";
+    public const string UpdateCurrent =
+        "Paket guncel";
+    public const string UpdateNotInstalled =
+        "Paket kurulu degil";
+    public const string UpdateReleaseNotFound =
+        "Release bulunamadi";
+    public const string UpdateCheckFailedPrefix =
+        "Guncelleme kontrolu basarisiz:";
+    public const string VersionUnavailable =
+        "-";
 
     public const string InstalledAppsTitle =
         "Kurulu Uygulamalar";

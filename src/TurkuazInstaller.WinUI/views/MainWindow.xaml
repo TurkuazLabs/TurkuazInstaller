@@ -2,8 +2,8 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 1.1.0
-# Aciklama: Kurulu uygulama katalog kartini manifest-driven install/update/repair/rollback/uninstall, progress ve recovery UX ile tek pencerede sunar
+# Version: 1.2.0
+# Aciklama: Kurulu uygulama katalogu, read-only update discovery, installer operations, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
 -->
@@ -214,6 +214,73 @@ Bagimli Oldugu Katman: View | Controller | Language
                                     IsEnabled="{Binding CanRun}"
                                     HorizontalAlignment="Stretch"
                                     Click="Uninstall_Click" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border
+                            Padding="24"
+                            CornerRadius="16"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                            <StackPanel Spacing="12">
+                                <TextBlock
+                                    Text="{Binding UpdateDiscoveryTitle}"
+                                    FontSize="18"
+                                    FontWeight="SemiBold" />
+
+                                <Button
+                                    Content="{Binding CheckUpdatesLabel}"
+                                    IsEnabled="{Binding CanCheckUpdate}"
+                                    HorizontalAlignment="Stretch"
+                                    Click="CheckUpdates_Click" />
+
+                                <Grid
+                                    ColumnSpacing="12"
+                                    RowSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <StackPanel
+                                        Grid.Row="0"
+                                        Grid.Column="0"
+                                        Spacing="2">
+                                        <TextBlock
+                                            Text="{Binding InstalledVersionLabel}"
+                                            Opacity="0.65" />
+                                        <TextBlock
+                                            Text="{Binding InstalledVersionText}"
+                                            FontWeight="SemiBold" />
+                                    </StackPanel>
+
+                                    <StackPanel
+                                        Grid.Row="0"
+                                        Grid.Column="1"
+                                        Spacing="2">
+                                        <TextBlock
+                                            Text="{Binding LatestVersionLabel}"
+                                            Opacity="0.65" />
+                                        <TextBlock
+                                            Text="{Binding LatestVersionText}"
+                                            FontWeight="SemiBold" />
+                                    </StackPanel>
+
+                                    <TextBlock
+                                        Grid.Row="1"
+                                        Grid.ColumnSpan="2"
+                                        Text="{Binding UpdateDiscoveryStatus}"
+                                        TextWrapping="Wrap"
+                                        FontWeight="SemiBold" />
+                                </Grid>
+
+                                <InfoBar
+                                    IsOpen="{Binding HasUpdateDiscoveryError}"
+                                    Severity="Error"
+                                    Message="{Binding UpdateDiscoveryErrorMessage}" />
                             </StackPanel>
                         </Border>
 

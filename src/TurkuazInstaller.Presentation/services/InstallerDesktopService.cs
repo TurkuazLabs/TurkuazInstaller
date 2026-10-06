@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
 // 📌 Amac: Ana pencere startup resume, request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.3.0
-// Aciklama: Manual/resume operasyonlarina ek olarak committed install state katalog refresh ve ayri katalog hata state'ini koordine eder
+// Version: 1.4.0
+// Aciklama: Manual/resume operasyonlari, catalog refresh ve read-only update discovery state'ini ayri hata sinirlariyla koordine eder
 //
 // Bagimli Oldugu Katman: Service | View | Language
 
 using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Application.Updates;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Presentation.Language;
@@ -73,6 +74,8 @@ public sealed class InstallerDesktopService
 
         if (resumePackageId is null)
         {
+            ClearUpdateDiscoveryResult();
+
             await RefreshInstalledAppsCoreAsync(
                     CancellationToken.None)
                 .ConfigureAwait(true);
@@ -90,7 +93,9 @@ public sealed class InstallerDesktopService
     public async Task RunAsync(
         InstallerOperationKind operation)
     {
-        if (_viewModel.IsBusy)
+        if (
+            _viewModel.IsBusy ||
+            _viewModel.IsCheckingUpdate)
         {
             return;
         }
@@ -117,9 +122,62 @@ public sealed class InstallerDesktopService
             .ConfigureAwait(true);
     }
 
+    public async Task CheckForUpdatesAsync()
+    {
+        if (
+            _viewModel.IsBusy ||
+            _viewModel.IsCheckingUpdate)
+        {
+            return;
+        }
+
+        _viewModel.IsCheckingUpdate = true;
+        _viewModel.HasUpdateDiscoveryError = false;
+        _viewModel.UpdateDiscoveryErrorMessage =
+            string.Empty;
+        _viewModel.UpdateDiscoveryStatus =
+            InstallerUiLabels.CheckingForUpdates;
+
+        try
+        {
+            var request =
+                CreateUpdateCheckRequest();
+
+            var result =
+                await _runtimeService
+                    .CheckUpdateAsync(
+                        request,
+                        CancellationToken.None)
+                    .ConfigureAwait(true);
+
+            ApplyUpdateCheckResult(
+                result);
+        }
+        catch (Exception exception)
+        {
+            _viewModel.HasUpdateDiscoveryError = true;
+            _viewModel.UpdateDiscoveryErrorMessage =
+                string.Concat(
+                    InstallerUiLabels.UpdateCheckFailedPrefix,
+                    " ",
+                    exception.Message);
+
+            _viewModel.UpdateDiscoveryStatus =
+                InstallerUiLabels.UpdateNotChecked;
+
+            _viewModel.HasUpdateAvailable = false;
+        }
+        finally
+        {
+            _viewModel.IsCheckingUpdate = false;
+        }
+    }
+
     public async Task RefreshInstalledAppsAsync()
     {
-        if (_viewModel.IsBusy)
+        if (
+            _viewModel.IsBusy ||
+            _viewModel.IsCheckingUpdate)
         {
             return;
         }
@@ -133,6 +191,7 @@ public sealed class InstallerDesktopService
     {
         if (
             _viewModel.IsBusy ||
+            _viewModel.IsCheckingUpdate ||
             _lastRequest is null)
         {
             return;
@@ -151,6 +210,35 @@ public sealed class InstallerDesktopService
     public void Dispose()
     {
         _operationCancellation?.Dispose();
+    }
+
+    private InstallerUpdateCheckRequest CreateUpdateCheckRequest()
+    {
+        if (
+            string.IsNullOrWhiteSpace(
+                _viewModel.PackageIdText))
+        {
+            throw new InvalidOperationException(
+                InstallerUiLabels.PackageIdRequired);
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(
+                _viewModel.ManifestSource))
+        {
+            throw new InvalidOperationException(
+                InstallerUiLabels.ManifestRequired);
+        }
+
+        var channel =
+            _viewModel.SelectedChannelIndex == 1
+                ? ReleaseChannel.Beta
+                : ReleaseChannel.Stable;
+
+        return new InstallerUpdateCheckRequest(
+            _viewModel.PackageIdText.Trim(),
+            channel,
+            _viewModel.ManifestSource.Trim());
     }
 
     private InstallerDesktopRequest CreateRequest(
@@ -224,6 +312,8 @@ public sealed class InstallerDesktopService
                     progress)
                 .ConfigureAwait(true);
 
+            ClearUpdateDiscoveryResult();
+
             await RefreshInstalledAppsCoreAsync(
                     CancellationToken.None)
                 .ConfigureAwait(true);
@@ -286,6 +376,8 @@ public sealed class InstallerDesktopService
                     progress)
                 .ConfigureAwait(true);
 
+            ClearUpdateDiscoveryResult();
+
             await RefreshInstalledAppsCoreAsync(
                     CancellationToken.None)
                 .ConfigureAwait(true);
@@ -321,6 +413,57 @@ public sealed class InstallerDesktopService
         {
             FinishOperation();
         }
+    }
+
+    private void ApplyUpdateCheckResult(
+        UpdateCheckResult result)
+    {
+        _viewModel.InstalledVersionText =
+            result.InstalledState?.Version.ToString()
+            ?? InstallerUiLabels.VersionUnavailable;
+
+        _viewModel.LatestVersionText =
+            result.LatestRelease?.Version.ToString()
+            ?? InstallerUiLabels.VersionUnavailable;
+
+        _viewModel.HasUpdateAvailable =
+            result.Availability ==
+                UpdateAvailability.Available &&
+            result.InstalledState is not null;
+
+        _viewModel.UpdateDiscoveryStatus =
+            result.Availability switch
+            {
+                UpdateAvailability.ReleaseNotFound =>
+                    InstallerUiLabels.UpdateReleaseNotFound,
+                UpdateAvailability.Available
+                    when result.InstalledState is null =>
+                    InstallerUiLabels.UpdateNotInstalled,
+                UpdateAvailability.Available =>
+                    InstallerUiLabels.UpdateAvailable,
+                UpdateAvailability.Current =>
+                    InstallerUiLabels.UpdateCurrent,
+                _ =>
+                    InstallerUiLabels.UpdateNotChecked
+            };
+
+        _viewModel.HasUpdateDiscoveryError = false;
+        _viewModel.UpdateDiscoveryErrorMessage =
+            string.Empty;
+    }
+
+    private void ClearUpdateDiscoveryResult()
+    {
+        _viewModel.InstalledVersionText =
+            InstallerUiLabels.VersionUnavailable;
+        _viewModel.LatestVersionText =
+            InstallerUiLabels.VersionUnavailable;
+        _viewModel.UpdateDiscoveryStatus =
+            InstallerUiLabels.UpdateNotChecked;
+        _viewModel.HasUpdateAvailable = false;
+        _viewModel.HasUpdateDiscoveryError = false;
+        _viewModel.UpdateDiscoveryErrorMessage =
+            string.Empty;
     }
 
     private async Task RefreshInstalledAppsCoreAsync(

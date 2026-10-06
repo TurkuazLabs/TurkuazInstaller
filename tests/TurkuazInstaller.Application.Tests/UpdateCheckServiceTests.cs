@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/UpdateCheckServiceTests.cs
 // 📌 Amac: UpdateCheckService surum kararlarini fake port implementasyonlariyla dogrular
 // 📌 Modul - Test CSharp
-// Version: 0.3.1
-// Aciklama: Available, current ve release-not-found senaryolarini kapsar
+// Version: 1.0.0
+// Aciklama: Availability kararina ek olarak installed state ve latest signed release sonucunun korundugunu dogrular
 //
 // Bagimli Oldugu Katman: Service | Repo
 
@@ -30,7 +30,17 @@ public sealed class UpdateCheckServiceTests
 
         var result = await service.ExecuteAsync(Package, ReleaseChannel.Stable, CancellationToken.None);
 
-        Assert.Equal(UpdateAvailability.Available, result.Availability);
+        Assert.Equal(
+            UpdateAvailability.Available,
+            result.Availability);
+
+        Assert.Same(
+            state,
+            result.InstalledState);
+
+        Assert.Equal(
+            "1.1.0",
+            result.LatestRelease?.Version.ToString());
     }
 
     [Fact]
@@ -41,7 +51,17 @@ public sealed class UpdateCheckServiceTests
 
         var result = await service.ExecuteAsync(Package, ReleaseChannel.Stable, CancellationToken.None);
 
-        Assert.Equal(UpdateAvailability.Current, result.Availability);
+        Assert.Equal(
+            UpdateAvailability.Current,
+            result.Availability);
+
+        Assert.Same(
+            state,
+            result.InstalledState);
+
+        Assert.Equal(
+            "1.1.0",
+            result.LatestRelease?.Version.ToString());
     }
 
     [Fact]
@@ -51,7 +71,15 @@ public sealed class UpdateCheckServiceTests
 
         var result = await service.ExecuteAsync(Package, ReleaseChannel.Stable, CancellationToken.None);
 
-        Assert.Equal(UpdateAvailability.ReleaseNotFound, result.Availability);
+        Assert.Equal(
+            UpdateAvailability.ReleaseNotFound,
+            result.Availability);
+
+        Assert.Null(
+            result.LatestRelease);
+
+        Assert.Null(
+            result.InstalledState);
     }
 
     private static PackageRelease CreateRelease(string version)

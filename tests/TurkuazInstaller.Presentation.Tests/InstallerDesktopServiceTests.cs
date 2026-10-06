@@ -1,13 +1,15 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/InstallerDesktopServiceTests.cs
 // 📌 Amac: InstallerDesktopService progress, success ve recovery state davranisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.2.0
-// Aciklama: Progress/reboot resume davranisina ek olarak startup catalog refresh ve catalog error ayrimini framework bagimsiz test eder
+// Version: 1.4.0
+// Aciklama: Progress/reboot resume/catalog davranisina ek olarak read-only update discovery state ve hata ayrimini test eder
 //
 // Bagimli Oldugu Katman: Service | View
 
 using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Application.Updates;
 using TurkuazInstaller.Contracts.State;
+using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Domain.State;
@@ -207,6 +209,216 @@ public sealed class InstallerDesktopServiceTests
     }
 
     [Fact]
+    public async Task CheckForUpdatesAsync_Available_ShowsInstalledAndLatestVersions()
+    {
+        var viewModel =
+            CreateViewModel();
+
+        var installedState =
+            new InstalledPackageState(
+                PackageId.Parse(
+                    "example-app"),
+                SemanticVersion.Parse(
+                    "1.0.0"),
+                ReleaseChannel.Stable,
+                "C:/Apps/Example");
+
+        var runtime =
+            new StubRuntimeService
+            {
+                UpdateCheckResult =
+                    new UpdateCheckResult(
+                        UpdateAvailability.Available,
+                        CreateRelease(
+                            "1.1.0"),
+                        installedState)
+            };
+
+        using var service =
+            new InstallerDesktopService(
+                viewModel,
+                runtime,
+                new InstallerResumeLaunchParser());
+
+        await service.CheckForUpdatesAsync();
+
+        Assert.Equal(
+            "1.0.0",
+            viewModel.InstalledVersionText);
+
+        Assert.Equal(
+            "1.1.0",
+            viewModel.LatestVersionText);
+
+        Assert.Equal(
+            InstallerUiLabels.UpdateAvailable,
+            viewModel.UpdateDiscoveryStatus);
+
+        Assert.True(
+            viewModel.HasUpdateAvailable);
+
+        Assert.False(
+            viewModel.HasUpdateDiscoveryError);
+
+        Assert.NotNull(
+            runtime.LastUpdateCheckRequest);
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_NotInstalled_ShowsLatestWithoutEnablingUpdateAvailable()
+    {
+        var viewModel =
+            CreateViewModel();
+
+        var runtime =
+            new StubRuntimeService
+            {
+                UpdateCheckResult =
+                    new UpdateCheckResult(
+                        UpdateAvailability.Available,
+                        CreateRelease(
+                            "2.0.0"),
+                        null)
+            };
+
+        using var service =
+            new InstallerDesktopService(
+                viewModel,
+                runtime,
+                new InstallerResumeLaunchParser());
+
+        await service.CheckForUpdatesAsync();
+
+        Assert.Equal(
+            InstallerUiLabels.VersionUnavailable,
+            viewModel.InstalledVersionText);
+
+        Assert.Equal(
+            "2.0.0",
+            viewModel.LatestVersionText);
+
+        Assert.Equal(
+            InstallerUiLabels.UpdateNotInstalled,
+            viewModel.UpdateDiscoveryStatus);
+
+        Assert.False(
+            viewModel.HasUpdateAvailable);
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_RuntimeFailure_DoesNotMarkInstallerOperationFailed()
+    {
+        var viewModel =
+            CreateViewModel();
+
+        var runtime =
+            new StubRuntimeService
+            {
+                UpdateCheckException =
+                    new InvalidOperationException(
+                        "Discovery failed.")
+            };
+
+        using var service =
+            new InstallerDesktopService(
+                viewModel,
+                runtime,
+                new InstallerResumeLaunchParser());
+
+        await service.CheckForUpdatesAsync();
+
+        Assert.True(
+            viewModel.HasUpdateDiscoveryError);
+
+        Assert.Contains(
+            "Discovery failed.",
+            viewModel.UpdateDiscoveryErrorMessage);
+
+        Assert.False(
+            viewModel.HasError);
+
+        Assert.False(
+            viewModel.IsCheckingUpdate);
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_ResultResetsWhenManifestSourceChanges()
+    {
+        var viewModel =
+            CreateViewModel();
+
+        var runtime =
+            new StubRuntimeService
+            {
+                UpdateCheckResult =
+                    new UpdateCheckResult(
+                        UpdateAvailability.Available,
+                        CreateRelease(
+                            "1.1.0"),
+                        new InstalledPackageState(
+                            PackageId.Parse(
+                                "example-app"),
+                            SemanticVersion.Parse(
+                                "1.0.0"),
+                            ReleaseChannel.Stable,
+                            "C:/Apps/Example"))
+            };
+
+        using var service =
+            new InstallerDesktopService(
+                viewModel,
+                runtime,
+                new InstallerResumeLaunchParser());
+
+        await service.CheckForUpdatesAsync();
+
+        Assert.True(
+            viewModel.HasUpdateAvailable);
+
+        viewModel.ManifestSource =
+            "https://example.invalid/other-manifest.yml";
+
+        Assert.Equal(
+            InstallerUiLabels.VersionUnavailable,
+            viewModel.InstalledVersionText);
+
+        Assert.Equal(
+            InstallerUiLabels.VersionUnavailable,
+            viewModel.LatestVersionText);
+
+        Assert.Equal(
+            InstallerUiLabels.UpdateNotChecked,
+            viewModel.UpdateDiscoveryStatus);
+
+        Assert.False(
+            viewModel.HasUpdateAvailable);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhileUpdateDiscoveryBusy_DoesNotStartMutation()
+    {
+        var viewModel =
+            CreateViewModel();
+
+        viewModel.IsCheckingUpdate = true;
+
+        var runtime =
+            new StubRuntimeService();
+
+        using var service =
+            new InstallerDesktopService(
+                viewModel,
+                runtime,
+                new InstallerResumeLaunchParser());
+
+        await service.RunAsync(
+            InstallerOperationKind.Update);
+
+        Assert.Null(
+            runtime.LastRequest);
+    }
+
+    [Fact]
     public async Task RunAsync_Uninstall_DoesNotRequireManifestOrTarget()
     {
         var viewModel =
@@ -236,6 +448,23 @@ public sealed class InstallerDesktopServiceTests
         Assert.Equal(
             InstallerOperationKind.Uninstall,
             runtime.LastRequest.Operation);
+    }
+
+    private static PackageRelease CreateRelease(
+        string version)
+    {
+        return new PackageRelease(
+            PackageId.Parse(
+                "example-app"),
+            SemanticVersion.Parse(
+                version),
+            ReleaseChannel.Stable,
+            new ArtifactDescriptor(
+                new Uri(
+                    "https://example.invalid/example-app.nupkg"),
+                ArtifactDigest.ParseSha256(
+                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+                1024));
     }
 
     private static MainWindowViewModel CreateViewModel()
@@ -314,6 +543,43 @@ public sealed class InstallerDesktopServiceTests
         public InstallerDesktopRequest? LastRequest { get; private set; }
 
         public PackageId? ResumedPackageId { get; private set; }
+
+        public InstallerUpdateCheckRequest? LastUpdateCheckRequest
+        {
+            get;
+            private set;
+        }
+
+        public UpdateCheckResult? UpdateCheckResult
+        {
+            get;
+            init;
+        }
+
+        public Exception? UpdateCheckException
+        {
+            get;
+            init;
+        }
+
+        public Task<UpdateCheckResult> CheckUpdateAsync(
+            InstallerUpdateCheckRequest request,
+            CancellationToken cancellationToken)
+        {
+            LastUpdateCheckRequest = request;
+
+            if (UpdateCheckException is not null)
+            {
+                throw UpdateCheckException;
+            }
+
+            return Task.FromResult(
+                UpdateCheckResult
+                ?? new UpdateCheckResult(
+                    UpdateAvailability.ReleaseNotFound,
+                    null,
+                    null));
+        }
 
         public Task ExecuteAsync(
             InstallerDesktopRequest request,
