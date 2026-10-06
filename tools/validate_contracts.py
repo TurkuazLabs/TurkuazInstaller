@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.10.0
-# Aciklama: Detached trust, private credentials, proxy policy, installed app catalog, update discovery, reboot resume ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.11.0
+# Aciklama: Detached trust, private credentials, proxy, catalog, manual/background update discovery, reboot resume ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -21,6 +21,7 @@ PROVIDER = ROOT / "contracts" / "release-provider.yml"
 NETWORK = ROOT / "contracts" / "network.yml"
 INSTALLED_APP_CATALOG = ROOT / "contracts" / "installed-app-catalog.yml"
 UPDATE_DISCOVERY = ROOT / "contracts" / "update-discovery.yml"
+BACKGROUND_UPDATE_POLICY = ROOT / "contracts" / "background-update-policy.yml"
 EXAMPLE = ROOT / "examples" / "community-manifest.yml"
 SECURITY = ROOT / "docs" / "SECURITY_MODEL.md"
 ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
@@ -1184,6 +1185,169 @@ for key in (
     if update_security.get(key) != "deny":
         fail(
             f"update discovery security invariant must deny: {key}"
+        )
+
+background_update_policy = load_yaml(
+    BACKGROUND_UPDATE_POLICY
+)
+
+if background_update_policy.get("schema_version") != 1:
+    fail(
+        "background update policy schema_version must be 1"
+    )
+
+background_runtime = background_update_policy.get(
+    "runtime_config",
+    {},
+)
+
+expected_background_runtime = {
+    "format": "json",
+    "path": "%LOCALAPPDATA%/TurkuazInstaller/config/background-updates.json",
+    "missing_config": "disabled",
+    "unknown_property": "deny",
+    "default_interval_minutes": 60,
+    "minimum_interval_minutes": 15,
+    "maximum_interval_minutes": 1440,
+    "maximum_entries": 100,
+}
+
+for key, expected_value in expected_background_runtime.items():
+    if background_runtime.get(key) != expected_value:
+        fail(
+            f"background update runtime invariant mismatch: {key}"
+        )
+
+background_scope = background_update_policy.get(
+    "scope",
+    {},
+)
+
+expected_background_scope = {
+    "process": "winui_session",
+    "os_background_service": False,
+    "run_when_app_closed": False,
+}
+
+for key, expected_value in expected_background_scope.items():
+    if background_scope.get(key) != expected_value:
+        fail(
+            f"background update scope invariant mismatch: {key}"
+        )
+
+background_entry = background_update_policy.get(
+    "entry",
+    {},
+)
+
+if set(background_entry.get("required", [])) != {
+    "package_id",
+    "channel",
+    "manifest_source",
+}:
+    fail(
+        "background update entry fields drifted"
+    )
+
+if set(background_entry.get("channels", [])) != {
+    "stable",
+    "beta",
+}:
+    fail(
+        "background update channels drifted"
+    )
+
+if background_entry.get("duplicate_package_channel") != "deny":
+    fail(
+        "background update duplicate package/channel must be denied"
+    )
+
+background_manifest_source = background_entry.get(
+    "manifest_source",
+    {},
+)
+
+if set(background_manifest_source.get("allowed", [])) != {
+    "https",
+    "absolute_local_file",
+}:
+    fail(
+        "background update manifest source types drifted"
+    )
+
+for key in (
+    "https_userinfo",
+    "https_query",
+    "https_fragment",
+):
+    if background_manifest_source.get(key) != "deny":
+        fail(
+            f"background update manifest source must deny: {key}"
+        )
+
+background_schedule = background_update_policy.get(
+    "schedule",
+    {},
+)
+
+for key in (
+    "startup_check",
+    "periodic_check",
+    "skip_while_installer_busy",
+    "skip_while_manual_discovery_active",
+    "skip_overlapping_background_cycle",
+    "stop_on_window_close",
+):
+    if background_schedule.get(key) is not True:
+        fail(
+            f"background update schedule invariant missing: {key}"
+        )
+
+background_discovery = background_update_policy.get(
+    "discovery",
+    {},
+)
+
+for key in (
+    "signed_manifest_pipeline_required",
+    "per_entry_failure_isolated",
+    "update_available_requires_installed_state",
+):
+    if background_discovery.get(key) is not True:
+        fail(
+            f"background update discovery invariant missing: {key}"
+        )
+
+for key in (
+    "package_artifact_download",
+    "prerequisite_install",
+    "package_stage",
+    "package_apply",
+    "state_write",
+    "journal_write",
+    "resume_write",
+):
+    if background_discovery.get(key) is not False:
+        fail(
+            f"background update must remain read-only: {key}"
+        )
+
+background_security = background_update_policy.get(
+    "security",
+    {},
+)
+
+for key in (
+    "auto_download",
+    "auto_install",
+    "secret_in_config",
+    "secret_bearing_https_uri",
+    "unsigned_manifest_bypass",
+    "mutation_from_background_cycle",
+):
+    if background_security.get(key) != "deny":
+        fail(
+            f"background update security invariant must deny: {key}"
         )
 
 example = load_yaml(EXAMPLE)
