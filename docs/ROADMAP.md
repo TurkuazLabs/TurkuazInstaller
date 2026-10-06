@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 2.0.0
-# Aciklama: Stable Community ve v1.2 safe Windows integration action gelistirme durumunu takip eder
+# Version: 2.1.0
+# Aciklama: Stable Community ve v1.2 sonrasi Windows integration ile branding/localization gelistirme durumunu takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
 # Roadmap
@@ -94,7 +94,7 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [x] richer update discovery UX
 - [x] background update policy
 - [x] version skip/pinning
-- [ ] safe Windows integration actions (signed shortcut/protocol policy, ownership receipt, HKCU-only registry, safe cleanup, tests ve contract implemented; CI validation pending)
+- [x] safe Windows integration actions (signed shortcut/protocol policy, ownership receipt, HKCU-only registry, safe cleanup, tests ve contract)
 - [ ] branding/localization extensions
 - [ ] optional delta optimization behind Package Engine
 - [ ] native ARM64 distribution
