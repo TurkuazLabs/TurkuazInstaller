@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/YamlInstallerUiProfileRepositoryTests.cs
 // 📌 Amac: YAML branding/localization profil parserinin typed ve fail-closed davranisini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Missing file fallback, branding/label mapping, culture normalizasyonu ve unknown key reddini dogrular
+// Version: 1.1.0
+// Aciklama: Missing file fallback, branding/label mapping, culture normalizasyonu, invalid culture ve unknown key reddini dogrular
 //
 // Bagimli Oldugu Katman: Repo | Tool | Language
 
@@ -82,6 +82,31 @@ public sealed class YamlInstallerUiProfileRepositoryTests
             Assert.Equal(
                 "Yenile",
                 profile.Labels[InstallerUiLabelKey.Update]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Read_RejectsInvalidCulture()
+    {
+        var path =
+            CreateProfile(
+                """
+                schema_version: 1
+                culture: definitely-not-a-real-culture
+                """);
+
+        try
+        {
+            var repository =
+                new YamlInstallerUiProfileRepository(
+                    path);
+
+            Assert.Throws<FormatException>(
+                repository.Read);
         }
         finally
         {
