@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/MANIFEST_TRUST.md
 # 📌 Amac: TurkuazInstaller detached manifest signature ve package bazli trust store modelini aciklar
 # 📌 Modul - Markdown
-# Version: 1.1.0
-# Aciklama: CMS/PKCS#7 .p7s sidecar, external publisher pinning, certificate SHA-256 trust anchor, provisioning ve rotation kurallarini dokumante eder
+# Version: 1.2.0
+# Aciklama: CMS/PKCS#7 trust zincirine manifest/signature byte limitleri, external pinning, provisioning ve rotation kurallarini ekler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Manifest Trust
@@ -32,6 +32,18 @@ Remote providerlarda `.p7s` dosyasi manifest URI'sinin ayni path'ine suffix olar
 Local file provider ayni klasorde ayni isim + `.p7s` bekler.
 
 Signature eksikse manifest parse edilmez.
+
+## Kaynak Boyut Sinirlari
+
+Parser veya CMS verification oncesinde metadata bounded okunur:
+
+- manifest maksimum: 1 MiB (1048576 byte)
+- detached `.p7s` maksimum: 256 KiB (262144 byte)
+- remote Content-Length bu sinirlari asiyorsa body okunmadan reddedilir
+- Content-Length yoksa stream limit asildigi anda kesilir
+- local file boyutu okunmadan once ayni limitlerle kontrol edilir
+
+Bu sinirlar bozuk veya kotu niyetli provider'in RAM tuketimini sinirsiz buyutmesini engeller.
 
 ## Imza Formati
 
@@ -122,5 +134,7 @@ Asagidaki durumlarda manifest parse edilmez:
 - publisher subject farkli
 - certificate SHA-256 farkli
 - signer certificate su anki tarih icin gecersiz
+- manifest 1 MiB limitini asiyor
+- detached signature 256 KiB limitini asiyor
 
 Artifact download ve package apply bu asamadan sonra baslar.
