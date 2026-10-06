@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.16.0
-# Aciklama: Detached trust, provider, update, retry-guvenli Windows integration, UI profile ve Community-Pro boundary invariantlarini kontrol eder
+# Version: 1.17.0
+# Aciklama: Trust, provider, update, Windows integration, self-update availability, UI profile ve Community-Pro boundary invariantlarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -677,6 +677,29 @@ if (
     fail(
         "bootstrap self-update completion source must not bypass signer verification"
     )
+
+bootstrap_availability = bootstrap_self_update.get(
+    "availability",
+    {},
+)
+
+expected_bootstrap_availability = {
+    "network_failure": "continue_current_bootstrap",
+    "unsigned_current_bootstrap": "continue_without_auto_update",
+    "malformed_newer_release": "continue_current_bootstrap",
+    "download_failure": "continue_current_bootstrap",
+    "untrusted_replacement": "continue_current_bootstrap",
+    "automatic_handoff_failure": "continue_current_bootstrap",
+    "caller_cancellation": "propagate",
+    "explicit_replacement_failure": "deny",
+    "completion_source_failure": "deny",
+}
+
+for key, expected_value in expected_bootstrap_availability.items():
+    if bootstrap_availability.get(key) != expected_value:
+        fail(
+            f"bootstrap self-update availability invariant mismatch: {key}"
+        )
 
 bootstrap_handoff = bootstrap_self_update.get(
     "handoff",
