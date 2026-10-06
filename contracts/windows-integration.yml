@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /contracts/windows-integration.yml
 # 📌 Amac: Windows shortcut/protocol entegrasyon action, ownership ve cleanup guvenlik invariantlarini contract-first tanimlar
 # 📌 Modul - YAML
-# Version: 1.0.0
-# Aciklama: Start Menu/Desktop shortcut hash ownershipi, HKCU protocol owner marker ve package-scoped receipt kurallarini sabitler
+# Version: 1.1.0
+# Aciklama: Shortcut hash+lokasyon ownershipi, strict protocol receipt scheme, HKCU owner marker ve package-scoped cleanup kurallarini sabitler
 # Bagimli Oldugu Katman: Domain | Service | Repo | Tool | Config
 
 schema_version: 1
@@ -42,6 +42,7 @@ shortcuts:
     modified_owned_file_overwrite: deny
   cleanup:
     delete_only_when_sha256_matches_receipt: true
+    path_must_match_supported_location: true
 
 protocols:
   maximum: 32
@@ -63,6 +64,7 @@ protocols:
     existing_foreign_owner: deny
   cleanup:
     delete_only_when_owner_marker_matches: true
+    scheme_validation_required: true
 
 workflow:
   install_reconcile_after_state_commit: true
@@ -84,3 +86,5 @@ security:
   reparse_point_executable: deny
   shell_command_interpretation: deny
   machine_wide_registry: deny
+  corrupt_receipt_path_escape: deny
+  invalid_receipt_protocol_scheme: deny
