@@ -1,14 +1,15 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/UpdateCheckServiceTests.cs
 // 📌 Amac: UpdateCheckService surum kararlarini fake port implementasyonlariyla dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Availability kararina ek olarak installed state ve latest signed release sonucunun korundugunu dogrular
+// Version: 1.1.0
+// Aciklama: Availability kararina ek olarak exact skip ve maximum-version pin policy sonucunu dogrular
 //
 // Bagimli Oldugu Katman: Service | Repo
 
 using TurkuazInstaller.Application.Updates;
 using TurkuazInstaller.Contracts.Releases;
 using TurkuazInstaller.Contracts.State;
+using TurkuazInstaller.Contracts.Updates;
 using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
@@ -65,6 +66,83 @@ public sealed class UpdateCheckServiceTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenLatestVersionIsSkipped_ReturnsSkipped()
+    {
+        var state =
+            new InstalledPackageState(
+                Package,
+                SemanticVersion.Parse("1.0.0"),
+                ReleaseChannel.Stable,
+                "C:/Apps/Example");
+
+        var policy =
+            new VersionUpdatePolicy(
+                Package,
+                ReleaseChannel.Stable,
+                null,
+                new[]
+                {
+                    SemanticVersion.Parse("1.1.0")
+                });
+
+        var service =
+            new UpdateCheckService(
+                new StubReleaseProvider(
+                    CreateRelease("1.1.0")),
+                new StubStateRepository(
+                    state),
+                new StubVersionPolicyRepository(
+                    policy));
+
+        var result =
+            await service.ExecuteAsync(
+                Package,
+                ReleaseChannel.Stable,
+                CancellationToken.None);
+
+        Assert.Equal(
+            UpdateAvailability.Skipped,
+            result.Availability);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenLatestExceedsMaximumVersion_ReturnsPinned()
+    {
+        var state =
+            new InstalledPackageState(
+                Package,
+                SemanticVersion.Parse("1.0.0"),
+                ReleaseChannel.Stable,
+                "C:/Apps/Example");
+
+        var policy =
+            new VersionUpdatePolicy(
+                Package,
+                ReleaseChannel.Stable,
+                SemanticVersion.Parse("1.0.5"),
+                Array.Empty<SemanticVersion>());
+
+        var service =
+            new UpdateCheckService(
+                new StubReleaseProvider(
+                    CreateRelease("1.1.0")),
+                new StubStateRepository(
+                    state),
+                new StubVersionPolicyRepository(
+                    policy));
+
+        var result =
+            await service.ExecuteAsync(
+                Package,
+                ReleaseChannel.Stable,
+                CancellationToken.None);
+
+        Assert.Equal(
+            UpdateAvailability.Pinned,
+            result.Availability);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenReleaseDoesNotExist_ReturnsReleaseNotFound()
     {
         var service = new UpdateCheckService(new StubReleaseProvider(null), new StubStateRepository(null));
@@ -101,6 +179,27 @@ public sealed class UpdateCheckServiceTests
 
         public Task<PackageRelease?> GetLatestReleaseAsync(PackageId packageId, ReleaseChannel channel, CancellationToken cancellationToken)
             => Task.FromResult(_release);
+    }
+
+    private sealed class StubVersionPolicyRepository
+        : IVersionUpdatePolicyRepository
+    {
+        private readonly VersionUpdatePolicy? _policy;
+
+        public StubVersionPolicyRepository(
+            VersionUpdatePolicy? policy)
+        {
+            _policy = policy;
+        }
+
+        public Task<VersionUpdatePolicy?> GetAsync(
+            PackageId packageId,
+            ReleaseChannel channel,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(
+                _policy);
+        }
     }
 
     private sealed class StubStateRepository : IInstallStateRepository
