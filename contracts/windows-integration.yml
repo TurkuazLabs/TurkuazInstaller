@@ -1,0 +1,86 @@
+# 📄 Dosya Yolu: /contracts/windows-integration.yml
+# 📌 Amac: Windows shortcut/protocol entegrasyon action, ownership ve cleanup guvenlik invariantlarini contract-first tanimlar
+# 📌 Modul - YAML
+# Version: 1.0.0
+# Aciklama: Start Menu/Desktop shortcut hash ownershipi, HKCU protocol owner marker ve package-scoped receipt kurallarini sabitler
+# Bagimli Oldugu Katman: Domain | Service | Repo | Tool | Config
+
+schema_version: 1
+
+scope:
+  platform: windows
+  user_scope_only: true
+  machine_wide_registry: false
+  requires_elevation: false
+
+receipt:
+  path: "%LOCALAPPDATA%/TurkuazInstaller/integrations/{package_id}.json"
+  package_scoped: true
+  atomic_write: true
+  shortcut_ownership:
+    fields:
+      - action_id
+      - path
+      - sha256
+  protocol_ownership:
+    registry_value: TurkuazInstallerOwner
+    value: package_id
+
+shortcuts:
+  maximum: 32
+  locations:
+    - desktop
+    - start_menu
+  executable:
+    relative_to_install_root: true
+    extension: .exe
+    path_escape: deny
+    reparse_point: deny
+    must_exist_after_package_apply: true
+  collision:
+    unowned_existing_file: deny
+    modified_owned_file_overwrite: deny
+  cleanup:
+    delete_only_when_sha256_matches_receipt: true
+
+protocols:
+  maximum: 32
+  registry_root: HKCU\Software\Classes
+  scheme:
+    normalized_lowercase: true
+    maximum_length: 32
+  executable:
+    relative_to_install_root: true
+    extension: .exe
+    path_escape: deny
+    reparse_point: deny
+    must_exist_after_package_apply: true
+  command:
+    shell: false
+    fixed_argument: "%1"
+  claim:
+    cross_process_lock: true
+    existing_foreign_owner: deny
+  cleanup:
+    delete_only_when_owner_marker_matches: true
+
+workflow:
+  install_reconcile_after_state_commit: true
+  update_reconcile_after_state_commit: true
+  repair_reconcile_after_package_repair: true
+  rollback_reconcile_after_state_commit: true
+  uninstall_cleanup_after_package_uninstall: true
+  uninstall_cleanup_failure:
+    package_state_delete_continues: true
+    receipt_preserved: true
+    structured_warning: true
+
+security:
+  overwrite_foreign_shortcut: deny
+  delete_modified_shortcut: deny
+  overwrite_foreign_protocol: deny
+  delete_foreign_protocol: deny
+  executable_outside_install_root: deny
+  reparse_point_executable: deny
+  shell_command_interpretation: deny
+  machine_wide_registry: deny
