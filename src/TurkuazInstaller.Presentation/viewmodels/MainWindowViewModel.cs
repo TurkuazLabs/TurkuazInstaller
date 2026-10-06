@@ -1,13 +1,14 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/viewmodels/MainWindowViewModel.cs
 // 📌 Amac: TurkuazInstaller ana penceresinin bind edilebilir UI state modelini tasir
 // 📌 Modul - ViewModel CSharp
-// Version: 1.3.0
-// Aciklama: Form/progress/recovery state'ine ek olarak katalog, manual update discovery ve session background update state'ini yonetir
+// Version: 1.4.0
+// Aciklama: Runtime state'e ek olarak typed branding/localization UI profilini fallback-guvenli uygular
 //
 // Bagimli Oldugu Katman: View | Language
 
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using TurkuazInstaller.Contracts.Branding;
 using TurkuazInstaller.Presentation.Language;
 
 namespace TurkuazInstaller.Presentation.ViewModels;
@@ -15,6 +16,8 @@ namespace TurkuazInstaller.Presentation.ViewModels;
 public sealed class MainWindowViewModel
     : INotifyPropertyChanged
 {
+    private readonly InstallerUiCatalog _ui;
+
     private static readonly IReadOnlyList<string> ChannelItems =
         Array.AsReadOnly(
             new[]
@@ -66,22 +69,40 @@ public sealed class MainWindowViewModel
     private bool _isBusy;
     private bool _canRetry;
 
+    public MainWindowViewModel()
+        : this(
+            InstallerUiProfile.Empty)
+    {
+    }
+
+    public MainWindowViewModel(
+        InstallerUiProfile uiProfile)
+    {
+        _ui =
+            new InstallerUiCatalog(
+                uiProfile);
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string WindowTitle =>
-        InstallerUiLabels.WindowTitle;
+        _ui.WindowTitle;
 
     public string HeaderTitle =>
-        InstallerUiLabels.HeaderTitle;
+        _ui.HeaderTitle;
 
     public string HeaderSubtitle =>
-        InstallerUiLabels.HeaderSubtitle;
+        _ui.HeaderSubtitle;
 
     public string InstalledAppsTitle =>
-        InstallerUiLabels.InstalledAppsTitle;
+        _ui.Resolve(
+            InstallerUiLabelKey.InstalledAppsTitle,
+            InstallerUiLabels.InstalledAppsTitle);
 
     public string RefreshInstalledAppsLabel =>
-        InstallerUiLabels.RefreshInstalledApps;
+        _ui.Resolve(
+            InstallerUiLabelKey.RefreshInstalledApps,
+            InstallerUiLabels.RefreshInstalledApps);
 
     public string InstalledAppsCountText =>
         string.Concat(
@@ -90,10 +111,14 @@ public sealed class MainWindowViewModel
             InstalledApps.Count);
 
     public string UpdateDiscoveryTitle =>
-        InstallerUiLabels.UpdateDiscoveryTitle;
+        _ui.Resolve(
+            InstallerUiLabelKey.UpdateDiscoveryTitle,
+            InstallerUiLabels.UpdateDiscoveryTitle);
 
     public string CheckUpdatesLabel =>
-        InstallerUiLabels.CheckUpdates;
+        _ui.Resolve(
+            InstallerUiLabelKey.CheckUpdates,
+            InstallerUiLabels.CheckUpdates);
 
     public string InstalledVersionLabel =>
         InstallerUiLabels.InstalledVersion;
@@ -102,55 +127,89 @@ public sealed class MainWindowViewModel
         InstallerUiLabels.LatestVersion;
 
     public string BackgroundUpdatesTitle =>
-        InstallerUiLabels.BackgroundUpdatesTitle;
+        _ui.Resolve(
+            InstallerUiLabelKey.BackgroundUpdatesTitle,
+            InstallerUiLabels.BackgroundUpdatesTitle);
 
     public string PackageIdLabel =>
-        InstallerUiLabels.PackageId;
+        _ui.Resolve(
+            InstallerUiLabelKey.PackageId,
+            InstallerUiLabels.PackageId);
 
     public string ChannelLabel =>
-        InstallerUiLabels.Channel;
+        _ui.Resolve(
+            InstallerUiLabelKey.Channel,
+            InstallerUiLabels.Channel);
 
     public string ManifestSourceLabel =>
-        InstallerUiLabels.ManifestSource;
+        _ui.Resolve(
+            InstallerUiLabelKey.ManifestSource,
+            InstallerUiLabels.ManifestSource);
 
     public string RollbackManifestSourceLabel =>
-        InstallerUiLabels.RollbackManifestSource;
+        _ui.Resolve(
+            InstallerUiLabelKey.RollbackManifestSource,
+            InstallerUiLabels.RollbackManifestSource);
 
     public string TargetPathLabel =>
-        InstallerUiLabels.TargetPath;
+        _ui.Resolve(
+            InstallerUiLabelKey.TargetPath,
+            InstallerUiLabels.TargetPath);
 
     public string InstallLabel =>
-        InstallerUiLabels.Install;
+        _ui.Resolve(
+            InstallerUiLabelKey.Install,
+            InstallerUiLabels.Install);
 
     public string UpdateLabel =>
-        InstallerUiLabels.Update;
+        _ui.Resolve(
+            InstallerUiLabelKey.Update,
+            InstallerUiLabels.Update);
 
     public string RepairLabel =>
-        InstallerUiLabels.Repair;
+        _ui.Resolve(
+            InstallerUiLabelKey.Repair,
+            InstallerUiLabels.Repair);
 
     public string RollbackLabel =>
-        InstallerUiLabels.Rollback;
+        _ui.Resolve(
+            InstallerUiLabelKey.Rollback,
+            InstallerUiLabels.Rollback);
 
     public string UninstallLabel =>
-        InstallerUiLabels.Uninstall;
+        _ui.Resolve(
+            InstallerUiLabelKey.Uninstall,
+            InstallerUiLabels.Uninstall);
 
     public string RetryLabel =>
-        InstallerUiLabels.Retry;
+        _ui.Resolve(
+            InstallerUiLabelKey.Retry,
+            InstallerUiLabels.Retry);
 
     public string CancelLabel =>
-        InstallerUiLabels.Cancel;
+        _ui.Resolve(
+            InstallerUiLabelKey.Cancel,
+            InstallerUiLabels.Cancel);
 
     public string StatusTitle =>
-        InstallerUiLabels.StatusTitle;
+        _ui.Resolve(
+            InstallerUiLabelKey.StatusTitle,
+            InstallerUiLabels.StatusTitle);
 
     public string SourceTitle =>
-        InstallerUiLabels.SourceTitle;
+        _ui.Resolve(
+            InstallerUiLabelKey.SourceTitle,
+            InstallerUiLabels.SourceTitle);
 
     public string OperationsTitle =>
-        InstallerUiLabels.OperationsTitle;
+        _ui.Resolve(
+            InstallerUiLabelKey.OperationsTitle,
+            InstallerUiLabels.OperationsTitle);
 
     public string RecoveryTitle =>
-        InstallerUiLabels.RecoveryTitle;
+        _ui.Resolve(
+            InstallerUiLabelKey.RecoveryTitle,
+            InstallerUiLabels.RecoveryTitle);
 
     public string ManifestPlaceholder =>
         InstallerUiLabels.ManifestPlaceholder;
@@ -162,7 +221,7 @@ public sealed class MainWindowViewModel
         InstallerUiLabels.TargetPathPlaceholder;
 
     public string FooterLabel =>
-        InstallerUiLabels.Footer;
+        _ui.Footer;
 
     public IReadOnlyList<string> ChannelOptions =>
         ChannelItems;
