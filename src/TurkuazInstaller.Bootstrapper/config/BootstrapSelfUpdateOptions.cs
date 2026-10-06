@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/config/BootstrapSelfUpdateOptions.cs
 // 📌 Amac: Bootstrap self-update discovery kaynagi, current version, asset adi ve staging root ayarlarini typed configte toplar
 // 📌 Modul - Config CSharp
-// Version: 1.0.0
-// Aciklama: Service ve GitHub discovery Tool icindeki update magic degerlerini merkezi config katmanina tasir
+// Version: 1.1.0
+// Aciklama: Service, GitHub discovery ve download timeout dahil update magic degerlerini merkezi config katmanina tasir
 //
 // Bagimli Oldugu Katman: Config | Service | Tool
 
@@ -16,12 +16,26 @@ internal sealed record BootstrapSelfUpdateOptions
         SemanticVersion currentVersion,
         Uri latestReleaseUri,
         string assetName,
-        string stagingRoot)
+        string stagingRoot,
+        TimeSpan discoveryTimeout,
+        TimeSpan downloadTimeout)
     {
         ArgumentNullException.ThrowIfNull(currentVersion);
         ArgumentNullException.ThrowIfNull(latestReleaseUri);
         ArgumentException.ThrowIfNullOrWhiteSpace(assetName);
         ArgumentException.ThrowIfNullOrWhiteSpace(stagingRoot);
+
+        if (discoveryTimeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(discoveryTimeout));
+        }
+
+        if (downloadTimeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(downloadTimeout));
+        }
 
         if (
             !latestReleaseUri.IsAbsoluteUri ||
@@ -54,6 +68,8 @@ internal sealed record BootstrapSelfUpdateOptions
         LatestReleaseUri = latestReleaseUri;
         AssetName = assetName.Trim();
         StagingRoot = Path.GetFullPath(stagingRoot);
+        DiscoveryTimeout = discoveryTimeout;
+        DownloadTimeout = downloadTimeout;
     }
 
     public SemanticVersion CurrentVersion { get; }
@@ -63,4 +79,8 @@ internal sealed record BootstrapSelfUpdateOptions
     public string AssetName { get; }
 
     public string StagingRoot { get; }
+
+    public TimeSpan DiscoveryTimeout { get; }
+
+    public TimeSpan DownloadTimeout { get; }
 }
