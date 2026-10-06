@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.8.0
-# Aciklama: Detached trust, private credentials, proxy, manual/background update discovery, reboot resume, bootstrap self-update, path, process ve state kurallarini sabitler
+# Version: 1.9.0
+# Aciklama: Detached trust, private credentials, proxy, manual/background discovery, version skip/pinning, reboot resume ve mutation guvenlik kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -36,6 +36,7 @@ Community baseline:
 - tum Windows HTTP clientleri icin ortak system/direct/custom proxy policy
 - update discovery icin signed-manifest-only read-only karar siniri
 - background update policy icin session-only, no-auto-download/no-auto-install siniri
+- version skip/pinning icin shared workflow pre-mutation guard
 
 ## Manifest Trust
 
@@ -262,6 +263,30 @@ Persistent HTTPS manifest source userinfo, query veya fragment tasiyamaz; secret
 Bir entry hatasi diger entry'leri durdurmaz.
 
 Detay: docs/BACKGROUND_UPDATES.md
+
+## Version Skip / Pinning
+
+Version policy config:
+
+`%LOCALAPPDATA%/TurkuazInstaller/config/version-policy.json`
+
+Policy package id + channel bazlidir.
+
+- skipped_versions exact candidate surumleri engeller
+- maximum_version maksimum kabul edilen update surum ceiling degeridir
+- policy provider'da olmayan historic release'i fetch etmez
+- pinned release uydurmaz
+- automatic downgrade yapmaz
+
+Installed package icin latest signed release mevcut surumden yeniyse policy discovery sonucunu Available, Skipped veya Pinned olarak siniflandirir.
+
+Policy yalniz UI filtresi degildir.
+
+InstallerWorkflowService.UpdateAsync policy'yi operation lock, journal, artifact download, staging ve package apply oncesinde zorunlu kontrol eder.
+
+Ayni guard WinUI, CLI ve reboot-resume update akislarinda kullanilir.
+
+Detay: docs/VERSION_POLICY.md
 
 ## Preserve Data
 
