@@ -96,9 +96,19 @@ public sealed class YamlInstallerUiProfileRepository
             return null;
         }
 
-        return CultureInfo
-            .GetCultureInfo(normalized)
-            .Name;
+        try
+        {
+            return CultureInfo
+                .GetCultureInfo(
+                    normalized)
+                .Name;
+        }
+        catch (CultureNotFoundException exception)
+        {
+            throw new FormatException(
+                "Installer UI profile culture is not supported.",
+                exception);
+        }
     }
 
     private static IReadOnlyDictionary<InstallerUiLabelKey, string>
