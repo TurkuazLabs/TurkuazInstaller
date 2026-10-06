@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 2.0.1
-# Aciklama: Detached trust, private credentials, proxy, discovery, version policy, safe Windows integration, reboot resume ve mutation guvenlik kurallarini sabitler
+# Version: 2.1.0
+# Aciklama: Detached trust, bounded input/transfer, self-update availability, safe Windows integration, reboot resume ve mutation guvenlik kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -15,6 +15,8 @@ Community baseline:
 - package-scoped external manifest publisher subject pinning
 - zorunlu manifest signer certificate SHA-256 pinning
 - SHA-256 artifact dogrulamasi
+- signed artifact size_bytes degerinin transfer sirasinda exact enforcement'i
+- manifest icin 1 MiB ve detached signature icin 256 KiB fail-closed input limiti
 - manifest signature deklarasyonu varsa Authenticode trust dogrulamasi
 - Authenticode publisher subject pinning
 - optional artifact certificate SHA-256 pinning
@@ -27,7 +29,7 @@ Community baseline:
 - path traversal engelleme
 - atomic staging
 - shell-free process invocation
-- apply sonrasi state commit
+- package apply ve Windows integration reconcile tamamlandiktan sonra state commit
 - rollback policy kontrolu
 - uninstall basarisi sonrasi state delete
 - secret degerlerin manifest icine yazilmamasi
@@ -43,8 +45,8 @@ Community baseline:
 
 Manifest YAML parsera girmeden once:
 
-1. raw manifest byte'lari indirilir veya local dosyadan okunur
-2. ayni kaynak icin `.p7s` detached CMS signature zorunlu tutulur
+1. raw manifest byte'lari remote/local kaynakta 1 MiB maksimum limit ile bounded okunur
+2. ayni kaynak icin `.p7s` detached CMS signature zorunlu tutulur ve 256 KiB maksimum limit ile bounded okunur
 3. requested package id ile external trust store policy resolve edilir
 4. CMS signature kriptografik olarak dogrulanir
 5. signer sayisinin tam olarak bir oldugu dogrulanir
@@ -69,13 +71,14 @@ Manifest trust certificate SHA-256 pini zorunludur.
 
 Apply oncesi:
 
-1. size kontrol edilir
-2. SHA-256 hesaplanir
-3. digest manifest ile karsilastirilir
-4. signature deklarasyonu varsa Windows WinVerifyTrust calisir
-5. signer certificate subject manifest publisher_subject ile birebir eslesir
-6. certificate_sha256 tanimliysa signer certificate SHA-256 pini birebir eslesir
-7. verification basarisizsa stage/apply baslamaz
+1. artifact transferi signed manifest `size_bytes` degerini exact byte count olarak uygular; Content-Length varsa birebir eslesir, oversize/undersize stream reddedilir
+2. tamamlanan dosya boyutu verifier tarafinda tekrar kontrol edilir
+3. SHA-256 hesaplanir
+4. digest manifest ile karsilastirilir
+5. signature deklarasyonu varsa Windows WinVerifyTrust calisir
+6. signer certificate subject manifest publisher_subject ile birebir eslesir
+7. certificate_sha256 tanimliysa signer certificate SHA-256 pini birebir eslesir
+8. verification basarisizsa stage/apply baslamaz
 
 Signature deklarasyonu olmayan artifact SHA-256 baseline ile calisir.
 
@@ -143,11 +146,13 @@ Daha yeni release icin:
 10. replacement certificate SHA-256 current bootstrap ile birebir ayni olmalidir
 11. ancak bundan sonra two-process handoff baslatilir
 
-Network discovery availability hatasi current trusted bootstrap ile normal startup'i engellemez.
+Automatic discovery/download/metadata/replacement trust hatasi current trusted bootstrap ile normal startup'i engellemez; automatic update o launch icin atlanir.
 
-Basarili GitHub response daha yeni release ilan ettigi halde required asset/digest metadata bozuksa update fail-closed durur.
+Basarisiz automatic replacement staged dosyasi temizlenir ve unverified binary hicbir zaman handoff'a verilmez.
 
-Internal explicit replacement path ve complete-self-update source executable ayni signer verification zincirini atlayamaz.
+Caller cancellation yutulmaz; cancellation normal sekilde propagate edilir.
+
+Internal explicit replacement path ve complete-self-update source executable ayni signer verification zincirini atlayamaz ve trust failure durumunda fail-closed kalir.
 
 Detay: docs/BOOTSTRAP_SELF_UPDATE.md
 
