@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/services/BootstrapRuntimeService.cs
 // 📌 Amac: Native bootstrap startup, prerequisite, self-update ve desktop launch akislarini koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Cleanup -> trusted explicit/discovered self-update -> prerequisite -> combined distribution WinUI launch siralamasini Port/Tool uzerinden uygular
 //
 // Bagimli Oldugu Katman: Service | Tool | Config
@@ -58,9 +58,18 @@ internal sealed class BootstrapRuntimeService
 
         if (invocation.IsSelfUpdateCompletion)
         {
+            var completion =
+                invocation.SelfUpdateRequest!;
+
+            await VerifyReplacementAsync(
+                    completion.TargetExecutablePath,
+                    completion.SourceExecutablePath,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
             await _selfUpdateHandoff
                 .CompleteAsync(
-                    invocation.SelfUpdateRequest!,
+                    completion,
                     cancellationToken)
                 .ConfigureAwait(false);
 
