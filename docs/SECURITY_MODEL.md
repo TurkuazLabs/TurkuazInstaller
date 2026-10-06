@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 2.0.0
+# Version: 2.0.1
 # Aciklama: Detached trust, private credentials, proxy, discovery, version policy, safe Windows integration, reboot resume ve mutation guvenlik kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -307,13 +307,17 @@ Shortcut ownership package-scoped receipt icinde action id + full path + SHA-256
 
 Var olan foreign veya modified shortcut overwrite edilmez.
 
-Shortcut cleanup yalniz mevcut dosya SHA-256 receipt hash ile eslesirse siler.
+Shortcut cleanup yalniz mevcut dosya SHA-256 receipt hash ile eslesir ve receipt path Desktop veya package-scoped Start Menu lokasyonuna aitse siler.
+
+Bozuk receipt arbitrary filesystem path temizligi baslatamaz.
 
 Protocol registration yalniz HKCU\\Software\\Classes altindadir.
 
 Protocol ownership TurkuazInstallerOwner package id marker ile korunur.
 
 Foreign protocol overwrite/silme reddedilir.
+
+Receipt protocol scheme degeri Domain validatorundan yeniden gecmeden registry cleanup yolu uretilmez.
 
 Protocol command quoted executable + fixed "%1" argumentidir; shell interpretation yoktur.
 
