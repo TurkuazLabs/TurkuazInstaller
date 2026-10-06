@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/InstallerDesktopServiceTests.cs
 // 📌 Amac: InstallerDesktopService progress, success ve recovery state davranisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.3.0
+// Version: 1.4.0
 // Aciklama: Progress/reboot resume/catalog davranisina ek olarak read-only update discovery state ve hata ayrimini test eder
 //
 // Bagimli Oldugu Katman: Service | View
@@ -339,6 +339,83 @@ public sealed class InstallerDesktopServiceTests
 
         Assert.False(
             viewModel.IsCheckingUpdate);
+    }
+
+    [Fact]
+    public async Task CheckForUpdatesAsync_ResultResetsWhenManifestSourceChanges()
+    {
+        var viewModel =
+            CreateViewModel();
+
+        var runtime =
+            new StubRuntimeService
+            {
+                UpdateCheckResult =
+                    new UpdateCheckResult(
+                        UpdateAvailability.Available,
+                        CreateRelease(
+                            "1.1.0"),
+                        new InstalledPackageState(
+                            PackageId.Parse(
+                                "example-app"),
+                            SemanticVersion.Parse(
+                                "1.0.0"),
+                            ReleaseChannel.Stable,
+                            "C:/Apps/Example"))
+            };
+
+        using var service =
+            new InstallerDesktopService(
+                viewModel,
+                runtime,
+                new InstallerResumeLaunchParser());
+
+        await service.CheckForUpdatesAsync();
+
+        Assert.True(
+            viewModel.HasUpdateAvailable);
+
+        viewModel.ManifestSource =
+            "https://example.invalid/other-manifest.yml";
+
+        Assert.Equal(
+            InstallerUiLabels.VersionUnavailable,
+            viewModel.InstalledVersionText);
+
+        Assert.Equal(
+            InstallerUiLabels.VersionUnavailable,
+            viewModel.LatestVersionText);
+
+        Assert.Equal(
+            InstallerUiLabels.UpdateNotChecked,
+            viewModel.UpdateDiscoveryStatus);
+
+        Assert.False(
+            viewModel.HasUpdateAvailable);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhileUpdateDiscoveryBusy_DoesNotStartMutation()
+    {
+        var viewModel =
+            CreateViewModel();
+
+        viewModel.IsCheckingUpdate = true;
+
+        var runtime =
+            new StubRuntimeService();
+
+        using var service =
+            new InstallerDesktopService(
+                viewModel,
+                runtime,
+                new InstallerResumeLaunchParser());
+
+        await service.RunAsync(
+            InstallerOperationKind.Update);
+
+        Assert.Null(
+            runtime.LastRequest);
     }
 
     [Fact]
