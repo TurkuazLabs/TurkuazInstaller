@@ -1,0 +1,40 @@
+# 📄 Dosya Yolu: /contracts/installed-app-catalog.yml
+# 📌 Amac: Kurulu uygulama katalog kaynak, siralama, refresh ve UI guvenlik invariantlarini contract-first tanimlar
+# 📌 Modul - YAML
+# Version: 1.0.0
+# Aciklama: Katalog yalniz committed install state repository verisini kullanir; View dogrudan storage okumaz
+# Bagimli Oldugu Katman: Repo | Service | View | Language
+
+schema_version: 1
+
+source:
+  repository: install_state
+  committed_state_only: true
+  direct_view_filesystem_access: false
+
+list:
+  sort_by: package_id
+  sort_order: ascending
+  fields:
+    - package_id
+    - version
+    - channel
+    - target_path
+  read_only: true
+
+refresh:
+  startup: true
+  manual: true
+  after_successful_mutation: true
+  after_successful_resume: true
+  while_operation_busy: deny
+
+error_boundary:
+  catalog_error_separate_from_operation_error: true
+  catalog_failure_marks_installer_operation_failed: false
+  malformed_state: reject
+
+security:
+  infer_manifest_source_from_state: deny
+  mutate_state_from_catalog_view: deny
+  bypass_repository: deny
