@@ -187,7 +187,8 @@ public sealed class GitHubReleaseProvider : IReleaseProvider
 
         using var request =
             CreateRequest(
-                uri);
+                uri,
+                authorization);
 
         using var response =
             await _httpClient
