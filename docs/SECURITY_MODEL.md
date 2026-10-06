@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.3.1
-# Aciklama: Detached trust, prerequisite verification, persisted reboot resume, path, process, state ve rollback guvenlik kurallarini sabitler
+# Version: 1.4.1
+# Aciklama: Detached trust, prerequisite/reboot resume, bootstrap self-update trust, path, process, state ve rollback guvenlik kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -31,6 +31,7 @@ Community baseline:
 - rollback policy kontrolu
 - uninstall basarisi sonrasi state delete
 - secret degerlerin manifest icine yazilmamasi
+- bootstrap self-update icin GitHub SHA-256 asset digest + current-signer Authenticode identity pinning
 
 ## Manifest Trust
 
@@ -115,6 +116,34 @@ Pending prerequisite reboot sonrasinda hala saglanmiyorsa ayni installer tekrar 
 AwaitingReboot durumundaki package icin normal manual mutation baslatilamaz.
 
 Detay: docs/REBOOT_RESUME.md
+
+## Bootstrap Self Update
+
+Automatic bootstrap self-update yalniz current bootstrap Authenticode trust kontrolunden geciyorsa etkinlesir.
+
+Discovery GitHub latest stable release endpointinden exact TurkuazInstaller.Bootstrapper.exe assetini arar.
+
+Daha yeni release icin:
+
+1. release tag SemVer olarak current versiondan buyuk olmalidir
+2. asset URL github.com HTTPS olmalidir
+3. asset state uploaded olmalidir
+4. expected size zorunludur
+5. GitHub asset digest sha256 formatinda zorunludur
+6. download byte count exact size ile eslesmelidir
+7. downloaded SHA-256 expected digest ile birebir eslesmelidir
+8. replacement WinVerifyTrust kontrolunden gecmelidir
+9. replacement publisher subject current bootstrap ile ayni olmalidir
+10. replacement certificate SHA-256 current bootstrap ile birebir ayni olmalidir
+11. ancak bundan sonra two-process handoff baslatilir
+
+Network discovery availability hatasi current trusted bootstrap ile normal startup'i engellemez.
+
+Basarili GitHub response daha yeni release ilan ettigi halde required asset/digest metadata bozuksa update fail-closed durur.
+
+Internal explicit replacement path ve complete-self-update source executable ayni signer verification zincirini atlayamaz.
+
+Detay: docs/BOOTSTRAP_SELF_UPDATE.md
 
 ## Preserve Data
 
