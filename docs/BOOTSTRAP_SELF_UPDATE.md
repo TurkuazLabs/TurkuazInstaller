@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/BOOTSTRAP_SELF_UPDATE.md
 # 📌 Amac: TurkuazInstaller bootstrap self-update discovery, download, trust ve handoff modelini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.0
-# Aciklama: GitHub latest release discovery, asset digest/size, current-signer Authenticode pinning ve two-process replacement akislarini sabitler
+# Version: 1.2.0
+# Aciklama: Automatic update hatalarinda current launch fallback ile explicit self-update fail-closed trust sinirini sabitler
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 # Bootstrap Self Update
@@ -26,9 +26,21 @@ Normal bootstrap startup sirasinda prerequisite kontrolu basarili olduktan sonra
 9. asset size pozitif olmali
 10. GitHub release asset digest alani sha256: formatinda zorunludur
 
-Network veya GitHub availability hatasi current bootstrap ile devam etmeyi engellemez.
+Automatic self-update availability ozelligidir; normal uygulama startup'inin guven zinciri degildir.
 
-GitHub basarili response icinde daha yeni release ilan edilmis ancak required asset/digest metadata bozuksa update fail-closed durur.
+Asagidaki automatic self-update hatalari current trusted bootstrap ile desktop launch'i engellemez:
+
+- network/GitHub availability hatasi
+- malformed newer-release metadata
+- download/size/hash failure
+- untrusted replacement
+- automatic handoff failure
+
+Bu durumlarda ilgili update denemesi reddedilir; dogrulanmamis replacement asla calistirilmaz ve mevcut surumle startup devam eder.
+
+Caller cancellation yutulmaz ve yukariya tasinir.
+
+Explicit replacement ve complete-self-update akislari availability fallback degildir; trust failure durumunda fail-closed kalir.
 
 ## Download Integrity
 
