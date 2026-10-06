@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/DefaultArtifactDownloaderTests.cs
 // 📌 Amac: Artifact downloaderin signed size_bytes sinirini HTTPS ve local file transferinde uyguladigini dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
-// Aciklama: Exact-size basari, Content-Length mismatch, unknown-length oversize/undersize ve local size mismatch senaryolarini kapsar
+// Version: 1.2.0
+// Aciklama: Exact-size basari, Content-Length/unknown-length mismatch, local mismatch ve failure staging cleanup davranisini kapsar
 //
 // Bagimli Oldugu Katman: Tool | Domain
 
@@ -105,7 +105,7 @@ public sealed class DefaultArtifactDownloaderTests
                         CancellationToken.None));
 
             Assert.Empty(
-                Directory.EnumerateFiles(
+                Directory.EnumerateFileSystemEntries(
                     root,
                     "*",
                     SearchOption.AllDirectories));
@@ -149,7 +149,7 @@ public sealed class DefaultArtifactDownloaderTests
                         CancellationToken.None));
 
             Assert.Empty(
-                Directory.EnumerateFiles(
+                Directory.EnumerateFileSystemEntries(
                     root,
                     "*",
                     SearchOption.AllDirectories));
@@ -192,7 +192,7 @@ public sealed class DefaultArtifactDownloaderTests
                         CancellationToken.None));
 
             Assert.Empty(
-                Directory.EnumerateFiles(
+                Directory.EnumerateFileSystemEntries(
                     root,
                     "*",
                     SearchOption.AllDirectories));
