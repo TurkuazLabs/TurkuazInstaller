@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Platform.Windows.Tests/WindowsProviderCredentialResolverTests.cs
 // 📌 Amac: Windows provider credential resolver target naming, missing secret ve redacted token davranisini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Gercek Credential Manager kullanmadan stub reader ile GitHub/Gitea target contractini dogrular
+// Version: 1.1.0
+// Aciklama: Gercek Credential Manager kullanmadan target contracti, missing secret, redaction ve invalid authority rejection davranisini dogrular
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -92,6 +92,17 @@ public sealed class WindowsProviderCredentialResolverTests
 
         Assert.Null(
             token);
+    }
+
+
+    [Fact]
+    public void ProviderCredentialRequest_UserInfoAuthority_Rejects()
+    {
+        Assert.Throws<ArgumentException>(
+            () =>
+                new ProviderCredentialRequest(
+                    ProviderCredentialProvider.GitHub,
+                    "user@api.github.com"));
     }
 
     private sealed class StubCredentialReader
