@@ -1,0 +1,67 @@
+# 📄 Dosya Yolu: /contracts/bootstrap-self-update.yml
+# 📌 Amac: Bootstrap self-update discovery, download, trust ve handoff guvenlik invariantlarini contract-first sabitler
+# 📌 Modul - YAML
+# Version: 1.0.0
+# Aciklama: GitHub latest stable release, exact standalone EXE, asset digest/size, current-signer trust ve two-process handoff kurallarini tanimlar
+# Bagimli Oldugu Katman: Service | Tool | Config
+
+schema_version: 1
+
+discovery:
+  provider: github_latest_release
+  stable_only: true
+  newer_version_only: true
+  asset_name: TurkuazInstaller.Bootstrapper.exe
+  asset:
+    scheme: https
+    host: github.com
+    state: uploaded
+    size_required: true
+    digest:
+      algorithm: sha256
+      required: true
+
+download:
+  staging: local_app_data
+  exact_size_required: true
+  exact_sha256_required: true
+  oversize_stream: deny
+  hash_mismatch: deny
+
+trust:
+  current_bootstrap:
+    authenticode_required_for_auto_update: true
+  replacement:
+    authenticode_required: true
+    win_verify_trust_required: true
+    publisher_subject_must_match_current: true
+    certificate_sha256_must_match_current: true
+  explicit_replacement_path:
+    same_trust_verification_required: true
+
+availability:
+  network_failure: continue_current_bootstrap
+  unsigned_current_bootstrap: continue_without_auto_update
+  malformed_newer_release: deny
+
+handoff:
+  mode: two_process
+  replacement_name_must_match_current: true
+  resume_arguments_preserved: true
+  cleanup_staged_source_after_resume: true
+
+release:
+  standalone_bootstrap_asset_required: true
+  signed_before_publish: true
+  github_asset_digest_required: true
+  provenance_attestation_required: true
+
+security:
+  plain_http: deny
+  missing_digest: deny
+  invalid_digest: deny
+  invalid_size: deny
+  invalid_authenticode: deny
+  signer_subject_mismatch: deny
+  signer_certificate_mismatch: deny
+  unverified_explicit_handoff: deny
