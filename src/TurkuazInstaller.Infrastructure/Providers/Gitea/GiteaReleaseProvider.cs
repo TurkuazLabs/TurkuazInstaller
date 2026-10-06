@@ -1,16 +1,18 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Providers/Gitea/GiteaReleaseProvider.cs
 // 📌 Amac: Gitea Releases API uzerinden signed installer manifestini bulur ve release modeline donusturur
 // 📌 Modul - Tool CSharp
-// Version: 1.1.0
-// Aciklama: Stable veya beta release assetinden manifest ve .p7s sidecarini ortak trust pipeline'inda fail-closed dogrular
+// Version: 1.2.0
+// Aciklama: Optional host-scoped Gitea token ile private API/manifest/.p7s isteklerini authorize eder; detached trust pipeline fail-closed kalir
 //
 // Bagimli Oldugu Katman: Tool | Service
 
 using System.Text.Json;
+using TurkuazInstaller.Contracts.Credentials;
 using TurkuazInstaller.Contracts.Manifests;
 using TurkuazInstaller.Contracts.Releases;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
+using TurkuazInstaller.Infrastructure.Credentials;
 using TurkuazInstaller.Infrastructure.Manifests;
 
 namespace TurkuazInstaller.Infrastructure.Providers.Gitea;
@@ -23,18 +25,40 @@ public sealed class GiteaReleaseProvider : IReleaseProvider
     private readonly HttpClient _httpClient;
     private readonly GiteaReleaseProviderOptions _options;
     private readonly RemoteManifestLoader _manifestLoader;
+    private readonly IProviderCredentialResolver _credentialResolver;
 
     public GiteaReleaseProvider(
         HttpClient httpClient,
         InstallerManifestReader manifestReader,
         IManifestSignatureVerifier signatureVerifier,
         GiteaReleaseProviderOptions options)
+        : this(
+            httpClient,
+            manifestReader,
+            signatureVerifier,
+            options,
+            NullProviderCredentialResolver.Instance)
     {
+    }
+
+    public GiteaReleaseProvider(
+        HttpClient httpClient,
+        InstallerManifestReader manifestReader,
+        IManifestSignatureVerifier signatureVerifier,
+        GiteaReleaseProviderOptions options,
+        IProviderCredentialResolver credentialResolver)
+    {
+        ArgumentNullException.ThrowIfNull(
+            credentialResolver);
+
         _httpClient =
             httpClient;
 
         _options =
             options;
+
+        _credentialResolver =
+            credentialResolver;
 
         _manifestLoader =
             new RemoteManifestLoader(
@@ -48,6 +72,11 @@ public sealed class GiteaReleaseProvider : IReleaseProvider
         ReleaseChannel channel,
         CancellationToken cancellationToken)
     {
+        var authorization =
+            await ResolveAuthorizationAsync(
+                    cancellationToken)
+                .ConfigureAwait(false);
+
         var relativePath =
             string.Format(
                 System.Globalization.CultureInfo.InvariantCulture,
@@ -62,10 +91,18 @@ public sealed class GiteaReleaseProvider : IReleaseProvider
                 _options.ApiBaseUri,
                 relativePath);
 
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Get,
+                uri);
+
+        authorization?.Apply(
+            request);
+
         using var response =
             await _httpClient
-                .GetAsync(
-                    uri,
+                .SendAsync(
+                    request,
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -125,12 +162,37 @@ public sealed class GiteaReleaseProvider : IReleaseProvider
                 .LoadAsync(
                     manifestUri,
                     packageId,
-                    cancellationToken)
+                    cancellationToken,
+                    authorization)
                 .ConfigureAwait(false);
 
         return ProviderValidation.MatchRequest(
             parsed,
             packageId,
             channel);
+    }
+
+    private async Task<ProviderRequestAuthorization?>
+        ResolveAuthorizationAsync(
+            CancellationToken cancellationToken)
+    {
+        var accessToken =
+            await _credentialResolver
+                .ResolveAsync(
+                    new ProviderCredentialRequest(
+                        ProviderCredentialProvider.Gitea,
+                        _options.ApiBaseUri.Authority),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (accessToken is null)
+        {
+            return null;
+        }
+
+        return new ProviderRequestAuthorization(
+            accessToken,
+            "token",
+            _options.CredentialAuthorities);
     }
 }

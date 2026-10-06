@@ -1,17 +1,19 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Providers/GitHub/GitHubReleaseProvider.cs
 // 📌 Amac: GitHub Releases uzerinden signed Community installer manifestini bulur ve release modeline donusturur
 // 📌 Modul - Tool CSharp
-// Version: 1.1.0
-// Aciklama: Stable latest veya beta prerelease seciminden sonra manifest ve .p7s sidecarini ortak trust pipeline'inda dogrular
+// Version: 1.2.0
+// Aciklama: Optional host-scoped Bearer credential ile private release API/manifest/.p7s isteklerini authorize eder; detached trust pipeline fail-closed kalir
 //
 // Bagimli Oldugu Katman: Tool | Service
 
 using System.Net.Http.Headers;
 using System.Text.Json;
+using TurkuazInstaller.Contracts.Credentials;
 using TurkuazInstaller.Contracts.Manifests;
 using TurkuazInstaller.Contracts.Releases;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
+using TurkuazInstaller.Infrastructure.Credentials;
 using TurkuazInstaller.Infrastructure.Manifests;
 
 namespace TurkuazInstaller.Infrastructure.Providers.GitHub;
@@ -27,18 +29,40 @@ public sealed class GitHubReleaseProvider : IReleaseProvider
     private readonly HttpClient _httpClient;
     private readonly GitHubReleaseProviderOptions _options;
     private readonly RemoteManifestLoader _manifestLoader;
+    private readonly IProviderCredentialResolver _credentialResolver;
 
     public GitHubReleaseProvider(
         HttpClient httpClient,
         InstallerManifestReader manifestReader,
         IManifestSignatureVerifier signatureVerifier,
         GitHubReleaseProviderOptions options)
+        : this(
+            httpClient,
+            manifestReader,
+            signatureVerifier,
+            options,
+            NullProviderCredentialResolver.Instance)
     {
+    }
+
+    public GitHubReleaseProvider(
+        HttpClient httpClient,
+        InstallerManifestReader manifestReader,
+        IManifestSignatureVerifier signatureVerifier,
+        GitHubReleaseProviderOptions options,
+        IProviderCredentialResolver credentialResolver)
+    {
+        ArgumentNullException.ThrowIfNull(
+            credentialResolver);
+
         _httpClient =
             httpClient;
 
         _options =
             options;
+
+        _credentialResolver =
+            credentialResolver;
 
         _manifestLoader =
             new RemoteManifestLoader(
@@ -52,12 +76,19 @@ public sealed class GitHubReleaseProvider : IReleaseProvider
         ReleaseChannel channel,
         CancellationToken cancellationToken)
     {
+        var authorization =
+            await ResolveAuthorizationAsync(
+                    cancellationToken)
+                .ConfigureAwait(false);
+
         var release =
             channel == ReleaseChannel.Stable
                 ? await GetStableReleaseAsync(
+                        authorization,
                         cancellationToken)
                     .ConfigureAwait(false)
                 : await GetBetaReleaseAsync(
+                        authorization,
                         cancellationToken)
                     .ConfigureAwait(false);
 
@@ -80,7 +111,8 @@ public sealed class GitHubReleaseProvider : IReleaseProvider
                 .LoadAsync(
                     manifestUri,
                     packageId,
-                    cancellationToken)
+                    cancellationToken,
+                    authorization)
                 .ConfigureAwait(false);
 
         return ProviderValidation.MatchRequest(
@@ -91,6 +123,7 @@ public sealed class GitHubReleaseProvider : IReleaseProvider
 
     private async Task<RemoteReleaseDocument?>
         GetStableReleaseAsync(
+            ProviderRequestAuthorization? authorization,
             CancellationToken cancellationToken)
     {
         var uri =
@@ -105,7 +138,8 @@ public sealed class GitHubReleaseProvider : IReleaseProvider
 
         using var request =
             CreateRequest(
-                uri);
+                uri,
+                authorization);
 
         using var response =
             await _httpClient
@@ -138,6 +172,7 @@ public sealed class GitHubReleaseProvider : IReleaseProvider
 
     private async Task<RemoteReleaseDocument?>
         GetBetaReleaseAsync(
+            ProviderRequestAuthorization? authorization,
             CancellationToken cancellationToken)
     {
         var uri =
@@ -152,7 +187,8 @@ public sealed class GitHubReleaseProvider : IReleaseProvider
 
         using var request =
             CreateRequest(
-                uri);
+                uri,
+                authorization);
 
         using var response =
             await _httpClient
@@ -212,7 +248,8 @@ public sealed class GitHubReleaseProvider : IReleaseProvider
     }
 
     private HttpRequestMessage CreateRequest(
-        Uri uri)
+        Uri uri,
+        ProviderRequestAuthorization? authorization)
     {
         var request =
             new HttpRequestMessage(
@@ -227,7 +264,34 @@ public sealed class GitHubReleaseProvider : IReleaseProvider
             new MediaTypeWithQualityHeaderValue(
                 "application/vnd.github+json"));
 
+        authorization?.Apply(
+            request);
+
         return request;
+    }
+
+    private async Task<ProviderRequestAuthorization?>
+        ResolveAuthorizationAsync(
+            CancellationToken cancellationToken)
+    {
+        var accessToken =
+            await _credentialResolver
+                .ResolveAsync(
+                    new ProviderCredentialRequest(
+                        ProviderCredentialProvider.GitHub,
+                        _options.ApiBaseUri.Authority),
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (accessToken is null)
+        {
+            return null;
+        }
+
+        return new ProviderRequestAuthorization(
+            accessToken,
+            "Bearer",
+            _options.CredentialAuthorities);
     }
 
     private Uri BuildApiUri(

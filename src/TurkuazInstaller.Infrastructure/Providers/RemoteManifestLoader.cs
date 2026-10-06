@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Providers/RemoteManifestLoader.cs
 // 📌 Amac: HTTPS manifest ve detached signature byte'larini indirip verification sonrasi ortak parsera iletir
 // 📌 Modul - Tool CSharp
-// Version: 1.1.0
-// Aciklama: Remote manifesti parserdan once CMS detached signature pipeline'inda package trust policy ile fail-closed dogrular
+// Version: 1.2.0
+// Aciklama: Remote manifest ve detached signature isteklerine optional host-scoped provider authorization uygular; parserdan once CMS trust fail-closed kalir
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -50,7 +50,8 @@ internal sealed class RemoteManifestLoader
     public async Task<PackageRelease> LoadAsync(
         Uri manifestUri,
         PackageId packageId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ProviderRequestAuthorization? authorization = null)
     {
         ProviderValidation.HttpsUri(
             manifestUri,
@@ -69,14 +70,16 @@ internal sealed class RemoteManifestLoader
             await GetRequiredBytesAsync(
                     manifestUri,
                     ManifestMissingMessage,
-                    cancellationToken)
+                    cancellationToken,
+                    authorization)
                 .ConfigureAwait(false);
 
         var detachedSignature =
             await GetRequiredBytesAsync(
                     signatureUri,
                     SignatureMissingMessage,
-                    cancellationToken)
+                    cancellationToken,
+                    authorization)
                 .ConfigureAwait(false);
 
         return await _verifiedManifestReader
@@ -91,12 +94,21 @@ internal sealed class RemoteManifestLoader
     private async Task<byte[]> GetRequiredBytesAsync(
         Uri uri,
         string notFoundMessage,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ProviderRequestAuthorization? authorization)
     {
+        using var request =
+            new HttpRequestMessage(
+                HttpMethod.Get,
+                uri);
+
+        authorization?.Apply(
+            request);
+
         using var response =
             await _httpClient
-                .GetAsync(
-                    uri,
+                .SendAsync(
+                    request,
                     HttpCompletionOption.ResponseHeadersRead,
                     cancellationToken)
                 .ConfigureAwait(false);

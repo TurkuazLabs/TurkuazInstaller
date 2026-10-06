@@ -1,9 +1,9 @@
 # 📄 Dosya Yolu: /contracts/release-provider.yml
-# 📌 Amac: Community release source provider port kontratini tanimlamak
+# 📌 Amac: Community release source provider port ve private credential guvenlik kontratini tanimlamak
 # 📌 Modul - YAML
-# Version: 0.2.0
-# Aciklama: GitHub, Gitea ve generic HTTPS providerlarin ortak release sorgu ve artifact resolve davranisini tanimlar
-# Bagimli Oldugu Katman: Application | Port | Adapter
+# Version: 1.0.0
+# Aciklama: GitHub/Gitea private tokenlarini Windows Credential Manager'dan resolve eder; manifest disi secret ve host-scoped header kurallarini sabitler
+# Bagimli Oldugu Katman: Application | Port | Adapter | Config
 
 schema_version: 1
 
@@ -14,24 +14,41 @@ provider_contract:
     - resolve_manifest
     - resolve_artifact
 
+credential_store:
+  platform: windows
+  adapter: windows_credential_manager
+  credential_type: generic
+  target_format: "TurkuazInstaller/provider/{provider}/{authority}"
+  secret_in_manifest: false
+  secret_in_log: false
+  missing_credential: anonymous
+
 providers:
   github:
     community: true
     authentication:
       optional: true
       secret_in_manifest: false
+      header_scheme: Bearer
+      authority_scope: explicit_allow_list
+      api_authority_required: true
+      public_github_web_origin_allowed: true
 
   gitea:
     community: true
     authentication:
       optional: true
       secret_in_manifest: false
+      header_scheme: token
+      authority_scope: explicit_allow_list
+      api_authority_required: true
 
   http:
     community: true
     authentication:
       optional: true
       secret_in_manifest: false
+      private_credential_adapter: false
     remote_plain_http: false
 
 result:
@@ -40,6 +57,13 @@ result:
     - package_id
     - version
     - manifest_uri
+
+security:
+  credential_in_query_string: deny
+  credential_in_manifest: deny
+  credential_in_log: deny
+  credential_cross_authority: deny
+  credential_userinfo_origin: deny
 
 failure:
   malformed_release: reject
