@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/BRANDING_LOCALIZATION.md
 # 📌 Amac: TurkuazInstaller branding ve localization extension davranisini belgelemek
 # 📌 Modul - Markdown
-# Version: 1.0.0
-# Aciklama: UI profile konumu, fallback davranisi, desteklenen alanlar ve fail-closed kurallari aciklar
+# Version: 1.1.0
+# Aciklama: UI profile konumu, culture uygulamasi, tam kullanici metni override yuzeyi, fallback ve fail-closed kurallarini aciklar
 # Bagimli Oldugu Katman: Config | Repo | View | Language
 
 # Branding ve Localization
@@ -32,7 +32,9 @@ Desteklenen branding alanlari:
 
 Desteklenen localization label anahtarlari contract dosyasinda sabittir. Bilinmeyen anahtar fail-closed davranisiyla reddedilir. Bos label degeri reddedilir.
 
-`culture` .NET culture adi olarak dogrulanir. Ornek: `tr-TR`, `en-US`.
+`culture` .NET culture adi olarak dogrulanir ve WinUI process icin current/default thread culture ile UI culture'a uygulanir. Ornek: `tr-TR`, `en-US`.
+
+Localization yalniz baslik ve butonlarla sinirli degildir. Contract icindeki desteklenen anahtarlar validation error, progress/status, update discovery, background update, channel, placeholder ve katalog metinlerini de kapsar. Profil bir anahtari override etmezse built-in Community metni kullanilir.
 
 ## Guvenlik siniri
 
