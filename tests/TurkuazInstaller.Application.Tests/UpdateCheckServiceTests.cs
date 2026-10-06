@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/UpdateCheckServiceTests.cs
 // 📌 Amac: UpdateCheckService surum kararlarini fake port implementasyonlariyla dogrular
 // 📌 Modul - Test CSharp
-// Version: 0.3.0
+// Version: 0.3.1
 // Aciklama: Available, current ve release-not-found senaryolarini kapsar
 //
 // Bagimli Oldugu Katman: Service | Repo
@@ -82,6 +82,19 @@ public sealed class UpdateCheckServiceTests
 
         public Task<InstalledPackageState?> GetAsync(PackageId packageId, CancellationToken cancellationToken)
             => Task.FromResult(_state);
+
+        public Task<IReadOnlyList<InstalledPackageState>> ListAsync(CancellationToken cancellationToken)
+        {
+            IReadOnlyList<InstalledPackageState> states =
+                _state is null
+                    ? Array.Empty<InstalledPackageState>()
+                    : new[]
+                    {
+                        _state
+                    };
+
+            return Task.FromResult(states);
+        }
 
         public Task SaveAsync(InstalledPackageState state, CancellationToken cancellationToken)
             => Task.CompletedTask;
