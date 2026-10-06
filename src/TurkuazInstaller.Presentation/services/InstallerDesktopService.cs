@@ -227,10 +227,6 @@ public sealed class InstallerDesktopService
             await RefreshInstalledAppsCoreAsync(
                     CancellationToken.None)
                 .ConfigureAwait(true);
-
-            await RefreshInstalledAppsCoreAsync(
-                    CancellationToken.None)
-                .ConfigureAwait(true);
         }
         catch (InstallerRebootRequiredException)
         {
@@ -288,6 +284,10 @@ public sealed class InstallerDesktopService
 
             await CompleteUiAsync(
                     progress)
+                .ConfigureAwait(true);
+
+            await RefreshInstalledAppsCoreAsync(
+                    CancellationToken.None)
                 .ConfigureAwait(true);
         }
         catch (InstallerRebootRequiredException)
