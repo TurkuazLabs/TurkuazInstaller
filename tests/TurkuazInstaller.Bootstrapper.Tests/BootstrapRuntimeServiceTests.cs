@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Bootstrapper.Tests/BootstrapRuntimeServiceTests.cs
 // 📌 Amac: Bootstrap Runtime Service startup, prerequisite, cleanup ve trusted self-update orchestration davranisini unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.2.0
-// Aciklama: Normal launch, explicit handoff trust, automatic discovery/download ve completion akislarini dogrular
+// Version: 1.3.0
+// Aciklama: Normal launch ve explicit fail-closed trust yaninda automatic self-update failure fallback, cleanup ve cancellation davranisini dogrular
 //
 // Bagimli Oldugu Katman: Service | Tool | Config
 
@@ -173,6 +173,144 @@ public sealed class BootstrapRuntimeServiceTests
 
         Assert.Null(
             launcher.ExecutablePath);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AutomaticDiscoveryFailure_LaunchesCurrentDesktop()
+    {
+        var launcher =
+            new StubApplicationLauncher();
+
+        var discovery =
+            new StubSelfUpdateDiscovery
+            {
+                Exception =
+                    new InvalidDataException(
+                        "Malformed latest release metadata.")
+            };
+
+        var service =
+            CreateService(
+                BootstrapCpuArchitecture.X64,
+                new StubSelfUpdateHandoff(),
+                new StubFileCleaner(),
+                launcher,
+                discovery,
+                trustVerifier:
+                    new StubSelfUpdateTrustVerifier
+                    {
+                        CanSelfUpdate = true
+                    });
+
+        var result =
+            await service.ExecuteAsync(
+                new BootstrapInvocation(
+                    null,
+                    null,
+                    null,
+                    Array.Empty<string>()),
+                CancellationToken.None);
+
+        Assert.Equal(
+            BootstrapExitCode.Success,
+            result);
+        Assert.Equal(
+            Path.GetFullPath(
+                @"C:\Bundle\app\TurkuazInstaller.WinUI.exe"),
+            launcher.ExecutablePath);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AutomaticUntrustedReplacement_CleansStageAndLaunchesCurrentDesktop()
+    {
+        var cleaner =
+            new StubFileCleaner();
+
+        var launcher =
+            new StubApplicationLauncher();
+
+        var handoff =
+            new StubSelfUpdateHandoff();
+
+        var service =
+            CreateService(
+                BootstrapCpuArchitecture.X64,
+                handoff,
+                cleaner,
+                launcher,
+                new StubSelfUpdateDiscovery(
+                    CreateUpdateRelease()),
+                new StubSelfUpdateDownloader(
+                    ReplacementPath),
+                new StubSelfUpdateTrustVerifier
+                {
+                    CanSelfUpdate = true,
+                    Verification =
+                        VerificationResult.Failed(
+                            VerificationFailure.SignatureInvalid,
+                            "Signer mismatch.")
+                });
+
+        var result =
+            await service.ExecuteAsync(
+                new BootstrapInvocation(
+                    null,
+                    null,
+                    null,
+                    Array.Empty<string>()),
+                CancellationToken.None);
+
+        Assert.Equal(
+            BootstrapExitCode.Success,
+            result);
+        Assert.Equal(
+            ReplacementPath,
+            cleaner.DeletedPath);
+        Assert.Null(
+            handoff.BeginRequest);
+        Assert.Equal(
+            Path.GetFullPath(
+                @"C:\Bundle\app\TurkuazInstaller.WinUI.exe"),
+            launcher.ExecutablePath);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AutomaticUpdateCancellation_PropagatesCancellation()
+    {
+        using var cancellation =
+            new CancellationTokenSource();
+
+        cancellation.Cancel();
+
+        var discovery =
+            new StubSelfUpdateDiscovery
+            {
+                Exception =
+                    new OperationCanceledException(
+                        cancellation.Token)
+            };
+
+        var service =
+            CreateService(
+                BootstrapCpuArchitecture.X64,
+                new StubSelfUpdateHandoff(),
+                new StubFileCleaner(),
+                new StubApplicationLauncher(),
+                discovery,
+                trustVerifier:
+                    new StubSelfUpdateTrustVerifier
+                    {
+                        CanSelfUpdate = true
+                    });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => service.ExecuteAsync(
+                new BootstrapInvocation(
+                    null,
+                    null,
+                    null,
+                    Array.Empty<string>()),
+                cancellation.Token));
     }
 
     [Fact]
@@ -567,11 +705,22 @@ public sealed class BootstrapRuntimeServiceTests
             private set;
         }
 
+        public Exception? Exception
+        {
+            get;
+            init;
+        }
+
         public Task<BootstrapSelfUpdateRelease?> GetLatestAsync(
             SemanticVersion currentVersion,
             CancellationToken cancellationToken)
         {
             CurrentVersion = currentVersion;
+
+            if (Exception is not null)
+            {
+                throw Exception;
+            }
 
             return Task.FromResult(
                 _release);
