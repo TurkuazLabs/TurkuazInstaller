@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/controllers/MainWindowController.cs
 // 📌 Amac: WinUI View event requestlerini alir ve yalniz InstallerDesktopService cagrisina donusturur
 // 📌 Modul - Controller CSharp
-// Version: 1.1.0
-// Aciklama: Startup resume, install, update, repair, rollback, uninstall, cancel ve retry requestlerini Service katmanina aktarir
+// Version: 1.2.0
+// Aciklama: Startup, catalog refresh, install/update/repair/rollback/uninstall, cancel ve retry requestlerini Service katmanina aktarir
 //
 // Bagimli Oldugu Katman: Controller | Service
 
@@ -45,6 +45,9 @@ public sealed class MainWindowController
     public Task UninstallAsync() =>
         _service.RunAsync(
             InstallerOperationKind.Uninstall);
+
+    public Task RefreshInstalledAppsAsync() =>
+        _service.RefreshInstalledAppsAsync();
 
     public Task RetryAsync() =>
         _service.RetryAsync();
