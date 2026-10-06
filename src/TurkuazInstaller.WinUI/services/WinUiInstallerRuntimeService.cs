@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/services/WinUiInstallerRuntimeService.cs
 // 📌 Amac: Presentation requestlerini signed provider, resumable workflow, repository ve Velopack runtime operasyonlarina baglar
 // 📌 Modul - Service CSharp
-// Version: 1.4.0
-// Aciklama: Signed provider uzerinden read-only update discovery, manual mutation ve reboot-resume akislarini koordine eder
+// Version: 1.5.0
+// Aciklama: Signed provider uzerinden version-policy-aware discovery, manual mutation ve reboot-resume akislarini koordine eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -10,6 +10,7 @@ using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Application.Updates;
 using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.State;
+using TurkuazInstaller.Contracts.Updates;
 using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
@@ -51,6 +52,7 @@ internal sealed class WinUiInstallerRuntimeService
     private readonly IInstallStateRepository _stateRepository;
     private readonly IInstallerOperationJournalRepository _operationJournal;
     private readonly IInstallerResumeRequestRepository _resumeRequestRepository;
+    private readonly IVersionUpdatePolicyRepository? _versionPolicyRepository;
     private readonly DesktopRuntimeOptions _options;
 
     public WinUiInstallerRuntimeService(
@@ -59,7 +61,8 @@ internal sealed class WinUiInstallerRuntimeService
         IInstallStateRepository stateRepository,
         IInstallerOperationJournalRepository operationJournal,
         IInstallerResumeRequestRepository resumeRequestRepository,
-        DesktopRuntimeOptions options)
+        DesktopRuntimeOptions options,
+        IVersionUpdatePolicyRepository? versionPolicyRepository = null)
     {
         _providerFactory = providerFactory;
         _workflowService = workflowService;
@@ -67,6 +70,7 @@ internal sealed class WinUiInstallerRuntimeService
         _operationJournal = operationJournal;
         _resumeRequestRepository = resumeRequestRepository;
         _options = options;
+        _versionPolicyRepository = versionPolicyRepository;
     }
 
     public async Task<UpdateCheckResult> CheckUpdateAsync(
@@ -86,7 +90,8 @@ internal sealed class WinUiInstallerRuntimeService
 
         return await new UpdateCheckService(
                 provider,
-                _stateRepository)
+                _stateRepository,
+                _versionPolicyRepository)
             .ExecuteAsync(
                 packageId,
                 request.Channel,
