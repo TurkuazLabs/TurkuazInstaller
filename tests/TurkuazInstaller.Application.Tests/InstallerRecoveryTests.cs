@@ -1,16 +1,18 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerRecoveryTests.cs
 // 📌 Amac: Installer workflow hata durumlarinda state commit edilmemesi ve rollback state guvenligini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Verification, apply ve rollback failure senaryolarinda yarim islemin kurulu state olarak kaydedilmesini engelleyen davranisi test eder
+// Version: 1.1.0
+// Aciklama: Verification, package apply ve Windows integration failure senaryolarinda state commit sinirini ve retry-guvenli recovery davranisini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Contracts.Artifacts;
+using TurkuazInstaller.Contracts.Integrations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Domain.Artifacts;
+using TurkuazInstaller.Domain.Integrations;
 using TurkuazInstaller.Domain.Plans;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
@@ -83,6 +85,186 @@ public sealed class InstallerRecoveryTests
 
         Assert.Equal(1, engine.ApplyCalls);
         Assert.Equal(0, stateRepository.SaveCalls);
+    }
+
+    [Fact]
+    public async Task InstallAsync_IntegrationFailure_DoesNotCommitState()
+    {
+        var engine =
+            new TrackingPackageEngine();
+
+        var stateRepository =
+            new TrackingStateRepository();
+
+        var integrationManager =
+            new TrackingWindowsIntegrationManager
+            {
+                FailuresRemaining = 1
+            };
+
+        var service =
+            CreateService(
+                engine,
+                stateRepository,
+                VerificationResult.Passed(),
+                integrationManager);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.InstallAsync(
+                CreateRelease(
+                    "1.0.0",
+                    "Example-Setup.exe"),
+                "C:/Apps/Example",
+                "C:/Temp/TurkuazInstaller",
+                null,
+                CancellationToken.None));
+
+        Assert.Equal(
+            1,
+            engine.ApplyCalls);
+        Assert.Equal(
+            1,
+            integrationManager.ApplyCalls);
+        Assert.Equal(
+            0,
+            stateRepository.SaveCalls);
+        Assert.Null(
+            stateRepository.CurrentState);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_IntegrationFailure_PreservesStateAndRetryCanCommit()
+    {
+        var packageId =
+            PackageId.Parse(
+                "example-app");
+
+        var currentRelease =
+            CreateRelease(
+                "1.0.0",
+                "Example-1.0.0-full.nupkg");
+
+        var updateRelease =
+            CreateRelease(
+                "2.0.0",
+                "Example-2.0.0-full.nupkg");
+
+        var currentState =
+            new InstalledPackageState(
+                packageId,
+                currentRelease.Version,
+                ReleaseChannel.Stable,
+                "C:/Apps/Example");
+
+        var stateRepository =
+            new TrackingStateRepository(
+                currentState);
+
+        var integrationManager =
+            new TrackingWindowsIntegrationManager
+            {
+                FailuresRemaining = 1
+            };
+
+        var service =
+            CreateService(
+                new TrackingPackageEngine(),
+                stateRepository,
+                VerificationResult.Passed(),
+                integrationManager);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.UpdateAsync(
+                updateRelease,
+                currentState,
+                "C:/Temp/TurkuazInstaller",
+                null,
+                CancellationToken.None));
+
+        Assert.Equal(
+            0,
+            stateRepository.SaveCalls);
+        Assert.Equal(
+            currentRelease.Version,
+            stateRepository.CurrentState?.Version);
+
+        await service.UpdateAsync(
+            updateRelease,
+            currentState,
+            "C:/Temp/TurkuazInstaller",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal(
+            2,
+            integrationManager.ApplyCalls);
+        Assert.Equal(
+            1,
+            stateRepository.SaveCalls);
+        Assert.Equal(
+            updateRelease.Version,
+            stateRepository.CurrentState?.Version);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_IntegrationFailure_PreservesCurrentState()
+    {
+        var packageId =
+            PackageId.Parse(
+                "example-app");
+
+        var currentRelease =
+            CreateRelease(
+                "2.0.0",
+                "Example-2.0.0-full.nupkg");
+
+        var previousRelease =
+            CreateRelease(
+                "1.0.0",
+                "Example-1.0.0-full.nupkg");
+
+        var currentState =
+            new InstalledPackageState(
+                packageId,
+                currentRelease.Version,
+                ReleaseChannel.Stable,
+                "C:/Apps/Example");
+
+        var stateRepository =
+            new TrackingStateRepository(
+                currentState);
+
+        var integrationManager =
+            new TrackingWindowsIntegrationManager
+            {
+                FailuresRemaining = 1
+            };
+
+        var service =
+            CreateService(
+                new TrackingPackageEngine(),
+                stateRepository,
+                VerificationResult.Passed(),
+                integrationManager);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RollbackAsync(
+                currentRelease,
+                previousRelease,
+                currentState,
+                "C:/Temp/TurkuazInstaller",
+                null,
+                CancellationToken.None));
+
+        Assert.Equal(
+            1,
+            integrationManager.ApplyCalls);
+        Assert.Equal(
+            0,
+            stateRepository.SaveCalls);
+        Assert.Equal(
+            currentRelease.Version,
+            stateRepository.CurrentState?.Version);
     }
 
     [Fact]
@@ -229,14 +411,17 @@ public sealed class InstallerRecoveryTests
     private static InstallerWorkflowService CreateService(
         TrackingPackageEngine engine,
         TrackingStateRepository repository,
-        VerificationResult verificationResult)
+        VerificationResult verificationResult,
+        IWindowsIntegrationManager? integrationManager = null)
     {
         return new InstallerWorkflowService(
             new StubDownloader(),
             new StubVerifier(
                 verificationResult),
             engine,
-            repository);
+            repository,
+            windowsIntegrationManager:
+                integrationManager);
     }
 
     private static PackageRelease CreateRelease(
@@ -372,6 +557,48 @@ public sealed class InstallerRecoveryTests
             CancellationToken cancellationToken)
         {
             UninstallCalls++;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class TrackingWindowsIntegrationManager
+        : IWindowsIntegrationManager
+    {
+        public int ApplyCalls
+        {
+            get;
+            private set;
+        }
+
+        public int FailuresRemaining
+        {
+            get;
+            set;
+        }
+
+        public Task ApplyAsync(
+            PackageId packageId,
+            string targetPath,
+            WindowsIntegrationPolicy policy,
+            CancellationToken cancellationToken)
+        {
+            ApplyCalls++;
+
+            if (FailuresRemaining > 0)
+            {
+                FailuresRemaining--;
+
+                throw new InvalidOperationException(
+                    "Simulated Windows integration failure.");
+            }
+
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
             return Task.CompletedTask;
         }
     }
