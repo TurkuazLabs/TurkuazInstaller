@@ -1,11 +1,18 @@
 # 📄 Dosya Yolu: /contracts/manifest-trust.yml
 # 📌 Amac: Detached installer manifest signature ve dis trust store guvenlik kontratini tanimlamak
 # 📌 Modul - YAML
-# Version: 1.1.0
-# Aciklama: CMS/PKCS#7 detached signature, tek signer, package-scoped publisher subject ve zorunlu sertifika SHA-256 pin invariantlarini sabitler
+# Version: 1.2.0
+# Aciklama: CMS/PKCS#7 trust zincirine remote/local manifest ve detached signature byte limitlerini de fail-closed invariant olarak ekler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 schema_version: 1
+
+content_limits:
+  manifest_max_bytes: 1048576
+  detached_signature_max_bytes: 262144
+  remote_stream_enforced: true
+  local_file_enforced: true
+  remote_content_length_precheck: true
 
 signature:
   format: cms-pkcs7-detached
@@ -34,3 +41,5 @@ security:
   certificate_pin_mismatch: deny
   expired_signer_certificate: deny
   parse_before_verification: deny
+  oversized_manifest: deny
+  oversized_detached_signature: deny
