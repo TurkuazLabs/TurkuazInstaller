@@ -1,11 +1,12 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/DefaultArtifactDownloaderTests.cs
 // 📌 Amac: Artifact downloaderin signed size_bytes sinirini HTTPS ve local file transferinde uyguladigini dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Exact-size basari, remote Content-Length mismatch ve local file size mismatch senaryolarini kapsar
+// Version: 1.1.0
+// Aciklama: Exact-size basari, Content-Length mismatch, unknown-length oversize/undersize ve local size mismatch senaryolarini kapsar
 //
 // Bagimli Oldugu Katman: Tool | Domain
 
+using System.Net;
 using System.Text;
 using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Infrastructure.Artifacts;
@@ -117,6 +118,50 @@ public sealed class DefaultArtifactDownloaderTests
         }
     }
 
+    [Theory]
+    [InlineData(4, 3)]
+    [InlineData(3, 4)]
+    public async Task DownloadAsync_HttpsUnknownLengthSizeMismatch_RejectsTransfer(
+        int actualBytes,
+        int expectedBytes)
+    {
+        using var client =
+            new HttpClient(
+                new UnknownLengthArtifactHandler(
+                    actualBytes));
+
+        var root =
+            CreateTemporaryDirectory();
+
+        try
+        {
+            var downloader =
+                new DefaultArtifactDownloader(
+                    client);
+
+            await Assert.ThrowsAsync<InvalidDataException>(
+                () =>
+                    downloader.DownloadAsync(
+                        CreateArtifact(
+                            ArtifactUri,
+                            expectedBytes),
+                        root,
+                        CancellationToken.None));
+
+            Assert.Empty(
+                Directory.EnumerateFiles(
+                    root,
+                    "*",
+                    SearchOption.AllDirectories));
+        }
+        finally
+        {
+            Directory.Delete(
+                root,
+                recursive: true);
+        }
+    }
+
     [Fact]
     public async Task DownloadAsync_LocalSizeMismatch_RejectsTransfer()
     {
@@ -188,4 +233,70 @@ public sealed class DefaultArtifactDownloaderTests
 
         return path;
     }
+
+    private sealed class UnknownLengthArtifactHandler
+        : HttpMessageHandler
+    {
+        private readonly int _byteCount;
+
+        public UnknownLengthArtifactHandler(
+            int byteCount)
+        {
+            _byteCount = byteCount;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            if (
+                request.RequestUri != ArtifactUri)
+            {
+                return Task.FromResult(
+                    new HttpResponseMessage(
+                        HttpStatusCode.NotFound));
+            }
+
+            return Task.FromResult(
+                new HttpResponseMessage(
+                    HttpStatusCode.OK)
+                {
+                    Content =
+                        new UnknownLengthContent(
+                            _byteCount)
+                });
+        }
+    }
+
+    private sealed class UnknownLengthContent
+        : HttpContent
+    {
+        private readonly byte[] _content;
+
+        public UnknownLengthContent(
+            int byteCount)
+        {
+            _content =
+                new byte[
+                    byteCount];
+        }
+
+        protected override async Task SerializeToStreamAsync(
+            Stream stream,
+            TransportContext? context)
+        {
+            await stream
+                .WriteAsync(
+                    _content)
+                .ConfigureAwait(false);
+        }
+
+        protected override bool TryComputeLength(
+            out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
 }
