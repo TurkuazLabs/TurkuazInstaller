@@ -1,11 +1,12 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.3.0
-// Aciklama: View code-behind is kurali tutmadan startup/catalog refresh/update discovery/mutation eventlerini Controller'a delege eder
+// Version: 1.4.0
+// Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
 
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using TurkuazInstaller.Presentation.Controllers;
@@ -20,6 +21,7 @@ public sealed partial class MainWindow : Window
     private readonly MainWindowController _controller;
     private readonly InstallerDesktopService _desktopService;
     private readonly IReadOnlyList<string> _startupArguments;
+    private DispatcherQueueTimer? _backgroundUpdateTimer;
     private bool _startupHandled;
 
     public MainWindow(
@@ -61,6 +63,53 @@ public sealed partial class MainWindow : Window
         await _controller
             .StartAsync(
                 _startupArguments)
+            .ConfigureAwait(true);
+
+        await _controller
+            .RunBackgroundUpdateCheckAsync()
+            .ConfigureAwait(true);
+
+        ConfigureBackgroundUpdateTimer();
+    }
+
+    private void ConfigureBackgroundUpdateTimer()
+    {
+        if (_backgroundUpdateTimer is not null)
+        {
+            return;
+        }
+
+        var interval =
+            _controller
+                .BackgroundUpdateInterval;
+
+        if (interval is null)
+        {
+            return;
+        }
+
+        _backgroundUpdateTimer =
+            DispatcherQueue
+                .CreateTimer();
+
+        _backgroundUpdateTimer.Interval =
+            interval.Value;
+
+        _backgroundUpdateTimer.IsRepeating =
+            true;
+
+        _backgroundUpdateTimer.Tick +=
+            OnBackgroundUpdateTimerTick;
+
+        _backgroundUpdateTimer.Start();
+    }
+
+    private async void OnBackgroundUpdateTimerTick(
+        DispatcherQueueTimer sender,
+        object args)
+    {
+        await _controller
+            .RunBackgroundUpdateCheckAsync()
             .ConfigureAwait(true);
     }
 
@@ -147,6 +196,14 @@ public sealed partial class MainWindow : Window
         object sender,
         WindowEventArgs args)
     {
+        if (_backgroundUpdateTimer is not null)
+        {
+            _backgroundUpdateTimer.Stop();
+            _backgroundUpdateTimer.Tick -=
+                OnBackgroundUpdateTimerTick;
+            _backgroundUpdateTimer = null;
+        }
+
         _desktopService.Dispose();
     }
 
