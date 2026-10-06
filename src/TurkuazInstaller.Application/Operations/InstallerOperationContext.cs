@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerOperationContext.cs
 // 📌 Amac: Bir installer operasyonunun crash journal ve structured log checkpoint yasam dongusunu koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.4.0
-// Aciklama: Diagnostics storage hatalarini izole eder; pre-execution resume arm, reboot wait, resume ve clear checkpointlerini yonetir
+// Version: 1.5.0
+// Aciklama: Diagnostics storage hatalarini izole eder; reboot checkpointlerine ek olarak non-terminal warning event yazimini destekler
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -199,6 +199,25 @@ internal sealed class InstallerOperationContext
                 null,
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    public Task WarnAsync(
+        string eventName,
+        string message,
+        string? errorType,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            eventName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            message);
+
+        return PersistBestEffortAsync(
+            InstallerEventLevel.Warning,
+            eventName.Trim(),
+            message.Trim(),
+            errorType,
+            cancellationToken);
     }
 
     public async Task CompleteAsync(

@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /examples/community-manifest.yml
 # 📌 Amac: TurkuazInstaller Community Stable v1 manifest contracti icin calisabilir ornek paket tanimlamak
 # 📌 Modul - YAML
-# Version: 1.2.0
-# Aciklama: Detached .p7s trust, full Velopack Setup, publisher-pinned prerequisite auto-install, preserve path ve rollback alanlarini ornekler
+# Version: 1.3.0
+# Aciklama: Detached trust, prerequisite auto-install, preserve path, package-owned Windows shortcut/protocol ve rollback alanlarini ornekler
 # Bagimli Oldugu Katman: Config
 
 # Bu dosya raw byte'lari ile imzalanmali ve yaninda community-manifest.yml.p7s publish edilmelidir.
@@ -48,6 +48,19 @@ install:
         requires_elevation: true
   preserve_paths:
     - "UserData"
+  windows:
+    shortcuts:
+      - id: main
+        name: Example App
+        location: start_menu
+        executable: ExampleApp.exe
+      - id: desktop
+        name: Example App
+        location: desktop
+        executable: ExampleApp.exe
+    protocols:
+      - scheme: example-app
+        executable: ExampleApp.exe
 
 rollback:
   supported: true

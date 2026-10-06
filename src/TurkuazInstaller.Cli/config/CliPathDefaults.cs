@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Cli/config/CliPathDefaults.cs
 // 📌 Amac: CLI runtime icin ortak TurkuazInstaller local storage ve trust yollarini merkezi uretir
 // 📌 Modul - Config CSharp
-// Version: 1.0.0
-// Aciklama: WinUI ile ayni state/journal/resume kokunu kullanir ve CLI reboot resume executable yolunu sabitler
+// Version: 1.1.0
+// Aciklama: WinUI ile ayni state/journal/resume/integration kokunu kullanir ve CLI reboot resume executable yolunu sabitler
 //
 // Bagimli Oldugu Katman: Config
 
@@ -17,6 +17,7 @@ internal static class CliPathDefaults
     private const string JournalDirectory = "journal";
     private const string LogDirectory = "logs";
     private const string ResumeDirectory = "resume";
+    private const string IntegrationDirectory = "integrations";
     private const string ConfigDirectory = "config";
     private const string ManifestTrustFileName = "manifest-trust.yml";
     private const string RebootResumeValueNamePrefix = "TurkuazInstaller.Cli.Resume";
@@ -44,6 +45,7 @@ internal static class CliPathDefaults
             Path.Combine(productRoot, JournalDirectory),
             Path.Combine(productRoot, LogDirectory),
             Path.Combine(productRoot, ResumeDirectory),
+            Path.Combine(productRoot, IntegrationDirectory),
             Path.Combine(
                 productRoot,
                 ConfigDirectory,

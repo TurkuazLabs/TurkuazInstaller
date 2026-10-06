@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.12.0
-# Aciklama: Detached trust, private credentials, proxy, catalog, manual/background discovery, version skip/pinning ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.14.0
+# Aciklama: Detached trust, private credentials, proxy, discovery, version policy, safe Windows integration ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -23,6 +23,7 @@ INSTALLED_APP_CATALOG = ROOT / "contracts" / "installed-app-catalog.yml"
 UPDATE_DISCOVERY = ROOT / "contracts" / "update-discovery.yml"
 BACKGROUND_UPDATE_POLICY = ROOT / "contracts" / "background-update-policy.yml"
 VERSION_POLICY = ROOT / "contracts" / "version-policy.yml"
+WINDOWS_INTEGRATION = ROOT / "contracts" / "windows-integration.yml"
 EXAMPLE = ROOT / "examples" / "community-manifest.yml"
 SECURITY = ROOT / "docs" / "SECURITY_MODEL.md"
 ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
@@ -121,6 +122,17 @@ schemes = set(
 if schemes != EXPECTED_URI_SCHEMES:
     fail(
         f"artifact URI schemes drifted: {sorted(schemes)}"
+    )
+
+windows_integration_reference = (
+    manifest
+    .get("install", {})
+    .get("windows_integration_contract")
+)
+
+if windows_integration_reference != WINDOWS_INTEGRATION.name:
+    fail(
+        "installer manifest must reference windows-integration.yml"
     )
 
 install_modes = set(
@@ -1522,6 +1534,302 @@ for key in (
     if version_security.get(key) != "deny":
         fail(
             f"version policy security invariant must deny: {key}"
+        )
+
+windows_integration = load_yaml(
+    WINDOWS_INTEGRATION
+)
+
+if windows_integration.get("schema_version") != 1:
+    fail(
+        "windows integration schema_version must be 1"
+    )
+
+windows_scope = windows_integration.get(
+    "scope",
+    {},
+)
+
+expected_windows_scope = {
+    "platform": "windows",
+    "user_scope_only": True,
+    "machine_wide_registry": False,
+    "requires_elevation": False,
+}
+
+for key, expected_value in expected_windows_scope.items():
+    if windows_scope.get(key) != expected_value:
+        fail(
+            f"windows integration scope invariant mismatch: {key}"
+        )
+
+windows_receipt = windows_integration.get(
+    "receipt",
+    {},
+)
+
+if (
+    windows_receipt.get("path")
+    != "%LOCALAPPDATA%/TurkuazInstaller/integrations/{package_id}.json"
+):
+    fail(
+        "windows integration receipt path drifted"
+    )
+
+for key in (
+    "package_scoped",
+    "atomic_write",
+):
+    if windows_receipt.get(key) is not True:
+        fail(
+            f"windows integration receipt invariant missing: {key}"
+        )
+
+shortcut_ownership_fields = set(
+    windows_receipt
+    .get("shortcut_ownership", {})
+    .get("fields", [])
+)
+
+if shortcut_ownership_fields != {
+    "action_id",
+    "path",
+    "sha256",
+}:
+    fail(
+        "windows shortcut ownership receipt fields drifted"
+    )
+
+protocol_ownership = windows_receipt.get(
+    "protocol_ownership",
+    {},
+)
+
+if (
+    protocol_ownership.get("registry_value")
+    != "TurkuazInstallerOwner"
+    or protocol_ownership.get("value")
+    != "package_id"
+):
+    fail(
+        "windows protocol ownership marker drifted"
+    )
+
+windows_shortcuts = windows_integration.get(
+    "shortcuts",
+    {},
+)
+
+if windows_shortcuts.get("maximum") != 32:
+    fail(
+        "windows shortcut maximum must remain 32"
+    )
+
+if set(windows_shortcuts.get("locations", [])) != {
+    "desktop",
+    "start_menu",
+}:
+    fail(
+        "windows shortcut locations drifted"
+    )
+
+shortcut_executable = windows_shortcuts.get(
+    "executable",
+    {},
+)
+
+expected_shortcut_executable = {
+    "relative_to_install_root": True,
+    "extension": ".exe",
+    "path_escape": "deny",
+    "reparse_point": "deny",
+    "must_exist_after_package_apply": True,
+}
+
+for key, expected_value in expected_shortcut_executable.items():
+    if shortcut_executable.get(key) != expected_value:
+        fail(
+            f"windows shortcut executable invariant mismatch: {key}"
+        )
+
+shortcut_collision = windows_shortcuts.get(
+    "collision",
+    {},
+)
+
+for key in (
+    "unowned_existing_file",
+    "modified_owned_file_overwrite",
+):
+    if shortcut_collision.get(key) != "deny":
+        fail(
+            f"windows shortcut collision must deny: {key}"
+        )
+
+shortcut_cleanup = windows_shortcuts.get(
+    "cleanup",
+    {},
+)
+
+if (
+    shortcut_cleanup
+    .get("delete_only_when_sha256_matches_receipt")
+    is not True
+):
+    fail(
+        "windows shortcut cleanup must require receipt hash match"
+    )
+
+if (
+    shortcut_cleanup
+    .get("path_must_match_supported_location")
+    is not True
+):
+    fail(
+        "windows shortcut cleanup must validate the package-owned shortcut location"
+    )
+
+windows_protocols = windows_integration.get(
+    "protocols",
+    {},
+)
+
+if windows_protocols.get("maximum") != 32:
+    fail(
+        "windows protocol maximum must remain 32"
+    )
+
+if windows_protocols.get("registry_root") != r"HKCU\Software\Classes":
+    fail(
+        "windows protocol registry root must remain HKCU Software Classes"
+    )
+
+protocol_executable = windows_protocols.get(
+    "executable",
+    {},
+)
+
+expected_protocol_executable = {
+    "relative_to_install_root": True,
+    "extension": ".exe",
+    "path_escape": "deny",
+    "reparse_point": "deny",
+    "must_exist_after_package_apply": True,
+}
+
+for key, expected_value in expected_protocol_executable.items():
+    if protocol_executable.get(key) != expected_value:
+        fail(
+            f"windows protocol executable invariant mismatch: {key}"
+        )
+
+protocol_command = windows_protocols.get(
+    "command",
+    {},
+)
+
+if protocol_command.get("shell") is not False:
+    fail(
+        "windows protocol command must remain shell-free"
+    )
+
+if protocol_command.get("fixed_argument") != "%1":
+    fail(
+        "windows protocol command fixed argument must remain %1"
+    )
+
+protocol_claim = windows_protocols.get(
+    "claim",
+    {},
+)
+
+if protocol_claim.get("cross_process_lock") is not True:
+    fail(
+        "windows protocol claim must use cross-process lock"
+    )
+
+if protocol_claim.get("existing_foreign_owner") != "deny":
+    fail(
+        "windows protocol foreign owner overwrite must be denied"
+    )
+
+protocol_cleanup = windows_protocols.get(
+    "cleanup",
+    {},
+)
+
+if (
+    protocol_cleanup
+    .get("delete_only_when_owner_marker_matches")
+    is not True
+):
+    fail(
+        "windows protocol cleanup must require owner marker match"
+    )
+
+if (
+    protocol_cleanup
+    .get("scheme_validation_required")
+    is not True
+):
+    fail(
+        "windows protocol cleanup must validate receipt scheme values"
+    )
+
+windows_workflow = windows_integration.get(
+    "workflow",
+    {},
+)
+
+for key in (
+    "install_reconcile_after_state_commit",
+    "update_reconcile_after_state_commit",
+    "repair_reconcile_after_package_repair",
+    "rollback_reconcile_after_state_commit",
+    "uninstall_cleanup_after_package_uninstall",
+):
+    if windows_workflow.get(key) is not True:
+        fail(
+            f"windows integration workflow invariant missing: {key}"
+        )
+
+cleanup_failure = windows_workflow.get(
+    "uninstall_cleanup_failure",
+    {},
+)
+
+expected_cleanup_failure = {
+    "package_state_delete_continues": True,
+    "receipt_preserved": True,
+    "structured_warning": True,
+}
+
+for key, expected_value in expected_cleanup_failure.items():
+    if cleanup_failure.get(key) != expected_value:
+        fail(
+            f"windows integration cleanup failure invariant mismatch: {key}"
+        )
+
+windows_security = windows_integration.get(
+    "security",
+    {},
+)
+
+for key in (
+    "overwrite_foreign_shortcut",
+    "delete_modified_shortcut",
+    "overwrite_foreign_protocol",
+    "delete_foreign_protocol",
+    "executable_outside_install_root",
+    "reparse_point_executable",
+    "shell_command_interpretation",
+    "machine_wide_registry",
+    "corrupt_receipt_path_escape",
+    "invalid_receipt_protocol_scheme",
+):
+    if windows_security.get(key) != "deny":
+        fail(
+            f"windows integration security invariant must deny: {key}"
         )
 
 example = load_yaml(EXAMPLE)

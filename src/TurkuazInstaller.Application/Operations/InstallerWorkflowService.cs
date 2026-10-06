@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.6.0
-// Aciklama: Prerequisite/reboot-safe mutation akimina ek olarak update skip/pinning policy'yi journal/staging oncesi zorunlu uygular
+// Version: 1.7.0
+// Aciklama: Prerequisite/version policy zincirine package-owned Windows integration reconcile ve safe uninstall cleanup ekler
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Contracts.Artifacts;
+using TurkuazInstaller.Contracts.Integrations;
 using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
@@ -77,6 +78,7 @@ public sealed class InstallerWorkflowService
     private readonly IPrerequisiteInstaller? _prerequisiteInstaller;
     private readonly IRebootResumeScheduler? _rebootResumeScheduler;
     private readonly VersionUpdatePolicyService? _versionPolicyService;
+    private readonly IWindowsIntegrationManager? _windowsIntegrationManager;
 
     public InstallerWorkflowService(
         IArtifactDownloader artifactDownloader,
@@ -90,7 +92,8 @@ public sealed class InstallerWorkflowService
         IInstallerEventLogger? eventLogger = null,
         IPrerequisiteInstaller? prerequisiteInstaller = null,
         IRebootResumeScheduler? rebootResumeScheduler = null,
-        IVersionUpdatePolicyRepository? versionPolicyRepository = null)
+        IVersionUpdatePolicyRepository? versionPolicyRepository = null,
+        IWindowsIntegrationManager? windowsIntegrationManager = null)
     {
         _artifactDownloader = artifactDownloader;
         _artifactVerifier = artifactVerifier;
@@ -109,6 +112,9 @@ public sealed class InstallerWorkflowService
                 ? null
                 : new VersionUpdatePolicyService(
                     versionPolicyRepository);
+
+        _windowsIntegrationManager =
+            windowsIntegrationManager;
     }
 
     public Task InstallAsync(
@@ -178,6 +184,13 @@ public sealed class InstallerWorkflowService
                         release,
                         targetPath,
                         progress,
+                        operation,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                await ApplyWindowsIntegrationsAsync(
+                        release,
+                        targetPath,
                         operation,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -274,6 +287,13 @@ public sealed class InstallerWorkflowService
                             cancellationToken)
                         .ConfigureAwait(false);
 
+                    await ApplyWindowsIntegrationsAsync(
+                            release,
+                            currentState.TargetPath,
+                            operation,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
                     ReportCompleted(progress);
                 })
             .ConfigureAwait(false);
@@ -343,6 +363,13 @@ public sealed class InstallerWorkflowService
                             release,
                             currentState.TargetPath),
                         stage,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+                await ApplyWindowsIntegrationsAsync(
+                        release,
+                        currentState.TargetPath,
+                        operation,
                         cancellationToken)
                     .ConfigureAwait(false);
 
@@ -434,6 +461,13 @@ public sealed class InstallerWorkflowService
                         cancellationToken)
                     .ConfigureAwait(false);
 
+                await ApplyWindowsIntegrationsAsync(
+                        previousRelease,
+                        currentState.TargetPath,
+                        operation,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
                 ReportCompleted(progress);
             });
     }
@@ -488,6 +522,12 @@ public sealed class InstallerWorkflowService
                     progress,
                     InstallerProgressStage.RemovingState,
                     SavePercent);
+
+                await RemoveWindowsIntegrationsBestEffortAsync(
+                        currentState.PackageId,
+                        operation,
+                        cancellationToken)
+                    .ConfigureAwait(false);
 
                 await _stateRepository
                     .DeleteAsync(
@@ -1074,6 +1114,78 @@ public sealed class InstallerWorkflowService
             prerequisite.Id,
             " ",
             prerequisite.VersionExpression);
+    }
+
+    private async Task ApplyWindowsIntegrationsAsync(
+        PackageRelease release,
+        string targetPath,
+        InstallerOperationContext operation,
+        CancellationToken cancellationToken)
+    {
+        if (_windowsIntegrationManager is null)
+        {
+            if (release.Install.WindowsIntegration.HasActions)
+            {
+                throw new InvalidOperationException(
+                    "Windows integration actions are declared but no integration manager is configured.");
+            }
+
+            return;
+        }
+
+        await operation
+            .SetPhaseAsync(
+                InstallerOperationPhase.ApplyingIntegrations,
+                "integration.applying",
+                "Package-owned Windows integrations are being reconciled.",
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await _windowsIntegrationManager
+            .ApplyAsync(
+                release.PackageId,
+                targetPath,
+                release.Install.WindowsIntegration,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private async Task RemoveWindowsIntegrationsBestEffortAsync(
+        PackageId packageId,
+        InstallerOperationContext operation,
+        CancellationToken cancellationToken)
+    {
+        if (_windowsIntegrationManager is null)
+        {
+            return;
+        }
+
+        await operation
+            .SetPhaseAsync(
+                InstallerOperationPhase.ApplyingIntegrations,
+                "integration.removing",
+                "Package-owned Windows integrations are being removed.",
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        try
+        {
+            await _windowsIntegrationManager
+                .RemoveAsync(
+                    packageId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            await operation
+                .WarnAsync(
+                    "integration.cleanup_failed",
+                    exception.Message,
+                    exception.GetType().FullName,
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+        }
     }
 
     private async Task SaveStateAsync(

@@ -1,19 +1,21 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerWorkflowServiceTests.cs
 // 📌 Amac: InstallerWorkflowService install pipeline sirasi ve state kaydini fake portlarla unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.2.0
-// Aciklama: Download/verify/apply zincirine ek olarak version-policy-blocked update'in journal/download baslatmadigini dogrular
+// Version: 1.4.0
+// Aciklama: Download/verify/apply zincirine ek olarak version policy, Windows integration reconcile ve cleanup failure isolation davranislarini dogrular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Application.Updates;
 using TurkuazInstaller.Contracts.Artifacts;
+using TurkuazInstaller.Contracts.Integrations;
 using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Contracts.Updates;
 using TurkuazInstaller.Domain.Artifacts;
+using TurkuazInstaller.Domain.Integrations;
 using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Plans;
 using TurkuazInstaller.Domain.Products;
@@ -135,6 +137,122 @@ public sealed class InstallerWorkflowServiceTests
     }
 
 
+
+    [Fact]
+    public async Task InstallAsync_WithWindowsIntegration_ReconcilesTypedPolicy()
+    {
+        var stateRepository =
+            new StubStateRepository();
+
+        var integrationManager =
+            new StubWindowsIntegrationManager();
+
+        var release =
+            CreateReleaseWithIntegration();
+
+        var service =
+            new InstallerWorkflowService(
+                new StubDownloader(),
+                new StubVerifier(),
+                new StubPackageEngine(),
+                stateRepository,
+                windowsIntegrationManager:
+                    integrationManager);
+
+        await service.InstallAsync(
+            release,
+            "C:/Apps/Example",
+            "C:/Temp/TurkuazInstaller",
+            null,
+            CancellationToken.None);
+
+        Assert.NotNull(
+            stateRepository.SavedState);
+
+        Assert.Equal(
+            1,
+            integrationManager.ApplyCalls);
+
+        Assert.Equal(
+            release.PackageId,
+            integrationManager.LastPackageId);
+
+        Assert.Equal(
+            "main",
+            Assert.Single(
+                integrationManager.LastPolicy!.Shortcuts)
+                .Id);
+
+        Assert.Equal(
+            "example-app",
+            Assert.Single(
+                integrationManager.LastPolicy.Protocols)
+                .Scheme);
+    }
+
+    [Fact]
+    public async Task UninstallAsync_IntegrationCleanupFailure_DeletesStateAndLogsWarning()
+    {
+        var stateRepository =
+            new StubStateRepository
+            {
+                SavedState =
+                    new InstalledPackageState(
+                        PackageId.Parse(
+                            "example-app"),
+                        SemanticVersion.Parse(
+                            "1.0.0"),
+                        ReleaseChannel.Stable,
+                        "C:/Apps/Example")
+            };
+
+        var logger =
+            new StubEventLogger();
+
+        var integrationManager =
+            new StubWindowsIntegrationManager
+            {
+                RemoveException =
+                    new IOException(
+                        "Simulated integration cleanup failure.")
+            };
+
+        var service =
+            new InstallerWorkflowService(
+                new StubDownloader(),
+                new StubVerifier(),
+                new StubPackageEngine(),
+                stateRepository,
+                eventLogger:
+                    logger,
+                windowsIntegrationManager:
+                    integrationManager);
+
+        await service.UninstallAsync(
+            stateRepository.SavedState,
+            null,
+            CancellationToken.None);
+
+        Assert.Equal(
+            1,
+            integrationManager.RemoveCalls);
+
+        Assert.Equal(
+            1,
+            stateRepository.DeleteCalls);
+
+        Assert.Null(
+            stateRepository.SavedState);
+
+        Assert.Contains(
+            logger.Events,
+            entry =>
+                entry.EventName ==
+                    "integration.cleanup_failed" &&
+                entry.Level ==
+                    InstallerEventLevel.Warning);
+    }
+
     [Fact]
     public async Task UpdateAsync_SkippedVersion_BlocksBeforeJournalAndDownload()
     {
@@ -214,6 +332,44 @@ public sealed class InstallerWorkflowServiceTests
             journal.SaveCalls);
     }
 
+
+    private static PackageRelease CreateReleaseWithIntegration()
+    {
+        return new PackageRelease(
+            PackageId.Parse(
+                "example-app"),
+            SemanticVersion.Parse(
+                "1.0.0"),
+            ReleaseChannel.Stable,
+            new ArtifactDescriptor(
+                new Uri(
+                    "https://example.invalid/Example-Setup.exe"),
+                ArtifactDigest.ParseSha256(
+                    Digest),
+                1024),
+            new PackageInstallPolicy(
+                PackageInstallMode.Full,
+                "C:/Apps/Example",
+                Array.Empty<TurkuazInstaller.Domain.Prerequisites.Prerequisite>(),
+                Array.Empty<string>(),
+                new WindowsIntegrationPolicy(
+                    new[]
+                    {
+                        new WindowsShortcutIntegration(
+                            "main",
+                            "Example App",
+                            WindowsShortcutLocation.StartMenu,
+                            "ExampleApp.exe")
+                    },
+                    new[]
+                    {
+                        new WindowsProtocolIntegration(
+                            "example-app",
+                            "ExampleApp.exe")
+                    })),
+            PackageRollbackPolicy.Disabled);
+    }
+
     private static PackageRelease CreateRelease()
     {
         return new PackageRelease(
@@ -225,6 +381,68 @@ public sealed class InstallerWorkflowServiceTests
                     "https://example.invalid/Example-Setup.exe"),
                 ArtifactDigest.ParseSha256(Digest),
                 1024));
+    }
+
+
+    private sealed class StubWindowsIntegrationManager
+        : IWindowsIntegrationManager
+    {
+        public int ApplyCalls
+        {
+            get;
+            private set;
+        }
+
+        public PackageId? LastPackageId
+        {
+            get;
+            private set;
+        }
+
+        public WindowsIntegrationPolicy? LastPolicy
+        {
+            get;
+            private set;
+        }
+
+        public int RemoveCalls
+        {
+            get;
+            private set;
+        }
+
+        public Exception? RemoveException
+        {
+            get;
+            init;
+        }
+
+        public Task ApplyAsync(
+            PackageId packageId,
+            string targetPath,
+            WindowsIntegrationPolicy policy,
+            CancellationToken cancellationToken)
+        {
+            ApplyCalls++;
+            LastPackageId = packageId;
+            LastPolicy = policy;
+
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveAsync(
+            PackageId packageId,
+            CancellationToken cancellationToken)
+        {
+            RemoveCalls++;
+
+            if (RemoveException is not null)
+            {
+                throw RemoveException;
+            }
+
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class StubDownloader
@@ -435,7 +653,13 @@ public sealed class InstallerWorkflowServiceTests
     private sealed class StubStateRepository
         : IInstallStateRepository
     {
-        public InstalledPackageState? SavedState { get; private set; }
+        public InstalledPackageState? SavedState { get; set; }
+
+        public int DeleteCalls
+        {
+            get;
+            private set;
+        }
 
         public Task<InstalledPackageState?> GetAsync(
             PackageId packageId,
@@ -472,6 +696,7 @@ public sealed class InstallerWorkflowServiceTests
             PackageId packageId,
             CancellationToken cancellationToken)
         {
+            DeleteCalls++;
             SavedState = null;
             return Task.CompletedTask;
         }

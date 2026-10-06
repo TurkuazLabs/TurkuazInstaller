@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.9.0
-# Aciklama: Detached trust, private credentials, proxy, manual/background discovery, version skip/pinning, reboot resume ve mutation guvenlik kurallarini sabitler
+# Version: 2.0.1
+# Aciklama: Detached trust, private credentials, proxy, discovery, version policy, safe Windows integration, reboot resume ve mutation guvenlik kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -37,6 +37,7 @@ Community baseline:
 - update discovery icin signed-manifest-only read-only karar siniri
 - background update policy icin session-only, no-auto-download/no-auto-install siniri
 - version skip/pinning icin shared workflow pre-mutation guard
+- signed Windows shortcut/protocol actionlari icin package-scoped ownership receipt + HKCU-only registry siniri
 
 ## Manifest Trust
 
@@ -287,6 +288,42 @@ InstallerWorkflowService.UpdateAsync policy'yi operation lock, journal, artifact
 Ayni guard WinUI, CLI ve reboot-resume update akislarinda kullanilir.
 
 Detay: docs/VERSION_POLICY.md
+
+## Safe Windows Integration Actions
+
+Windows integration actionlari yalniz signed manifestten gelir.
+
+Desteklenen actionlar:
+
+- Desktop shortcut
+- Start Menu shortcut
+- per-user URL protocol
+
+Target executable install rootuna gore relative .exe olmalidir.
+
+Install root escape ve reparse-point path reddedilir.
+
+Shortcut ownership package-scoped receipt icinde action id + full path + SHA-256 ile tutulur.
+
+Var olan foreign veya modified shortcut overwrite edilmez.
+
+Shortcut cleanup yalniz mevcut dosya SHA-256 receipt hash ile eslesir ve receipt path Desktop veya package-scoped Start Menu lokasyonuna aitse siler.
+
+Bozuk receipt arbitrary filesystem path temizligi baslatamaz.
+
+Protocol registration yalniz HKCU\\Software\\Classes altindadir.
+
+Protocol ownership TurkuazInstallerOwner package id marker ile korunur.
+
+Foreign protocol overwrite/silme reddedilir.
+
+Receipt protocol scheme degeri Domain validatorundan yeniden gecmeden registry cleanup yolu uretilmez.
+
+Protocol command quoted executable + fixed "%1" argumentidir; shell interpretation yoktur.
+
+Uninstall cleanup failure structured warning olarak loglanir, package state delete devam eder ve receipt safe retry icin korunur.
+
+Detay: docs/WINDOWS_INTEGRATION.md
 
 ## Preserve Data
 

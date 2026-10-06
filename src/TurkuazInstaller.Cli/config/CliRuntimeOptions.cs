@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Cli/config/CliRuntimeOptions.cs
 // 📌 Amac: CLI state, staging, diagnostics, resume, trust ve executable yollarini typed config olarak tasir
 // 📌 Modul - Config CSharp
-// Version: 1.0.0
-// Aciklama: Silent runtime storage ve reboot resume ayarlarini Service/Repo/Tool implementasyonlarindan ayirir
+// Version: 1.1.0
+// Aciklama: Silent runtime storage, integration receipt ve reboot resume ayarlarini implementasyonlardan ayirir
 //
 // Bagimli Oldugu Katman: Config
 
@@ -15,6 +15,7 @@ internal sealed record CliRuntimeOptions(
     string JournalRoot,
     string LogRoot,
     string ResumeRoot,
+    string IntegrationRoot,
     string ManifestTrustStorePath,
     string ExecutablePath,
     string RebootResumeValueNamePrefix);
