@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/viewmodels/MainWindowViewModel.cs
 // 📌 Amac: TurkuazInstaller ana penceresinin bind edilebilir UI state modelini tasir
 // 📌 Modul - ViewModel CSharp
-// Version: 1.0.0
-// Aciklama: Form, language, progress, uninstall, error ve recovery state'ini WinUI framework bagimsiz modelde yonetir
+// Version: 1.1.0
+// Aciklama: Form/progress/recovery state'ine ek olarak salt-okunur kurulu uygulama katalog ve katalog hata state'ini yonetir
 //
 // Bagimli Oldugu Katman: View | Language
 
@@ -22,6 +22,15 @@ public sealed class MainWindowViewModel
                 InstallerUiLabels.Stable,
                 InstallerUiLabels.Beta
             });
+
+    private IReadOnlyList<InstalledAppListItemViewModel>
+        _installedApps =
+            Array.Empty<InstalledAppListItemViewModel>();
+
+    private string _catalogErrorMessage =
+        string.Empty;
+
+    private bool _hasCatalogError;
 
     private string _packageIdText = string.Empty;
     private string _manifestSource = string.Empty;
@@ -46,6 +55,18 @@ public sealed class MainWindowViewModel
 
     public string HeaderSubtitle =>
         InstallerUiLabels.HeaderSubtitle;
+
+    public string InstalledAppsTitle =>
+        InstallerUiLabels.InstalledAppsTitle;
+
+    public string RefreshInstalledAppsLabel =>
+        InstallerUiLabels.RefreshInstalledApps;
+
+    public string InstalledAppsCountText =>
+        string.Concat(
+            InstallerUiLabels.InstalledAppsCountPrefix,
+            " ",
+            InstalledApps.Count);
 
     public string PackageIdLabel =>
         InstallerUiLabels.PackageId;
@@ -109,6 +130,39 @@ public sealed class MainWindowViewModel
 
     public IReadOnlyList<string> ChannelOptions =>
         ChannelItems;
+
+    public IReadOnlyList<InstalledAppListItemViewModel>
+        InstalledApps
+    {
+        get => _installedApps;
+        private set
+        {
+            if (
+                SetProperty(
+                    ref _installedApps,
+                    value))
+            {
+                OnPropertyChanged(
+                    nameof(InstalledAppsCountText));
+            }
+        }
+    }
+
+    public string CatalogErrorMessage
+    {
+        get => _catalogErrorMessage;
+        set => SetProperty(
+            ref _catalogErrorMessage,
+            value);
+    }
+
+    public bool HasCatalogError
+    {
+        get => _hasCatalogError;
+        set => SetProperty(
+            ref _hasCatalogError,
+            value);
+    }
 
     public string PackageIdText
     {
@@ -203,6 +257,17 @@ public sealed class MainWindowViewModel
     public bool CanRun => !IsBusy;
 
     public bool CanCancel => IsBusy;
+
+    public void SetInstalledApps(
+        IReadOnlyList<InstalledAppListItemViewModel> items)
+    {
+        ArgumentNullException.ThrowIfNull(
+            items);
+
+        InstalledApps =
+            Array.AsReadOnly(
+                items.ToArray());
+    }
 
     public bool CanRetry
     {
