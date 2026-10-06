@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Bootstrapper.Tests/BootstrapRuntimeServiceTests.cs
-// 📌 Amac: Bootstrap Runtime Service startup, prerequisite, cleanup ve self-update orchestration davranisini unit test eder
+// 📌 Amac: Bootstrap Runtime Service startup, prerequisite, cleanup ve trusted self-update orchestration davranisini unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Normal startup'in app/WinUI launch ettigini ve self-update modlarinin dogru Tool portuna yonlendigini dogrular
+// Version: 1.1.0
+// Aciklama: Normal launch, explicit handoff trust, automatic discovery/download ve completion akislarini dogrular
 //
 // Bagimli Oldugu Katman: Service | Tool | Config
 
@@ -11,6 +11,9 @@ using TurkuazInstaller.Bootstrapper.Config;
 using TurkuazInstaller.Bootstrapper.Services;
 using TurkuazInstaller.Bootstrapper.Tools;
 using TurkuazInstaller.Contracts.Bootstrap;
+using TurkuazInstaller.Domain.Artifacts;
+using TurkuazInstaller.Domain.Releases;
+using TurkuazInstaller.Domain.Verification;
 using Xunit;
 
 namespace TurkuazInstaller.Bootstrapper.Tests;
@@ -22,6 +25,9 @@ public sealed class BootstrapRuntimeServiceTests
 
     private const string ReplacementPath =
         @"C:\Stage\TurkuazInstaller.Bootstrapper.exe";
+
+    private const string Digest =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     [Fact]
     public async Task ExecuteAsync_SupportedEnvironment_LaunchesDesktopFromAppDirectory()
@@ -80,6 +86,96 @@ public sealed class BootstrapRuntimeServiceTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_DiscoveredUpdate_VerifiesAndBeginsHandoffWithoutLaunchingDesktop()
+    {
+        var release =
+            CreateUpdateRelease();
+
+        var discovery =
+            new StubSelfUpdateDiscovery(
+                release);
+
+        var downloader =
+            new StubSelfUpdateDownloader(
+                ReplacementPath);
+
+        var trustVerifier =
+            new StubSelfUpdateTrustVerifier
+            {
+                CanSelfUpdate = true
+            };
+
+        var handoff =
+            new StubSelfUpdateHandoff();
+
+        var launcher =
+            new StubApplicationLauncher();
+
+        var service =
+            CreateService(
+                BootstrapCpuArchitecture.X64,
+                handoff,
+                new StubFileCleaner(),
+                launcher,
+                discovery,
+                downloader,
+                trustVerifier);
+
+        var result =
+            await service.ExecuteAsync(
+                new BootstrapInvocation(
+                    null,
+                    null,
+                    null,
+                    new[]
+                    {
+                        "--resume-package",
+                        "example-app"
+                    }),
+                CancellationToken.None);
+
+        Assert.Equal(
+            BootstrapExitCode.Success,
+            result);
+
+        Assert.Equal(
+            SemanticVersion.Parse(
+                "1.0.0"),
+            discovery.CurrentVersion);
+
+        Assert.Same(
+            release,
+            downloader.Release);
+
+        Assert.Equal(
+            BootstrapPath,
+            trustVerifier.CurrentExecutablePath);
+
+        Assert.Equal(
+            ReplacementPath,
+            trustVerifier.ReplacementExecutablePath);
+
+        Assert.NotNull(
+            handoff.BeginRequest);
+
+        Assert.Equal(
+            Path.GetFullPath(
+                ReplacementPath),
+            handoff.BeginRequest!.ReplacementExecutablePath);
+
+        Assert.Equal(
+            new[]
+            {
+                "--resume-package",
+                "example-app"
+            },
+            handoff.BeginRequest.ResumeArguments);
+
+        Assert.Null(
+            launcher.ExecutablePath);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_UnsupportedArchitecture_DoesNotLaunchDesktop()
     {
         var launcher =
@@ -110,7 +206,7 @@ public sealed class BootstrapRuntimeServiceTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_SelfUpdateStart_InvokesBeginWithoutLaunchingDesktop()
+    public async Task ExecuteAsync_SelfUpdateStart_VerifiesThenInvokesBeginWithoutLaunchingDesktop()
     {
         var handoff =
             new StubSelfUpdateHandoff();
@@ -118,12 +214,17 @@ public sealed class BootstrapRuntimeServiceTests
         var launcher =
             new StubApplicationLauncher();
 
+        var trustVerifier =
+            new StubSelfUpdateTrustVerifier();
+
         var service =
             CreateService(
                 BootstrapCpuArchitecture.X64,
                 handoff,
                 new StubFileCleaner(),
-                launcher);
+                launcher,
+                trustVerifier:
+                    trustVerifier);
 
         var result =
             await service.ExecuteAsync(
@@ -142,13 +243,22 @@ public sealed class BootstrapRuntimeServiceTests
             BootstrapExitCode.Success,
             result);
 
+        Assert.Equal(
+            BootstrapPath,
+            trustVerifier.CurrentExecutablePath);
+
+        Assert.Equal(
+            Path.GetFullPath(
+                ReplacementPath),
+            trustVerifier.ReplacementExecutablePath);
+
         Assert.NotNull(
             handoff.BeginRequest);
 
         Assert.Equal(
             Path.GetFullPath(
                 BootstrapPath),
-            handoff.BeginRequest.CurrentExecutablePath);
+            handoff.BeginRequest!.CurrentExecutablePath);
 
         Assert.Equal(
             Path.GetFullPath(
@@ -157,6 +267,44 @@ public sealed class BootstrapRuntimeServiceTests
 
         Assert.Null(
             launcher.ExecutablePath);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_SelfUpdateStart_UntrustedReplacementDoesNotBegin()
+    {
+        var handoff =
+            new StubSelfUpdateHandoff();
+
+        var trustVerifier =
+            new StubSelfUpdateTrustVerifier
+            {
+                Verification =
+                    VerificationResult.Failed(
+                        VerificationFailure.SignatureInvalid,
+                        "Signer mismatch.")
+            };
+
+        var service =
+            CreateService(
+                BootstrapCpuArchitecture.X64,
+                handoff,
+                new StubFileCleaner(),
+                new StubApplicationLauncher(),
+                trustVerifier:
+                    trustVerifier);
+
+        await Assert.ThrowsAsync<InvalidDataException>(
+            () =>
+                service.ExecuteAsync(
+                    new BootstrapInvocation(
+                        null,
+                        null,
+                        ReplacementPath,
+                        Array.Empty<string>()),
+                    CancellationToken.None));
+
+        Assert.Null(
+            handoff.BeginRequest);
     }
 
     [Fact]
@@ -236,7 +384,10 @@ public sealed class BootstrapRuntimeServiceTests
         BootstrapCpuArchitecture architecture,
         StubSelfUpdateHandoff handoff,
         StubFileCleaner cleaner,
-        StubApplicationLauncher launcher)
+        StubApplicationLauncher launcher,
+        StubSelfUpdateDiscovery? discovery = null,
+        StubSelfUpdateDownloader? downloader = null,
+        StubSelfUpdateTrustVerifier? trustVerifier = null)
     {
         var prerequisiteService =
             new BootstrapPrerequisiteService(
@@ -263,6 +414,13 @@ public sealed class BootstrapRuntimeServiceTests
         return new BootstrapRuntimeService(
             prerequisiteService,
             handoff,
+            discovery
+                ?? new StubSelfUpdateDiscovery(),
+            downloader
+                ?? new StubSelfUpdateDownloader(
+                    ReplacementPath),
+            trustVerifier
+                ?? new StubSelfUpdateTrustVerifier(),
             cleaner,
             new StubProcessContext(
                 BootstrapPath),
@@ -270,7 +428,32 @@ public sealed class BootstrapRuntimeServiceTests
             new BootstrapRuntimeOptions(
                 Path.Combine(
                     "app",
-                    "TurkuazInstaller.WinUI.exe")));
+                    "TurkuazInstaller.WinUI.exe")),
+            new BootstrapSelfUpdateOptions(
+                SemanticVersion.Parse(
+                    "1.0.0"),
+                new Uri(
+                    "https://api.github.com/repos/TurkuazLabs/TurkuazInstaller/releases/latest"),
+                "TurkuazInstaller.Bootstrapper.exe",
+                @"C:\Stage",
+                TimeSpan.FromSeconds(
+                    5),
+                TimeSpan.FromMinutes(
+                    2)));
+    }
+
+    private static BootstrapSelfUpdateRelease
+        CreateUpdateRelease()
+    {
+        return new BootstrapSelfUpdateRelease(
+            SemanticVersion.Parse(
+                "1.1.0"),
+            "TurkuazInstaller.Bootstrapper.exe",
+            new Uri(
+                "https://github.com/TurkuazLabs/TurkuazInstaller/releases/download/v1.1.0/TurkuazInstaller.Bootstrapper.exe"),
+            ArtifactDigest.ParseSha256(
+                Digest),
+            1024);
     }
 
     private sealed class StubEnvironmentProbe
@@ -319,6 +502,110 @@ public sealed class BootstrapRuntimeServiceTests
         {
             CompleteRequest = request;
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class StubSelfUpdateDiscovery
+        : IBootstrapSelfUpdateDiscovery
+    {
+        private readonly BootstrapSelfUpdateRelease? _release;
+
+        public StubSelfUpdateDiscovery(
+            BootstrapSelfUpdateRelease? release = null)
+        {
+            _release = release;
+        }
+
+        public SemanticVersion? CurrentVersion
+        {
+            get;
+            private set;
+        }
+
+        public Task<BootstrapSelfUpdateRelease?> GetLatestAsync(
+            SemanticVersion currentVersion,
+            CancellationToken cancellationToken)
+        {
+            CurrentVersion = currentVersion;
+
+            return Task.FromResult(
+                _release);
+        }
+    }
+
+    private sealed class StubSelfUpdateDownloader
+        : IBootstrapSelfUpdateDownloader
+    {
+        private readonly string _path;
+
+        public StubSelfUpdateDownloader(
+            string path)
+        {
+            _path = path;
+        }
+
+        public BootstrapSelfUpdateRelease? Release
+        {
+            get;
+            private set;
+        }
+
+        public Task<string> DownloadAsync(
+            BootstrapSelfUpdateRelease release,
+            string stagingRoot,
+            CancellationToken cancellationToken)
+        {
+            Release = release;
+
+            return Task.FromResult(
+                _path);
+        }
+    }
+
+    private sealed class StubSelfUpdateTrustVerifier
+        : IBootstrapSelfUpdateTrustVerifier
+    {
+        public bool CanSelfUpdate { get; init; }
+
+        public VerificationResult Verification { get; init; } =
+            VerificationResult.Passed();
+
+        public string? CurrentExecutablePath
+        {
+            get;
+            private set;
+        }
+
+        public string? ReplacementExecutablePath
+        {
+            get;
+            private set;
+        }
+
+        public Task<bool> CanSelfUpdateAsync(
+            string currentExecutablePath,
+            CancellationToken cancellationToken)
+        {
+            CurrentExecutablePath =
+                currentExecutablePath;
+
+            return Task.FromResult(
+                CanSelfUpdate);
+        }
+
+        public Task<VerificationResult> VerifyReplacementAsync(
+            string currentExecutablePath,
+            string replacementExecutablePath,
+            CancellationToken cancellationToken)
+        {
+            CurrentExecutablePath =
+                currentExecutablePath;
+
+            ReplacementExecutablePath =
+                replacementExecutablePath;
+
+            return Task.FromResult(
+                Verification);
         }
     }
 
