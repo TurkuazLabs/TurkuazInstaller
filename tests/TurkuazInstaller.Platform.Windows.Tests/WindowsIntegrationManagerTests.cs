@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Platform.Windows.Tests/WindowsIntegrationManagerTests.cs
 // 📌 Amac: Windows integration manager receipt reconcile ve uninstall cleanup davranisini deterministik seam'lerle test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Yeni/stale shortcut ve protocol aksiyonlarinin package-scoped receipt ile dogru yonetildigini dogrular
+// Version: 1.1.0
+// Aciklama: Reconcile/remove davranisina ek olarak cleanup failure sonrasi ownership receipt'inin korundugunu dogrular
 //
 // Bagimli Oldugu Katman: Tool | Repo | Service
 
@@ -137,6 +137,73 @@ public sealed class WindowsIntegrationManagerTests
     }
 
     [Fact]
+    public async Task RemoveAsync_CleanupFailure_PreservesReceiptForRetry()
+    {
+        var root =
+            CreateTempRoot();
+
+        try
+        {
+            var packageId =
+                PackageId.Parse(
+                    "example-app");
+
+            var receiptStore =
+                new WindowsIntegrationReceiptStore(
+                    root);
+
+            await receiptStore.SaveAsync(
+                new WindowsIntegrationReceipt(
+                    packageId,
+                    new[]
+                    {
+                        new WindowsShortcutReceipt(
+                            "main",
+                            Path.Combine(
+                                root,
+                                "Example.lnk"),
+                            HashA)
+                    },
+                    new[]
+                    {
+                        "example-app"
+                    }),
+                CancellationToken.None);
+
+            var shortcutStore =
+                new StubShortcutStore(
+                    root)
+                {
+                    RemoveException =
+                        new IOException(
+                            "Simulated shortcut cleanup failure.")
+                };
+
+            var manager =
+                new WindowsIntegrationManager(
+                    receiptStore,
+                    shortcutStore,
+                    new StubProtocolStore());
+
+            await Assert.ThrowsAsync<AggregateException>(
+                () =>
+                    manager.RemoveAsync(
+                        packageId,
+                        CancellationToken.None));
+
+            Assert.NotNull(
+                await receiptStore.GetAsync(
+                    packageId,
+                    CancellationToken.None));
+        }
+        finally
+        {
+            DeleteTempRoot(
+                root);
+        }
+    }
+
+    [Fact]
     public async Task RemoveAsync_CleansOwnedActionsAndDeletesReceipt()
     {
         var root =
@@ -252,6 +319,12 @@ public sealed class WindowsIntegrationManagerTests
             get;
         } = new();
 
+        public Exception? RemoveException
+        {
+            get;
+            init;
+        }
+
         public Task<WindowsShortcutReceipt> CreateAsync(
             PackageId packageId,
             string targetPath,
@@ -276,6 +349,11 @@ public sealed class WindowsIntegrationManagerTests
         {
             Removed.Add(
                 receipt);
+
+            if (RemoveException is not null)
+            {
+                throw RemoveException;
+            }
 
             return Task.CompletedTask;
         }
