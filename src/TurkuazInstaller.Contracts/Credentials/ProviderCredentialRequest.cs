@@ -35,6 +35,8 @@ public sealed record ProviderCredentialRequest
                 "/",
                 StringComparison.Ordinal) ||
             !string.IsNullOrEmpty(
+                uri.UserInfo) ||
+            !string.IsNullOrEmpty(
                 uri.Query) ||
             !string.IsNullOrEmpty(
                 uri.Fragment))
