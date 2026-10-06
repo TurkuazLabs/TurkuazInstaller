@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Domain/Integrations/WindowsShortcutIntegration.cs
 // 📌 Amac: Signed manifest Windows shortcut aksiyonunu guvenli typed modelde tasir
 // 📌 Modul - Domain CSharp
-// Version: 1.0.1
+// Version: 1.0.2
 // Aciklama: Action id, gorunen ad, lokasyon ve install root relative EXE yolunu strict dogrular
 //
 // Bagimli Oldugu Katman: Service | Tool
@@ -126,8 +126,7 @@ public sealed record WindowsShortcutIntegration
                 '/',
                 StringComparison.Ordinal) ||
             normalized.Contains(
-                ':',
-                StringComparison.Ordinal) ||
+                ':') ||
             segments.Length == 0 ||
             !string.Equals(
                 Path.GetExtension(
