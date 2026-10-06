@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/services/WinUiInstallerRuntimeService.cs
 // 📌 Amac: Presentation requestlerini signed provider, resumable workflow, repository ve Velopack runtime operasyonlarina baglar
 // 📌 Modul - Service CSharp
-// Version: 1.3.0
-// Aciklama: Manual mutationlari ve AwaitingReboot/RebootResumeArmed journal-validated resume akisini koordine eder
+// Version: 1.4.0
+// Aciklama: Signed provider uzerinden read-only update discovery, manual mutation ve reboot-resume akislarini koordine eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
 using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Application.Updates;
 using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Domain.Operations;
@@ -66,6 +67,31 @@ internal sealed class WinUiInstallerRuntimeService
         _operationJournal = operationJournal;
         _resumeRequestRepository = resumeRequestRepository;
         _options = options;
+    }
+
+    public async Task<UpdateCheckResult> CheckUpdateAsync(
+        InstallerUpdateCheckRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(
+            request);
+
+        var packageId =
+            PackageId.Parse(
+                request.PackageId);
+
+        var provider =
+            _providerFactory.Create(
+                request.ManifestSource);
+
+        return await new UpdateCheckService(
+                provider,
+                _stateRepository)
+            .ExecuteAsync(
+                packageId,
+                request.Channel,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task ExecuteAsync(
