@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.5.0
-// Aciklama: Prerequisite auto-install, pre-execution reboot-safe arm, RunOnce resume ve package mutation akisini uygular
+// Version: 1.6.0
+// Aciklama: Prerequisite/reboot-safe mutation akimina ek olarak update skip/pinning policy'yi journal/staging oncesi zorunlu uygular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -11,6 +11,8 @@ using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Contracts.System;
+using TurkuazInstaller.Contracts.Updates;
+using TurkuazInstaller.Application.Updates;
 using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Plans;
@@ -74,6 +76,7 @@ public sealed class InstallerWorkflowService
     private readonly IInstallerEventLogger? _eventLogger;
     private readonly IPrerequisiteInstaller? _prerequisiteInstaller;
     private readonly IRebootResumeScheduler? _rebootResumeScheduler;
+    private readonly VersionUpdatePolicyService? _versionPolicyService;
 
     public InstallerWorkflowService(
         IArtifactDownloader artifactDownloader,
@@ -86,7 +89,8 @@ public sealed class InstallerWorkflowService
         IInstallerOperationJournalRepository? operationJournal = null,
         IInstallerEventLogger? eventLogger = null,
         IPrerequisiteInstaller? prerequisiteInstaller = null,
-        IRebootResumeScheduler? rebootResumeScheduler = null)
+        IRebootResumeScheduler? rebootResumeScheduler = null,
+        IVersionUpdatePolicyRepository? versionPolicyRepository = null)
     {
         _artifactDownloader = artifactDownloader;
         _artifactVerifier = artifactVerifier;
@@ -99,6 +103,12 @@ public sealed class InstallerWorkflowService
         _eventLogger = eventLogger;
         _prerequisiteInstaller = prerequisiteInstaller;
         _rebootResumeScheduler = rebootResumeScheduler;
+
+        _versionPolicyService =
+            versionPolicyRepository is null
+                ? null
+                : new VersionUpdatePolicyService(
+                    versionPolicyRepository);
     }
 
     public Task InstallAsync(
@@ -176,7 +186,7 @@ public sealed class InstallerWorkflowService
             });
     }
 
-    public Task UpdateAsync(
+    public async Task UpdateAsync(
         PackageRelease release,
         InstalledPackageState currentState,
         string stagingDirectory,
@@ -187,80 +197,86 @@ public sealed class InstallerWorkflowService
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(currentState);
 
-        return ExecuteTrackedAsync(
-            release.PackageId,
-            InstallerOperationType.Update,
-            release.Version.ToString(),
-            currentState.TargetPath,
-            cancellationToken,
-            resumeEntry,
-            async operation =>
-            {
-                if (release.PackageId != currentState.PackageId)
+        if (release.PackageId != currentState.PackageId)
+        {
+            throw new InvalidOperationException(
+                UpdatePackageMismatch);
+        }
+
+        if (release.Version <= currentState.Version)
+        {
+            throw new InvalidOperationException(
+                UpdateVersionInvalid);
+        }
+
+        await EnsureVersionPolicyAllowsUpdateAsync(
+                release,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        await ExecuteTrackedAsync(
+                release.PackageId,
+                InstallerOperationType.Update,
+                release.Version.ToString(),
+                currentState.TargetPath,
+                cancellationToken,
+                resumeEntry,
+                async operation =>
                 {
-                    throw new InvalidOperationException(
-                        UpdatePackageMismatch);
-                }
-
-                if (release.Version <= currentState.Version)
-                {
-                    throw new InvalidOperationException(
-                        UpdateVersionInvalid);
-                }
-
-                await ValidatePrerequisitesAsync(
-                        release,
-                        stagingDirectory,
-                        operation,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-
-                var stage =
-                    await PrepareStageAsync(
+                    await ValidatePrerequisitesAsync(
                             release,
                             stagingDirectory,
+                            operation,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                    var stage =
+                        await PrepareStageAsync(
+                                release,
+                                stagingDirectory,
+                                progress,
+                                operation,
+                                cancellationToken)
+                            .ConfigureAwait(false);
+
+                    await operation
+                        .SetPhaseAsync(
+                            InstallerOperationPhase.Applying,
+                            "package.updating",
+                            "Package update apply started.",
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                    Report(
+                        progress,
+                        InstallerProgressStage.Applying,
+                        ApplyPercent);
+
+                    var plan =
+                        new InstallPlan(
+                            release,
+                            currentState.TargetPath,
+                            release.Install.Prerequisites,
+                            release.Install.PreservePaths);
+
+                    await _packageEngine
+                        .ApplyAsync(
+                            plan,
+                            stage,
+                            cancellationToken)
+                        .ConfigureAwait(false);
+
+                    await SaveStateAsync(
+                            release,
+                            currentState.TargetPath,
                             progress,
                             operation,
                             cancellationToken)
                         .ConfigureAwait(false);
 
-                await operation
-                    .SetPhaseAsync(
-                        InstallerOperationPhase.Applying,
-                        "package.updating",
-                        "Package update apply started.",
-                        cancellationToken)
-                    .ConfigureAwait(false);
-
-                Report(
-                    progress,
-                    InstallerProgressStage.Applying,
-                    ApplyPercent);
-
-                var plan =
-                    new InstallPlan(
-                        release,
-                        currentState.TargetPath,
-                        release.Install.Prerequisites,
-                        release.Install.PreservePaths);
-
-                await _packageEngine
-                    .ApplyAsync(
-                        plan,
-                        stage,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-
-                await SaveStateAsync(
-                        release,
-                        currentState.TargetPath,
-                        progress,
-                        operation,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-
-                ReportCompleted(progress);
-            });
+                    ReportCompleted(progress);
+                })
+            .ConfigureAwait(false);
     }
 
     public Task RepairAsync(
@@ -481,6 +497,38 @@ public sealed class InstallerWorkflowService
 
                 ReportCompleted(progress);
             });
+    }
+
+    private async Task EnsureVersionPolicyAllowsUpdateAsync(
+        PackageRelease release,
+        CancellationToken cancellationToken)
+    {
+        if (_versionPolicyService is null)
+        {
+            return;
+        }
+
+        var evaluation =
+            await _versionPolicyService
+                .EvaluateAsync(
+                    release.PackageId,
+                    release.Channel,
+                    release.Version,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (
+            evaluation.Decision ==
+            VersionUpdatePolicyDecision.Allowed)
+        {
+            return;
+        }
+
+        throw new InstallerVersionPolicyException(
+            release.PackageId,
+            release.Version,
+            evaluation.Decision,
+            evaluation.Policy?.MaximumVersion);
     }
 
     private async Task ExecuteTrackedAsync(

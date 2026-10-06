@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.11.0
-# Aciklama: Detached trust, private credentials, proxy, catalog, manual/background update discovery, reboot resume ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.12.0
+# Aciklama: Detached trust, private credentials, proxy, catalog, manual/background discovery, version skip/pinning ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -22,6 +22,7 @@ NETWORK = ROOT / "contracts" / "network.yml"
 INSTALLED_APP_CATALOG = ROOT / "contracts" / "installed-app-catalog.yml"
 UPDATE_DISCOVERY = ROOT / "contracts" / "update-discovery.yml"
 BACKGROUND_UPDATE_POLICY = ROOT / "contracts" / "background-update-policy.yml"
+VERSION_POLICY = ROOT / "contracts" / "version-policy.yml"
 EXAMPLE = ROOT / "examples" / "community-manifest.yml"
 SECURITY = ROOT / "docs" / "SECURITY_MODEL.md"
 ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
@@ -1111,6 +1112,8 @@ if set(
     "release_not_found",
     "current",
     "available",
+    "skipped",
+    "pinned",
 }:
     fail(
         "update discovery availability values drifted"
@@ -1141,6 +1144,8 @@ for key in (
     "reset_on_manifest_source_change",
     "separate_error_state",
     "not_installed_is_not_update_available",
+    "version_policy_applied_to_installed_updates",
+    "blocked_latest_version_remains_visible",
 ):
     if update_ux.get(key) is not True:
         fail(
@@ -1348,6 +1353,175 @@ for key in (
     if background_security.get(key) != "deny":
         fail(
             f"background update security invariant must deny: {key}"
+        )
+
+version_policy = load_yaml(
+    VERSION_POLICY
+)
+
+if version_policy.get("schema_version") != 1:
+    fail(
+        "version policy schema_version must be 1"
+    )
+
+version_runtime = version_policy.get(
+    "runtime_config",
+    {},
+)
+
+expected_version_runtime = {
+    "format": "json",
+    "path": "%LOCALAPPDATA%/TurkuazInstaller/config/version-policy.json",
+    "missing_config": "no_policy",
+    "unknown_property": "deny",
+    "maximum_entries": 100,
+    "maximum_skipped_versions_per_entry": 100,
+}
+
+for key, expected_value in expected_version_runtime.items():
+    if version_runtime.get(key) != expected_value:
+        fail(
+            f"version policy runtime invariant mismatch: {key}"
+        )
+
+version_entry = version_policy.get(
+    "entry",
+    {},
+)
+
+if set(version_entry.get("identity", [])) != {
+    "package_id",
+    "channel",
+}:
+    fail(
+        "version policy identity fields drifted"
+    )
+
+if set(version_entry.get("channels", [])) != {
+    "stable",
+    "beta",
+}:
+    fail(
+        "version policy channels drifted"
+    )
+
+if version_entry.get("duplicate_package_channel") != "deny":
+    fail(
+        "version policy duplicate package/channel must be denied"
+    )
+
+if version_entry.get("at_least_one_policy_required") is not True:
+    fail(
+        "version policy entry must require at least one rule"
+    )
+
+version_fields = version_entry.get(
+    "fields",
+    {},
+)
+
+if (
+    version_fields
+    .get("maximum_version", {})
+    .get("semantics")
+    != "maximum_accepted_version"
+):
+    fail(
+        "maximum_version must remain a maximum accepted version ceiling"
+    )
+
+if (
+    version_fields
+    .get("skipped_versions", {})
+    .get("semantics")
+    != "exact_candidate_versions"
+):
+    fail(
+        "skipped_versions must remain exact candidate versions"
+    )
+
+version_evaluation = version_policy.get(
+    "evaluation",
+    {},
+)
+
+expected_version_evaluation = {
+    "skipped_version_precedence": True,
+    "maximum_version_is_ceiling": True,
+    "policy_applies_to_installed_updates_only": True,
+    "latest_release_source": "signed_provider",
+    "historic_release_fetch": False,
+    "fabricated_release": False,
+    "automatic_downgrade": False,
+}
+
+for key, expected_value in expected_version_evaluation.items():
+    if version_evaluation.get(key) != expected_value:
+        fail(
+            f"version policy evaluation invariant mismatch: {key}"
+        )
+
+if set(
+    version_policy
+    .get("discovery", {})
+    .get("availability", [])
+) != {
+    "release_not_found",
+    "current",
+    "available",
+    "skipped",
+    "pinned",
+}:
+    fail(
+        "version policy discovery availability values drifted"
+    )
+
+version_mutation = version_policy.get(
+    "mutation",
+    {},
+)
+
+if version_mutation.get("enforce_in_shared_workflow") is not True:
+    fail(
+        "version policy must be enforced in shared workflow"
+    )
+
+if set(version_mutation.get("consumers", [])) != {
+    "winui",
+    "cli",
+    "reboot_resume",
+}:
+    fail(
+        "version policy mutation consumers drifted"
+    )
+
+if set(version_mutation.get("block_before", [])) != {
+    "operation_lock",
+    "journal",
+    "artifact_download",
+    "staging",
+    "package_apply",
+}:
+    fail(
+        "version policy must block before all mutation side effects"
+    )
+
+version_security = version_policy.get(
+    "security",
+    {},
+)
+
+for key in (
+    "bypass_policy_from_cli",
+    "bypass_policy_from_winui",
+    "bypass_policy_from_resume",
+    "auto_downgrade",
+    "fetch_unverified_historic_release",
+    "fabricate_pinned_release",
+):
+    if version_security.get(key) != "deny":
+        fail(
+            f"version policy security invariant must deny: {key}"
         )
 
 example = load_yaml(EXAMPLE)
