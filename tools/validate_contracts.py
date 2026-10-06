@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.15.0
-# Aciklama: Detached trust, provider, update, Windows integration, UI profile ve Community-Pro boundary contract invariantlarini kontrol eder
+# Version: 1.16.0
+# Aciklama: Detached trust, provider, update, retry-guvenli Windows integration, UI profile ve Community-Pro boundary invariantlarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -1851,10 +1851,12 @@ windows_workflow = windows_integration.get(
 )
 
 for key in (
-    "install_reconcile_after_state_commit",
-    "update_reconcile_after_state_commit",
+    "install_reconcile_before_state_commit",
+    "update_reconcile_before_state_commit",
     "repair_reconcile_after_package_repair",
-    "rollback_reconcile_after_state_commit",
+    "rollback_reconcile_before_state_commit",
+    "state_commit_after_successful_reconcile",
+    "integration_failure_preserves_committed_state",
     "uninstall_cleanup_after_package_uninstall",
 ):
     if windows_workflow.get(key) is not True:
