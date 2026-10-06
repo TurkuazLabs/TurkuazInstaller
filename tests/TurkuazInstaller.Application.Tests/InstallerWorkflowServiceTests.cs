@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerWorkflowServiceTests.cs
 // 📌 Amac: InstallerWorkflowService install pipeline sirasi ve state kaydini fake portlarla unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.4.0
-// Aciklama: Download/verify/apply zincirine ek olarak version policy, Windows integration reconcile ve cleanup failure isolation davranislarini dogrular
+// Version: 1.5.0
+// Aciklama: Windows integration reconcile basarisinin install/update/rollback state commit onkosulu oldugunu ve cleanup failure isolation davranisini dogrular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -191,6 +191,164 @@ public sealed class InstallerWorkflowServiceTests
     }
 
     [Fact]
+    public async Task InstallAsync_IntegrationFailure_DoesNotCommitState()
+    {
+        var stateRepository =
+            new StubStateRepository();
+
+        var integrationManager =
+            new StubWindowsIntegrationManager
+            {
+                ApplyException =
+                    new IOException(
+                        "Simulated integration apply failure.")
+            };
+
+        var service =
+            new InstallerWorkflowService(
+                new StubDownloader(),
+                new StubVerifier(),
+                new StubPackageEngine(),
+                stateRepository,
+                windowsIntegrationManager:
+                    integrationManager);
+
+        await Assert.ThrowsAsync<IOException>(
+            () => service.InstallAsync(
+                CreateReleaseWithIntegration(),
+                "C:/Apps/Example",
+                "C:/Temp/TurkuazInstaller",
+                null,
+                CancellationToken.None));
+
+        Assert.Equal(
+            1,
+            integrationManager.ApplyCalls);
+
+        Assert.Equal(
+            0,
+            stateRepository.SaveCalls);
+
+        Assert.Null(
+            stateRepository.SavedState);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_IntegrationFailure_PreservesCurrentState()
+    {
+        var currentState =
+            new InstalledPackageState(
+                PackageId.Parse(
+                    "example-app"),
+                SemanticVersion.Parse(
+                    "1.0.0"),
+                ReleaseChannel.Stable,
+                "C:/Apps/Example");
+
+        var stateRepository =
+            new StubStateRepository
+            {
+                SavedState =
+                    currentState
+            };
+
+        var integrationManager =
+            new StubWindowsIntegrationManager
+            {
+                ApplyException =
+                    new IOException(
+                        "Simulated integration apply failure.")
+            };
+
+        var service =
+            new InstallerWorkflowService(
+                new StubDownloader(),
+                new StubVerifier(),
+                new StubPackageEngine(),
+                stateRepository,
+                windowsIntegrationManager:
+                    integrationManager);
+
+        await Assert.ThrowsAsync<IOException>(
+            () => service.UpdateAsync(
+                CreateReleaseWithIntegration(
+                    "2.0.0"),
+                currentState,
+                "C:/Temp/TurkuazInstaller",
+                null,
+                CancellationToken.None));
+
+        Assert.Equal(
+            0,
+            stateRepository.SaveCalls);
+
+        Assert.Equal(
+            currentState.Version,
+            stateRepository.SavedState?.Version);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_IntegrationFailure_PreservesCurrentState()
+    {
+        var currentRelease =
+            CreateReleaseWithIntegration(
+                "2.0.0",
+                rollbackSupported: true);
+
+        var previousRelease =
+            CreateReleaseWithIntegration(
+                "1.0.0");
+
+        var currentState =
+            new InstalledPackageState(
+                currentRelease.PackageId,
+                currentRelease.Version,
+                currentRelease.Channel,
+                "C:/Apps/Example");
+
+        var stateRepository =
+            new StubStateRepository
+            {
+                SavedState =
+                    currentState
+            };
+
+        var integrationManager =
+            new StubWindowsIntegrationManager
+            {
+                ApplyException =
+                    new IOException(
+                        "Simulated integration apply failure.")
+            };
+
+        var service =
+            new InstallerWorkflowService(
+                new StubDownloader(),
+                new StubVerifier(),
+                new StubPackageEngine(),
+                stateRepository,
+                windowsIntegrationManager:
+                    integrationManager);
+
+        await Assert.ThrowsAsync<IOException>(
+            () => service.RollbackAsync(
+                currentRelease,
+                previousRelease,
+                currentState,
+                "C:/Temp/TurkuazInstaller",
+                null,
+                CancellationToken.None));
+
+        Assert.Equal(
+            0,
+            stateRepository.SaveCalls);
+
+        Assert.Equal(
+            currentRelease.Version,
+            stateRepository.SavedState?.Version);
+    }
+
+    [Fact]
     public async Task UninstallAsync_IntegrationCleanupFailure_DeletesStateAndLogsWarning()
     {
         var stateRepository =
@@ -333,13 +491,15 @@ public sealed class InstallerWorkflowServiceTests
     }
 
 
-    private static PackageRelease CreateReleaseWithIntegration()
+    private static PackageRelease CreateReleaseWithIntegration(
+        string version = "1.0.0",
+        bool rollbackSupported = false)
     {
         return new PackageRelease(
             PackageId.Parse(
                 "example-app"),
             SemanticVersion.Parse(
-                "1.0.0"),
+                version),
             ReleaseChannel.Stable,
             new ArtifactDescriptor(
                 new Uri(
@@ -367,7 +527,11 @@ public sealed class InstallerWorkflowServiceTests
                             "example-app",
                             "ExampleApp.exe")
                     })),
-            PackageRollbackPolicy.Disabled);
+            rollbackSupported
+                ? new PackageRollbackPolicy(
+                    Supported: true,
+                    PreviousVersionRequired: true)
+                : PackageRollbackPolicy.Disabled);
     }
 
     private static PackageRelease CreateRelease()
@@ -411,6 +575,12 @@ public sealed class InstallerWorkflowServiceTests
             private set;
         }
 
+        public Exception? ApplyException
+        {
+            get;
+            init;
+        }
+
         public Exception? RemoveException
         {
             get;
@@ -426,6 +596,11 @@ public sealed class InstallerWorkflowServiceTests
             ApplyCalls++;
             LastPackageId = packageId;
             LastPolicy = policy;
+
+            if (ApplyException is not null)
+            {
+                throw ApplyException;
+            }
 
             return Task.CompletedTask;
         }
@@ -655,6 +830,12 @@ public sealed class InstallerWorkflowServiceTests
     {
         public InstalledPackageState? SavedState { get; set; }
 
+        public int SaveCalls
+        {
+            get;
+            private set;
+        }
+
         public int DeleteCalls
         {
             get;
@@ -688,6 +869,7 @@ public sealed class InstallerWorkflowServiceTests
             InstalledPackageState state,
             CancellationToken cancellationToken)
         {
+            SaveCalls++;
             SavedState = state;
             return Task.CompletedTask;
         }
