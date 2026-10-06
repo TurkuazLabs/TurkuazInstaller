@@ -36,20 +36,23 @@ public sealed class GiteaReleaseProviderTests
 [{"draft":false,"prerelease":true,"assets":[{"name":"{{ProviderTestData.ManifestAssetName}}","browser_download_url":"{{manifestUrl}}"}]}]
 """;
 
+        var handler =
+            new StubHttpMessageHandler(
+                new Dictionary<string, string>
+                {
+                    [apiUrl] =
+                        releaseJson,
+                    [manifestUrl] =
+                        ProviderTestData.Manifest(
+                            ReleaseChannel.Beta,
+                            "5.0.0-beta.1"),
+                    [signatureUrl] =
+                        ProviderTestData.DetachedSignature
+                });
+
         using var client =
             new HttpClient(
-                new StubHttpMessageHandler(
-                    new Dictionary<string, string>
-                    {
-                        [apiUrl] =
-                            releaseJson,
-                        [manifestUrl] =
-                            ProviderTestData.Manifest(
-                                ReleaseChannel.Beta,
-                                "5.0.0-beta.1"),
-                        [signatureUrl] =
-                            ProviderTestData.DetachedSignature
-                    }));
+                handler);
 
         var signatureVerifier =
             new FakeManifestSignatureVerifier();
@@ -80,7 +83,19 @@ public sealed class GiteaReleaseProviderTests
         Assert.Equal(
             1,
             signatureVerifier.CallCount);
+
+        Assert.All(
+            handler.Requests,
+            request =>
+            {
+                Assert.Null(
+                    request.AuthorizationScheme);
+
+                Assert.Null(
+                    request.AuthorizationParameter);
+            });
     }
+
     [Fact]
     public async Task GetLatestReleaseAsync_PrivateRelease_AuthorizesApiManifestAndSignature()
     {
