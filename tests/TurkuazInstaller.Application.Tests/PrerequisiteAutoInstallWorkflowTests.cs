@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/PrerequisiteAutoInstallWorkflowTests.cs
 // 📌 Amac: Eksik prerequisite auto-install, verification ve zorunlu post-install re-probe akisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.4.0
+// Version: 1.4.1
 // Aciklama: Guvenli prerequisite install, RunOnce scheduler cleanup/retention, reboot checkpoint ve post-reboot re-probe sinirlarini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -776,6 +776,13 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
         {
             return Task.FromResult<InstalledPackageState?>(
                 null);
+        }
+
+        public Task<IReadOnlyList<InstalledPackageState>> ListAsync(
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<InstalledPackageState>>(
+                Array.Empty<InstalledPackageState>());
         }
 
         public Task SaveAsync(
