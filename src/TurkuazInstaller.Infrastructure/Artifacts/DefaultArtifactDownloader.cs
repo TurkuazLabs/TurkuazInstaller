@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Artifacts/DefaultArtifactDownloader.cs
 // 📌 Amac: HTTPS ve file artifactlarini staging alanina atomik olarak indiren Tool adapterini uygular
 // 📌 Modul - Tool CSharp
-// Version: 0.8.0
-// Aciklama: Remote ve local artifacti imzali metadata size_bytes degerine gore bounded/exact streaming ile .partial dosyasina alip verified pipeline'a teslim eder
+// Version: 0.8.1
+// Aciklama: Bounded/exact transfer uygular ve basarisiz operation staging kalintilarini best-effort temizler
 //
 // Bagimli Oldugu Katman: Tool
 
@@ -85,6 +85,7 @@ public sealed class DefaultArtifactDownloader : IArtifactDownloader
         catch
         {
             TryDelete(partialPath);
+            TryDeleteDirectory(downloadRoot);
             throw;
         }
     }
@@ -257,4 +258,29 @@ public sealed class DefaultArtifactDownloader : IArtifactDownloader
         {
         }
     }
+
+    private static void TryDeleteDirectory(
+        string path)
+    {
+        try
+        {
+            if (
+                Directory.Exists(
+                    path) &&
+                !Directory.EnumerateFileSystemEntries(
+                    path)
+                    .Any())
+            {
+                Directory.Delete(
+                    path);
+            }
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+    }
+
 }
