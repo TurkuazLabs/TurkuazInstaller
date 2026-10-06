@@ -2,7 +2,7 @@
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
 # Version: 2.1.0
-# Aciklama: Detached trust, bounded input/transfer, self-update availability, safe Windows integration, reboot resume ve mutation guvenlik kurallarini sabitler
+# Aciklama: Trust, bounded input/transfer, retry-guvenli integration ve fail-safe automatic bootstrap availability sinirlarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -29,7 +29,7 @@ Community baseline:
 - path traversal engelleme
 - atomic staging
 - shell-free process invocation
-- package apply ve Windows integration reconcile tamamlandiktan sonra state commit
+- package apply ve zorunlu Windows integration reconcile basarisi sonrasi state commit
 - rollback policy kontrolu
 - uninstall basarisi sonrasi state delete
 - secret degerlerin manifest icine yazilmamasi
@@ -40,6 +40,7 @@ Community baseline:
 - background update policy icin session-only, no-auto-download/no-auto-install siniri
 - version skip/pinning icin shared workflow pre-mutation guard
 - signed Windows shortcut/protocol actionlari icin package-scoped ownership receipt + HKCU-only registry siniri
+- install/update/rollback integration failure durumunda onceki committed state'i koruyan retry-guvenli commit siniri
 
 ## Manifest Trust
 
@@ -146,13 +147,13 @@ Daha yeni release icin:
 10. replacement certificate SHA-256 current bootstrap ile birebir ayni olmalidir
 11. ancak bundan sonra two-process handoff baslatilir
 
-Automatic discovery/download/metadata/replacement trust hatasi current trusted bootstrap ile normal startup'i engellemez; automatic update o launch icin atlanir.
+Automatic self-update discovery, metadata, download, integrity, replacement trust veya handoff hatasi current trusted bootstrap ile normal startup'i engellemez.
 
-Basarisiz automatic replacement staged dosyasi temizlenir ve unverified binary hicbir zaman handoff'a verilmez.
+Bu fallback yalniz availability davranisidir: dogrulanmamis replacement calistirilmaz ve automatic update denemesi reddedilir.
 
-Caller cancellation yutulmaz; cancellation normal sekilde propagate edilir.
+Caller cancellation propagate edilir. Internal explicit replacement path ve complete-self-update source executable trust failure durumunda fail-closed kalir.
 
-Internal explicit replacement path ve complete-self-update source executable ayni signer verification zincirini atlayamaz ve trust failure durumunda fail-closed kalir.
+Internal explicit replacement path ve complete-self-update source executable ayni signer verification zincirini atlayamaz.
 
 Detay: docs/BOOTSTRAP_SELF_UPDATE.md
 
