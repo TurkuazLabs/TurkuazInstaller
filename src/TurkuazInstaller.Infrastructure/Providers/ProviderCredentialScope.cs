@@ -2,7 +2,7 @@
 // 📌 Amac: Provider access tokeninin gidebilecegi HTTPS authority allow-listini normalize eder
 // 📌 Modul - Tool CSharp
 // Version: 1.0.0
-// Aciklama: API ve explicit asset originlerini authority bazinda tekilleştirir; HTTP veya malformed originleri reddeder
+// Aciklama: API ve explicit asset originlerini authority bazinda tekillestirir; HTTP veya malformed originleri reddeder
 //
 // Bagimli Oldugu Katman: Tool | Config
 
@@ -54,6 +54,8 @@ internal static class ProviderCredentialScope
                 origin.AbsolutePath,
                 "/",
                 StringComparison.Ordinal) ||
+            !string.IsNullOrEmpty(
+                origin.UserInfo) ||
             !string.IsNullOrEmpty(
                 origin.Query) ||
             !string.IsNullOrEmpty(
