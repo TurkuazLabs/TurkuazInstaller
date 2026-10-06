@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.4.0
+// Version: 1.4.1
 // Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
@@ -88,8 +88,14 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _backgroundUpdateTimer =
+        var dispatcherQueue =
             DispatcherQueue
+                .GetForCurrentThread()
+            ?? throw new InvalidOperationException(
+                "WinUI DispatcherQueue is unavailable.");
+
+        _backgroundUpdateTimer =
+            dispatcherQueue
                 .CreateTimer();
 
         _backgroundUpdateTimer.Interval =
