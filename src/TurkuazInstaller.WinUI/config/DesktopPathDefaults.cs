@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopPathDefaults.cs
 // 📌 Amac: WinUI desktop runtime storage ve manifest trust store yollarini merkezi config katmaninda uretir
 // 📌 Modul - Config CSharp
-// Version: 1.3.0
-// Aciklama: Local storage, manifest trust ve combined distribution reboot resume yollarini merkezi configte uretir
+// Version: 1.4.0
+// Aciklama: Local storage, integration receipt, manifest trust ve combined distribution reboot resume yollarini merkezi configte uretir
 //
 // Bagimli Oldugu Katman: Config
 
@@ -30,6 +30,9 @@ internal static class DesktopPathDefaults
 
     private const string ResumeDirectory =
         "resume";
+
+    private const string IntegrationDirectory =
+        "integrations";
 
     private const string ConfigDirectory =
         "config";
@@ -76,6 +79,9 @@ internal static class DesktopPathDefaults
             Path.Combine(
                 productRoot,
                 ResumeDirectory),
+            Path.Combine(
+                productRoot,
+                IntegrationDirectory),
             Path.Combine(
                 productRoot,
                 ConfigDirectory,
