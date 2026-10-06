@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 1.4.0
+# Version: 1.4.1
 # Aciklama: Stable Community ve v1.2 private provider credential adapter gelistirme durumunu takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -88,7 +88,7 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 
 ## v1.2 Sonrasi
 
-- [ ] private GitHub/Gitea credential adapters (provider auth, Windows Credential Manager resolver, host-scoped leak protection ve tests implemented; CI validation pending)
+- [x] private GitHub/Gitea credential adapters
 - [ ] proxy support
 - [ ] installed-app catalog/list UI
 - [ ] richer update discovery UX
