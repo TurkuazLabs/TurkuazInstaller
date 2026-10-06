@@ -1,13 +1,14 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
 // 📌 Amac: Ana pencere startup resume, request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.6.0
-// Aciklama: Manual/resume, catalog, background update ve version-policy-aware discovery/mutation UX akislarini koordine eder
+// Version: 1.7.0
+// Aciklama: Manual/resume, catalog, background update ve discovery/mutation UX akislarinda tum kullanici metinlerini typed Language katalogundan cozer
 //
 // Bagimli Oldugu Katman: Service | View | Language
 
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Application.Updates;
+using TurkuazInstaller.Contracts.Branding;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Presentation.Language;
@@ -23,6 +24,7 @@ public sealed class InstallerDesktopService
     private readonly InstallerResumeLaunchParser _resumeLaunchParser;
     private readonly InstalledAppCatalogService? _catalogService;
     private readonly BackgroundUpdateService? _backgroundUpdateService;
+    private readonly InstallerUiCatalog _ui;
     private CancellationTokenSource? _operationCancellation;
     private InstallerDesktopRequest? _lastRequest;
 
@@ -58,13 +60,19 @@ public sealed class InstallerDesktopService
         IInstallerRuntimeService runtimeService,
         InstallerResumeLaunchParser resumeLaunchParser,
         InstalledAppCatalogService? catalogService,
-        BackgroundUpdateService? backgroundUpdateService)
+        BackgroundUpdateService? backgroundUpdateService,
+        InstallerUiCatalog? uiCatalog = null)
     {
         _viewModel = viewModel;
         _runtimeService = runtimeService;
         _resumeLaunchParser = resumeLaunchParser;
         _catalogService = catalogService;
         _backgroundUpdateService = backgroundUpdateService;
+
+        _ui =
+            uiCatalog
+            ?? new InstallerUiCatalog(
+                InstallerUiProfile.Empty);
     }
 
     public async Task StartAsync(
@@ -168,7 +176,7 @@ public sealed class InstallerDesktopService
         _viewModel.UpdateDiscoveryErrorMessage =
             string.Empty;
         _viewModel.UpdateDiscoveryStatus =
-            InstallerUiLabels.CheckingForUpdates;
+            _ui.Resolve(InstallerUiLabelKey.CheckingForUpdates);
 
         try
         {
@@ -190,12 +198,12 @@ public sealed class InstallerDesktopService
             _viewModel.HasUpdateDiscoveryError = true;
             _viewModel.UpdateDiscoveryErrorMessage =
                 string.Concat(
-                    InstallerUiLabels.UpdateCheckFailedPrefix,
+                    _ui.Resolve(InstallerUiLabelKey.UpdateCheckFailedPrefix),
                     " ",
                     exception.Message);
 
             _viewModel.UpdateDiscoveryStatus =
-                InstallerUiLabels.UpdateNotChecked;
+                _ui.Resolve(InstallerUiLabelKey.UpdateNotChecked);
 
             _viewModel.HasUpdateAvailable = false;
         }
@@ -254,7 +262,7 @@ public sealed class InstallerDesktopService
                 _viewModel.PackageIdText))
         {
             throw new InvalidOperationException(
-                InstallerUiLabels.PackageIdRequired);
+                _ui.Resolve(InstallerUiLabelKey.PackageIdRequired));
         }
 
         if (
@@ -262,7 +270,7 @@ public sealed class InstallerDesktopService
                 _viewModel.ManifestSource))
         {
             throw new InvalidOperationException(
-                InstallerUiLabels.ManifestRequired);
+                _ui.Resolve(InstallerUiLabelKey.ManifestRequired));
         }
 
         var channel =
@@ -284,7 +292,7 @@ public sealed class InstallerDesktopService
                 _viewModel.PackageIdText))
         {
             throw new InvalidOperationException(
-                InstallerUiLabels.PackageIdRequired);
+                _ui.Resolve(InstallerUiLabelKey.PackageIdRequired));
         }
 
         if (
@@ -293,7 +301,7 @@ public sealed class InstallerDesktopService
                 _viewModel.ManifestSource))
         {
             throw new InvalidOperationException(
-                InstallerUiLabels.ManifestRequired);
+                _ui.Resolve(InstallerUiLabelKey.ManifestRequired));
         }
 
         if (
@@ -302,7 +310,7 @@ public sealed class InstallerDesktopService
                 _viewModel.RollbackManifestSource))
         {
             throw new InvalidOperationException(
-                InstallerUiLabels.RollbackManifestRequired);
+                _ui.Resolve(InstallerUiLabelKey.RollbackManifestRequired));
         }
 
         var channel =
@@ -368,7 +376,7 @@ public sealed class InstallerDesktopService
                 .ConfigureAwait(true);
 
             _viewModel.StatusMessage =
-                InstallerUiLabels.Cancelled;
+                _ui.Resolve(InstallerUiLabelKey.Cancelled);
             _viewModel.CanRetry = true;
         }
         catch (Exception exception)
@@ -432,7 +440,7 @@ public sealed class InstallerDesktopService
                 .ConfigureAwait(true);
 
             _viewModel.StatusMessage =
-                InstallerUiLabels.Cancelled;
+                _ui.Resolve(InstallerUiLabelKey.Cancelled);
             _viewModel.CanRetry = false;
         }
         catch (Exception exception)
@@ -455,11 +463,11 @@ public sealed class InstallerDesktopService
     {
         _viewModel.InstalledVersionText =
             result.InstalledState?.Version.ToString()
-            ?? InstallerUiLabels.VersionUnavailable;
+            ?? _ui.Resolve(InstallerUiLabelKey.VersionUnavailable);
 
         _viewModel.LatestVersionText =
             result.LatestRelease?.Version.ToString()
-            ?? InstallerUiLabels.VersionUnavailable;
+            ?? _ui.Resolve(InstallerUiLabelKey.VersionUnavailable);
 
         _viewModel.HasUpdateAvailable =
             result.Availability ==
@@ -470,20 +478,20 @@ public sealed class InstallerDesktopService
             result.Availability switch
             {
                 UpdateAvailability.ReleaseNotFound =>
-                    InstallerUiLabels.UpdateReleaseNotFound,
+                    _ui.Resolve(InstallerUiLabelKey.UpdateReleaseNotFound),
                 UpdateAvailability.Available
                     when result.InstalledState is null =>
-                    InstallerUiLabels.UpdateNotInstalled,
+                    _ui.Resolve(InstallerUiLabelKey.UpdateNotInstalled),
                 UpdateAvailability.Available =>
-                    InstallerUiLabels.UpdateAvailable,
+                    _ui.Resolve(InstallerUiLabelKey.UpdateAvailable),
                 UpdateAvailability.Current =>
-                    InstallerUiLabels.UpdateCurrent,
+                    _ui.Resolve(InstallerUiLabelKey.UpdateCurrent),
                 UpdateAvailability.Skipped =>
-                    InstallerUiLabels.UpdateSkipped,
+                    _ui.Resolve(InstallerUiLabelKey.UpdateSkipped),
                 UpdateAvailability.Pinned =>
-                    InstallerUiLabels.UpdatePinned,
+                    _ui.Resolve(InstallerUiLabelKey.UpdatePinned),
                 _ =>
-                    InstallerUiLabels.UpdateNotChecked
+                    _ui.Resolve(InstallerUiLabelKey.UpdateNotChecked)
             };
 
         _viewModel.HasUpdateDiscoveryError = false;
@@ -494,11 +502,11 @@ public sealed class InstallerDesktopService
     private void ClearUpdateDiscoveryResult()
     {
         _viewModel.InstalledVersionText =
-            InstallerUiLabels.VersionUnavailable;
+            _ui.Resolve(InstallerUiLabelKey.VersionUnavailable);
         _viewModel.LatestVersionText =
-            InstallerUiLabels.VersionUnavailable;
+            _ui.Resolve(InstallerUiLabelKey.VersionUnavailable);
         _viewModel.UpdateDiscoveryStatus =
-            InstallerUiLabels.UpdateNotChecked;
+            _ui.Resolve(InstallerUiLabelKey.UpdateNotChecked);
         _viewModel.HasUpdateAvailable = false;
         _viewModel.HasUpdateDiscoveryError = false;
         _viewModel.UpdateDiscoveryErrorMessage =
@@ -533,7 +541,7 @@ public sealed class InstallerDesktopService
             _viewModel.HasCatalogError = true;
             _viewModel.CatalogErrorMessage =
                 string.Concat(
-                    InstallerUiLabels.CatalogLoadFailedPrefix,
+                    _ui.Resolve(InstallerUiLabelKey.CatalogLoadFailedPrefix),
                     " ",
                     exception.Message);
         }
@@ -548,7 +556,7 @@ public sealed class InstallerDesktopService
 
         _viewModel.ProgressValue = 100;
         _viewModel.StatusMessage =
-            InstallerUiLabels.Completed;
+            _ui.Resolve(InstallerUiLabelKey.Completed);
         _viewModel.CanRetry = false;
     }
 
@@ -567,7 +575,7 @@ public sealed class InstallerDesktopService
         _viewModel.ErrorMessage = string.Empty;
         _viewModel.ProgressValue = 0;
         _viewModel.StatusMessage =
-            InstallerUiLabels.Preparing;
+            _ui.Resolve(InstallerUiLabelKey.Preparing);
     }
 
     private void ShowRebootRequired()
@@ -575,7 +583,7 @@ public sealed class InstallerDesktopService
         _viewModel.HasError = false;
         _viewModel.ErrorMessage = string.Empty;
         _viewModel.StatusMessage =
-            InstallerUiLabels.RebootRequired;
+            _ui.Resolve(InstallerUiLabelKey.RebootRequired);
         _viewModel.CanRetry = false;
     }
 
@@ -585,7 +593,7 @@ public sealed class InstallerDesktopService
         _viewModel.HasError = true;
         _viewModel.ErrorMessage =
             string.Concat(
-                InstallerUiLabels.OperationFailedPrefix,
+                _ui.Resolve(InstallerUiLabelKey.OperationFailedPrefix),
                 " ",
                 exception.Message);
         _viewModel.CanRetry =
@@ -602,23 +610,23 @@ public sealed class InstallerDesktopService
             progress.Stage switch
             {
                 InstallerProgressStage.Downloading =>
-                    InstallerUiLabels.Downloading,
+                    _ui.Resolve(InstallerUiLabelKey.Downloading),
                 InstallerProgressStage.Verifying =>
-                    InstallerUiLabels.Verifying,
+                    _ui.Resolve(InstallerUiLabelKey.Verifying),
                 InstallerProgressStage.Staging =>
-                    InstallerUiLabels.Staging,
+                    _ui.Resolve(InstallerUiLabelKey.Staging),
                 InstallerProgressStage.Applying =>
-                    InstallerUiLabels.Applying,
+                    _ui.Resolve(InstallerUiLabelKey.Applying),
                 InstallerProgressStage.Uninstalling =>
-                    InstallerUiLabels.Uninstalling,
+                    _ui.Resolve(InstallerUiLabelKey.Uninstalling),
                 InstallerProgressStage.SavingState =>
-                    InstallerUiLabels.SavingState,
+                    _ui.Resolve(InstallerUiLabelKey.SavingState),
                 InstallerProgressStage.RemovingState =>
-                    InstallerUiLabels.RemovingState,
+                    _ui.Resolve(InstallerUiLabelKey.RemovingState),
                 InstallerProgressStage.Completed =>
-                    InstallerUiLabels.Completed,
+                    _ui.Resolve(InstallerUiLabelKey.Completed),
                 _ =>
-                    InstallerUiLabels.Preparing
+                    _ui.Resolve(InstallerUiLabelKey.Preparing)
             };
     }
 }
