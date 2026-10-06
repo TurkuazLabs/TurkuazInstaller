@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.16.0
-# Aciklama: Detached trust, bounded metadata/artifact transfer, self-update availability, Windows integration, UI profile ve Community-Pro boundary invariantlarini kontrol eder
+# Version: 1.18.0
+# Aciklama: Trust, bounded transfer, update, Windows integration, self-update availability, UI profile ve Community-Pro boundary invariantlarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -727,16 +727,18 @@ expected_bootstrap_availability = {
     "network_failure": "continue_current_bootstrap",
     "unsigned_current_bootstrap": "continue_without_auto_update",
     "malformed_newer_release": "continue_current_bootstrap",
-    "automatic_download_failure": "continue_current_bootstrap",
-    "automatic_replacement_trust_failure": "continue_current_bootstrap",
-    "staged_failed_replacement_cleanup": "required",
+    "download_failure": "continue_current_bootstrap",
+    "untrusted_replacement": "continue_current_bootstrap",
+    "automatic_handoff_failure": "continue_current_bootstrap",
     "caller_cancellation": "propagate",
+    "explicit_replacement_failure": "deny",
+    "completion_source_failure": "deny",
 }
 
 for key, expected_value in expected_bootstrap_availability.items():
     if bootstrap_availability.get(key) != expected_value:
         fail(
-            f"bootstrap availability invariant mismatch: {key}"
+            f"bootstrap self-update availability invariant mismatch: {key}"
         )
 
 bootstrap_handoff = bootstrap_self_update.get(
@@ -1912,10 +1914,12 @@ windows_workflow = windows_integration.get(
 )
 
 for key in (
-    "install_reconcile_after_state_commit",
-    "update_reconcile_after_state_commit",
+    "install_reconcile_before_state_commit",
+    "update_reconcile_before_state_commit",
     "repair_reconcile_after_package_repair",
-    "rollback_reconcile_after_state_commit",
+    "rollback_reconcile_before_state_commit",
+    "state_commit_after_successful_reconcile",
+    "integration_failure_preserves_committed_state",
     "uninstall_cleanup_after_package_uninstall",
 ):
     if windows_workflow.get(key) is not True:
