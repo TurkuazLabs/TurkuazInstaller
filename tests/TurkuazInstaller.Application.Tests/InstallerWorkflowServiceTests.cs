@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerWorkflowServiceTests.cs
 // 📌 Amac: InstallerWorkflowService install pipeline sirasi ve state kaydini fake portlarla unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.3.0
-// Aciklama: Download/verify/apply zincirine ek olarak version policy ve Windows integration reconcile davranislarini dogrular
+// Version: 1.4.0
+// Aciklama: Download/verify/apply zincirine ek olarak version policy, Windows integration reconcile ve cleanup failure isolation davranislarini dogrular
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -191,6 +191,69 @@ public sealed class InstallerWorkflowServiceTests
     }
 
     [Fact]
+    public async Task UninstallAsync_IntegrationCleanupFailure_DeletesStateAndLogsWarning()
+    {
+        var stateRepository =
+            new StubStateRepository
+            {
+                SavedState =
+                    new InstalledPackageState(
+                        PackageId.Parse(
+                            "example-app"),
+                        SemanticVersion.Parse(
+                            "1.0.0"),
+                        ReleaseChannel.Stable,
+                        "C:/Apps/Example")
+            };
+
+        var logger =
+            new StubEventLogger();
+
+        var integrationManager =
+            new StubWindowsIntegrationManager
+            {
+                RemoveException =
+                    new IOException(
+                        "Simulated integration cleanup failure.")
+            };
+
+        var service =
+            new InstallerWorkflowService(
+                new StubDownloader(),
+                new StubVerifier(),
+                new StubPackageEngine(),
+                stateRepository,
+                eventLogger:
+                    logger,
+                windowsIntegrationManager:
+                    integrationManager);
+
+        await service.UninstallAsync(
+            stateRepository.SavedState,
+            null,
+            CancellationToken.None);
+
+        Assert.Equal(
+            1,
+            integrationManager.RemoveCalls);
+
+        Assert.Equal(
+            1,
+            stateRepository.DeleteCalls);
+
+        Assert.Null(
+            stateRepository.SavedState);
+
+        Assert.Contains(
+            logger.Events,
+            entry =>
+                entry.EventName ==
+                    "integration.cleanup_failed" &&
+                entry.Level ==
+                    InstallerEventLevel.Warning);
+    }
+
+    [Fact]
     public async Task UpdateAsync_SkippedVersion_BlocksBeforeJournalAndDownload()
     {
         var downloader =
@@ -342,6 +405,18 @@ public sealed class InstallerWorkflowServiceTests
             private set;
         }
 
+        public int RemoveCalls
+        {
+            get;
+            private set;
+        }
+
+        public Exception? RemoveException
+        {
+            get;
+            init;
+        }
+
         public Task ApplyAsync(
             PackageId packageId,
             string targetPath,
@@ -359,6 +434,13 @@ public sealed class InstallerWorkflowServiceTests
             PackageId packageId,
             CancellationToken cancellationToken)
         {
+            RemoveCalls++;
+
+            if (RemoveException is not null)
+            {
+                throw RemoveException;
+            }
+
             return Task.CompletedTask;
         }
     }
@@ -571,7 +653,13 @@ public sealed class InstallerWorkflowServiceTests
     private sealed class StubStateRepository
         : IInstallStateRepository
     {
-        public InstalledPackageState? SavedState { get; private set; }
+        public InstalledPackageState? SavedState { get; set; }
+
+        public int DeleteCalls
+        {
+            get;
+            private set;
+        }
 
         public Task<InstalledPackageState?> GetAsync(
             PackageId packageId,
@@ -608,6 +696,7 @@ public sealed class InstallerWorkflowServiceTests
             PackageId packageId,
             CancellationToken cancellationToken)
         {
+            DeleteCalls++;
             SavedState = null;
             return Task.CompletedTask;
         }
