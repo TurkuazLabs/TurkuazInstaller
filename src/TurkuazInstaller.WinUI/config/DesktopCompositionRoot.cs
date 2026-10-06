@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.9.0
-// Aciklama: Signed trust/proxy/catalog/background/version policy zincirine package-owned Windows integration manager adapterini baglar
+// Version: 1.11.0
+// Aciklama: Signed trust/proxy/catalog/background/version policy zincirine Windows integration, shared UI catalog ve culture service baglar
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
 
@@ -10,6 +10,7 @@ using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Application.Prerequisites;
 using TurkuazInstaller.Contracts.System;
 using TurkuazInstaller.Infrastructure.Artifacts;
+using TurkuazInstaller.Infrastructure.Branding;
 using TurkuazInstaller.Infrastructure.Manifests;
 using TurkuazInstaller.Infrastructure.Operations;
 using TurkuazInstaller.Infrastructure.Packages.Velopack;
@@ -18,6 +19,7 @@ using TurkuazInstaller.Infrastructure.Repositories;
 using TurkuazInstaller.Platform.Windows.Config;
 using TurkuazInstaller.Platform.Windows.Tools;
 using TurkuazInstaller.Presentation.Controllers;
+using TurkuazInstaller.Presentation.Language;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
 using TurkuazInstaller.WinUI.Services;
@@ -156,14 +158,29 @@ internal static class DesktopCompositionRoot
                 runtimeOptions,
                 versionPolicyRepository);
 
+        var uiProfile =
+            new YamlInstallerUiProfileRepository(
+                runtimeOptions.UiProfilePath)
+                .Read();
+
+        var uiCatalog =
+            new InstallerUiCatalog(
+                uiProfile);
+
+        new InstallerUiCultureService()
+            .Apply(
+                uiCatalog);
+
         var viewModel =
-            new MainWindowViewModel();
+            new MainWindowViewModel(
+                uiCatalog);
 
         var backgroundUpdateService =
             new BackgroundUpdateService(
                 runtimeService,
                 viewModel,
-                backgroundUpdatePolicy);
+                backgroundUpdatePolicy,
+                uiCatalog);
 
         var desktopService =
             new InstallerDesktopService(
@@ -171,8 +188,10 @@ internal static class DesktopCompositionRoot
                 runtimeService,
                 new InstallerResumeLaunchParser(),
                 new InstalledAppCatalogService(
-                    stateRepository),
-                backgroundUpdateService);
+                    stateRepository,
+                    uiCatalog),
+                backgroundUpdateService,
+                uiCatalog);
 
         var controller =
             new MainWindowController(

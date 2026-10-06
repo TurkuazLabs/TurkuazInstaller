@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/BackgroundUpdateService.cs
 // 📌 Amac: WinUI session icinde configured package'lar icin periyodik read-only signed update check cycle'ini koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.0.2
-// Aciklama: Mutation/artifact download baslatmaz; entry hatalarini izole eder ve cycle ozetini ViewModel state'ine yazar
+// Version: 1.1.0
+// Aciklama: Mutation/artifact download baslatmaz; entry hatalarini izole eder ve tum cycle metinlerini typed Language katalogundan cozer
 //
 // Bagimli Oldugu Katman: Service | View | Config
 
 using TurkuazInstaller.Application.Updates;
+using TurkuazInstaller.Contracts.Branding;
 using TurkuazInstaller.Contracts.Updates;
 using TurkuazInstaller.Presentation.Language;
 using TurkuazInstaller.Presentation.ViewModels;
@@ -25,6 +26,9 @@ public sealed class BackgroundUpdateService
     private readonly BackgroundUpdatePolicy
         _policy;
 
+    private readonly InstallerUiCatalog
+        _ui;
+
     private readonly CancellationTokenSource
         _lifetimeCancellation =
             new();
@@ -32,7 +36,8 @@ public sealed class BackgroundUpdateService
     public BackgroundUpdateService(
         IInstallerRuntimeService runtimeService,
         MainWindowViewModel viewModel,
-        BackgroundUpdatePolicy policy)
+        BackgroundUpdatePolicy policy,
+        InstallerUiCatalog? uiCatalog = null)
     {
         ArgumentNullException.ThrowIfNull(
             runtimeService);
@@ -50,12 +55,17 @@ public sealed class BackgroundUpdateService
         _policy =
             policy;
 
+        _ui =
+            uiCatalog
+            ?? new InstallerUiCatalog(
+                InstallerUiProfile.Empty);
+
         _viewModel.BackgroundUpdateStatus =
             IsEnabled
-                ? InstallerUiLabels
-                    .BackgroundUpdatesWaiting
-                : InstallerUiLabels
-                    .BackgroundUpdatesDisabled;
+                ? _ui.Resolve(
+                    InstallerUiLabelKey.BackgroundUpdatesWaiting)
+                : _ui.Resolve(
+                    InstallerUiLabelKey.BackgroundUpdatesDisabled);
     }
 
     public bool IsEnabled =>
@@ -70,8 +80,8 @@ public sealed class BackgroundUpdateService
         if (!IsEnabled)
         {
             _viewModel.BackgroundUpdateStatus =
-                InstallerUiLabels
-                    .BackgroundUpdatesDisabled;
+                _ui.Resolve(
+                    InstallerUiLabelKey.BackgroundUpdatesDisabled);
 
             return;
         }
@@ -91,8 +101,8 @@ public sealed class BackgroundUpdateService
             true;
 
         _viewModel.BackgroundUpdateStatus =
-            InstallerUiLabels
-                .BackgroundUpdatesChecking;
+            _ui.Resolve(
+                InstallerUiLabelKey.BackgroundUpdatesChecking);
 
         var checkedCount = 0;
         var availableCount = 0;
@@ -142,23 +152,23 @@ public sealed class BackgroundUpdateService
 
             _viewModel.BackgroundUpdateStatus =
                 string.Concat(
-                    InstallerUiLabels
-                        .BackgroundUpdatesCompletedPrefix,
+                    _ui.Resolve(
+                        InstallerUiLabelKey.BackgroundUpdatesCompletedPrefix),
                     ": ",
                     checkedCount,
                     " ",
-                    InstallerUiLabels
-                        .BackgroundUpdatesCheckedPrefix,
+                    _ui.Resolve(
+                        InstallerUiLabelKey.BackgroundUpdatesCheckedPrefix),
                     ", ",
                     availableCount,
                     " ",
-                    InstallerUiLabels
-                        .BackgroundUpdatesAvailablePrefix,
+                    _ui.Resolve(
+                        InstallerUiLabelKey.BackgroundUpdatesAvailablePrefix),
                     ", ",
                     failureCount,
                     " ",
-                    InstallerUiLabels
-                        .BackgroundUpdatesFailurePrefix);
+                    _ui.Resolve(
+                        InstallerUiLabelKey.BackgroundUpdatesFailurePrefix));
         }
         finally
         {

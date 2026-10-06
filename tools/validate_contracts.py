@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.14.0
-# Aciklama: Detached trust, private credentials, proxy, discovery, version policy, safe Windows integration ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.15.0
+# Aciklama: Detached trust, provider, update, Windows integration, UI profile ve Community-Pro boundary contract invariantlarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -24,6 +24,8 @@ UPDATE_DISCOVERY = ROOT / "contracts" / "update-discovery.yml"
 BACKGROUND_UPDATE_POLICY = ROOT / "contracts" / "background-update-policy.yml"
 VERSION_POLICY = ROOT / "contracts" / "version-policy.yml"
 WINDOWS_INTEGRATION = ROOT / "contracts" / "windows-integration.yml"
+UI_PROFILE = ROOT / "contracts" / "ui-profile.yml"
+UI_PROFILE_EXAMPLE = ROOT / "examples" / "ui-profile.yml"
 EXAMPLE = ROOT / "examples" / "community-manifest.yml"
 SECURITY = ROOT / "docs" / "SECURITY_MODEL.md"
 ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
@@ -44,6 +46,73 @@ EXPECTED_PREREQUISITES = {
     "dotnet-desktop-runtime",
 }
 SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+EXPECTED_UI_PROFILE_LABELS = {
+    "package_id",
+    "channel",
+    "manifest_source",
+    "rollback_manifest_source",
+    "target_path",
+    "stable",
+    "beta",
+    "install",
+    "update",
+    "repair",
+    "rollback",
+    "uninstall",
+    "retry",
+    "cancel",
+    "refresh_installed_apps",
+    "check_updates",
+    "ready",
+    "preparing",
+    "downloading",
+    "verifying",
+    "staging",
+    "applying",
+    "uninstalling",
+    "saving_state",
+    "removing_state",
+    "completed",
+    "cancelled",
+    "reboot_required",
+    "package_id_required",
+    "manifest_required",
+    "rollback_manifest_required",
+    "target_path_unavailable",
+    "operation_failed_prefix",
+    "update_discovery_title",
+    "installed_version",
+    "latest_version",
+    "update_not_checked",
+    "checking_for_updates",
+    "update_available",
+    "update_current",
+    "update_skipped",
+    "update_pinned",
+    "update_not_installed",
+    "update_release_not_found",
+    "update_check_failed_prefix",
+    "background_updates_title",
+    "background_updates_disabled",
+    "background_updates_waiting",
+    "background_updates_checking",
+    "background_updates_completed_prefix",
+    "background_updates_checked_prefix",
+    "background_updates_available_prefix",
+    "background_updates_failure_prefix",
+    "version_unavailable",
+    "installed_apps_title",
+    "installed_apps_count_prefix",
+    "catalog_load_failed_prefix",
+    "status_title",
+    "source_title",
+    "operations_title",
+    "recovery_title",
+    "manifest_placeholder",
+    "rollback_manifest_placeholder",
+    "target_path_placeholder",
+}
+
 
 
 def fail(message: str) -> None:
@@ -1831,6 +1900,181 @@ for key in (
         fail(
             f"windows integration security invariant must deny: {key}"
         )
+
+
+ui_profile = load_yaml(
+    UI_PROFILE
+)
+
+if ui_profile.get("schema_version") != 1:
+    fail(
+        "ui profile schema_version must be 1"
+    )
+
+ui_profile_location = ui_profile.get(
+    "profile",
+    {},
+)
+
+if (
+    ui_profile_location.get("path")
+    != "%LOCALAPPDATA%/TurkuazInstaller/config/ui-profile.yml"
+):
+    fail(
+        "ui profile path drifted"
+    )
+
+if (
+    ui_profile_location.get("missing_file")
+    != "use_builtin_defaults"
+):
+    fail(
+        "ui profile missing file policy must use built-in defaults"
+    )
+
+ui_profile_culture = ui_profile.get(
+    "culture",
+    {},
+)
+
+expected_ui_profile_culture = {
+    "optional": True,
+    "format": "dotnet_culture_name",
+    "invalid": "deny",
+}
+
+for key, expected_value in expected_ui_profile_culture.items():
+    if ui_profile_culture.get(key) != expected_value:
+        fail(
+            f"ui profile culture invariant mismatch: {key}"
+        )
+
+ui_profile_branding = ui_profile.get(
+    "branding",
+    {},
+)
+
+if ui_profile_branding.get("optional") is not True:
+    fail(
+        "ui profile branding must remain optional"
+    )
+
+if set(ui_profile_branding.get("fields", [])) != {
+    "window_title",
+    "header_title",
+    "header_subtitle",
+    "footer",
+}:
+    fail(
+        "ui profile branding fields drifted"
+    )
+
+if (
+    ui_profile_branding.get("empty_value")
+    != "fallback_to_builtin"
+):
+    fail(
+        "ui profile branding empty value policy drifted"
+    )
+
+ui_profile_labels = ui_profile.get(
+    "labels",
+    {},
+)
+
+if ui_profile_labels.get("optional") is not True:
+    fail(
+        "ui profile labels must remain optional"
+    )
+
+if ui_profile_labels.get("unknown_key") != "deny":
+    fail(
+        "ui profile unknown labels must be denied"
+    )
+
+if ui_profile_labels.get("empty_value") != "deny":
+    fail(
+        "ui profile empty label values must be denied"
+    )
+
+if (
+    set(ui_profile_labels.get("supported", []))
+    != EXPECTED_UI_PROFILE_LABELS
+):
+    fail(
+        "ui profile supported label surface drifted"
+    )
+
+ui_profile_example = load_yaml(
+    UI_PROFILE_EXAMPLE
+)
+
+if ui_profile_example.get("schema_version") != 1:
+    fail(
+        "ui profile example schema_version must be 1"
+    )
+
+example_culture = ui_profile_example.get(
+    "culture"
+)
+
+if (
+    example_culture is not None
+    and (
+        not isinstance(example_culture, str)
+        or not example_culture.strip()
+    )
+):
+    fail(
+        "ui profile example culture must be a non-empty string"
+    )
+
+example_branding = ui_profile_example.get(
+    "branding",
+    {},
+)
+
+if not isinstance(example_branding, dict):
+    fail(
+        "ui profile example branding must be a mapping"
+    )
+
+if (
+    set(example_branding)
+    - {
+        "window_title",
+        "header_title",
+        "header_subtitle",
+        "footer",
+    }
+):
+    fail(
+        "ui profile example contains unsupported branding fields"
+    )
+
+example_labels = ui_profile_example.get(
+    "labels",
+    {},
+)
+
+if not isinstance(example_labels, dict):
+    fail(
+        "ui profile example labels must be a mapping"
+    )
+
+if set(example_labels) - EXPECTED_UI_PROFILE_LABELS:
+    fail(
+        "ui profile example contains unsupported label keys"
+    )
+
+if any(
+    not isinstance(value, str)
+    or not value.strip()
+    for value in example_labels.values()
+):
+    fail(
+        "ui profile example label values must be non-empty strings"
+    )
 
 example = load_yaml(EXAMPLE)
 

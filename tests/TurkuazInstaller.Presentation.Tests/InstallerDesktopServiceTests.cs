@@ -8,6 +8,7 @@
 
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Application.Updates;
+using TurkuazInstaller.Contracts.Branding;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Products;
@@ -448,6 +449,52 @@ public sealed class InstallerDesktopServiceTests
         Assert.Equal(
             InstallerOperationKind.Uninstall,
             runtime.LastRequest.Operation);
+    }
+
+    [Fact]
+    public async Task RunAsync_ValidationFailure_UsesLocalizedRuntimeMessages()
+    {
+        var catalog =
+            new InstallerUiCatalog(
+                new InstallerUiProfile(
+                    "en-US",
+                    InstallerBrandingProfile.Empty,
+                    new Dictionary<InstallerUiLabelKey, string>
+                    {
+                        [InstallerUiLabelKey.OperationFailedPrefix] =
+                            "Operation failed:",
+                        [InstallerUiLabelKey.PackageIdRequired] =
+                            "Package id is required."
+                    }));
+
+        var viewModel =
+            new MainWindowViewModel(
+                catalog);
+
+        var runtime =
+            new StubRuntimeService();
+
+        using var service =
+            new InstallerDesktopService(
+                viewModel,
+                runtime,
+                new InstallerResumeLaunchParser(),
+                null,
+                null,
+                catalog);
+
+        await service.RunAsync(
+            InstallerOperationKind.Install);
+
+        Assert.True(
+            viewModel.HasError);
+
+        Assert.Equal(
+            "Operation failed: Package id is required.",
+            viewModel.ErrorMessage);
+
+        Assert.Null(
+            runtime.LastRequest);
     }
 
     private static PackageRelease CreateRelease(

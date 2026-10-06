@@ -1,0 +1,96 @@
+# 📄 Dosya Yolu: /contracts/ui-profile.yml
+# 📌 Amac: TurkuazInstaller branding ve localization extension contractini tanimlamak
+# 📌 Modul - YAML
+# Version: 1.1.0
+# Aciklama: Local UI profile schema, branding alanlari ve tum kullaniciya gorunen typed label override anahtarlarini sabitler
+# Bagimli Oldugu Katman: Config | Repo | View | Language
+
+schema_version: 1
+
+profile:
+  path: "%LOCALAPPDATA%/TurkuazInstaller/config/ui-profile.yml"
+  missing_file: use_builtin_defaults
+
+culture:
+  optional: true
+  format: dotnet_culture_name
+  invalid: deny
+
+branding:
+  optional: true
+  fields:
+    - window_title
+    - header_title
+    - header_subtitle
+    - footer
+  empty_value: fallback_to_builtin
+
+labels:
+  optional: true
+  unknown_key: deny
+  empty_value: deny
+  supported:
+    - package_id
+    - channel
+    - manifest_source
+    - rollback_manifest_source
+    - target_path
+    - stable
+    - beta
+    - install
+    - update
+    - repair
+    - rollback
+    - uninstall
+    - retry
+    - cancel
+    - refresh_installed_apps
+    - check_updates
+    - ready
+    - preparing
+    - downloading
+    - verifying
+    - staging
+    - applying
+    - uninstalling
+    - saving_state
+    - removing_state
+    - completed
+    - cancelled
+    - reboot_required
+    - package_id_required
+    - manifest_required
+    - rollback_manifest_required
+    - target_path_unavailable
+    - operation_failed_prefix
+    - update_discovery_title
+    - installed_version
+    - latest_version
+    - update_not_checked
+    - checking_for_updates
+    - update_available
+    - update_current
+    - update_skipped
+    - update_pinned
+    - update_not_installed
+    - update_release_not_found
+    - update_check_failed_prefix
+    - background_updates_title
+    - background_updates_disabled
+    - background_updates_waiting
+    - background_updates_checking
+    - background_updates_completed_prefix
+    - background_updates_checked_prefix
+    - background_updates_available_prefix
+    - background_updates_failure_prefix
+    - version_unavailable
+    - installed_apps_title
+    - installed_apps_count_prefix
+    - catalog_load_failed_prefix
+    - status_title
+    - source_title
+    - operations_title
+    - recovery_title
+    - manifest_placeholder
+    - rollback_manifest_placeholder
+    - target_path_placeholder

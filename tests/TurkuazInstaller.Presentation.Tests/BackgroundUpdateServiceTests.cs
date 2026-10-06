@@ -1,13 +1,14 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/BackgroundUpdateServiceTests.cs
 // 📌 Amac: Session background update coordinator enablement, concurrency guard ve entry failure izolasyonunu test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Disabled/busy cycle, available/current sonuc sayimi ve tek entry hatasinin diger checkleri durdurmamasini dogrular
+// Version: 1.1.0
+// Aciklama: Disabled/busy cycle, entry failure izolasyonu ve localized cycle ozet metnini dogrular
 //
 // Bagimli Oldugu Katman: Service | View | Config
 
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Application.Updates;
+using TurkuazInstaller.Contracts.Branding;
 using TurkuazInstaller.Contracts.Updates;
 using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Products;
@@ -123,6 +124,68 @@ public sealed class BackgroundUpdateServiceTests
 
         Assert.Equal(
             "Arka plan kontrolu tamamlandi: 2 kontrol, 1 guncelleme, 1 hata",
+            viewModel.BackgroundUpdateStatus);
+    }
+
+    [Fact]
+    public async Task RunOnceAsync_UsesLocalizedCycleSummary()
+    {
+        var runtime =
+            new StubRuntimeService();
+
+        runtime.Results["alpha-app"] =
+            CreateResult(
+                "alpha-app",
+                "1.0.0",
+                "1.1.0",
+                UpdateAvailability.Available);
+
+        runtime.Results["beta-app"] =
+            CreateResult(
+                "beta-app",
+                "2.0.0",
+                "2.0.0",
+                UpdateAvailability.Current);
+
+        runtime.Failures.Add(
+            "broken-app");
+
+        var catalog =
+            new InstallerUiCatalog(
+                new InstallerUiProfile(
+                    "en-US",
+                    InstallerBrandingProfile.Empty,
+                    new Dictionary<InstallerUiLabelKey, string>
+                    {
+                        [InstallerUiLabelKey.BackgroundUpdatesWaiting] =
+                            "Waiting",
+                        [InstallerUiLabelKey.BackgroundUpdatesChecking] =
+                            "Checking",
+                        [InstallerUiLabelKey.BackgroundUpdatesCompletedPrefix] =
+                            "Background check complete",
+                        [InstallerUiLabelKey.BackgroundUpdatesCheckedPrefix] =
+                            "checked",
+                        [InstallerUiLabelKey.BackgroundUpdatesAvailablePrefix] =
+                            "updates",
+                        [InstallerUiLabelKey.BackgroundUpdatesFailurePrefix] =
+                            "failures"
+                    }));
+
+        var viewModel =
+            new MainWindowViewModel(
+                catalog);
+
+        using var service =
+            new BackgroundUpdateService(
+                runtime,
+                viewModel,
+                CreatePolicy(),
+                catalog);
+
+        await service.RunOnceAsync();
+
+        Assert.Equal(
+            "Background check complete: 2 checked, 1 updates, 1 failures",
             viewModel.BackgroundUpdateStatus);
     }
 

@@ -1,0 +1,77 @@
+// 📄 Dosya Yolu: /src/TurkuazInstaller.Contracts/Branding/InstallerUiLabelKey.cs
+// 📌 Amac: UI localization override anahtarlarini magic string kullanmadan typed contract olarak tanimlar
+// 📌 Modul - Contract CSharp
+// Version: 1.1.0
+// Aciklama: Masaustu arayuzundeki statik ve runtime kullanici metinlerinin desteklenen localization anahtarlarini sabitler
+//
+// Bagimli Oldugu Katman: Service | Repo | View | Language
+
+namespace TurkuazInstaller.Contracts.Branding;
+
+public enum InstallerUiLabelKey
+{
+    PackageId,
+    Channel,
+    ManifestSource,
+    RollbackManifestSource,
+    TargetPath,
+    Stable,
+    Beta,
+    Install,
+    Update,
+    Repair,
+    Rollback,
+    Uninstall,
+    Retry,
+    Cancel,
+    RefreshInstalledApps,
+    CheckUpdates,
+    Ready,
+    Preparing,
+    Downloading,
+    Verifying,
+    Staging,
+    Applying,
+    Uninstalling,
+    SavingState,
+    RemovingState,
+    Completed,
+    Cancelled,
+    RebootRequired,
+    PackageIdRequired,
+    ManifestRequired,
+    RollbackManifestRequired,
+    TargetPathUnavailable,
+    OperationFailedPrefix,
+    UpdateDiscoveryTitle,
+    InstalledVersion,
+    LatestVersion,
+    UpdateNotChecked,
+    CheckingForUpdates,
+    UpdateAvailable,
+    UpdateCurrent,
+    UpdateSkipped,
+    UpdatePinned,
+    UpdateNotInstalled,
+    UpdateReleaseNotFound,
+    UpdateCheckFailedPrefix,
+    BackgroundUpdatesTitle,
+    BackgroundUpdatesDisabled,
+    BackgroundUpdatesWaiting,
+    BackgroundUpdatesChecking,
+    BackgroundUpdatesCompletedPrefix,
+    BackgroundUpdatesCheckedPrefix,
+    BackgroundUpdatesAvailablePrefix,
+    BackgroundUpdatesFailurePrefix,
+    VersionUnavailable,
+    InstalledAppsTitle,
+    InstalledAppsCountPrefix,
+    CatalogLoadFailedPrefix,
+    StatusTitle,
+    SourceTitle,
+    OperationsTitle,
+    RecoveryTitle,
+    ManifestPlaceholder,
+    RollbackManifestPlaceholder,
+    TargetPathPlaceholder
+}

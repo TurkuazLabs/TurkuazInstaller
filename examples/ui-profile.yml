@@ -1,0 +1,32 @@
+# 📄 Dosya Yolu: /examples/ui-profile.yml
+# 📌 Amac: Branding ve localization extension icin kopyalanabilir ornek UI profili sunar
+# 📌 Modul - Config YAML
+# Version: 1.1.0
+# Aciklama: Branding ile statik/runtime UI metinlerinin kismi override ve culture kullanimini gosterir
+# Bagimli Oldugu Katman: Config | Repo | View | Language
+
+schema_version: 1
+culture: en-US
+
+branding:
+  window_title: TurkuazInstaller
+  header_title: Turkuaz Installer
+  header_subtitle: Install and update center
+  footer: TurkuazLabs Community
+
+labels:
+  stable: Stable
+  beta: Beta
+  install: Install
+  update: Update
+  repair: Repair
+  rollback: Roll Back
+  uninstall: Uninstall
+  check_updates: Check for Updates
+  ready: Ready
+  preparing: Preparing release information
+  downloading: Downloading package
+  verifying: Verifying integrity and signature
+  completed: Operation completed successfully
+  operation_failed_prefix: "Operation failed:"
+  package_id_required: Package id is required.
