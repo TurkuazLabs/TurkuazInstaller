@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/BACKGROUND_UPDATES.md
 # 📌 Amac: TurkuazInstaller session background update policy konfigurasyonunu, schedule ve guvenlik sinirlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: background-updates.json, startup/periodic signed discovery, failure isolation ve no-auto-install politikasini aciklar
 # Bagimli Oldugu Katman: Config | Service | Tool | View
 
@@ -72,7 +72,7 @@ Persistent config icinde secret tasimamak icin HTTPS source:
 - query tasiyamaz
 - fragment tasiyamaz
 
-Private GitHub/Gitea credential gerekiyorsa secret background config'e yazilmaz; mevcut credential adapter siniri kullanilir.
+Background policy config private provider tokeni tasimaz. Private kaynaga erisim gerekiyorsa signed manifest source, runtime tarafinda yetkili bir provider/integration uzerinden erisilebilir hale getirilmelidir; token URL/query icine gomulmez.
 
 ## Schedule
 
