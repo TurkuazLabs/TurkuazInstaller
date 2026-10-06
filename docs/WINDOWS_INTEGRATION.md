@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/WINDOWS_INTEGRATION.md
 # 📌 Amac: TurkuazInstaller signed Windows shortcut ve URL protocol integration action guvenlik modelini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: HKCU-only protocol ownership, shortcut hash receipt, install-root executable containment ve uninstall cleanup davranislarini sabitler
 # Bagimli Oldugu Katman: Domain | Service | Repo | Tool | Config
 
@@ -75,6 +75,13 @@ Var olan shortcut:
 
 Cleanup yalniz mevcut .lnk SHA-256 receipt hash ile birebir eslesiyorsa siler.
 
+Receipt path ayrica package-owned lokasyon allow-listinden gecmelidir:
+
+- Desktop shortcut icin kullanici Desktop klasorunun dogrudan alti
+- Start Menu shortcut icin package-scoped TurkuazInstaller/{package_id} klasorunun dogrudan alti
+
+Bozuk veya elle degistirilmis receipt keyfi filesystem path temizligi baslatamaz.
+
 Kullanici veya baska uygulama shortcut'i degistirdiyse TurkuazInstaller dosyayi silmez.
 
 Start Menu shortcutlari package-scoped klasorde tutulur:
@@ -104,6 +111,8 @@ Var olan scheme:
 - foreign scheme overwrite edilmez
 
 Protocol claim scheme bazli cross-process mutex ile serialize edilir.
+
+Receipt icindeki protocol scheme degeri Domain scheme validatorundan tekrar gecmeden registry cleanup yolu uretilmez.
 
 Command formati:
 
