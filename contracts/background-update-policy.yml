@@ -1,0 +1,68 @@
+# 📄 Dosya Yolu: /contracts/background-update-policy.yml
+# 📌 Amac: Session background update policy config, schedule, trust ve mutation sinirlarini contract-first tanimlar
+# 📌 Modul - YAML
+# Version: 1.0.0
+# Aciklama: Varsayilan disabled policy, strict entry listesi, signed read-only discovery ve no-auto-install kurallarini sabitler
+# Bagimli Oldugu Katman: Config | Service | Tool | View
+
+schema_version: 1
+
+runtime_config:
+  format: json
+  path: "%LOCALAPPDATA%/TurkuazInstaller/config/background-updates.json"
+  missing_config: disabled
+  unknown_property: deny
+  default_interval_minutes: 60
+  minimum_interval_minutes: 15
+  maximum_interval_minutes: 1440
+  maximum_entries: 100
+
+scope:
+  process: winui_session
+  os_background_service: false
+  run_when_app_closed: false
+
+entry:
+  required:
+    - package_id
+    - channel
+    - manifest_source
+  channels:
+    - stable
+    - beta
+  duplicate_package_channel: deny
+  manifest_source:
+    allowed:
+      - https
+      - absolute_local_file
+    https_userinfo: deny
+    https_query: deny
+    https_fragment: deny
+
+schedule:
+  startup_check: true
+  periodic_check: true
+  skip_while_installer_busy: true
+  skip_while_manual_discovery_active: true
+  skip_overlapping_background_cycle: true
+  stop_on_window_close: true
+
+discovery:
+  signed_manifest_pipeline_required: true
+  per_entry_failure_isolated: true
+  update_available_requires_installed_state: true
+  package_artifact_download: false
+  prerequisite_install: false
+  package_stage: false
+  package_apply: false
+  state_write: false
+  journal_write: false
+  resume_write: false
+
+security:
+  auto_download: deny
+  auto_install: deny
+  secret_in_config: deny
+  secret_bearing_https_uri: deny
+  unsigned_manifest_bypass: deny
+  mutation_from_background_cycle: deny

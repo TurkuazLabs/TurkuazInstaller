@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiLabels.cs
 // 📌 Amac: TurkuazInstaller masaustu arayuzundeki kullanici metinlerini merkezi Language katmaninda tanimlar
 // 📌 Modul - Language CSharp
-// Version: 1.3.0
-// Aciklama: Install/update/recovery metinlerine ek olarak kurulu uygulama katalog ve read-only update discovery UX metinlerini tek katalogda tutar
+// Version: 1.4.0
+// Aciklama: Install/update/recovery metinlerine ek olarak katalog, manual discovery ve session background update UX metinlerini tek katalogda tutar
 //
 // Bagimli Oldugu Katman: Language
 
@@ -91,6 +91,23 @@ public static class InstallerUiLabels
         "Release bulunamadi";
     public const string UpdateCheckFailedPrefix =
         "Guncelleme kontrolu basarisiz:";
+
+    public const string BackgroundUpdatesTitle =
+        "Arka Plan Guncelleme";
+    public const string BackgroundUpdatesDisabled =
+        "Arka plan guncelleme kontrolu kapali";
+    public const string BackgroundUpdatesWaiting =
+        "Arka plan guncelleme kontrolu bekliyor";
+    public const string BackgroundUpdatesChecking =
+        "Arka plan guncellemeleri kontrol ediliyor";
+    public const string BackgroundUpdatesCompletedPrefix =
+        "Arka plan kontrolu tamamlandi";
+    public const string BackgroundUpdatesCheckedPrefix =
+        "kontrol";
+    public const string BackgroundUpdatesAvailablePrefix =
+        "guncelleme";
+    public const string BackgroundUpdatesFailurePrefix =
+        "hata";
     public const string VersionUnavailable =
         "-";
 
