@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 1.3.0
+# Version: 1.3.1
 # Aciklama: Stable Community, tamamlanan CLI ve bootstrap self-update discovery/download gelistirme durumunu takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -84,7 +84,7 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [x] generic prerequisite detection engine
 - [x] reboot/resume orchestration
 - [x] CLI/silent mode
-- [ ] bootstrap self-update discovery/download (GitHub digest + size, current-signer Authenticode pinning, standalone signed release asset ve handoff wiring implemented; CI validation pending)
+- [x] bootstrap self-update discovery/download
 
 ## v1.2 Sonrasi
 
