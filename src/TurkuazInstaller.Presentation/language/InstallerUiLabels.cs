@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiLabels.cs
 // 📌 Amac: TurkuazInstaller masaustu arayuzundeki kullanici metinlerini merkezi Language katmaninda tanimlar
 // 📌 Modul - Language CSharp
-// Version: 1.4.0
-// Aciklama: Install/update/recovery metinlerine ek olarak katalog, manual discovery ve session background update UX metinlerini tek katalogda tutar
+// Version: 1.5.0
+// Aciklama: Install/update/recovery metinlerine ek olarak katalog, discovery, background update ve version skip/pinning UX metinlerini tutar
 //
 // Bagimli Oldugu Katman: Language
 
@@ -85,6 +85,10 @@ public static class InstallerUiLabels
         "Yeni surum mevcut";
     public const string UpdateCurrent =
         "Paket guncel";
+    public const string UpdateSkipped =
+        "Bu surum version policy ile atlandi";
+    public const string UpdatePinned =
+        "Bu surum version pin ust sinirini asiyor";
     public const string UpdateNotInstalled =
         "Paket kurulu degil";
     public const string UpdateReleaseNotFound =
