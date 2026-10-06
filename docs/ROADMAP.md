@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 1.5.1
-# Aciklama: Stable Community ve v1.2 proxy support gelistirme durumunu takip eder
+# Version: 1.6.0
+# Aciklama: Stable Community ve v1.2 installed-app catalog/list UI gelistirme durumunu takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
 # Roadmap
@@ -90,7 +90,7 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 
 - [x] private GitHub/Gitea credential adapters
 - [x] proxy support
-- [ ] installed-app catalog/list UI
+- [ ] installed-app catalog/list UI (committed state ListAsync, Presentation catalog service, startup/manual/post-operation refresh, WinUI list ve tests implemented; CI validation pending)
 - [ ] richer update discovery UX
 - [ ] background update policy
 - [ ] version skip/pinning
