@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.6.1
-# Aciklama: Detached trust, reboot resume, bootstrap self-update digest/signer, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.7.0
+# Aciklama: Detached trust, private provider credentials, reboot resume, bootstrap self-update, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -665,6 +665,27 @@ if provider_ids != EXPECTED_PROVIDERS:
         f"provider IDs drifted: {sorted(provider_ids)}"
     )
 
+credential_store = provider.get(
+    "credential_store",
+    {},
+)
+
+expected_credential_store = {
+    "platform": "windows",
+    "adapter": "windows_credential_manager",
+    "credential_type": "generic",
+    "target_format": "TurkuazInstaller/provider/{provider}/{authority}",
+    "secret_in_manifest": False,
+    "secret_in_log": False,
+    "missing_credential": "anonymous",
+}
+
+for key, expected_value in expected_credential_store.items():
+    if credential_store.get(key) != expected_value:
+        fail(
+            f"provider credential store invariant mismatch: {key}"
+        )
+
 for provider_id, definition in (
     provider.get("providers", {}).items()
 ):
@@ -686,6 +707,49 @@ for provider_id, definition in (
             f"{provider_id}: secret_in_manifest must be false"
         )
 
+    if provider_id in {"github", "gitea"}:
+        if authentication.get("optional") is not True:
+            fail(
+                f"{provider_id}: authentication must remain optional"
+            )
+
+        if (
+            authentication.get("authority_scope")
+            != "explicit_allow_list"
+        ):
+            fail(
+                f"{provider_id}: credential authority scope must use explicit_allow_list"
+            )
+
+        if (
+            authentication.get("api_authority_required")
+            is not True
+        ):
+            fail(
+                f"{provider_id}: API authority must remain in credential scope"
+            )
+
+expected_provider_header_schemes = {
+    "github": "Bearer",
+    "gitea": "token",
+}
+
+for provider_id, expected_scheme in (
+    expected_provider_header_schemes.items()
+):
+    scheme = (
+        provider
+        .get("providers", {})
+        .get(provider_id, {})
+        .get("authentication", {})
+        .get("header_scheme")
+    )
+
+    if scheme != expected_scheme:
+        fail(
+            f"{provider_id}: credential header scheme mismatch"
+        )
+
 if (
     provider
     .get("providers", {})
@@ -696,6 +760,35 @@ if (
     fail(
         "generic HTTP provider must reject remote plain HTTP"
     )
+
+if (
+    provider
+    .get("providers", {})
+    .get("http", {})
+    .get("authentication", {})
+    .get("private_credential_adapter")
+    is not False
+):
+    fail(
+        "generic HTTP private credential adapter must remain disabled in this tranche"
+    )
+
+provider_security = provider.get(
+    "security",
+    {},
+)
+
+for key in (
+    "credential_in_query_string",
+    "credential_in_manifest",
+    "credential_in_log",
+    "credential_cross_authority",
+    "credential_userinfo_origin",
+):
+    if provider_security.get(key) != "deny":
+        fail(
+            f"provider credential security invariant must deny: {key}"
+        )
 
 example = load_yaml(EXAMPLE)
 
