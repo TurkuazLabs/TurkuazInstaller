@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.6.0
+# Version: 1.6.1
 # Aciklama: Detached trust, reboot resume, bootstrap self-update digest/signer, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -582,6 +582,16 @@ if (
         "explicit bootstrap replacement path must not bypass signer verification"
     )
 
+if (
+    bootstrap_trust
+    .get("completion_source", {})
+    .get("same_trust_verification_required")
+    is not True
+):
+    fail(
+        "bootstrap self-update completion source must not bypass signer verification"
+    )
+
 bootstrap_handoff = bootstrap_self_update.get(
     "handoff",
     {},
@@ -632,6 +642,7 @@ for key in (
     "signer_subject_mismatch",
     "signer_certificate_mismatch",
     "unverified_explicit_handoff",
+    "unverified_completion_source",
 ):
     if bootstrap_security.get(key) != "deny":
         fail(
