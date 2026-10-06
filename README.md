@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim, kullanim ve release durumu giris dokumani
 # 📌 Modul - Markdown
-# Version: 1.5.0
-# Aciklama: Stable Community kod durumunu, signed trust, private credentials, proxy, catalog, manual/background update discovery ve production signing durumunu ozetler
+# Version: 1.6.0
+# Aciklama: Stable Community kod durumunu, signed trust, proxy, catalog, manual/background discovery, version policy ve production signing durumunu ozetler
 
 Bagimli Oldugu Katman: View
 
@@ -21,6 +21,7 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum, guncelle
 - committed install state tabanli kurulu uygulama katalog/list UI
 - signed manifest + installed state tabanli read-only update discovery UX
 - session-only read-only background update policy
+- package/channel bazli version skip ve maximum-version pinning
 - Paket motorundan bagimsiz Core
 - Velopack Package Engine adapteri
 - CMS/PKCS#7 detached manifest signature
@@ -164,6 +165,7 @@ Bir proje TurkuazInstaller'a gecmeden once signed manifest, install, update, rep
 - docs/INSTALLED_APP_CATALOG.md
 - docs/UPDATE_DISCOVERY.md
 - docs/BACKGROUND_UPDATES.md
+- docs/VERSION_POLICY.md
 - docs/VELOPACK_E2E.md
 - docs/AZURE_SIGNING_BOOTSTRAP.md
 - docs/RELEASE_SIGNING.md
