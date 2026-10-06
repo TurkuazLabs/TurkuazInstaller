@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/WINDOWS_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller Windows NativeAOT bootstrap startup, app launch ve self-update mimarisini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.2.0
+# Version: 1.2.1
 # Aciklama: Combined distribution, prerequisite, reboot resume forwarding, trusted self-update discovery/download ve least-privilege process sinirlarini tanimlar
 # Bagimli Oldugu Katman: Service | Tool | Config
 
@@ -88,7 +88,9 @@ Explicit replacement yolu da artik current bootstrap ile ayni trusted Authentico
 
 ## Self-update Completion
 
-Replacement process:
+Replacement process once target mevcut bootstrap ile source replacement signer kimligini tekrar dogrular.
+
+Ardindan:
 
 1. parent process exit bekler
 2. target bootstrap dosyasini retry ile degistirir
