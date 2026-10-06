@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
 // 📌 Amac: Ana pencere startup resume, request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.2.0
-// Aciklama: Manual operasyonlari ve reboot sonrasi package-scoped resume akislarini ayni UI state makinesinde koordine eder
+// Version: 1.3.0
+// Aciklama: Manual/resume operasyonlarina ek olarak committed install state katalog refresh ve ayri katalog hata state'ini koordine eder
 //
 // Bagimli Oldugu Katman: Service | View | Language
 
@@ -20,6 +20,7 @@ public sealed class InstallerDesktopService
     private readonly MainWindowViewModel _viewModel;
     private readonly IInstallerRuntimeService _runtimeService;
     private readonly InstallerResumeLaunchParser _resumeLaunchParser;
+    private readonly InstalledAppCatalogService? _catalogService;
     private CancellationTokenSource? _operationCancellation;
     private InstallerDesktopRequest? _lastRequest;
 
@@ -27,10 +28,24 @@ public sealed class InstallerDesktopService
         MainWindowViewModel viewModel,
         IInstallerRuntimeService runtimeService,
         InstallerResumeLaunchParser resumeLaunchParser)
+        : this(
+            viewModel,
+            runtimeService,
+            resumeLaunchParser,
+            null)
+    {
+    }
+
+    public InstallerDesktopService(
+        MainWindowViewModel viewModel,
+        IInstallerRuntimeService runtimeService,
+        InstallerResumeLaunchParser resumeLaunchParser,
+        InstalledAppCatalogService? catalogService)
     {
         _viewModel = viewModel;
         _runtimeService = runtimeService;
         _resumeLaunchParser = resumeLaunchParser;
+        _catalogService = catalogService;
     }
 
     public async Task StartAsync(
@@ -58,6 +73,10 @@ public sealed class InstallerDesktopService
 
         if (resumePackageId is null)
         {
+            await RefreshInstalledAppsCoreAsync(
+                    CancellationToken.None)
+                .ConfigureAwait(true);
+
             return;
         }
 
@@ -95,6 +114,18 @@ public sealed class InstallerDesktopService
 
         await ExecuteRequestAsync(
                 request)
+            .ConfigureAwait(true);
+    }
+
+    public async Task RefreshInstalledAppsAsync()
+    {
+        if (_viewModel.IsBusy)
+        {
+            return;
+        }
+
+        await RefreshInstalledAppsCoreAsync(
+                CancellationToken.None)
             .ConfigureAwait(true);
     }
 
@@ -192,6 +223,14 @@ public sealed class InstallerDesktopService
             await CompleteUiAsync(
                     progress)
                 .ConfigureAwait(true);
+
+            await RefreshInstalledAppsCoreAsync(
+                    CancellationToken.None)
+                .ConfigureAwait(true);
+
+            await RefreshInstalledAppsCoreAsync(
+                    CancellationToken.None)
+                .ConfigureAwait(true);
         }
         catch (InstallerRebootRequiredException)
         {
@@ -281,6 +320,40 @@ public sealed class InstallerDesktopService
         finally
         {
             FinishOperation();
+        }
+    }
+
+    private async Task RefreshInstalledAppsCoreAsync(
+        CancellationToken cancellationToken)
+    {
+        if (_catalogService is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var items =
+                await _catalogService
+                    .LoadAsync(
+                        cancellationToken)
+                    .ConfigureAwait(true);
+
+            _viewModel.SetInstalledApps(
+                items);
+
+            _viewModel.HasCatalogError = false;
+            _viewModel.CatalogErrorMessage =
+                string.Empty;
+        }
+        catch (Exception exception)
+        {
+            _viewModel.HasCatalogError = true;
+            _viewModel.CatalogErrorMessage =
+                string.Concat(
+                    InstallerUiLabels.CatalogLoadFailedPrefix,
+                    " ",
+                    exception.Message);
         }
     }
 
