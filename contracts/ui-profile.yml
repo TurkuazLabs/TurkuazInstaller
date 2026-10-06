@@ -1,0 +1,53 @@
+# 📄 Dosya Yolu: /contracts/ui-profile.yml
+# 📌 Amac: TurkuazInstaller branding ve localization extension contractini tanimlamak
+# 📌 Modul - YAML
+# Version: 1.0.0
+# Aciklama: Local UI profile schema, branding alanlari ve desteklenen label override anahtarlarini sabitler
+# Bagimli Oldugu Katman: Config | Repo | View | Language
+
+schema_version: 1
+
+profile:
+  path: "%LOCALAPPDATA%/TurkuazInstaller/config/ui-profile.yml"
+  missing_file: use_builtin_defaults
+
+culture:
+  optional: true
+  format: dotnet_culture_name
+  invalid: deny
+
+branding:
+  optional: true
+  fields:
+    - window_title
+    - header_title
+    - header_subtitle
+    - footer
+  empty_value: fallback_to_builtin
+
+labels:
+  optional: true
+  unknown_key: deny
+  empty_value: deny
+  supported:
+    - package_id
+    - channel
+    - manifest_source
+    - rollback_manifest_source
+    - target_path
+    - install
+    - update
+    - repair
+    - rollback
+    - uninstall
+    - retry
+    - cancel
+    - refresh_installed_apps
+    - check_updates
+    - update_discovery_title
+    - background_updates_title
+    - installed_apps_title
+    - status_title
+    - source_title
+    - operations_title
+    - recovery_title
