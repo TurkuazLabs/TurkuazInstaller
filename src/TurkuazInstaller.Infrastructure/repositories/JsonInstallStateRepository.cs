@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/repositories/JsonInstallStateRepository.cs
 // 📌 Amac: InstalledPackageState verisini paket bazli JSON dosyalarinda atomik olarak saklar ve siler
 // 📌 Modul - Repo CSharp
-// Version: 1.0.0
-// Aciklama: Application state portunu dosya sistemi storage adapteriyle Get, Save ve Delete davranislariyla uygular
+// Version: 1.1.0
+// Aciklama: Package Get/Save/Delete yaninda committed JSON state dosyalarini deterministik package id sirasinda listeler
 //
 // Bagimli Oldugu Katman: Repo
 
@@ -57,27 +57,81 @@ public sealed class JsonInstallStateRepository
                 FileOptions.Asynchronous |
                 FileOptions.SequentialScan);
 
-        var document =
-            await JsonSerializer
-                .DeserializeAsync<StateDocument>(
-                    stream,
-                    SerializerOptions,
-                    cancellationToken)
-                .ConfigureAwait(false);
+        return await ReadStateAsync(
+                stream,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
 
-        if (document is null)
+    public async Task<IReadOnlyList<InstalledPackageState>> ListAsync(
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!Directory.Exists(
+                _options.RootDirectory))
         {
-            throw new InvalidDataException(
-                "Install state document is empty.");
+            return Array.Empty<InstalledPackageState>();
         }
 
-        return new InstalledPackageState(
-            PackageId.Parse(
-                document.PackageId),
-            SemanticVersion.Parse(
-                document.Version),
-            document.Channel,
-            document.TargetPath);
+        var paths =
+            Directory
+                .EnumerateFiles(
+                    _options.RootDirectory,
+                    string.Concat(
+                        "*",
+                        JsonExtension),
+                    SearchOption.TopDirectoryOnly)
+                .OrderBy(
+                    Path.GetFileName,
+                    StringComparer.Ordinal)
+                .ToArray();
+
+        var states =
+            new List<InstalledPackageState>(
+                paths.Length);
+
+        foreach (var path in paths)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await using var stream =
+                new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read,
+                    4096,
+                    FileOptions.Asynchronous |
+                    FileOptions.SequentialScan);
+
+            var state =
+                await ReadStateAsync(
+                        stream,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            var expectedFileName =
+                string.Concat(
+                    state.PackageId.Value,
+                    JsonExtension);
+
+            if (
+                !string.Equals(
+                    Path.GetFileName(
+                        path),
+                    expectedFileName,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(
+                    "Install state file name does not match package id.");
+            }
+
+            states.Add(
+                state);
+        }
+
+        return states.AsReadOnly();
     }
 
     public async Task SaveAsync(
@@ -158,6 +212,33 @@ public sealed class JsonInstallStateRepository
         }
 
         return Task.CompletedTask;
+    }
+
+    private static async Task<InstalledPackageState> ReadStateAsync(
+        Stream stream,
+        CancellationToken cancellationToken)
+    {
+        var document =
+            await JsonSerializer
+                .DeserializeAsync<StateDocument>(
+                    stream,
+                    SerializerOptions,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (document is null)
+        {
+            throw new InvalidDataException(
+                "Install state document is empty.");
+        }
+
+        return new InstalledPackageState(
+            PackageId.Parse(
+                document.PackageId),
+            SemanticVersion.Parse(
+                document.Version),
+            document.Channel,
+            document.TargetPath);
     }
 
     private string GetStatePath(
