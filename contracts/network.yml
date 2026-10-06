@@ -1,0 +1,55 @@
+# 📄 Dosya Yolu: /contracts/network.yml
+# 📌 Amac: TurkuazInstaller Windows HTTP proxy runtime config ve guvenlik invariantlarini contract-first tanimlar
+# 📌 Modul - YAML
+# Version: 1.0.0
+# Aciklama: System/direct/custom modlari, LocalAppData network.json kaynagi, default credentials ve secret-free custom proxy kurallarini sabitler
+# Bagimli Oldugu Katman: Config | Tool | Controller
+
+schema_version: 1
+
+runtime_config:
+  format: json
+  path: "%LOCALAPPDATA%/TurkuazInstaller/config/network.json"
+  missing_config: system
+  unknown_property: deny
+
+modes:
+  allowed:
+    - system
+    - direct
+    - custom
+
+  system:
+    use_os_proxy: true
+    custom_proxy_forbidden: true
+    default_credentials_optional: true
+
+  direct:
+    use_proxy: false
+    custom_proxy_forbidden: true
+    default_credentials_forbidden: true
+
+  custom:
+    proxy_uri_required: true
+    allowed_schemes:
+      - http
+    userinfo_forbidden: true
+    path_forbidden: true
+    query_forbidden: true
+    fragment_forbidden: true
+    bypass_local_optional: true
+    default_credentials_optional: true
+
+consumers:
+  - bootstrap_self_update
+  - winui_manifest_and_artifact
+  - cli_manifest_and_artifact
+
+security:
+  proxy_username_in_config: deny
+  proxy_password_in_config: deny
+  proxy_token_in_config: deny
+  proxy_uri_userinfo: deny
+  malformed_config: deny
+  unsupported_mode: deny
+  unsupported_proxy_scheme: deny

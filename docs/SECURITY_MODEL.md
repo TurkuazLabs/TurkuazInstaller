@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.5.0
-# Aciklama: Detached trust, private provider credentials, prerequisite/reboot resume, bootstrap self-update, path, process, state ve rollback kurallarini sabitler
+# Version: 1.6.0
+# Aciklama: Detached trust, private credentials, proxy policy, prerequisite/reboot resume, bootstrap self-update, path, process, state ve rollback kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -33,6 +33,7 @@ Community baseline:
 - secret degerlerin manifest icine yazilmamasi
 - bootstrap self-update icin GitHub SHA-256 asset digest + current-signer Authenticode identity pinning
 - private GitHub/Gitea tokenlari icin Windows Credential Manager + host-scoped Authorization
+- tum Windows HTTP clientleri icin ortak system/direct/custom proxy policy
 
 ## Manifest Trust
 
@@ -171,6 +172,34 @@ Transport authentication, signed manifest trust zincirini gevsetmez.
 Private manifest yine CMS/PKCS#7, publisher subject ve certificate SHA-256 kontrollerinden gecmeden parse edilmez.
 
 Detay: docs/PRIVATE_PROVIDER_CREDENTIALS.md
+
+## Network Proxy
+
+Runtime proxy config manifest disindadir:
+
+`%LOCALAPPDATA%/TurkuazInstaller/config/network.json`
+
+Config yoksa system proxy kullanilir.
+
+Desteklenen modlar:
+
+- system: Windows/system proxy davranisini korur
+- direct: proxy kullanmaz
+- custom: explicit HTTP proxy origin kullanir
+
+Custom proxy URI userinfo, path, query veya fragment tasiyamaz.
+
+Proxy username/password/token network.json icinde tutulmaz.
+
+System veya custom mod Windows default credentials kullanabilir.
+
+Direct modda proxy credential kullanilamaz.
+
+Ayni policy bootstrap self-update, WinUI manifest/artifact ve CLI manifest/artifact HTTP clientlerine uygulanir.
+
+Malformed mevcut config sessizce system moda dusmez; runtime fail-closed durur.
+
+Detay: docs/PROXY.md
 
 ## Preserve Data
 

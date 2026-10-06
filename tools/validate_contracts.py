@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.7.0
-# Aciklama: Detached trust, private provider credentials, reboot resume, bootstrap self-update, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
+# Version: 1.8.0
+# Aciklama: Detached trust, private credentials, proxy policy, reboot resume, bootstrap self-update, HTTPS/hash ve Community-Pro boundary kurallarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -18,6 +18,7 @@ MANIFEST = ROOT / "contracts" / "installer-manifest.yml"
 MANIFEST_TRUST = ROOT / "contracts" / "manifest-trust.yml"
 BOOTSTRAP_SELF_UPDATE = ROOT / "contracts" / "bootstrap-self-update.yml"
 PROVIDER = ROOT / "contracts" / "release-provider.yml"
+NETWORK = ROOT / "contracts" / "network.yml"
 EXAMPLE = ROOT / "examples" / "community-manifest.yml"
 SECURITY = ROOT / "docs" / "SECURITY_MODEL.md"
 ARCHITECTURE = ROOT / "docs" / "ARCHITECTURE.md"
@@ -788,6 +789,133 @@ for key in (
     if provider_security.get(key) != "deny":
         fail(
             f"provider credential security invariant must deny: {key}"
+        )
+
+network = load_yaml(NETWORK)
+
+if network.get("schema_version") != 1:
+    fail(
+        "network schema_version must be 1"
+    )
+
+network_runtime_config = network.get(
+    "runtime_config",
+    {},
+)
+
+expected_network_runtime = {
+    "format": "json",
+    "path": "%LOCALAPPDATA%/TurkuazInstaller/config/network.json",
+    "missing_config": "system",
+    "unknown_property": "deny",
+}
+
+for key, expected_value in expected_network_runtime.items():
+    if network_runtime_config.get(key) != expected_value:
+        fail(
+            f"network runtime config invariant mismatch: {key}"
+        )
+
+network_modes = network.get(
+    "modes",
+    {},
+)
+
+if set(network_modes.get("allowed", [])) != {
+    "system",
+    "direct",
+    "custom",
+}:
+    fail(
+        "network proxy modes must remain system/direct/custom"
+    )
+
+system_proxy = network_modes.get(
+    "system",
+    {},
+)
+
+expected_system_proxy = {
+    "use_os_proxy": True,
+    "custom_proxy_forbidden": True,
+    "default_credentials_optional": True,
+}
+
+for key, expected_value in expected_system_proxy.items():
+    if system_proxy.get(key) != expected_value:
+        fail(
+            f"system proxy invariant mismatch: {key}"
+        )
+
+direct_proxy = network_modes.get(
+    "direct",
+    {},
+)
+
+expected_direct_proxy = {
+    "use_proxy": False,
+    "custom_proxy_forbidden": True,
+    "default_credentials_forbidden": True,
+}
+
+for key, expected_value in expected_direct_proxy.items():
+    if direct_proxy.get(key) != expected_value:
+        fail(
+            f"direct proxy invariant mismatch: {key}"
+        )
+
+custom_proxy = network_modes.get(
+    "custom",
+    {},
+)
+
+if set(custom_proxy.get("allowed_schemes", [])) != {
+    "http",
+}:
+    fail(
+        "custom proxy scheme must remain HTTP in this tranche"
+    )
+
+for key in (
+    "proxy_uri_required",
+    "userinfo_forbidden",
+    "path_forbidden",
+    "query_forbidden",
+    "fragment_forbidden",
+    "bypass_local_optional",
+    "default_credentials_optional",
+):
+    if custom_proxy.get(key) is not True:
+        fail(
+            f"custom proxy invariant missing: {key}"
+        )
+
+if set(network.get("consumers", [])) != {
+    "bootstrap_self_update",
+    "winui_manifest_and_artifact",
+    "cli_manifest_and_artifact",
+}:
+    fail(
+        "network proxy consumers drifted"
+    )
+
+network_security = network.get(
+    "security",
+    {},
+)
+
+for key in (
+    "proxy_username_in_config",
+    "proxy_password_in_config",
+    "proxy_token_in_config",
+    "proxy_uri_userinfo",
+    "malformed_config",
+    "unsupported_mode",
+    "unsupported_proxy_scheme",
+):
+    if network_security.get(key) != "deny":
+        fail(
+            f"network proxy security invariant must deny: {key}"
         )
 
 example = load_yaml(EXAMPLE)

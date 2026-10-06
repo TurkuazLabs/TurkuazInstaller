@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/controllers/Program.cs
 // 📌 Amac: Native bootstrap process girisini alir, dependency composition yapar ve runtime servisini cagirir
 // 📌 Modul - Controller CSharp
-// Version: 1.1.0
-// Aciklama: Controller argument requestini parsera aktarir ve Service katmanini discovery/download/trust/handoff Windows Tool adapterlariyla compose eder
+// Version: 1.2.0
+// Aciklama: Controller argument requestini parsera aktarir; self-update HTTP clientlerini ortak system/direct/custom proxy politikasiyla compose eder
 //
 // Bagimli Oldugu Katman: Controller | Service | Tool | Config
 
@@ -10,6 +10,7 @@ using TurkuazInstaller.Application.Bootstrap;
 using TurkuazInstaller.Bootstrapper.Config;
 using TurkuazInstaller.Bootstrapper.Services;
 using TurkuazInstaller.Bootstrapper.Tools;
+using TurkuazInstaller.Platform.Windows.Config;
 using TurkuazInstaller.Platform.Windows.Tools;
 
 namespace TurkuazInstaller.Bootstrapper.Controllers;
@@ -40,21 +41,23 @@ internal static class Program
                 BootstrapDefaults
                     .CreateSelfUpdateDiscoveryOptions();
 
+            var networkProxyOptions =
+                new WindowsNetworkProxyOptionsReader(
+                    WindowsNetworkProxyDefaults
+                        .CreateConfigPath())
+                    .Read();
+
             using var discoveryHttpClient =
-                new HttpClient
-                {
-                    Timeout =
-                        selfUpdateOptions
-                            .DiscoveryTimeout
-                };
+                WindowsHttpClientFactory.Create(
+                    networkProxyOptions,
+                    selfUpdateOptions
+                        .DiscoveryTimeout);
 
             using var downloadHttpClient =
-                new HttpClient
-                {
-                    Timeout =
-                        selfUpdateOptions
-                            .DownloadTimeout
-                };
+                WindowsHttpClientFactory.Create(
+                    networkProxyOptions,
+                    selfUpdateOptions
+                        .DownloadTimeout);
 
             var runtimeService =
                 new BootstrapRuntimeService(

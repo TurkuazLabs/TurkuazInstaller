@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim, kullanim ve release durumu giris dokumani
 # 📌 Modul - Markdown
-# Version: 1.1.2
-# Aciklama: Stable Community kod durumunu, signed manifest trust, secure prerequisite engine ve production signing dis bagimliligini ozetler
+# Version: 1.2.0
+# Aciklama: Stable Community kod durumunu, signed trust, private provider credentials, shared proxy policy ve production signing dis bagimliligini ozetler
 
 Bagimli Oldugu Katman: View
 
@@ -16,6 +16,8 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum, guncelle
 - .NET runtime gerektirmeyen NativeAOT Windows bootstrapper
 - Install, update, repair, rollback ve uninstall akislari
 - GitHub, Gitea, generic HTTPS ve local file release provider modeli
+- Windows Credential Manager tabanli private GitHub/Gitea credentials
+- ortak system/direct/custom HTTP proxy policy
 - Paket motorundan bagimsiz Core
 - Velopack Package Engine adapteri
 - CMS/PKCS#7 detached manifest signature
@@ -154,6 +156,8 @@ Bir proje TurkuazInstaller'a gecmeden once signed manifest, install, update, rep
 - docs/MANIFEST_TRUST.md
 - docs/PREREQUISITES.md
 - docs/CLI.md
+- docs/PRIVATE_PROVIDER_CREDENTIALS.md
+- docs/PROXY.md
 - docs/VELOPACK_E2E.md
 - docs/AZURE_SIGNING_BOOTSTRAP.md
 - docs/RELEASE_SIGNING.md
