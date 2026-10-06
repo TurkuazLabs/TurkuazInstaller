@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/InstallerManifestReaderTests.cs
 // 📌 Amac: YAML installer manifest parserinin Stable v1 typed Domain sonucunu dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
-// Aciklama: Package, artifact, signature, install policy, prerequisite, preserve path ve rollback alanlarini test eder
+// Version: 1.2.0
+// Aciklama: Package/artifact/install alanlarina ek olarak signed Windows shortcut/protocol policy mappingini test eder
 //
 // Bagimli Oldugu Katman: Tool | Service
 
 using TurkuazInstaller.Domain.Artifacts;
+using TurkuazInstaller.Domain.Integrations;
 using TurkuazInstaller.Domain.Prerequisites;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Infrastructure.Manifests;
@@ -85,6 +86,97 @@ public sealed class InstallerManifestReaderTests
 
         Assert.True(
             release.Rollback.PreviousVersionRequired);
+    }
+
+
+    [Fact]
+    public void Read_MapsWindowsIntegrationPolicy()
+    {
+        var reader =
+            new InstallerManifestReader();
+
+        var yaml =
+            ProviderTestData
+                .Manifest(
+                    ReleaseChannel.Stable,
+                    "2.5.0")
+                .Replace(
+                    "  preserve_paths:\n    - UserData",
+                    """
+  preserve_paths:
+    - UserData
+  windows:
+    shortcuts:
+      - id: main
+        name: Example App
+        location: start_menu
+        executable: ExampleApp.exe
+      - id: desktop
+        name: Example App
+        location: desktop
+        executable: bin/ExampleApp.exe
+    protocols:
+      - scheme: example-app
+        executable: ExampleApp.exe
+""",
+                    StringComparison.Ordinal);
+
+        var release =
+            reader.Read(
+                yaml);
+
+        Assert.Equal(
+            2,
+            release.Install
+                .WindowsIntegration
+                .Shortcuts
+                .Count);
+
+        Assert.Equal(
+            WindowsShortcutLocation.StartMenu,
+            release.Install
+                .WindowsIntegration
+                .Shortcuts[0]
+                .Location);
+
+        Assert.Equal(
+            "example-app",
+            Assert.Single(
+                release.Install
+                    .WindowsIntegration
+                    .Protocols)
+                .Scheme);
+    }
+
+    [Fact]
+    public void Read_RejectsWindowsIntegrationTraversal()
+    {
+        var reader =
+            new InstallerManifestReader();
+
+        var yaml =
+            ProviderTestData
+                .Manifest(
+                    ReleaseChannel.Stable,
+                    "2.5.0")
+                .Replace(
+                    "  preserve_paths:\n    - UserData",
+                    """
+  preserve_paths:
+    - UserData
+  windows:
+    shortcuts:
+      - id: main
+        name: Example App
+        location: start_menu
+        executable: ../ExampleApp.exe
+""",
+                    StringComparison.Ordinal);
+
+        Assert.Throws<ArgumentException>(
+            () =>
+                reader.Read(
+                    yaml));
     }
 
     [Fact]
