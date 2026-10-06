@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/ROADMAP.md
 # 📌 Amac: TurkuazInstaller Community gelistirme fazlarini ve kabul kriterlerini takip etmek
 # 📌 Modul - Markdown
-# Version: 1.7.0
+# Version: 1.7.1
 # Aciklama: Stable Community ve v1.2 richer update discovery UX gelistirme durumunu takip eder
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -91,7 +91,7 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [x] private GitHub/Gitea credential adapters
 - [x] proxy support
 - [x] installed-app catalog/list UI
-- [ ] richer update discovery UX (signed read-only check, installed/latest version UX, isolated errors, concurrency guard, tests ve contract implemented; CI validation pending)
+- [x] richer update discovery UX
 - [ ] background update policy
 - [ ] version skip/pinning
 - [ ] safe Windows integration actions
