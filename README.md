@@ -27,6 +27,7 @@ TurkuazInstaller, TurkuazLabs masaustu uygulamalari icin ortak kurulum, guncelle
 - crash/reboot operation journal
 - structured JSONL diagnostics
 - generic prerequisite detector registry
+- Windows CLI / silent automation runtime
 - hash + Authenticode dogrulamali prerequisite auto-install
 - Windows prerequisite kontrolu
 - Stable ve beta release kanallari
@@ -152,6 +153,7 @@ Bir proje TurkuazInstaller'a gecmeden once signed manifest, install, update, rep
 - docs/PROJECT_INTEGRATION.md
 - docs/MANIFEST_TRUST.md
 - docs/PREREQUISITES.md
+- docs/CLI.md
 - docs/VELOPACK_E2E.md
 - docs/AZURE_SIGNING_BOOTSTRAP.md
 - docs/RELEASE_SIGNING.md
