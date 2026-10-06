@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /contracts/bootstrap-self-update.yml
 # 📌 Amac: Bootstrap self-update discovery, download, trust ve handoff guvenlik invariantlarini contract-first sabitler
 # 📌 Modul - YAML
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: GitHub latest stable release, exact standalone EXE, asset digest/size, current-signer trust ve two-process handoff kurallarini tanimlar
 # Bagimli Oldugu Katman: Service | Tool | Config
 
@@ -38,6 +38,8 @@ trust:
     certificate_sha256_must_match_current: true
   explicit_replacement_path:
     same_trust_verification_required: true
+  completion_source:
+    same_trust_verification_required: true
 
 availability:
   network_failure: continue_current_bootstrap
@@ -65,3 +67,4 @@ security:
   signer_subject_mismatch: deny
   signer_certificate_mismatch: deny
   unverified_explicit_handoff: deny
+  unverified_completion_source: deny
