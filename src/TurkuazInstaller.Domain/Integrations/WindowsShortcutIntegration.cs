@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Domain/Integrations/WindowsShortcutIntegration.cs
 // 📌 Amac: Signed manifest Windows shortcut aksiyonunu guvenli typed modelde tasir
 // 📌 Modul - Domain CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: Action id, gorunen ad, lokasyon ve install root relative EXE yolunu strict dogrular
 //
 // Bagimli Oldugu Katman: Service | Tool
@@ -82,8 +82,19 @@ public sealed record WindowsShortcutIntegration
         if (
             normalized.Length > 100 ||
             normalized is "." or ".." ||
-            normalized.IndexOfAny(
-                Path.GetInvalidFileNameChars()) >= 0)
+            normalized.Any(
+                character =>
+                    character < 32 ||
+                    character is
+                        '<' or
+                        '>' or
+                        ':' or
+                        '"' or
+                        '/' or
+                        '\\' or
+                        '|' or
+                        '?' or
+                        '*'))
         {
             throw new ArgumentException(
                 "Windows shortcut name is invalid.",
@@ -102,24 +113,30 @@ public sealed record WindowsShortcutIntegration
         var normalized =
             value.Trim()
                 .Replace(
-                    '/',
-                    Path.DirectorySeparatorChar);
+                    '\\',
+                    '/');
+
+        var segments =
+            normalized.Split(
+                '/',
+                StringSplitOptions.RemoveEmptyEntries);
 
         if (
-            Path.IsPathRooted(
-                normalized) ||
+            normalized.StartsWith(
+                '/',
+                StringComparison.Ordinal) ||
+            normalized.Contains(
+                ':',
+                StringComparison.Ordinal) ||
+            segments.Length == 0 ||
             !string.Equals(
                 Path.GetExtension(
                     normalized),
                 ".exe",
                 StringComparison.OrdinalIgnoreCase) ||
-            normalized
-                .Split(
-                    Path.DirectorySeparatorChar,
-                    StringSplitOptions.RemoveEmptyEntries)
-                .Any(
-                    segment =>
-                        segment is "." or ".."))
+            segments.Any(
+                segment =>
+                    segment is "." or ".."))
         {
             throw new ArgumentException(
                 "Windows integration executable must be a relative .exe path without traversal.",
