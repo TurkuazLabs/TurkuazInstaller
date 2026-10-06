@@ -254,9 +254,9 @@ public sealed class GitHubReleaseProviderTests
 
         var apiRequest =
             Assert.Single(
-                handler.Requests.Where(
-                    request =>
-                        request.Uri == apiUrl));
+                handler.Requests,
+                request =>
+                    request.Uri == apiUrl);
 
         Assert.Equal(
             "Bearer",
