@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.4.0
+# Version: 1.4.1
 # Aciklama: Detached trust, prerequisite/reboot resume, bootstrap self-update trust, path, process, state ve rollback guvenlik kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -141,7 +141,7 @@ Network discovery availability hatasi current trusted bootstrap ile normal start
 
 Basarili GitHub response daha yeni release ilan ettigi halde required asset/digest metadata bozuksa update fail-closed durur.
 
-Internal explicit replacement path ayni signer verification zincirini atlayamaz.
+Internal explicit replacement path ve complete-self-update source executable ayni signer verification zincirini atlayamaz.
 
 Detay: docs/BOOTSTRAP_SELF_UPDATE.md
 
