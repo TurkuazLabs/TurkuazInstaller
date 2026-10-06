@@ -93,7 +93,9 @@ public sealed class InstallerDesktopService
     public async Task RunAsync(
         InstallerOperationKind operation)
     {
-        if (_viewModel.IsBusy)
+        if (
+            _viewModel.IsBusy ||
+            _viewModel.IsCheckingUpdate)
         {
             return;
         }
@@ -173,7 +175,9 @@ public sealed class InstallerDesktopService
 
     public async Task RefreshInstalledAppsAsync()
     {
-        if (_viewModel.IsBusy)
+        if (
+            _viewModel.IsBusy ||
+            _viewModel.IsCheckingUpdate)
         {
             return;
         }
@@ -187,6 +191,7 @@ public sealed class InstallerDesktopService
     {
         if (
             _viewModel.IsBusy ||
+            _viewModel.IsCheckingUpdate ||
             _lastRequest is null)
         {
             return;
