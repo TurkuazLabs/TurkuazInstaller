@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsRegistryProtocolRegistrationStore.cs
 // 📌 Amac: Package-owned URL protocol kayitlarini HKCU Software Classes altinda ownership marker ile guvenli yonetir
 // 📌 Modul - Tool CSharp
-// Version: 1.0.1
+// Version: 1.1.0
 // Aciklama: Existing third-party scheme overwrite edilmez; remove yalniz owner marker package id ile eslesirse calisir
 //
 // Bagimli Oldugu Katman: Tool
@@ -150,9 +150,15 @@ public sealed class WindowsRegistryProtocolRegistrationStore
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        var normalizedScheme =
+            new WindowsProtocolIntegration(
+                scheme,
+                "TurkuazInstallerReceiptTarget.exe")
+                .Scheme;
+
         using var mutex =
             CreateProtocolMutex(
-                scheme);
+                normalizedScheme);
 
         AcquireMutex(
             mutex,
