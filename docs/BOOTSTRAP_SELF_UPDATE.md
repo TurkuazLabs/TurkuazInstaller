@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/BOOTSTRAP_SELF_UPDATE.md
 # 📌 Amac: TurkuazInstaller bootstrap self-update discovery, download, trust ve handoff modelini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.2.0
-# Aciklama: Automatic update hatalarinda current launch fallback ile explicit self-update fail-closed trust sinirini sabitler
+# Version: 1.3.0
+# Aciklama: Architecture-safe x64/ARM64 asset discovery, automatic fallback ve explicit self-update fail-closed trust sinirini sabitler
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 # Bootstrap Self Update
@@ -20,11 +20,12 @@ Normal bootstrap startup sirasinda prerequisite kontrolu basarili olduktan sonra
 3. GitHub latest stable release endpointi sorgulanir
 4. release tag SemVer olarak parse edilir
 5. yalniz current versiondan daha yeni stable release kabul edilir
-6. exact TurkuazInstaller.Bootstrapper.exe asseti aranir
-7. asset state uploaded olmali
-8. browser download URL https://github.com/... olmali
-9. asset size pozitif olmali
-10. GitHub release asset digest alani sha256: formatinda zorunludur
+6. calisan process mimarisine gore exact bootstrap asseti aranir
+7. X64 icin TurkuazInstaller.Bootstrapper.exe, ARM64 icin TurkuazInstaller.Bootstrapper-win-arm64.exe zorunludur
+8. asset state uploaded olmali
+9. browser download URL https://github.com/... olmali
+10. asset size pozitif olmali
+11. GitHub release asset digest alani sha256: formatinda zorunludur
 
 Automatic self-update availability ozelligidir; normal uygulama startup'inin guven zinciri degildir.
 
@@ -101,12 +102,13 @@ Complete-self-update source executable da target bootstrap'a karsi ayni signer v
 
 ## Release Asset
 
-Signed release su standalone asseti de yayinlar:
+Signed release iki standalone bootstrap asseti yayinlar:
 
-TurkuazInstaller.Bootstrapper.exe
+- TurkuazInstaller.Bootstrapper.exe: win-x64 ve eski x64 self-update uyumlulugu
+- TurkuazInstaller.Bootstrapper-win-arm64.exe: native win-arm64 self-update
 
-Asset combined distribution icindeki imzalanmis root bootstrap dosyasindan kopyalanir.
+Her asset ilgili combined distribution icindeki imzalanmis root bootstrap dosyasindan kopyalanir.
 
 GitHub Release upload sonrasi asset digest discovery tarafindan kullanilir.
 
-Standalone bootstrap EXE ayrica provenance attestation alir.
+Her iki standalone bootstrap EXE ayrica provenance attestation alir.
