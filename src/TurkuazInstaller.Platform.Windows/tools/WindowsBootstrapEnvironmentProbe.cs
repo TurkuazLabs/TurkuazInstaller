@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsBootstrapEnvironmentProbe.cs
 // 📌 Amac: Windows runtime OS surumu ve CPU mimarisini bootstrap prerequisite portuna map eder
 // 📌 Modul - Tool CSharp
-// Version: 0.6.0
-// Aciklama: RuntimeInformation ve Environment API degerlerini typed BootstrapEnvironmentSnapshot olarak dondurur
+// Version: 1.0.0
+// Aciklama: Windows surumu ve calisan process mimarisini typed BootstrapEnvironmentSnapshot olarak dondurur; native x64 ve ARM64 dagitimlarini ayirt eder
 //
 // Bagimli Oldugu Katman: Tool
 
@@ -18,7 +18,7 @@ public sealed class WindowsBootstrapEnvironmentProbe : IBootstrapEnvironmentProb
         return new BootstrapEnvironmentSnapshot(
             OperatingSystem.IsWindows(),
             Environment.OSVersion.Version,
-            MapArchitecture(RuntimeInformation.OSArchitecture));
+            MapArchitecture(RuntimeInformation.ProcessArchitecture));
     }
 
     private static BootstrapCpuArchitecture MapArchitecture(
