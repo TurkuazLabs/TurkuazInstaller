@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /contracts/installer-manifest.yml
 # 📌 Amac: TurkuazInstaller Community Stable v1 paket manifest contract alanlarini ve guvenlik invariantlarini tanimlamak
 # 📌 Modul - YAML
-# Version: 1.5.0
-# Aciklama: Detached trust, prerequisite/reboot resume ve signed Windows integration action contractini runtime ile birebir sabitler
+# Version: 1.6.0
+# Aciklama: Detached trust, bounded artifact transfer, prerequisite/reboot resume ve signed Windows integration action contractini runtime ile birebir sabitler
 # Bagimli Oldugu Katman: Application | Port | Adapter | Config
 
 schema_version: 1
@@ -49,6 +49,11 @@ artifact:
   size_bytes:
     type: integer
     minimum: 1
+    enforced_during_transfer: true
+    remote_content_length_exact_when_present: true
+    oversize_stream: deny
+    undersize_stream: deny
+    local_size_mismatch: deny
   signature:
     optional: true
     algorithm:

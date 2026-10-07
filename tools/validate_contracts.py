@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.17.0
-# Aciklama: Trust, provider, update, Windows integration, self-update availability, UI profile ve Community-Pro boundary invariantlarini kontrol eder
+# Version: 1.18.0
+# Aciklama: Trust, bounded transfer, update, Windows integration, self-update availability, UI profile ve Community-Pro boundary invariantlarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -420,6 +420,25 @@ for key in (
 
 artifact = manifest.get("artifact", {})
 
+artifact_size_policy = artifact.get(
+    "size_bytes",
+    {},
+)
+
+expected_artifact_size_policy = {
+    "enforced_during_transfer": True,
+    "remote_content_length_exact_when_present": True,
+    "oversize_stream": "deny",
+    "undersize_stream": "deny",
+    "local_size_mismatch": "deny",
+}
+
+for key, expected_value in expected_artifact_size_policy.items():
+    if artifact_size_policy.get(key) != expected_value:
+        fail(
+            f"artifact transfer size invariant mismatch: {key}"
+        )
+
 if (
     artifact
     .get("sha256", {})
@@ -436,6 +455,25 @@ if manifest_trust.get("schema_version") != 1:
     fail(
         "manifest trust schema_version must be 1"
     )
+
+manifest_content_limits = manifest_trust.get(
+    "content_limits",
+    {},
+)
+
+expected_manifest_content_limits = {
+    "manifest_max_bytes": 1048576,
+    "detached_signature_max_bytes": 262144,
+    "remote_stream_enforced": True,
+    "local_file_enforced": True,
+    "remote_content_length_precheck": True,
+}
+
+for key, expected_value in expected_manifest_content_limits.items():
+    if manifest_content_limits.get(key) != expected_value:
+        fail(
+            f"manifest content limit invariant mismatch: {key}"
+        )
 
 manifest_signature = manifest_trust.get(
     "signature",
@@ -533,6 +571,8 @@ for key in (
     "certificate_pin_mismatch",
     "expired_signer_certificate",
     "parse_before_verification",
+    "oversized_manifest",
+    "oversized_detached_signature",
 ):
     if manifest_trust_security.get(key) != "deny":
         fail(

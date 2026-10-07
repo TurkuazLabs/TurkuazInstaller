@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Providers/RemoteManifestLoader.cs
 // 📌 Amac: HTTPS manifest ve detached signature byte'larini indirip verification sonrasi ortak parsera iletir
 // 📌 Modul - Tool CSharp
-// Version: 1.2.0
-// Aciklama: Remote manifest ve detached signature isteklerine optional host-scoped provider authorization uygular; parserdan once CMS trust fail-closed kalir
+// Version: 1.3.0
+// Aciklama: Remote manifest ve detached signature isteklerini host-scoped authorization ve bounded streaming ile parser/verification oncesi fail-closed sinirlar
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -70,6 +70,7 @@ internal sealed class RemoteManifestLoader
             await GetRequiredBytesAsync(
                     manifestUri,
                     ManifestMissingMessage,
+                    ManifestContentLimits.MaximumManifestBytes,
                     cancellationToken,
                     authorization)
                 .ConfigureAwait(false);
@@ -78,6 +79,7 @@ internal sealed class RemoteManifestLoader
             await GetRequiredBytesAsync(
                     signatureUri,
                     SignatureMissingMessage,
+                    ManifestContentLimits.MaximumDetachedSignatureBytes,
                     cancellationToken,
                     authorization)
                 .ConfigureAwait(false);
@@ -94,6 +96,7 @@ internal sealed class RemoteManifestLoader
     private async Task<byte[]> GetRequiredBytesAsync(
         Uri uri,
         string notFoundMessage,
+        int maximumBytes,
         CancellationToken cancellationToken,
         ProviderRequestAuthorization? authorization)
     {
@@ -123,8 +126,25 @@ internal sealed class RemoteManifestLoader
 
         response.EnsureSuccessStatusCode();
 
-        return await response.Content
-            .ReadAsByteArrayAsync(
+        if (
+            response.Content.Headers.ContentLength is long contentLength &&
+            contentLength > maximumBytes)
+        {
+            throw new InvalidDataException(
+                "Remote installer metadata exceeds the configured maximum size.");
+        }
+
+        await using var stream =
+            await response.Content
+                .ReadAsStreamAsync(
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        return await BoundedContentReader
+            .ReadAsync(
+                stream,
+                maximumBytes,
+                "Remote installer metadata",
                 cancellationToken)
             .ConfigureAwait(false);
     }

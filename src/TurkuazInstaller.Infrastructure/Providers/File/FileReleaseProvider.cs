@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Providers/File/FileReleaseProvider.cs
 // 📌 Amac: Air-gapped ve local test senaryolari icin dosyadan signed installer manifesti okur
 // 📌 Modul - Tool CSharp
-// Version: 1.1.0
-// Aciklama: Local manifestin yanindaki .p7s detached signature dosyasini zorunlu tutar ve verification sonrasi typed release modeline donusturur
+// Version: 1.2.0
+// Aciklama: Local manifest ve .p7s signature dosyalarini bounded streaming ile okuyup verification sonrasi typed release modeline donusturur
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -71,16 +71,18 @@ public sealed class FileReleaseProvider : IReleaseProvider
         }
 
         var manifestContent =
-            await System.IO.File
-                .ReadAllBytesAsync(
+            await ReadBoundedFileAsync(
                     path,
+                    ManifestContentLimits.MaximumManifestBytes,
+                    "Installer manifest",
                     cancellationToken)
                 .ConfigureAwait(false);
 
         var detachedSignature =
-            await System.IO.File
-                .ReadAllBytesAsync(
+            await ReadBoundedFileAsync(
                     signaturePath,
+                    ManifestContentLimits.MaximumDetachedSignatureBytes,
+                    "Detached installer manifest signature",
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -97,5 +99,38 @@ public sealed class FileReleaseProvider : IReleaseProvider
             parsed,
             packageId,
             channel);
+    }
+
+    private static async Task<byte[]> ReadBoundedFileAsync(
+        string path,
+        int maximumBytes,
+        string contentName,
+        CancellationToken cancellationToken)
+    {
+        await using var stream =
+            new FileStream(
+                path,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read,
+                4096,
+                FileOptions.Asynchronous |
+                FileOptions.SequentialScan);
+
+        if (stream.Length > maximumBytes)
+        {
+            throw new InvalidDataException(
+                string.Concat(
+                    contentName,
+                    " exceeds the configured maximum size."));
+        }
+
+        return await BoundedContentReader
+            .ReadAsync(
+                stream,
+                maximumBytes,
+                contentName,
+                cancellationToken)
+            .ConfigureAwait(false);
     }
 }
