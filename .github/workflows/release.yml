@@ -1,5 +1,5 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
-# 📌 Amac: Stable tag'lerde tek combined Windows dagitimini build, production sign, attest ve GitHub Release olarak yayinlar
+# 📌 Amac: Stable tag'lerde x64 ve ARM64 combined Windows dagitimlarini build, production sign, attest ve GitHub Release olarak yayinlar
 # 📌 Modul - CI YAML
 # Version: 1.4.0
 # Aciklama: Native win-x64 ve win-arm64 combined dagitimlarini sign eder; iki deterministic ZIP ve architecture-safe standalone bootstrap assetlerini checksum/provenance ile yayinlar
