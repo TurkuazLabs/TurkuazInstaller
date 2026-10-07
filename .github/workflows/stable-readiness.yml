@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/stable-readiness.yml
 # 📌 Amac: Stable Community release oncesinde combined Windows dagitiminin reproducibility ve recovery kapilarini calistirir
 # 📌 Modul - CI YAML
-# Version: 1.2.0
-# Aciklama: Core, CLI ve bootstrap testleriyle iki temiz bootstrap+WinUI+CLI dagitim agacini ve deterministic ZIP'i dogrular
+# Version: 1.3.0
+# Aciklama: win-x64 stable gate'i korur; native win-arm64 icin iki temiz publish agaci, combined distribution ve deterministic ZIP reproducibility kapisi ekler
 # Bagimli Oldugu Katman: Tool
 
 name: Stable Readiness CI
@@ -88,3 +88,61 @@ jobs:
       - name: Validate deterministic combined archive
         shell: pwsh
         run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/repro/a/distribution -OutputPath artifacts/repro/TurkuazInstaller-win-x64.zip -PackagerPath tools/release/package_release.py
+
+
+  arm64-readiness:
+    runs-on: windows-2025
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Publish ARM64 reproducibility pass A
+        shell: pwsh
+        run: |
+          dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/repro-arm64/a/bootstrap
+          dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/repro-arm64/a/winui
+          dotnet publish src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/repro-arm64/a/cli
+          ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/repro-arm64/a/bootstrap -WinUiRoot artifacts/repro-arm64/a/winui -CliRoot artifacts/repro-arm64/a/cli -OutputRoot artifacts/repro-arm64/a/distribution
+
+      - name: Clean ARM64 generated output
+        run: dotnet clean TurkuazInstaller.Windows.slnx --configuration Release
+
+      - name: Publish ARM64 reproducibility pass B
+        shell: pwsh
+        run: |
+          dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/repro-arm64/b/bootstrap
+          dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/repro-arm64/b/winui
+          dotnet publish src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/repro-arm64/b/cli
+          ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/repro-arm64/b/bootstrap -WinUiRoot artifacts/repro-arm64/b/winui -CliRoot artifacts/repro-arm64/b/cli -OutputRoot artifacts/repro-arm64/b/distribution
+
+      - name: Compare ARM64 bootstrap publish trees
+        shell: pwsh
+        run: ./tools/Compare-PublishTrees.ps1 -FirstRoot artifacts/repro-arm64/a/bootstrap -SecondRoot artifacts/repro-arm64/b/bootstrap
+
+      - name: Compare ARM64 WinUI publish trees
+        shell: pwsh
+        run: ./tools/Compare-PublishTrees.ps1 -FirstRoot artifacts/repro-arm64/a/winui -SecondRoot artifacts/repro-arm64/b/winui
+
+      - name: Compare ARM64 CLI publish trees
+        shell: pwsh
+        run: ./tools/Compare-PublishTrees.ps1 -FirstRoot artifacts/repro-arm64/a/cli -SecondRoot artifacts/repro-arm64/b/cli
+
+      - name: Compare ARM64 combined distribution trees
+        shell: pwsh
+        run: ./tools/Compare-PublishTrees.ps1 -FirstRoot artifacts/repro-arm64/a/distribution -SecondRoot artifacts/repro-arm64/b/distribution
+
+      - name: Validate ARM64 deterministic combined archive
+        shell: pwsh
+        run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/repro-arm64/a/distribution -OutputPath artifacts/repro-arm64/TurkuazInstaller-win-arm64.zip -PackagerPath tools/release/package_release.py
