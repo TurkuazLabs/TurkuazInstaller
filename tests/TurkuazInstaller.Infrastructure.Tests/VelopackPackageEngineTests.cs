@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/VelopackPackageEngineTests.cs
 // 📌 Amac: Velopack Package Engine staging, apply, repair ve rollback kontratini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 0.5.0
-// Aciklama: Gercek Velopack executable calistirmadan resmi CLI argumentlerini, atomic staging ve release eslesmesini test eder
+// Version: 0.6.0
+// Aciklama: Full/delta staging, delta reconstruction, resmi CLI argumentleri, atomic staging ve release eslesmesini test eder
 //
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -22,6 +22,15 @@ public sealed class VelopackPackageEngineTests
     private const string Digest =
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
+    private const string BasePackageFileName =
+        "Example-1.0.0-full.nupkg";
+
+    private const string DeltaPackageFileName =
+        "Example-1.1.0-delta.nupkg";
+
+    private const string PackagesDirectoryName =
+        "packages";
+
     [Fact]
     public async Task StageAsync_SetupArtifact_CopiesAtomically()
     {
@@ -35,7 +44,9 @@ public sealed class VelopackPackageEngineTests
             fixture.ProcessRunner);
 
         var stage = await engine.StageAsync(
-            release,
+            new PackageStageRequest(
+                release,
+                release.Artifact),
             source,
             fixture.StagingDirectory,
             CancellationToken.None);
@@ -63,7 +74,9 @@ public sealed class VelopackPackageEngineTests
             fixture.ProcessRunner);
 
         var stage = await engine.StageAsync(
-            release,
+            new PackageStageRequest(
+                release,
+                release.Artifact),
             source,
             fixture.StagingDirectory,
             CancellationToken.None);
@@ -108,7 +121,9 @@ public sealed class VelopackPackageEngineTests
             fixture.ProcessRunner);
 
         var stage = await engine.StageAsync(
-            release,
+            new PackageStageRequest(
+                release,
+                release.Artifact),
             source,
             fixture.StagingDirectory,
             CancellationToken.None);
@@ -161,6 +176,75 @@ public sealed class VelopackPackageEngineTests
     }
 
     [Fact]
+    public async Task StageAsync_DeltaArtifact_ReconstructsFullPackage()
+    {
+        using var fixture =
+            new PackageEngineFixture();
+
+        fixture.CreateUpdater();
+
+        var basePackage =
+            fixture.CreateInstalledPackage(
+                BasePackageFileName);
+
+        var source =
+            fixture.CreateArtifact(
+                DeltaPackageFileName);
+
+        var release =
+            CreateDeltaRelease();
+
+        fixture.ProcessRunner.BeforeReturn =
+            command =>
+            {
+                File.WriteAllText(
+                    command.Arguments[^1],
+                    "reconstructed");
+            };
+
+        var engine =
+            new VelopackPackageEngine(
+                fixture.ProcessRunner);
+
+        var stage =
+            await engine.StageAsync(
+                new PackageStageRequest(
+                    release,
+                    release.DeltaArtifact!.Artifact,
+                    fixture.InstallDirectory),
+                source,
+                fixture.StagingDirectory,
+                CancellationToken.None);
+
+        Assert.Equal(
+            PackageArtifactKind.VelopackFullPackage,
+            stage.ArtifactKind);
+
+        Assert.True(
+            File.Exists(
+                stage.ArtifactPath));
+
+        var command =
+            Assert.IsType<ProcessCommand>(
+                fixture.ProcessRunner.LastCommand);
+
+        Assert.Equal(
+            Path.Combine(
+                Path.GetFullPath(
+                    fixture.InstallDirectory),
+                "Update.exe"),
+            command.FileName);
+
+        Assert.Contains(
+            basePackage,
+            command.Arguments);
+
+        Assert.Contains(
+            stage.ArtifactPath,
+            command.Arguments);
+    }
+
+    [Fact]
     public async Task RepairAsync_RequiresFullPackage()
     {
         using var fixture = new PackageEngineFixture();
@@ -173,7 +257,9 @@ public sealed class VelopackPackageEngineTests
             fixture.ProcessRunner);
 
         var stage = await engine.StageAsync(
-            release,
+            new PackageStageRequest(
+                release,
+                release.Artifact),
             source,
             fixture.StagingDirectory,
             CancellationToken.None);
@@ -212,7 +298,9 @@ public sealed class VelopackPackageEngineTests
             fixture.ProcessRunner);
 
         var stage = await engine.StageAsync(
-            previous,
+            new PackageStageRequest(
+                previous,
+                previous.Artifact),
             source,
             fixture.StagingDirectory,
             CancellationToken.None);
@@ -293,7 +381,9 @@ public sealed class VelopackPackageEngineTests
             fixture.ProcessRunner);
 
         var stage = await engine.StageAsync(
-            release,
+            new PackageStageRequest(
+                release,
+                release.Artifact),
             source,
             fixture.StagingDirectory,
             CancellationToken.None);
@@ -333,7 +423,9 @@ public sealed class VelopackPackageEngineTests
             fixture.ProcessRunner);
 
         var stage = await engine.StageAsync(
-            release,
+            new PackageStageRequest(
+                release,
+                release.Artifact),
             source,
             fixture.StagingDirectory,
             CancellationToken.None);
@@ -351,6 +443,39 @@ public sealed class VelopackPackageEngineTests
                 CancellationToken.None));
 
         Assert.Equal(17, exception.ExitCode);
+    }
+
+    private static PackageRelease CreateDeltaRelease()
+    {
+        var fullArtifact =
+            new ArtifactDescriptor(
+                new Uri(
+                    "https://downloads.example.invalid/Example-1.1.0-full.nupkg"),
+                ArtifactDigest.ParseSha256(
+                    Digest),
+                2048);
+
+        var deltaArtifact =
+            new PackageDeltaArtifact(
+                SemanticVersion.Parse(
+                    "1.0.0"),
+                new ArtifactDescriptor(
+                    new Uri(
+                        "https://downloads.example.invalid/Example-1.1.0-delta.nupkg"),
+                    ArtifactDigest.ParseSha256(
+                        Digest),
+                    512));
+
+        return new PackageRelease(
+            PackageId.Parse(
+                "example-app"),
+            SemanticVersion.Parse(
+                "1.1.0"),
+            ReleaseChannel.Stable,
+            fullArtifact,
+            PackageInstallPolicy.LegacyDefault,
+            PackageRollbackPolicy.Disabled,
+            deltaArtifact);
     }
 
     private static PackageRelease CreateRelease(
@@ -403,6 +528,29 @@ public sealed class VelopackPackageEngineTests
             File.WriteAllText(
                 path,
                 "payload");
+
+            return path;
+        }
+
+        public string CreateInstalledPackage(
+            string fileName)
+        {
+            var packagesDirectory =
+                Path.Combine(
+                    InstallDirectory,
+                    PackagesDirectoryName);
+
+            Directory.CreateDirectory(
+                packagesDirectory);
+
+            var path =
+                Path.Combine(
+                    packagesDirectory,
+                    fileName);
+
+            File.WriteAllText(
+                path,
+                "base");
 
             return path;
         }

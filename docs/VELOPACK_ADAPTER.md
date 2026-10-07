@@ -1,21 +1,44 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_ADAPTER.md
 # 📌 Amac: Merkezi TurkuazInstaller ile Velopack arasindaki adapter sinirini ve runtime kontratini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.0
-# Aciklama: Setup.exe ve Update.exe install/update/repair/rollback/uninstall CLI entegrasyonunu ve staging guvenligini dokumante eder
+# Version: 1.1.0
+# Aciklama: Setup/full/delta staging, safe delta reconstruction/fallback ve install/update/repair/rollback/uninstall CLI sinirini dokumante eder
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 # Velopack Adapter
 
 TurkuazInstaller merkezi bir installer oldugu icin baska uygulamalari kurar, gunceller, onarir, geri alir ve kaldirir.
 
-Stable v1 manifest yalniz full payload modeli kullanir.
+Install modeli full kalir. v1.2 sonrasi delta yalniz optional transfer optimizasyonudur; apply her zaman dogrulanmis full package ile yapilir.
 
 ## Initial Install
 
 ```text
 Setup.exe --silent --installto <target>
 ```
+
+## Optional Delta Optimization
+
+Update release signed manifest icinde optional delta metadata tasiyabilir.
+
+Delta yalniz su kosullarda secilir:
+
+- from_version kurulu surumle birebir eslesir
+- delta size_bytes full artifacttan kucuktur
+- delta artifact HTTPS/file + exact size + SHA-256 + optional Authenticode zincirinden gecer
+- kurulu Velopack packages cache icinde exact base full nupkg vardir
+
+Package Engine reconstruction:
+
+```text
+Update.exe --silent patch --old <base-full.nupkg> --delta <target-delta.nupkg> --output <target-full.nupkg>
+```
+
+Reconstructed full nupkg, target release full artifact SHA-256 ve varsa Authenticode policy ile yeniden dogrulanmadan apply baslamaz.
+
+Delta download, verify, base lookup, patch veya reconstructed-full verify adimlarindan biri basarisizsa mutation baslamadan full artifact yoluna geri donulur.
+
+Repair ve rollback delta kullanmaz; full package kontratini korur.
 
 ## Update / Repair / Rollback
 

@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /contracts/installer-manifest.yml
 # 📌 Amac: TurkuazInstaller Community Stable v1 paket manifest contract alanlarini ve guvenlik invariantlarini tanimlamak
 # 📌 Modul - YAML
-# Version: 1.6.0
-# Aciklama: Detached trust, bounded artifact transfer, prerequisite/reboot resume ve signed Windows integration action contractini runtime ile birebir sabitler
+# Version: 1.7.0
+# Aciklama: Detached trust, bounded full/delta transfer, safe delta fallback, prerequisite/reboot resume ve signed Windows integration contractini runtime ile sabitler
 # Bagimli Oldugu Katman: Application | Port | Adapter | Config
 
 schema_version: 1
@@ -65,6 +65,43 @@ artifact:
       optional: true
       format: hex
       length: 64
+  delta:
+    optional: true
+    optimization_only: true
+    from_version:
+      type: semver
+      exact_installed_version_required: true
+    uri:
+      allowed_schemes:
+        - https
+        - file
+      required_suffix: "-delta.nupkg"
+    sha256:
+      format: hex
+      length: 64
+      required_before_stage: true
+    size_bytes:
+      type: integer
+      minimum: 1
+      must_be_smaller_than_full: true
+      enforced_during_transfer: true
+    signature:
+      optional: true
+      algorithm:
+        - authenticode
+      publisher_subject:
+        required_when_present: true
+        type: string
+      certificate_sha256:
+        optional: true
+        format: hex
+        length: 64
+    reconstruction:
+      package_engine_only: true
+      exact_base_full_package_required: true
+      output_kind: full_nupkg
+      reconstructed_full_verification_required: true
+      fallback_to_full_before_apply: true
 
 install:
   windows_integration_contract: windows-integration.yml

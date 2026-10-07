@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Velopack.E2E.Runner/Program.cs
 // 📌 Amac: Gercek Velopack artifactlariyla TurkuazInstaller Package Engine yasam dongusunu uctan uca dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
-// Aciklama: Setup install, full-package update, repair, rollback ve uninstall sonrasi disk durumunu fail-fast kontrollerle test eder
+// Version: 1.0.1
+// Aciklama: Yeni PackageStageRequest kontratiyla Setup install, full-package update, repair, rollback ve uninstall yasam dongusunu fail-fast dogrular
 //
 // Bagimli Oldugu Katman: Service | Tool
 
 using System.Security.Cryptography;
+using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Plans;
 using TurkuazInstaller.Domain.Products;
@@ -91,7 +92,7 @@ internal static class Program
         string stagingRoot)
     {
         var stage = await engine.StageAsync(
-            release,
+            new PackageStageRequest(release, release.Artifact, installRoot),
             release.Artifact.Uri.LocalPath,
             stagingRoot,
             CancellationToken.None).ConfigureAwait(false);
@@ -113,7 +114,7 @@ internal static class Program
         string stagingRoot)
     {
         var stage = await engine.StageAsync(
-            release,
+            new PackageStageRequest(release, release.Artifact, installRoot),
             release.Artifact.Uri.LocalPath,
             stagingRoot,
             CancellationToken.None).ConfigureAwait(false);
@@ -135,7 +136,7 @@ internal static class Program
         string stagingRoot)
     {
         var stage = await engine.StageAsync(
-            release,
+            new PackageStageRequest(release, release.Artifact, installRoot),
             release.Artifact.Uri.LocalPath,
             stagingRoot,
             CancellationToken.None).ConfigureAwait(false);
@@ -154,7 +155,7 @@ internal static class Program
         string stagingRoot)
     {
         var stage = await engine.StageAsync(
-            previousRelease,
+            new PackageStageRequest(previousRelease, previousRelease.Artifact, installRoot),
             previousRelease.Artifact.Uri.LocalPath,
             stagingRoot,
             CancellationToken.None).ConfigureAwait(false);

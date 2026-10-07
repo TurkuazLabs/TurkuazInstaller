@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.8.0
-// Aciklama: Package mutation sonrasi Windows integration reconcile tamamlanmadan install state commit etmeyerek retry-guvenli commit siniri uygular
+// Version: 1.9.0
+// Aciklama: Retry-guvenli state commit sinirina exact-base delta secimi, pre-apply full fallback ve reconstructed full verification ekler
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -244,8 +244,9 @@ public sealed class InstallerWorkflowService
                         .ConfigureAwait(false);
 
                     var stage =
-                        await PrepareStageAsync(
+                        await PrepareUpdateStageAsync(
                                 release,
+                                currentState,
                                 stagingDirectory,
                                 progress,
                                 operation,
@@ -702,8 +703,94 @@ public sealed class InstallerWorkflowService
             .ConfigureAwait(false);
     }
 
+    private Task<PackageStage> PrepareStageAsync(
+        PackageRelease release,
+        string stagingDirectory,
+        IProgress<InstallerOperationProgress>? progress,
+        InstallerOperationContext operation,
+        CancellationToken cancellationToken)
+    {
+        return PrepareStageAsync(
+            release,
+            release.Artifact,
+            null,
+            stagingDirectory,
+            progress,
+            operation,
+            cancellationToken);
+    }
+
+    private async Task<PackageStage> PrepareUpdateStageAsync(
+        PackageRelease release,
+        InstalledPackageState currentState,
+        string stagingDirectory,
+        IProgress<InstallerOperationProgress>? progress,
+        InstallerOperationContext operation,
+        CancellationToken cancellationToken)
+    {
+        var deltaArtifact =
+            release.DeltaArtifact;
+
+        if (
+            deltaArtifact is null ||
+            !deltaArtifact.FromVersion.Equals(
+                currentState.Version) ||
+            deltaArtifact.Artifact.SizeBytes >=
+                release.Artifact.SizeBytes)
+        {
+            return await PrepareStageAsync(
+                    release,
+                    release.Artifact,
+                    currentState.TargetPath,
+                    stagingDirectory,
+                    progress,
+                    operation,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        try
+        {
+            return await PrepareStageAsync(
+                    release,
+                    deltaArtifact.Artifact,
+                    currentState.TargetPath,
+                    stagingDirectory,
+                    progress,
+                    operation,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await operation
+                .WarnAsync(
+                    "artifact.delta_fallback",
+                    "Delta optimization failed before apply; full artifact fallback started.",
+                    exception.GetType().FullName,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            return await PrepareStageAsync(
+                    release,
+                    release.Artifact,
+                    currentState.TargetPath,
+                    stagingDirectory,
+                    progress,
+                    operation,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
     private async Task<PackageStage> PrepareStageAsync(
         PackageRelease release,
+        ArtifactDescriptor artifact,
+        string? installedTargetPath,
         string stagingDirectory,
         IProgress<InstallerOperationProgress>? progress,
         InstallerOperationContext operation,
@@ -725,7 +812,7 @@ public sealed class InstallerWorkflowService
         var downloadedPath =
             await _artifactDownloader
                 .DownloadAsync(
-                    release.Artifact,
+                    artifact,
                     stagingDirectory,
                     cancellationToken)
                 .ConfigureAwait(false);
@@ -747,7 +834,7 @@ public sealed class InstallerWorkflowService
             await _artifactVerifier
                 .VerifyAsync(
                     downloadedPath,
-                    release.Artifact,
+                    artifact,
                     cancellationToken)
                 .ConfigureAwait(false);
 
@@ -758,7 +845,7 @@ public sealed class InstallerWorkflowService
         }
 
         await VerifySignatureAsync(
-                release.Artifact,
+                artifact,
                 downloadedPath,
                 cancellationToken)
             .ConfigureAwait(false);
@@ -776,13 +863,53 @@ public sealed class InstallerWorkflowService
             InstallerProgressStage.Staging,
             StagePercent);
 
-        return await _packageEngine
-            .StageAsync(
-                release,
-                downloadedPath,
-                stagingDirectory,
-                cancellationToken)
-            .ConfigureAwait(false);
+        var stage =
+            await _packageEngine
+                .StageAsync(
+                    new PackageStageRequest(
+                        release,
+                        artifact,
+                        installedTargetPath),
+                    downloadedPath,
+                    stagingDirectory,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+        if (
+            !Equals(
+                artifact,
+                release.Artifact))
+        {
+            if (
+                stage.ArtifactKind !=
+                PackageArtifactKind.VelopackFullPackage)
+            {
+                throw new InvalidDataException(
+                    "Delta optimization must reconstruct a full package before apply.");
+            }
+
+            var reconstructedVerification =
+                await _artifactVerifier
+                    .VerifyAsync(
+                        stage.ArtifactPath,
+                        release.Artifact,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+
+            if (!reconstructedVerification.IsValid)
+            {
+                throw new InvalidDataException(
+                    reconstructedVerification.Message);
+            }
+
+            await VerifySignatureAsync(
+                    release.Artifact,
+                    stage.ArtifactPath,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return stage;
     }
 
     private async Task VerifySignatureAsync(
