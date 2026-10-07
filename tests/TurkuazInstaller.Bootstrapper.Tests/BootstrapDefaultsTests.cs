@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Bootstrapper.Tests/BootstrapDefaultsTests.cs
 // 📌 Amac: Native x64 ve ARM64 bootstrap runtime varsayilanlarini architecture-safe olarak dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: Supported architecture listesi ile x64 ve ARM64 self-update asset adlarini unit test ile sabitler
 //
 // Bagimli Oldugu Katman: Config | Tool
@@ -51,12 +51,15 @@ public sealed class BootstrapDefaultsTests
     }
 
     [Fact]
-    public void CreateSelfUpdateDiscoveryOptions_UnsupportedArchitecture_Throws()
+    public void CreateSelfUpdateDiscoveryOptions_UnsupportedArchitecture_UsesNonExecutingFallback()
     {
-        Assert.Throws<PlatformNotSupportedException>(
-            () =>
-                BootstrapDefaults
-                    .CreateSelfUpdateDiscoveryOptions(
-                        BootstrapCpuArchitecture.Unsupported));
+        var options =
+            BootstrapDefaults
+                .CreateSelfUpdateDiscoveryOptions(
+                    BootstrapCpuArchitecture.Unsupported);
+
+        Assert.Equal(
+            "TurkuazInstaller.Bootstrapper.exe",
+            options.AssetName);
     }
 }
