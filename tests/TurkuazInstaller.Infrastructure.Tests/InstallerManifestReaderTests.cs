@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/InstallerManifestReaderTests.cs
 // 📌 Amac: YAML installer manifest parserinin Stable v1 typed Domain sonucunu dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.3.3
+// Version: 1.3.4
 // Aciklama: Package/artifact/install alanlarina optional exact-base delta ve signed Windows policy mapping testlerini ekler
 //
 // Bagimli Oldugu Katman: Tool | Service
@@ -106,7 +106,7 @@ public sealed class InstallerManifestReaderTests
                     StringComparison.Ordinal)
                 .Replace(
                     "    publisher_subject: \"CN=Example Software\"",
-                    $"""
+                    $$"""
     publisher_subject: "CN=Example Software"
   delta:
     from_version: 2.3.0
