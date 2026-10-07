@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
 # 📌 Amac: Stable tag'lerde tek combined Windows dagitimini build, production sign, attest ve GitHub Release olarak yayinlar
 # 📌 Modul - CI YAML
-# Version: 1.3.0
-# Aciklama: Bootstrap + app/WinUI + cli layoutunu sign eder; deterministic ZIP ve standalone signed bootstrap self-update assetini checksum/provenance ile yayinlar
+# Version: 1.4.0
+# Aciklama: Native win-x64 ve win-arm64 combined dagitimlarini sign eder; iki deterministic ZIP ve architecture-safe standalone bootstrap assetlerini checksum/provenance ile yayinlar
 # Bagimli Oldugu Katman: Tool | Config
 
 name: Signed Release
@@ -84,10 +84,15 @@ jobs:
       - name: Publish release binaries
         shell: pwsh
         run: |
-          dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/bootstrap
-          dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/winui
-          dotnet publish src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/cli
-          ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/publish/bootstrap -WinUiRoot artifacts/publish/winui -CliRoot artifacts/publish/cli -OutputRoot artifacts/release/distribution
+          dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/win-x64/bootstrap
+          dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/win-x64/winui
+          dotnet publish src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/publish/win-x64/cli
+          ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/publish/win-x64/bootstrap -WinUiRoot artifacts/publish/win-x64/winui -CliRoot artifacts/publish/win-x64/cli -OutputRoot artifacts/release/win-x64/distribution
+
+          dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/publish/win-arm64/bootstrap
+          dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/publish/win-arm64/winui
+          dotnet publish src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/publish/win-arm64/cli
+          ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/publish/win-arm64/bootstrap -WinUiRoot artifacts/publish/win-arm64/winui -CliRoot artifacts/publish/win-arm64/cli -OutputRoot artifacts/release/win-arm64/distribution
 
       - name: Azure login with OIDC
         uses: azure/login@v3
@@ -102,7 +107,7 @@ jobs:
           endpoint: ${{ vars.ARTIFACT_SIGNING_ENDPOINT }}
           signing-account-name: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
           certificate-profile-name: ${{ vars.ARTIFACT_SIGNING_CERT_PROFILE_NAME }}
-          files-folder: ${{ github.workspace }}\artifacts\release\distribution
+          files-folder: ${{ github.workspace }}\artifacts\release
           files-folder-filter: TurkuazInstaller*.exe,TurkuazInstaller*.dll
           files-folder-recurse: true
           file-digest: SHA256
@@ -111,34 +116,49 @@ jobs:
 
       - name: Verify Authenticode signatures
         shell: pwsh
-        run: ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/distribution
+        run: |
+          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-x64/distribution
+          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-arm64/distribution
 
-      - name: Stage signed bootstrap self-update asset
+      - name: Stage signed bootstrap self-update assets
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path artifacts/release-assets -Force | Out-Null
-          Copy-Item -LiteralPath artifacts/release/distribution/TurkuazInstaller.Bootstrapper.exe -Destination artifacts/release-assets/TurkuazInstaller.Bootstrapper.exe -Force
+          Copy-Item -LiteralPath artifacts/release/win-x64/distribution/TurkuazInstaller.Bootstrapper.exe -Destination artifacts/release-assets/TurkuazInstaller.Bootstrapper.exe -Force
+          Copy-Item -LiteralPath artifacts/release/win-arm64/distribution/TurkuazInstaller.Bootstrapper.exe -Destination artifacts/release-assets/TurkuazInstaller.Bootstrapper-win-arm64.exe -Force
 
-      - name: Build deterministic combined archive
+      - name: Build deterministic combined archives
         shell: pwsh
-        run: ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/release/distribution -OutputPath artifacts/release-assets/TurkuazInstaller-win-x64.zip -PackagerPath tools/release/package_release.py
+        run: |
+          ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/release/win-x64/distribution -OutputPath artifacts/release-assets/TurkuazInstaller-win-x64.zip -PackagerPath tools/release/package_release.py
+          ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/release/win-arm64/distribution -OutputPath artifacts/release-assets/TurkuazInstaller-win-arm64.zip -PackagerPath tools/release/package_release.py
 
       - name: Create checksums
         shell: pwsh
         run: ./tools/New-ReleaseChecksums.ps1 -AssetDirectory artifacts/release-assets -OutputPath artifacts/release-assets/SHA256SUMS.txt
 
-      - name: Attest release archive
+      - name: Attest x64 release archive
         uses: actions/attest@v4
         with:
           subject-path: artifacts/release-assets/TurkuazInstaller-win-x64.zip
 
-      - name: Attest bootstrap self-update binary
+      - name: Attest ARM64 release archive
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/release-assets/TurkuazInstaller-win-arm64.zip
+
+      - name: Attest x64 bootstrap self-update binary
         uses: actions/attest@v4
         with:
           subject-path: artifacts/release-assets/TurkuazInstaller.Bootstrapper.exe
+
+      - name: Attest ARM64 bootstrap self-update binary
+        uses: actions/attest@v4
+        with:
+          subject-path: artifacts/release-assets/TurkuazInstaller.Bootstrapper-win-arm64.exe
 
       - name: Publish GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" "artifacts/release-assets/TurkuazInstaller-win-x64.zip" "artifacts/release-assets/TurkuazInstaller.Bootstrapper.exe" "artifacts/release-assets/SHA256SUMS.txt" --verify-tag --title "TurkuazInstaller ${{ github.ref_name }}" --generate-notes
+        run: gh release create "${{ github.ref_name }}" "artifacts/release-assets/TurkuazInstaller-win-x64.zip" "artifacts/release-assets/TurkuazInstaller-win-arm64.zip" "artifacts/release-assets/TurkuazInstaller.Bootstrapper.exe" "artifacts/release-assets/TurkuazInstaller.Bootstrapper-win-arm64.exe" "artifacts/release-assets/SHA256SUMS.txt" --verify-tag --title "TurkuazInstaller ${{ github.ref_name }}" --generate-notes
