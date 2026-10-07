@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/config/BootstrapDefaults.cs
 // 📌 Amac: Native bootstrap runtime requirement, app layout ve self-update retry varsayilanlarini tek config katmaninda tanimlar
 // 📌 Modul - Config CSharp
-// Version: 1.2.0
+// Version: 1.2.1
 // Aciklama: Windows baseline, x64/ARM64 policy, app yolu, handoff retry ve architecture-safe GitHub bootstrap self-update discovery varsayilanlarini merkezilestirir
 //
 // Bagimli Oldugu Katman: Config
@@ -119,8 +119,7 @@ internal static class BootstrapDefaults
             BootstrapCpuArchitecture.Arm64 =>
                 Arm64BootstrapExecutableName,
             _ =>
-                throw new PlatformNotSupportedException(
-                    "Bootstrap self-update architecture is unsupported.")
+                X64BootstrapExecutableName
         };
     }
 }
