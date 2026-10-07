@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/controllers/Program.cs
 // 📌 Amac: Native bootstrap process girisini alir, dependency composition yapar ve runtime servisini cagirir
 // 📌 Modul - Controller CSharp
-// Version: 1.2.0
-// Aciklama: Controller argument requestini parsera aktarir; self-update HTTP clientlerini ortak system/direct/custom proxy politikasiyla compose eder
+// Version: 1.3.0
+// Aciklama: Controller argument requestini parsera aktarir; process architecture-aware self-update ve ortak proxy politikasini compose eder
 //
 // Bagimli Oldugu Katman: Controller | Service | Tool | Config
 
@@ -31,6 +31,9 @@ internal static class Program
             var environmentProbe =
                 new WindowsBootstrapEnvironmentProbe();
 
+            var environmentSnapshot =
+                environmentProbe.GetSnapshot();
+
             var prerequisiteService =
                 new BootstrapPrerequisiteService(
                     environmentProbe,
@@ -39,7 +42,8 @@ internal static class Program
 
             var selfUpdateOptions =
                 BootstrapDefaults
-                    .CreateSelfUpdateDiscoveryOptions();
+                    .CreateSelfUpdateDiscoveryOptions(
+                        environmentSnapshot.Architecture);
 
             var networkProxyOptions =
                 new WindowsNetworkProxyOptionsReader(
