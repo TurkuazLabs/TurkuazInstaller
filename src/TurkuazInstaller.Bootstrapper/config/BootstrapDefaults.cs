@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/config/BootstrapDefaults.cs
 // 📌 Amac: Native bootstrap runtime requirement, app layout ve self-update retry varsayilanlarini tek config katmaninda tanimlar
 // 📌 Modul - Config CSharp
-// Version: 1.1.0
-// Aciklama: Windows baseline, x64 policy, app yolu, handoff retry ve GitHub bootstrap self-update discovery varsayilanlarini merkezilestirir
+// Version: 1.2.1
+// Aciklama: Windows baseline, x64/ARM64 policy, app yolu, handoff retry ve architecture-safe GitHub bootstrap self-update discovery varsayilanlarini merkezilestirir
 //
 // Bagimli Oldugu Katman: Config
 
@@ -23,8 +23,10 @@ internal static class BootstrapDefaults
 
     private const string ProductDirectoryName = "TurkuazInstaller";
     private const string SelfUpdateDirectoryName = "bootstrap-update";
-    private const string BootstrapExecutableName =
+    private const string X64BootstrapExecutableName =
         "TurkuazInstaller.Bootstrapper.exe";
+    private const string Arm64BootstrapExecutableName =
+        "TurkuazInstaller.Bootstrapper-win-arm64.exe";
     private const string LatestReleaseApiUrl =
         "https://api.github.com/repos/TurkuazLabs/TurkuazInstaller/releases/latest";
 
@@ -42,7 +44,8 @@ internal static class BootstrapDefaults
                 0),
             new[]
             {
-                BootstrapCpuArchitecture.X64
+                BootstrapCpuArchitecture.X64,
+                BootstrapCpuArchitecture.Arm64
             });
     }
 
@@ -63,7 +66,8 @@ internal static class BootstrapDefaults
     }
 
     public static BootstrapSelfUpdateOptions
-        CreateSelfUpdateDiscoveryOptions()
+        CreateSelfUpdateDiscoveryOptions(
+            BootstrapCpuArchitecture processArchitecture)
     {
         var assemblyVersion =
             typeof(BootstrapDefaults)
@@ -93,7 +97,8 @@ internal static class BootstrapDefaults
             new Uri(
                 LatestReleaseApiUrl,
                 UriKind.Absolute),
-            BootstrapExecutableName,
+            ResolveBootstrapAssetName(
+                processArchitecture),
             Path.Combine(
                 localAppData,
                 ProductDirectoryName,
@@ -102,5 +107,19 @@ internal static class BootstrapDefaults
                 DiscoveryTimeoutSeconds),
             TimeSpan.FromSeconds(
                 DownloadTimeoutSeconds));
+    }
+
+    private static string ResolveBootstrapAssetName(
+        BootstrapCpuArchitecture processArchitecture)
+    {
+        return processArchitecture switch
+        {
+            BootstrapCpuArchitecture.X64 =>
+                X64BootstrapExecutableName,
+            BootstrapCpuArchitecture.Arm64 =>
+                Arm64BootstrapExecutableName,
+            _ =>
+                X64BootstrapExecutableName
+        };
     }
 }

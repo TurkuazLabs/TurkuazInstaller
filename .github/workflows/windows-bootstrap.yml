@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.2.0
-# Aciklama: Bootstrap, Windows adapter, CLI/silent testleri ve bootstrap+WinUI+CLI combined distribution layoutunu dogrular
+# Version: 1.3.0
+# Aciklama: Mevcut win-x64 kalite kapisini korur ve native win-arm64 bootstrap+WinUI+CLI combined distribution publish/layout dogrulamasini ekler
 # Bagimli Oldugu Katman: Tool
 
 name: Windows Desktop CI
@@ -86,4 +86,59 @@ jobs:
         with:
           name: TurkuazInstaller-win-x64
           path: artifacts/distribution/win-x64/
+          if-no-files-found: error
+
+
+  arm64-distribution:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    needs:
+      - windows-desktop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish ARM64 NativeAOT bootstrap
+        run: dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/publish/bootstrap/win-arm64
+
+      - name: Publish ARM64 WinUI desktop
+        run: dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/publish/winui/win-arm64
+
+      - name: Publish ARM64 CLI
+        run: dotnet publish src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj --configuration Release --runtime win-arm64 --self-contained true --output artifacts/publish/cli/win-arm64
+
+      - name: Build ARM64 combined distribution
+        shell: pwsh
+        run: ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/publish/bootstrap/win-arm64 -WinUiRoot artifacts/publish/winui/win-arm64 -CliRoot artifacts/publish/cli/win-arm64 -OutputRoot artifacts/distribution/win-arm64
+
+      - name: Verify ARM64 combined startup layout
+        shell: pwsh
+        run: |
+          $bootstrap = "artifacts/distribution/win-arm64/TurkuazInstaller.Bootstrapper.exe"
+          $desktop = "artifacts/distribution/win-arm64/app/TurkuazInstaller.WinUI.exe"
+          $cli = "artifacts/distribution/win-arm64/cli/TurkuazInstaller.Cli.exe"
+
+          if (-not (Test-Path -LiteralPath $bootstrap)) {
+            throw "ARM64 combined distribution bootstrap executable was not produced."
+          }
+
+          if (-not (Test-Path -LiteralPath $desktop)) {
+            throw "ARM64 combined distribution WinUI executable was not produced."
+          }
+
+          if (-not (Test-Path -LiteralPath $cli)) {
+            throw "ARM64 combined distribution CLI executable was not produced."
+          }
+
+      - name: Upload ARM64 combined distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurkuazInstaller-win-arm64
+          path: artifacts/distribution/win-arm64/
           if-no-files-found: error

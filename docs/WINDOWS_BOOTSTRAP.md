@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/WINDOWS_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller Windows NativeAOT bootstrap startup, app launch ve self-update mimarisini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.2.1
-# Aciklama: Combined distribution, prerequisite, reboot resume forwarding, trusted self-update discovery/download ve least-privilege process sinirlarini tanimlar
+# Version: 1.3.0
+# Aciklama: Native x64/ARM64 combined distribution, architecture-safe self-update, reboot resume ve least-privilege process sinirlarini tanimlar
 # Bagimli Oldugu Katman: Service | Tool | Config
 
 # Windows Bootstrap
@@ -46,9 +46,12 @@ Bu argument RunOnce tarafindan yalniz package kimligini tasir. Manifest source, 
 
 WinUI bu package id ile persisted resume request ve AwaitingReboot journal kaydini tekrar dogrular.
 
-Stable v1 release target win-x64 olarak sabitlenmistir.
+Native Windows release hedefleri:
 
-ARM64 native release sonraki minor faza birakilmistir; desteklenmeyen architecture bootstrap tarafinda acikca reddedilir.
+- win-x64
+- win-arm64
+
+Bootstrap environment probe calisan process mimarisini typed olarak X64 veya Arm64 degerine map eder. Desteklenmeyen process architecture typed exit code ile reddedilir.
 
 ## Self-update Discovery
 
@@ -56,9 +59,12 @@ Automatic discovery GitHub latest stable release endpointini kullanir.
 
 Yalniz current assembly SemVer degerinden daha yeni release kabul edilir.
 
-Required asset:
+Required asset process mimarisine gore sabittir:
 
-TurkuazInstaller.Bootstrapper.exe
+- X64: TurkuazInstaller.Bootstrapper.exe
+- ARM64: TurkuazInstaller.Bootstrapper-win-arm64.exe
+
+X64 generic asset adi eski x64 bootstrap self-update zincirini bozmamak icin korunur.
 
 Asset icin GitHub size ve sha256 digest zorunludur. Download URL yalniz github.com HTTPS olabilir.
 

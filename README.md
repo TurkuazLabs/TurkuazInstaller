@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /README.md
 # 📌 Amac: TurkuazInstaller projesinin ana tanitim, kullanim ve release durumu giris dokumani
 # 📌 Modul - Markdown
-# Version: 1.7.0
-# Aciklama: Stable Community kod durumunu, signed trust, proxy, discovery, version policy, safe Windows integrations ve production signing durumunu ozetler
+# Version: 1.8.0
+# Aciklama: Stable Community kod durumunu, x64/ARM64 dagitimlarini, signed trust, update policy ve production signing durumunu ozetler
 
 Bagimli Oldugu Katman: View
 
@@ -73,16 +73,23 @@ Gercek Velopack E2E su zinciri Windows runner uzerinde calistirir:
 
 ## Combined Distribution
 
-Stable v1 release target win-x64 olarak sabitlenmistir.
+Stable Windows dagitimi native win-x64 ve win-arm64 hedefleri icin uretilir.
 
-Dagitim yapisi:
+Her mimaride combined dagitim yapisi aynidir:
 
 ```text
 TurkuazInstaller.Bootstrapper.exe
 app/
   TurkuazInstaller.WinUI.exe
   ...
+cli/
+  TurkuazInstaller.Cli.exe
 ```
+
+Release arsivleri:
+
+- TurkuazInstaller-win-x64.zip
+- TurkuazInstaller-win-arm64.zip
 
 Kullanici TurkuazInstaller.Bootstrapper.exe calistirir.
 

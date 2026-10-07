@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/signing-tooling-validation.yml
 # 📌 Amac: Production signing bootstrap script ve config dosyalarinin secretsiz statik kalite kontrolunu yapar
 # 📌 Modul - CI YAML
-# Version: 1.0.0
-# Aciklama: PowerShell parser, immutable repository ID config ve release environment sabitlerini PR/main seviyesinde dogrular
+# Version: 1.1.0
+# Aciklama: PowerShell parser, immutable signing config ve x64/ARM64 release asset invariants degerlerini PR/main seviyesinde dogrular
 # Bagimli Oldugu Katman: Tool | Config
 
 name: Signing Tooling Validation
@@ -74,4 +74,25 @@ jobs:
 
           if (-not $config.RegionEndpoints.ContainsKey("westeurope")) {
             throw "Artifact Signing region endpoint map is incomplete."
+          }
+
+
+      - name: Validate release architecture asset invariants
+        shell: pwsh
+        run: |
+          $release = Get-Content -LiteralPath ".github/workflows/release.yml" -Raw
+
+          $required = @(
+            "TurkuazInstaller-win-x64.zip",
+            "TurkuazInstaller-win-arm64.zip",
+            "TurkuazInstaller.Bootstrapper.exe",
+            "TurkuazInstaller.Bootstrapper-win-arm64.exe",
+            "--runtime win-x64",
+            "--runtime win-arm64"
+          )
+
+          foreach ($value in $required) {
+            if (-not $release.Contains($value)) {
+              throw "Release workflow architecture invariant is missing: $value"
+            }
           }

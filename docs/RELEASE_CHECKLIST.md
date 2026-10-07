@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/RELEASE_CHECKLIST.md
 # 📌 Amac: TurkuazInstaller Stable Community release oncesi zorunlu teknik ve operasyonel kontrolleri siralar
 # 📌 Modul - Markdown
-# Version: 1.0.3
-# Aciklama: Kod kalite kapilari ile Azure/GitHub production signing operasyonlarini ayri checklist gruplarinda takip eder
+# Version: 1.1.0
+# Aciklama: x64/ARM64 kod kalite kapilari ile Azure/GitHub production signing operasyonlarini ayri checklist gruplarinda takip eder
 # Bagimli Oldugu Katman: Tool | Config | View
 
 # Stable Release Checklist
@@ -17,9 +17,11 @@
 - [x] main Signing Tooling Validation yesil
 - [x] bootstrap orchestration testleri yesil
 - [x] real install/update/repair/rollback/uninstall E2E yesil
-- [x] combined bootstrap + app/WinUI distribution olusuyor
+- [x] win-x64 combined bootstrap + app/WinUI + CLI distribution olusuyor
+- [x] win-arm64 combined bootstrap + app/WinUI + CLI distribution olusuyor
 - [x] iki temiz publish agaci SHA-256 olarak birebir
-- [x] deterministic combined release ZIP kalite kapisi yesil
+- [x] deterministic win-x64 combined release ZIP kalite kapisi yesil
+- [x] deterministic win-arm64 combined release ZIP kalite kapisi yesil
 - [x] recovery testleri yesil
 - [x] security review acik P1/P2 bulgu icermiyor
 - [x] production signing bootstrap tooling repository icinde
@@ -40,7 +42,7 @@ Bu bolum hesap/kayit islemleridir ve kod gelistirmesinden ayri tutulur.
 - [ ] urun surumu ile tag birebir eslesiyor
 - [ ] release EXE ve DLL Authenticode verification basarili
 - [ ] SHA256SUMS.txt olustu
-- [ ] release ZIP GitHub artifact attestation olustu
+- [ ] win-x64 ve win-arm64 release ZIP GitHub artifact attestation olustu
 - [ ] release notes olustu
 - [ ] release assetleri indirilebilir
 
