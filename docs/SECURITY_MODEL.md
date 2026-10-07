@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 2.1.0
-# Aciklama: Trust, bounded input/transfer, retry-guvenli integration ve fail-safe automatic bootstrap availability sinirlarini sabitler
+# Version: 2.2.0
+# Aciklama: Trust, bounded full/delta transfer, reconstructed-full verification, retry-guvenli integration ve fail-safe bootstrap availability sinirlarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
 # Security Model
@@ -16,6 +16,8 @@ Community baseline:
 - zorunlu manifest signer certificate SHA-256 pinning
 - SHA-256 artifact dogrulamasi
 - signed artifact size_bytes degerinin transfer sirasinda exact enforcement'i
+- optional delta icin exact installed base + smaller-than-full secim siniri ve pre-apply full fallback
+- reconstructed delta outputunun target full artifact SHA-256/signature policy ile yeniden dogrulanmasi
 - manifest icin 1 MiB ve detached signature icin 256 KiB fail-closed input limiti
 - manifest signature deklarasyonu varsa Authenticode trust dogrulamasi
 - Authenticode publisher subject pinning
@@ -82,6 +84,16 @@ Apply oncesi:
 8. verification basarisizsa stage/apply baslamaz
 
 Signature deklarasyonu olmayan artifact SHA-256 baseline ile calisir.
+
+Optional delta update optimization:
+
+1. delta from_version kurulu surumle birebir eslesmeden secilmez
+2. delta size_bytes full artifact size_bytes degerinden kucuk olmadan secilmez
+3. delta kendi signed-manifest metadata'si ile exact transfer, SHA-256 ve varsa Authenticode dogrulamasindan gecer
+4. Package Engine yalniz exact base full package ile delta reconstruction yapar
+5. reconstructed full package target release full artifact metadata'si ile yeniden SHA-256 ve varsa Authenticode dogrulamasindan gecer
+6. delta yolundaki hata apply baslamadan full artifact fallback'i tetikler
+7. dogrulanmamis delta veya reconstructed output package mutation baslatamaz
 
 ## Prerequisites
 

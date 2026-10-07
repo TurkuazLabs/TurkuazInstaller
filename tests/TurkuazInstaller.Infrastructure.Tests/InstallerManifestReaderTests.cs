@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/InstallerManifestReaderTests.cs
 // 📌 Amac: YAML installer manifest parserinin Stable v1 typed Domain sonucunu dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.2.1
-// Aciklama: Package/artifact/install alanlarina ek olarak signed Windows shortcut/protocol policy mappingini test eder
+// Version: 1.3.0
+// Aciklama: Package/artifact/install alanlarina optional exact-base delta ve signed Windows policy mapping testlerini ekler
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -86,6 +86,55 @@ public sealed class InstallerManifestReaderTests
 
         Assert.True(
             release.Rollback.PreviousVersionRequired);
+    }
+
+
+    [Fact]
+    public void Read_MapsOptionalDeltaArtifact()
+    {
+        var reader =
+            new InstallerManifestReader();
+
+        var yaml =
+            ProviderTestData
+                .Manifest(
+                    ReleaseChannel.Stable,
+                    "2.4.0")
+                .Replace(
+                    "Example-Setup.exe",
+                    "Example-2.4.0-full.nupkg",
+                    StringComparison.Ordinal)
+                .Replace(
+                    "    publisher_subject: \"CN=Example Software\"",
+                    $"""
+    publisher_subject: "CN=Example Software"
+  delta:
+    from_version: 2.3.0
+    uri: https://downloads.example.invalid/{{ProviderTestData.PackageId}}/2.4.0/Example-2.4.0-delta.nupkg
+    sha256: {{ProviderTestData.Digest}}
+    size_bytes: 256
+""",
+                    StringComparison.Ordinal);
+
+        var release =
+            reader.Read(
+                yaml);
+
+        Assert.NotNull(
+            release.DeltaArtifact);
+
+        Assert.Equal(
+            "2.3.0",
+            release.DeltaArtifact.FromVersion.ToString());
+
+        Assert.Equal(
+            256,
+            release.DeltaArtifact.Artifact.SizeBytes);
+
+        Assert.EndsWith(
+            "Example-2.4.0-delta.nupkg",
+            release.DeltaArtifact.Artifact.Uri.AbsolutePath,
+            StringComparison.Ordinal);
     }
 
 

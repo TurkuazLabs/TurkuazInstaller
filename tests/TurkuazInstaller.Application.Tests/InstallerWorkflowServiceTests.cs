@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerWorkflowServiceTests.cs
 // 📌 Amac: InstallerWorkflowService install pipeline sirasi ve state kaydini fake portlarla unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.4.0
-// Aciklama: Download/verify/apply zincirine ek olarak version policy, Windows integration reconcile ve cleanup failure isolation davranislarini dogrular
+// Version: 1.5.0
+// Aciklama: Download/verify/apply zincirine exact-base delta secimi, reconstructed full verify ve pre-apply full fallback testlerini ekler
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -333,6 +333,182 @@ public sealed class InstallerWorkflowServiceTests
     }
 
 
+    [Fact]
+    public async Task UpdateAsync_ExactSmallerDelta_UsesDeltaAndVerifiesReconstructedFull()
+    {
+        var downloader =
+            new StubDownloader();
+
+        var verifier =
+            new StubVerifier();
+
+        var packageEngine =
+            new StubPackageEngine();
+
+        var release =
+            CreateDeltaRelease();
+
+        var currentState =
+            new InstalledPackageState(
+                release.PackageId,
+                SemanticVersion.Parse(
+                    "1.0.0"),
+                ReleaseChannel.Stable,
+                "C:/Apps/Example");
+
+        var service =
+            new InstallerWorkflowService(
+                downloader,
+                verifier,
+                packageEngine,
+                new StubStateRepository());
+
+        await service.UpdateAsync(
+            release,
+            currentState,
+            "C:/Temp/TurkuazInstaller",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal(
+            release.DeltaArtifact!.Artifact,
+            Assert.Single(
+                downloader.DownloadedArtifacts));
+
+        Assert.Equal(
+            2,
+            verifier.ExpectedArtifacts.Count);
+
+        Assert.Equal(
+            release.DeltaArtifact.Artifact,
+            verifier.ExpectedArtifacts[0]);
+
+        Assert.Equal(
+            release.Artifact,
+            verifier.ExpectedArtifacts[1]);
+
+        var stageRequest =
+            Assert.Single(
+                packageEngine.StageRequests);
+
+        Assert.Equal(
+            release.DeltaArtifact.Artifact,
+            stageRequest.Artifact);
+
+        Assert.Equal(
+            currentState.TargetPath,
+            stageRequest.InstalledTargetPath);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_DeltaStageFailure_FallsBackToFullBeforeApply()
+    {
+        var downloader =
+            new StubDownloader();
+
+        var packageEngine =
+            new StubPackageEngine
+            {
+                FailDeltaStage = true
+            };
+
+        var logger =
+            new StubEventLogger();
+
+        var release =
+            CreateDeltaRelease();
+
+        var currentState =
+            new InstalledPackageState(
+                release.PackageId,
+                SemanticVersion.Parse(
+                    "1.0.0"),
+                ReleaseChannel.Stable,
+                "C:/Apps/Example");
+
+        var stateRepository =
+            new StubStateRepository();
+
+        var service =
+            new InstallerWorkflowService(
+                downloader,
+                new StubVerifier(),
+                packageEngine,
+                stateRepository,
+                eventLogger:
+                    logger);
+
+        await service.UpdateAsync(
+            release,
+            currentState,
+            "C:/Temp/TurkuazInstaller",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal(
+            2,
+            downloader.DownloadedArtifacts.Count);
+
+        Assert.Equal(
+            release.DeltaArtifact!.Artifact,
+            downloader.DownloadedArtifacts[0]);
+
+        Assert.Equal(
+            release.Artifact,
+            downloader.DownloadedArtifacts[1]);
+
+        Assert.Equal(
+            2,
+            packageEngine.StageRequests.Count);
+
+        Assert.Equal(
+            release.Artifact,
+            packageEngine.StageRequests[1].Artifact);
+
+        Assert.NotNull(
+            stateRepository.SavedState);
+
+        Assert.Contains(
+            logger.Events,
+            entry =>
+                entry.EventName ==
+                "artifact.delta_fallback");
+    }
+
+    private static PackageRelease CreateDeltaRelease()
+    {
+        var fullArtifact =
+            new ArtifactDescriptor(
+                new Uri(
+                    "https://example.invalid/Example-1.1.0-full.nupkg"),
+                ArtifactDigest.ParseSha256(
+                    Digest),
+                2048);
+
+        var deltaArtifact =
+            new PackageDeltaArtifact(
+                SemanticVersion.Parse(
+                    "1.0.0"),
+                new ArtifactDescriptor(
+                    new Uri(
+                        "https://example.invalid/Example-1.1.0-delta.nupkg"),
+                    ArtifactDigest.ParseSha256(
+                        Digest),
+                    512));
+
+        return new PackageRelease(
+            PackageId.Parse(
+                "example-app"),
+            SemanticVersion.Parse(
+                "1.1.0"),
+            ReleaseChannel.Stable,
+            fullArtifact,
+            PackageInstallPolicy.LegacyDefault,
+            PackageRollbackPolicy.Disabled,
+            deltaArtifact);
+    }
+
+
     private static PackageRelease CreateReleaseWithIntegration()
     {
         return new PackageRelease(
@@ -454,12 +630,19 @@ public sealed class InstallerWorkflowServiceTests
             private set;
         }
 
+        public List<ArtifactDescriptor> DownloadedArtifacts
+        {
+            get;
+        } = new();
+
         public Task<string> DownloadAsync(
             ArtifactDescriptor artifact,
             string stagingDirectory,
             CancellationToken cancellationToken)
         {
             DownloadCalls++;
+            DownloadedArtifacts.Add(
+                artifact);
 
             return Task.FromResult(
                 "C:/Temp/Example-Setup.exe");
@@ -469,11 +652,19 @@ public sealed class InstallerWorkflowServiceTests
     private sealed class StubVerifier
         : IArtifactVerifier
     {
+        public List<ArtifactDescriptor> ExpectedArtifacts
+        {
+            get;
+        } = new();
+
         public Task<VerificationResult> VerifyAsync(
             string artifactPath,
             ArtifactDescriptor expectedArtifact,
             CancellationToken cancellationToken)
         {
+            ExpectedArtifacts.Add(
+                expectedArtifact);
+
             return Task.FromResult(
                 VerificationResult.Passed());
         }
@@ -482,18 +673,67 @@ public sealed class InstallerWorkflowServiceTests
     private sealed class StubPackageEngine
         : IPackageEngine
     {
+        private const string FullPackageExtension =
+            ".nupkg";
+
+        private const string ReconstructedArtifactPath =
+            "C:/Temp/Example-1.1.0-full.nupkg";
+
+        public bool FailDeltaStage
+        {
+            get;
+            init;
+        }
+
+        public List<PackageStageRequest> StageRequests
+        {
+            get;
+        } = new();
+
         public Task<PackageStage> StageAsync(
-            PackageRelease release,
+            PackageStageRequest request,
             string verifiedArtifactPath,
             string stagingDirectory,
             CancellationToken cancellationToken)
         {
+            StageRequests.Add(
+                request);
+
+            var deltaArtifact =
+                request.Release.DeltaArtifact;
+
+            var isDelta =
+                deltaArtifact is not null &&
+                Equals(
+                    deltaArtifact.Artifact,
+                    request.Artifact);
+
+            if (
+                FailDeltaStage &&
+                isDelta)
+            {
+                throw new PackageEngineException(
+                    PackageEngineOperation.Stage,
+                    "Simulated delta stage failure.");
+            }
+
+            var artifactKind =
+                request.Artifact.Uri.AbsolutePath.EndsWith(
+                    FullPackageExtension,
+                    StringComparison.OrdinalIgnoreCase)
+                    ? PackageArtifactKind.VelopackFullPackage
+                    : PackageArtifactKind.VelopackSetup;
+
             return Task.FromResult(
                 new PackageStage(
-                    release.PackageId,
-                    release.Version,
-                    PackageArtifactKind.VelopackSetup,
-                    verifiedArtifactPath));
+                    request.Release.PackageId,
+                    request.Release.Version,
+                    isDelta
+                        ? PackageArtifactKind.VelopackFullPackage
+                        : artifactKind,
+                    isDelta
+                        ? ReconstructedArtifactPath
+                        : verifiedArtifactPath));
         }
 
         public Task ApplyAsync(

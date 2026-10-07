@@ -1,13 +1,14 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Packages/Velopack/VelopackPackageEngine.cs
 // 📌 Amac: Merkezi TurkuazInstaller icin Velopack staging, apply, repair, rollback ve uninstall adapterini uygular
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
-// Aciklama: Dogrulanmis Setup.exe veya full nupkg artifactini atomik stage eder ve resmi Velopack CLI kontratini shell kullanmadan cagirir
+// Version: 1.1.0
+// Aciklama: Dogrulanmis Setup/full/delta artifactlarini stage eder, delta paketi kurulu base full paketle reconstruct eder ve resmi Velopack CLI kontratini shell kullanmadan cagirir
 //
 // Bagimli Oldugu Katman: Service | Tool
 
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.System;
+using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Plans;
 using TurkuazInstaller.Domain.Releases;
 
@@ -26,12 +27,18 @@ public sealed class VelopackPackageEngine : IPackageEngine
     }
 
     public async Task<PackageStage> StageAsync(
-        PackageRelease release,
+        PackageStageRequest request,
         string verifiedArtifactPath,
         string stagingDirectory,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(release);
+        ArgumentNullException.ThrowIfNull(request);
+
+        var release =
+            request.Release;
+
+        var artifact =
+            request.Artifact;
         ArgumentException.ThrowIfNullOrWhiteSpace(
             verifiedArtifactPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(
@@ -45,7 +52,7 @@ public sealed class VelopackPackageEngine : IPackageEngine
         }
 
         var artifactKind =
-            ResolveArtifactKind(release);
+            ResolveArtifactKind(artifact);
 
         var stageRoot =
             Path.GetFullPath(
@@ -67,7 +74,7 @@ public sealed class VelopackPackageEngine : IPackageEngine
 
         var fileName =
             ResolveArtifactFileName(
-                release,
+                artifact,
                 artifactKind);
 
         var stagedArtifactPath =
@@ -93,6 +100,18 @@ public sealed class VelopackPackageEngine : IPackageEngine
             File.Move(
                 partialPath,
                 stagedArtifactPath);
+
+            if (
+                artifactKind ==
+                PackageArtifactKind.VelopackDeltaPackage)
+            {
+                return await ReconstructDeltaAsync(
+                        request,
+                        stagedArtifactPath,
+                        operationDirectory,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             return new PackageStage(
                 release.PackageId,
@@ -248,6 +267,148 @@ public sealed class VelopackPackageEngine : IPackageEngine
                 command,
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private async Task<PackageStage> ReconstructDeltaAsync(
+        PackageStageRequest request,
+        string stagedDeltaPath,
+        string operationDirectory,
+        CancellationToken cancellationToken)
+    {
+        var release =
+            request.Release;
+
+        var deltaArtifact =
+            release.DeltaArtifact;
+
+        if (
+            deltaArtifact is null ||
+            !Equals(
+                deltaArtifact.Artifact,
+                request.Artifact))
+        {
+            throw new PackageEngineException(
+                PackageEngineOperation.Stage,
+                "Delta artifact is not declared by the requested release.");
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(
+                request.InstalledTargetPath))
+        {
+            throw new PackageEngineException(
+                PackageEngineOperation.Stage,
+                "Delta staging requires the installed target path.");
+        }
+
+        var targetRoot =
+            Path.GetFullPath(
+                request.InstalledTargetPath);
+
+        var updaterPath =
+            Path.Combine(
+                targetRoot,
+                VelopackConventions.UpdateExecutableName);
+
+        if (!File.Exists(updaterPath))
+        {
+            throw new PackageEngineException(
+                PackageEngineOperation.Stage,
+                "Velopack Update.exe was not found for delta reconstruction.");
+        }
+
+        var packagesDirectory =
+            Path.Combine(
+                targetRoot,
+                VelopackConventions.PackagesDirectoryName);
+
+        if (!Directory.Exists(packagesDirectory))
+        {
+            throw new PackageEngineException(
+                PackageEngineOperation.Stage,
+                "Velopack package cache was not found for delta reconstruction.");
+        }
+
+        var basePattern =
+            string.Concat(
+                "*-",
+                deltaArtifact.FromVersion.ToString(),
+                VelopackConventions.FullPackageSuffix);
+
+        var basePackages =
+            Directory.GetFiles(
+                packagesDirectory,
+                basePattern,
+                SearchOption.TopDirectoryOnly);
+
+        if (basePackages.Length != 1)
+        {
+            throw new PackageEngineException(
+                PackageEngineOperation.Stage,
+                "Exactly one matching Velopack base full package is required for delta reconstruction.");
+        }
+
+        var deltaFileName =
+            Path.GetFileName(
+                stagedDeltaPath);
+
+        if (
+            !deltaFileName.EndsWith(
+                VelopackConventions.DeltaPackageSuffix,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new PackageEngineException(
+                PackageEngineOperation.Stage,
+                "Velopack delta artifact file name is invalid.");
+        }
+
+        var fullFileName =
+            string.Concat(
+                deltaFileName[
+                    ..^VelopackConventions.DeltaPackageSuffix.Length],
+                VelopackConventions.FullPackageSuffix);
+
+        var reconstructedPath =
+            EnsureChildPath(
+                operationDirectory,
+                Path.Combine(
+                    operationDirectory,
+                    fullFileName));
+
+        var command =
+            new ProcessCommand(
+                updaterPath,
+                new[]
+                {
+                    VelopackConventions.SilentArgument,
+                    VelopackConventions.PatchCommand,
+                    VelopackConventions.OldArgument,
+                    basePackages[0],
+                    VelopackConventions.DeltaArgument,
+                    stagedDeltaPath,
+                    VelopackConventions.OutputArgument,
+                    reconstructedPath
+                },
+                targetRoot);
+
+        await RunCheckedAsync(
+                PackageEngineOperation.Stage,
+                command,
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!File.Exists(reconstructedPath))
+        {
+            throw new PackageEngineException(
+                PackageEngineOperation.Stage,
+                "Velopack delta reconstruction did not produce a full package.");
+        }
+
+        return new PackageStage(
+            release.PackageId,
+            release.Version,
+            PackageArtifactKind.VelopackFullPackage,
+            reconstructedPath);
     }
 
     private async Task RunSetupAsync(
@@ -437,12 +598,12 @@ public sealed class VelopackPackageEngine : IPackageEngine
     }
 
     private static PackageArtifactKind ResolveArtifactKind(
-        PackageRelease release)
+        ArtifactDescriptor artifact)
     {
         var path =
-            release.Artifact.Uri.IsFile
-                ? release.Artifact.Uri.LocalPath
-                : release.Artifact.Uri.AbsolutePath;
+            artifact.Uri.IsFile
+                ? artifact.Uri.LocalPath
+                : artifact.Uri.AbsolutePath;
 
         var extension =
             Path.GetExtension(path);
@@ -462,7 +623,11 @@ public sealed class VelopackPackageEngine : IPackageEngine
                 VelopackConventions.FullPackageExtension,
                 StringComparison.OrdinalIgnoreCase))
         {
-            return PackageArtifactKind.VelopackFullPackage;
+            return path.EndsWith(
+                VelopackConventions.DeltaPackageSuffix,
+                StringComparison.OrdinalIgnoreCase)
+                    ? PackageArtifactKind.VelopackDeltaPackage
+                    : PackageArtifactKind.VelopackFullPackage;
         }
 
         throw new PackageEngineException(
@@ -471,13 +636,13 @@ public sealed class VelopackPackageEngine : IPackageEngine
     }
 
     private static string ResolveArtifactFileName(
-        PackageRelease release,
+        ArtifactDescriptor artifact,
         PackageArtifactKind artifactKind)
     {
         var path =
-            release.Artifact.Uri.IsFile
-                ? release.Artifact.Uri.LocalPath
-                : release.Artifact.Uri.AbsolutePath;
+            artifact.Uri.IsFile
+                ? artifact.Uri.LocalPath
+                : artifact.Uri.AbsolutePath;
 
         var fileName =
             Path.GetFileName(
@@ -488,10 +653,15 @@ public sealed class VelopackPackageEngine : IPackageEngine
             return fileName;
         }
 
-        return artifactKind ==
-            PackageArtifactKind.VelopackSetup
-                ? VelopackConventions.SetupFallbackName
-                : VelopackConventions.FullPackageFallbackName;
+        return artifactKind switch
+        {
+            PackageArtifactKind.VelopackSetup =>
+                VelopackConventions.SetupFallbackName,
+            PackageArtifactKind.VelopackDeltaPackage =>
+                VelopackConventions.DeltaPackageFallbackName,
+            _ =>
+                VelopackConventions.FullPackageFallbackName
+        };
     }
 
     private static void ValidatePreservePaths(
