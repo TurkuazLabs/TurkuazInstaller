@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Manifests/InstallerManifestReader.cs
 // 📌 Amac: Community installer manifest YAML metnini tam typed PackageRelease modeline donusturur
 // 📌 Modul - Tool CSharp
-// Version: 1.3.0
-// Aciklama: Package/artifact/prerequisite alanlarina ek olarak signed Windows shortcut/protocol policy'yi typed runtime modeline tasir
+// Version: 1.4.0
+// Aciklama: Full artifact yaninda optional exact-base delta artifact metadata'sini ve signed Windows policy'yi typed runtime modeline tasir
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -79,6 +79,10 @@ public sealed class InstallerManifestReader
                 document.Artifact.SizeBytes,
                 signature);
 
+        var deltaArtifact =
+            ParseDeltaArtifact(
+                document.Artifact.Delta);
+
         var prerequisites =
             document.Install.Prerequisites
                 .Select(
@@ -117,7 +121,8 @@ public sealed class InstallerManifestReader
             channel,
             artifact,
             install,
-            rollback);
+            rollback,
+            deltaArtifact);
     }
 
     private static void ValidateRequiredSections(
@@ -271,6 +276,31 @@ public sealed class InstallerManifestReader
             install.RequiresElevation);
     }
 
+    private static PackageDeltaArtifact? ParseDeltaArtifact(
+        DeltaArtifactSection? delta)
+    {
+        if (delta is null)
+        {
+            return null;
+        }
+
+        var artifact =
+            new ArtifactDescriptor(
+                new Uri(
+                    delta.Uri,
+                    UriKind.Absolute),
+                ArtifactDigest.ParseSha256(
+                    delta.Sha256),
+                delta.SizeBytes,
+                ParseSignature(
+                    delta.Signature));
+
+        return new PackageDeltaArtifact(
+            SemanticVersion.Parse(
+                delta.FromVersion),
+            artifact);
+    }
+
     private static ArtifactSignatureDescriptor? ParseSignature(
         SignatureSection? signature)
     {
@@ -332,6 +362,24 @@ public sealed class InstallerManifestReader
 
     private sealed class ArtifactSection
     {
+        public string Uri { get; init; } =
+            string.Empty;
+
+        public string Sha256 { get; init; } =
+            string.Empty;
+
+        public long SizeBytes { get; init; }
+
+        public SignatureSection? Signature { get; init; }
+
+        public DeltaArtifactSection? Delta { get; init; }
+    }
+
+    private sealed class DeltaArtifactSection
+    {
+        public string FromVersion { get; init; } =
+            string.Empty;
+
         public string Uri { get; init; } =
             string.Empty;
 

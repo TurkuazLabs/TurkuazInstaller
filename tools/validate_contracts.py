@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/validate_contracts.py
 # 📌 Amac: TurkuazInstaller Community manifest, manifest trust, provider ve guvenlik contract invariantlarini statik dogrulamak
 # 📌 Modul - Python
-# Version: 1.18.0
-# Aciklama: Trust, bounded transfer, update, Windows integration, self-update availability, UI profile ve Community-Pro boundary invariantlarini kontrol eder
+# Version: 1.19.0
+# Aciklama: Trust, bounded full/delta transfer, safe delta fallback, update, Windows integration, self-update availability, UI profile ve Community-Pro invariantlarini kontrol eder
 # Bagimli Oldugu Katman: Tool | Config
 
 from pathlib import Path
@@ -448,6 +448,92 @@ if (
     fail(
         "SHA-256 must be required before install"
     )
+
+delta_policy = artifact.get(
+    "delta",
+    {},
+)
+
+if delta_policy.get("optional") is not True:
+    fail(
+        "delta optimization must remain optional"
+    )
+
+if delta_policy.get("optimization_only") is not True:
+    fail(
+        "delta artifact must remain an optimization only"
+    )
+
+delta_from_version = delta_policy.get(
+    "from_version",
+    {},
+)
+
+if (
+    delta_from_version.get(
+        "exact_installed_version_required"
+    )
+    is not True
+):
+    fail(
+        "delta artifact must require exact installed base version"
+    )
+
+delta_uri = delta_policy.get(
+    "uri",
+    {},
+)
+
+if set(
+    delta_uri.get(
+        "allowed_schemes",
+        [],
+    )
+) != EXPECTED_URI_SCHEMES:
+    fail(
+        "delta artifact URI schemes drifted"
+    )
+
+if (
+    delta_uri.get("required_suffix")
+    != "-delta.nupkg"
+):
+    fail(
+        "delta artifact suffix must remain -delta.nupkg"
+    )
+
+delta_size_policy = delta_policy.get(
+    "size_bytes",
+    {},
+)
+
+for key, expected_value in {
+    "must_be_smaller_than_full": True,
+    "enforced_during_transfer": True,
+}.items():
+    if delta_size_policy.get(key) != expected_value:
+        fail(
+            f"delta artifact size invariant mismatch: {key}"
+        )
+
+delta_reconstruction = delta_policy.get(
+    "reconstruction",
+    {},
+)
+
+expected_delta_reconstruction = {
+    "package_engine_only": True,
+    "exact_base_full_package_required": True,
+    "output_kind": "full_nupkg",
+    "reconstructed_full_verification_required": True,
+    "fallback_to_full_before_apply": True,
+}
+
+for key, expected_value in expected_delta_reconstruction.items():
+    if delta_reconstruction.get(key) != expected_value:
+        fail(
+            f"delta reconstruction invariant mismatch: {key}"
+        )
 
 manifest_trust = load_yaml(MANIFEST_TRUST)
 
