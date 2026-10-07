@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerRecoveryTests.cs
 // 📌 Amac: Installer workflow hata durumlarinda state commit edilmemesi ve rollback state guvenligini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Verification, package apply ve Windows integration failure senaryolarinda state commit sinirini ve retry-guvenli recovery davranisini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -493,15 +493,18 @@ public sealed class InstallerRecoveryTests
         public Exception? RollbackException { get; init; }
 
         public Task<PackageStage> StageAsync(
-            PackageRelease release,
+            PackageStageRequest request,
             string verifiedArtifactPath,
             string stagingDirectory,
             CancellationToken cancellationToken)
         {
             StageCalls++;
 
+            var release =
+                request.Release;
+
             var artifactKind =
-                release.Artifact.Uri.AbsolutePath
+                request.Artifact.Uri.AbsolutePath
                     .EndsWith(
                         ".nupkg",
                         StringComparison.OrdinalIgnoreCase)
