@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerWorkflowServiceTests.cs
 // 📌 Amac: InstallerWorkflowService install pipeline sirasi ve state kaydini fake portlarla unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.5.0
+// Version: 2.5.0
 // Aciklama: Download/verify/apply zincirine exact-base delta secimi, reconstructed full verify ve pre-apply full fallback testlerini ekler
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -475,6 +475,140 @@ public sealed class InstallerWorkflowServiceTests
                 "artifact.delta_fallback");
     }
 
+
+    [Theory]
+    [InlineData(StagedUpdatePolicyDecision.Deferred)]
+    [InlineData(StagedUpdatePolicyDecision.Denied)]
+    [InlineData(StagedUpdatePolicyDecision.RollbackRequested)]
+    public async Task UpdateAsync_StagedGateBlocksBeforeDownloadOrJournal(
+        StagedUpdatePolicyDecision disposition)
+    {
+        var release = CreateDeltaRelease();
+        var current = new InstalledPackageState(
+            release.PackageId,
+            SemanticVersion.Parse("1.0.0"),
+            ReleaseChannel.Stable,
+            "C:/Apps/Example");
+        var downloader = new StubDownloader();
+        var engine = new StubPackageEngine();
+        var journal = new StubOperationJournal();
+        var state = new StubStateRepository();
+        var gate = new StubStagedUpdatePolicyGate(disposition);
+
+        var service = new InstallerWorkflowService(
+            downloader,
+            new StubVerifier(),
+            engine,
+            state,
+            operationJournal: journal,
+            stagedUpdatePolicyGate: gate);
+
+        var exception =
+            await Assert.ThrowsAsync<InstallerStagedUpdatePolicyException>(
+                () => service.UpdateAsync(
+                    release, current, "C:/Temp/TurkuazInstaller",
+                    null, CancellationToken.None));
+
+        Assert.Equal(disposition, exception.Decision);
+        Assert.Equal(1, gate.Calls);
+        Assert.Equal(0, downloader.DownloadCalls);
+        Assert.Empty(engine.StageRequests);
+        Assert.Equal(0, engine.ApplyCalls);
+        Assert.Equal(0, journal.SaveCalls);
+        Assert.Null(state.SavedState);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_StagedPolicyRevocationBeforeApply_PreventsMutation()
+    {
+        var release = CreateDeltaRelease();
+        var current = new InstalledPackageState(
+            release.PackageId,
+            SemanticVersion.Parse("1.0.0"),
+            ReleaseChannel.Stable,
+            "C:/Apps/Example");
+        var downloader = new StubDownloader();
+        var engine = new StubPackageEngine();
+        var state = new StubStateRepository();
+        var gate = new StubStagedUpdatePolicyGate(
+            StagedUpdatePolicyDecision.Eligible,
+            StagedUpdatePolicyDecision.Denied);
+
+        var service = new InstallerWorkflowService(
+            downloader, new StubVerifier(), engine, state,
+            stagedUpdatePolicyGate: gate);
+
+        var exception =
+            await Assert.ThrowsAsync<InstallerStagedUpdatePolicyException>(
+                () => service.UpdateAsync(
+                    release, current, "C:/Temp/TurkuazInstaller",
+                    null, CancellationToken.None));
+
+        Assert.Equal(StagedUpdatePolicyDecision.Denied, exception.Decision);
+        Assert.Equal(2, gate.Calls);
+        Assert.Equal(1, downloader.DownloadCalls);
+        Assert.Single(engine.StageRequests);
+        Assert.Equal(0, engine.ApplyCalls);
+        Assert.Null(state.SavedState);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_StagedEligibleRecheckedBeforeApply()
+    {
+        var release = CreateDeltaRelease();
+        var current = new InstalledPackageState(
+            release.PackageId,
+            SemanticVersion.Parse("1.0.0"),
+            ReleaseChannel.Stable,
+            "C:/Apps/Example");
+        var engine = new StubPackageEngine();
+        var state = new StubStateRepository();
+        var gate = new StubStagedUpdatePolicyGate(
+            StagedUpdatePolicyDecision.Eligible,
+            StagedUpdatePolicyDecision.Eligible);
+        var service = new InstallerWorkflowService(
+            new StubDownloader(), new StubVerifier(), engine, state,
+            stagedUpdatePolicyGate: gate);
+
+        await service.UpdateAsync(
+            release, current, "C:/Temp/TurkuazInstaller",
+            null, CancellationToken.None);
+
+        Assert.Equal(2, gate.Calls);
+        Assert.Equal(1, engine.ApplyCalls);
+        Assert.NotNull(state.SavedState);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_GateFailureFailsClosedBeforeDownload()
+    {
+        var release = CreateDeltaRelease();
+        var current = new InstalledPackageState(
+            release.PackageId,
+            SemanticVersion.Parse("1.0.0"),
+            ReleaseChannel.Stable,
+            "C:/Apps/Example");
+        var downloader = new StubDownloader();
+        var engine = new StubPackageEngine();
+        var gate = new StubStagedUpdatePolicyGate(
+            StagedUpdatePolicyDecision.Eligible)
+        {
+            FailWithUnavailable = true
+        };
+        var service = new InstallerWorkflowService(
+            downloader, new StubVerifier(), engine,
+            new StubStateRepository(),
+            stagedUpdatePolicyGate: gate);
+
+        await Assert.ThrowsAsync<IOException>(
+            () => service.UpdateAsync(
+                release, current, "C:/Temp/TurkuazInstaller",
+                null, CancellationToken.None));
+
+        Assert.Equal(0, downloader.DownloadCalls);
+        Assert.Equal(0, engine.ApplyCalls);
+    }
+
     private static PackageRelease CreateDeltaRelease()
     {
         var fullArtifact =
@@ -559,6 +693,43 @@ public sealed class InstallerWorkflowServiceTests
                 1024));
     }
 
+
+
+    private sealed class StubStagedUpdatePolicyGate
+        : IStagedUpdatePolicyGate
+    {
+        private readonly Queue<StagedUpdatePolicyDecision> _decisions;
+
+        public StubStagedUpdatePolicyGate(
+            params StagedUpdatePolicyDecision[] decisions)
+        {
+            _decisions = new Queue<StagedUpdatePolicyDecision>(decisions);
+        }
+
+        public int Calls { get; private set; }
+
+        public bool FailWithUnavailable { get; init; }
+
+        public Task<StagedUpdatePolicyDecision> EvaluateAsync(
+            PackageRelease candidateRelease,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Calls++;
+            if (FailWithUnavailable)
+            {
+                throw new IOException("Simulated policy authority outage.");
+            }
+
+            if (_decisions.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "No staged policy decision queued.");
+            }
+
+            return Task.FromResult(_decisions.Dequeue());
+        }
+    }
 
     private sealed class StubWindowsIntegrationManager
         : IWindowsIntegrationManager
@@ -685,6 +856,8 @@ public sealed class InstallerWorkflowServiceTests
             init;
         }
 
+        public int ApplyCalls { get; private set; }
+
         public List<PackageStageRequest> StageRequests
         {
             get;
@@ -741,6 +914,7 @@ public sealed class InstallerWorkflowServiceTests
             PackageStage stage,
             CancellationToken cancellationToken)
         {
+            ApplyCalls++;
             return Task.CompletedTask;
         }
 
