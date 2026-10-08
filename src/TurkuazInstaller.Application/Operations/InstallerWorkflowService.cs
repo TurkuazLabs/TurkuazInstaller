@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.9.0
-// Aciklama: Retry-guvenli state commit sinirina exact-base delta secimi, pre-apply full fallback ve reconstructed full verification ekler
+// Version: 2.5.0
+// Aciklama: Optional staged update gate'i download oncesi ve pre-apply asamasinda fail-closed kontrol eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -79,6 +79,7 @@ public sealed class InstallerWorkflowService
     private readonly IRebootResumeScheduler? _rebootResumeScheduler;
     private readonly VersionUpdatePolicyService? _versionPolicyService;
     private readonly IWindowsIntegrationManager? _windowsIntegrationManager;
+    private readonly StagedUpdatePolicyService? _stagedUpdatePolicyService;
 
     public InstallerWorkflowService(
         IArtifactDownloader artifactDownloader,
@@ -93,7 +94,8 @@ public sealed class InstallerWorkflowService
         IPrerequisiteInstaller? prerequisiteInstaller = null,
         IRebootResumeScheduler? rebootResumeScheduler = null,
         IVersionUpdatePolicyRepository? versionPolicyRepository = null,
-        IWindowsIntegrationManager? windowsIntegrationManager = null)
+        IWindowsIntegrationManager? windowsIntegrationManager = null,
+        IStagedUpdatePolicyGate? stagedUpdatePolicyGate = null)
     {
         _artifactDownloader = artifactDownloader;
         _artifactVerifier = artifactVerifier;
@@ -115,6 +117,11 @@ public sealed class InstallerWorkflowService
 
         _windowsIntegrationManager =
             windowsIntegrationManager;
+
+        _stagedUpdatePolicyService =
+            stagedUpdatePolicyGate is null
+                ? null
+                : new StagedUpdatePolicyService(stagedUpdatePolicyGate);
     }
 
     public Task InstallAsync(
@@ -227,6 +234,13 @@ public sealed class InstallerWorkflowService
                 cancellationToken)
             .ConfigureAwait(false);
 
+        if (_stagedUpdatePolicyService is not null)
+        {
+            await _stagedUpdatePolicyService
+                .RequireEligibleAsync(release, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         await ExecuteTrackedAsync(
                 release.PackageId,
                 InstallerOperationType.Update,
@@ -252,6 +266,15 @@ public sealed class InstallerWorkflowService
                                 operation,
                                 cancellationToken)
                             .ConfigureAwait(false);
+
+                    // Re-evaluate directly before mutating the installed package.
+                    // A revocation during download/staging must prevent apply.
+                    if (_stagedUpdatePolicyService is not null)
+                    {
+                        await _stagedUpdatePolicyService
+                            .RequireEligibleAsync(release, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
 
                     await operation
                         .SetPhaseAsync(
