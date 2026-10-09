@@ -1,0 +1,114 @@
+# 📄 Dosya Yolu: /.github/workflows/local-test-package.yml
+# 📌 Amac: Production signing sirlarini atlamadan Windows x64 lokal test ZIP artifacti uretmek
+# 📌 Modul - CI YAML
+# Version: 2.6.0
+# Aciklama: Test-only unsigned bootstrap/WinUI/CLI paketini dogrular, kisa sureli CI artifacti olarak yukler; GitHub Release/tag olusturmaz
+# Bagimli Oldugu Katman: Tool | Repo | Config
+
+name: Community Unsigned Local Test Package
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: community-unsigned-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-package:
+    # Only PR test runs and deliberate main-branch manual dispatches.
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: windows-2025
+    timeout-minutes: 50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Setup archive packager Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Restore Windows solution
+        run: dotnet restore TurkuazInstaller.Windows.slnx
+
+      - name: Run Core and recovery regressions
+        run: dotnet test TurkuazInstaller.slnx --configuration Release
+
+      - name: Run bootstrap and CLI regressions
+        shell: pwsh
+        run: |
+          dotnet test tests/TurkuazInstaller.Bootstrapper.Tests/TurkuazInstaller.Bootstrapper.Tests.csproj --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw "Bootstrapper tests failed" }
+          dotnet test tests/TurkuazInstaller.Cli.Tests/TurkuazInstaller.Cli.Tests.csproj --configuration Release --no-restore
+          if ($LASTEXITCODE -ne 0) { throw "CLI tests failed" }
+
+      - name: Publish x64 self-contained test binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet publish src/TurkuazInstaller.Bootstrapper/TurkuazInstaller.Bootstrapper.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/local-test/publish/bootstrap
+          if ($LASTEXITCODE -ne 0) { throw "Bootstrap publish failed" }
+          dotnet publish src/TurkuazInstaller.WinUI/TurkuazInstaller.WinUI.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/local-test/publish/winui
+          if ($LASTEXITCODE -ne 0) { throw "WinUI publish failed" }
+          dotnet publish src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj --configuration Release --runtime win-x64 --self-contained true --output artifacts/local-test/publish/cli
+          if ($LASTEXITCODE -ne 0) { throw "CLI publish failed" }
+
+      - name: Assemble existing combined distribution layout
+        shell: pwsh
+        run: |
+          ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/local-test/publish/bootstrap -WinUiRoot artifacts/local-test/publish/winui -CliRoot artifacts/local-test/publish/cli -OutputRoot artifacts/local-test/distribution
+
+      - name: Produce reproducible test ZIP
+        shell: pwsh
+        run: |
+          ./tools/Assert-ReproducibleArchive.ps1 -SourceDirectory artifacts/local-test/distribution -OutputPath artifacts/local-test/assets/TurkuazInstaller-UNSIGNED-LOCAL-TEST-win-x64.zip -PackagerPath tools/release/package_release.py
+
+      - name: Document explicit unsigned test-only scope
+        shell: pwsh
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          @"
+          TURKUAZINSTALLER LOCAL TEST BUILD - UNSIGNED / NOT FOR PRODUCTION
+          =================================================================
+          Source commit: $env:SOURCE_SHA
+          Architecture: Windows x64
+          Purpose: Isolated VM/manual development smoke test only.
+          This archive has NOT passed production Azure Artifact Signing.
+          This archive has NOT passed production Authenticode release gating.
+          Do not release, publicly distribute, or use for real customers.
+          Do not disable Windows antivirus, SmartScreen, or security policy
+          to run these binaries. Use a disposable development VM.
+          Launch the existing TurkuazInstaller.Bootstrapper.exe from the ZIP.
+          A real signed product manifest and its independent trusted signer
+          are still REQUIRED before attempting install/update operations.
+          GitHub production tag/release is not created by this workflow.
+          "@ | Set-Content -LiteralPath artifacts/local-test/assets/TEST-ONLY-README.txt -Encoding utf8
+
+      - name: Produce artifact checksums
+        shell: pwsh
+        run: ./tools/New-ReleaseChecksums.ps1 -AssetDirectory artifacts/local-test/assets -OutputPath artifacts/local-test/assets/SHA256SUMS.txt
+
+      - name: Upload SHORT-LIVED unsigned local test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TURKUAZINSTALLER-TEST-ONLY-UNSIGNED-win-x64
+          path: |
+            artifacts/local-test/assets/TurkuazInstaller-UNSIGNED-LOCAL-TEST-win-x64.zip
+            artifacts/local-test/assets/TEST-ONLY-README.txt
+            artifacts/local-test/assets/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
