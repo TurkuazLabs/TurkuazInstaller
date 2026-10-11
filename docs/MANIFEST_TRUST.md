@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/MANIFEST_TRUST.md
 # 📌 Amac: TurkuazInstaller detached manifest signature ve package bazli trust store modelini aciklar
 # 📌 Modul - Markdown
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: CMS/PKCS#7 trust zincirine manifest/signature byte limitleri, external pinning, provisioning ve rotation kurallarini ekler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -178,3 +178,26 @@ Guvenli test siniri: uygulama gercekten kurulmaz; Package Engine ve state
 repository test double'dir. Kaynak fixture byte'lari executable degildir.
 Artifact Authenticode ve production signer zinciri de bu testin konusu
 degildir; gercek signed product VM kabul testi #41 halen zorunludur.
+
+## Windows Authenticode Real-Trust CI Gate
+
+WindowsAuthenticodeArtifactSignatureVerifierTests, Windows hosted CI'da
+Windows veya PowerShell'in mevcut guvenilir bir signer tarafindan
+imzalanmis gercek EXE dosyasini secerek native WinVerifyTrust kodunu
+dogrudan cagirir. Test:
+
+- Windows trust chain + gercek publisher subject + SHA-256 signer pin
+  dogrulamasi basariliysa positive kabul eder.
+- Yanlis publisher subject veya yanlis signer SHA-256 pinini reddeder.
+- Gercek imzali dosyanin gecici bir kopyasindaki PE byte degisikligini
+  reddeder. Sistem dosyasini degistirmez.
+
+Bu bir gercek Windows Authenticode *verification* testidir. Test
+sertifikasi olusturmaz, Windows trust store'a CA eklemez ve antivirus
+istisnasi olusturmaz. GitHub-hosted Windows'un guvenilen sistem
+sertifikasini test fixture'i olarak kullanir.
+
+Bu test, uygulamamizin kendi Velopack artifactinin Authenticode ile
+imzalanmis oldugunu veya end-user Windows VM'de kurulabildigini
+kanitlamaz. Production Artifact Signing ve #41 manuel kabul kapilari
+ayri kalir.
