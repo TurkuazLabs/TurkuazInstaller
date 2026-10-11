@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Invoke-VelopackE2E.ps1
 # 📌 Amac: Gercek vpk toolu ile iki Velopack release uretir ve TurkuazInstaller E2E runnerini calistirir
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.2
+# Version: 1.1.0
 # Aciklama: Local tool install, fixture publish, v1/v2 package uretimi ve install-update-repair-rollback-uninstall zincirini tek kalite kapisinda koordine eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -116,7 +116,7 @@ $v2Full = Join-Path -Path $inputRoot -ChildPath "v2-full.nupkg"
 
 Copy-Item -LiteralPath $v2.Full -Destination $v2Full -Force
 
-dotnet run --project tests/TurkuazInstaller.Velopack.E2E.Runner/TurkuazInstaller.Velopack.E2E.Runner.csproj --configuration Release -- $v1Setup $v1Full $v2Full $installRoot $stagingRoot $config.VersionMarkerFile
+dotnet run --project tests/TurkuazInstaller.Velopack.E2E.Runner/TurkuazInstaller.Velopack.E2E.Runner.csproj --configuration Release -- $v1Setup $v1Full $v2Full $installRoot $stagingRoot $config.VersionMarkerFile $config.UserDataDirectory $config.UserDataMarkerFile
 
 if ($LASTEXITCODE -ne 0) {
     throw "TurkuazInstaller real Velopack E2E runner failed."
