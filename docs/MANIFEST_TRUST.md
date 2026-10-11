@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/MANIFEST_TRUST.md
 # 📌 Amac: TurkuazInstaller detached manifest signature ve package bazli trust store modelini aciklar
 # 📌 Modul - Markdown
-# Version: 1.2.1
+# Version: 1.3.0
 # Aciklama: CMS/PKCS#7 trust zincirine manifest/signature byte limitleri, external pinning, provisioning ve rotation kurallarini ekler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -160,3 +160,21 @@ Gecici private key repository'ye, release artifactina veya CI secrets'a
 yazilmaz. Bu bir metadata/trust pipeline entegrasyon testidir;
 InstallerWorkflowService uzerinden kurulum, dosya indirme, artifact
 Authenticode veya gercek Windows VM urun migration testinin yerine gecmez.
+
+## Signed Manifest -> Artifact SHA -> Workflow CI Bridge
+
+SignedFileManifestIntegrationTests icindeki ek teori testi, ephemeral CMS
+ile imzalanan gercek local-file manifesti external SHA-256 pinned trust
+store'dan gecirir. Sonra gercek DefaultArtifactDownloader ve
+Sha256ArtifactVerifier ile signed manifestin tanimladigi fixture artifacti
+kontrol edilir.
+
+- dogru signed metadata + dosya byte'lari: staging/apply portuna ulasilir,
+  state commit portu cagrilir
+- dogru imzali metadata ama yanlis artifact SHA-256: stage/apply ve
+  install state kaydi yapilmadan operasyon fail-closed biter
+
+Guvenli test siniri: uygulama gercekten kurulmaz; Package Engine ve state
+repository test double'dir. Kaynak fixture byte'lari executable degildir.
+Artifact Authenticode ve production signer zinciri de bu testin konusu
+degildir; gercek signed product VM kabul testi #41 halen zorunludur.
