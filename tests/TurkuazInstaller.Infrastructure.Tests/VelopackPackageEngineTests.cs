@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/VelopackPackageEngineTests.cs
 // 📌 Amac: Velopack Package Engine staging, apply, repair ve rollback kontratini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 0.6.0
+// Version: 0.7.0
 // Aciklama: Full/delta staging, delta reconstruction, resmi CLI argumentleri, atomic staging ve release eslesmesini test eder
 //
 // Bagimli Oldugu Katman: Service | Tool
@@ -327,6 +327,12 @@ public sealed class VelopackPackageEngineTests
 
         fixture.CreateUpdater();
 
+        // A successful fake process must simulate its real filesystem
+        // postcondition or the engine correctly refuses to commit uninstall.
+        fixture.ProcessRunner.BeforeReturn = _ =>
+            File.Delete(
+                Path.Combine(fixture.InstallDirectory, "Update.exe"));
+
         var engine =
             new VelopackPackageEngine(
                 fixture.ProcessRunner);
@@ -364,6 +370,65 @@ public sealed class VelopackPackageEngineTests
                 "uninstall"
             },
             command.Arguments);
+    }
+
+    [Fact]
+    public async Task UninstallAsync_WaitsForAsyncUpdaterSelfCleanup()
+    {
+        using var fixture = new PackageEngineFixture();
+        fixture.CreateUpdater();
+        Directory.CreateDirectory(
+            Path.Combine(fixture.InstallDirectory, "current"));
+        var updaterPath = Path.Combine(
+            fixture.InstallDirectory, "Update.exe");
+        var currentDirectory = Path.Combine(
+            fixture.InstallDirectory, "current");
+
+        Task? deletionTask = null;
+        fixture.ProcessRunner.BeforeReturn = _ =>
+            deletionTask = Task.Run(async () =>
+            {
+                await Task.Delay(120);
+                File.Delete(updaterPath);
+                Directory.Delete(currentDirectory);
+            });
+
+        var engine = new VelopackPackageEngine(fixture.ProcessRunner);
+        var plan = new UninstallPlan(
+            PackageId.Parse("example-app"),
+            SemanticVersion.Parse("1.0.0"),
+            fixture.InstallDirectory);
+
+        await engine.UninstallAsync(plan, CancellationToken.None);
+        if (deletionTask is not null)
+        {
+            await deletionTask;
+        }
+
+        Assert.False(File.Exists(updaterPath));
+        Assert.False(Directory.Exists(currentDirectory));
+    }
+
+    [Fact]
+    public async Task UninstallAsync_NeverCommitsIfUpdaterLeavesFiles()
+    {
+        using var fixture = new PackageEngineFixture();
+        fixture.CreateUpdater();
+
+        var updaterPath = Path.Combine(
+            fixture.InstallDirectory, "Update.exe");
+        var engine = new VelopackPackageEngine(fixture.ProcessRunner);
+        var plan = new UninstallPlan(
+            PackageId.Parse("example-app"),
+            SemanticVersion.Parse("1.0.0"),
+            fixture.InstallDirectory);
+
+        using var cts = new CancellationTokenSource(
+            TimeSpan.FromMilliseconds(300));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => engine.UninstallAsync(plan, cts.Token));
+        Assert.True(File.Exists(updaterPath));
     }
 
     [Fact]
