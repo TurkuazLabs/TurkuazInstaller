@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/MANIFEST_TRUST.md
 # 📌 Amac: TurkuazInstaller detached manifest signature ve package bazli trust store modelini aciklar
 # 📌 Modul - Markdown
-# Version: 1.2.0
+# Version: 1.2.1
 # Aciklama: CMS/PKCS#7 trust zincirine manifest/signature byte limitleri, external pinning, provisioning ve rotation kurallarini ekler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -138,3 +138,25 @@ Asagidaki durumlarda manifest parse edilmez:
 - detached signature 256 KiB limitini asiyor
 
 Artifact download ve package apply bu asamadan sonra baslar.
+
+## Gercek CMS Local File CI Entegrasyon Testi
+
+tests/TurkuazInstaller.Infrastructure.Tests/SignedFileManifestIntegrationTests.cs
+her testte gecici ve production disi RSA sertifikasi olusturur. Raw manifest
+byte'larini detached CMS .p7s olarak imzalar, bagimsiz YAML trust policy
+dosyasina o sertifikanin SHA-256 pinini yazar ve gercek FileReleaseProvider
+ile release okur.
+
+CI kabul/reddetme kontrolleri:
+
+- dogru sertifika ve external pin: manifest parse basarili
+- signature imzalandiktan sonra gecerli YAML'in degistirilmesi: reddedilir
+- yanlis external SHA-256 pin: reddedilir
+- ayni subject ile farkli sertifikanin imzasi: reddedilir
+- eksik detached signature: reddedilir
+- eksik independent trust store: reddedilir
+
+Gecici private key repository'ye, release artifactina veya CI secrets'a
+yazilmaz. Bu bir metadata/trust pipeline entegrasyon testidir;
+InstallerWorkflowService uzerinden kurulum, dosya indirme, artifact
+Authenticode veya gercek Windows VM urun migration testinin yerine gecmez.
