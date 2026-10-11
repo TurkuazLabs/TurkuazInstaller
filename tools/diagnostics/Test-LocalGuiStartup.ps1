@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/diagnostics/Test-LocalGuiStartup.ps1
 # 📌 Amac: Gercek unsigned Installer bootstrap ile WinUI penceresini izole Windows CI icinde kontrol eder
 # 📌 Modul - Tool PowerShell
-# Version: 0.1.0
+# Version: 0.2.0
 # Aciklama: Kullanici kurulumunu degistirmez; CI disposable Windows GUI smoke ve fault diagnostics
 # Bagimli Oldugu Katman: CI | Diagnostics | Tool
 
@@ -53,6 +53,10 @@ finally {
     $log = Join-Path $env:LOCALAPPDATA 'TurkuazInstaller/logs/bootstrap-startup.log'
     if (Test-Path -LiteralPath $log) {
         Get-Content -LiteralPath $log -Tail 12 | ForEach-Object { Write-Host "BOOTSTRAP_LOCAL_LOG $_" }
+    }
+    $winUiLog = Join-Path $env:LOCALAPPDATA 'TurkuazInstaller/logs/winui-startup.log'
+    if (Test-Path -LiteralPath $winUiLog) {
+        Get-Content -LiteralPath $winUiLog -Tail 20 | ForEach-Object { Write-Host "WINUI_LOCAL_LOG $_" }
     }
     if ($null -ne $uiProcess -and -not $uiProcess.HasExited) {
         Stop-Process -Id $uiProcess.Id -Force -ErrorAction SilentlyContinue
