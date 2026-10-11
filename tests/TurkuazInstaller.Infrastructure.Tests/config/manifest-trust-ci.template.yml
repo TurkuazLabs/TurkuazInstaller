@@ -1,0 +1,12 @@
+# 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/config/manifest-trust-ci.template.yml
+# 📌 Amac: Gercek CMS signed local manifest CI testi icin dis manifest trust store sablonu
+# 📌 Modul - Config YAML
+# Version: 0.1.0
+# Aciklama: Sadece CI sirasinda olusturulan gecici sertifikanin SHA-256 piniyle doldurulur
+# Bagimli Oldugu Katman: Repo | Tool | Config
+
+schema_version: 1
+packages:
+  - id: example-app
+    publisher_subject: "CN=Example Software"
+    certificate_sha256: __CERTIFICATE_SHA256__
