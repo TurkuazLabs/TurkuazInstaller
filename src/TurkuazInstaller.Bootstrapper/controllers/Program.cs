@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Bootstrapper/controllers/Program.cs
 // 📌 Amac: Native bootstrap process girisini alir, dependency composition yapar ve runtime servisini cagirir
 // 📌 Modul - Controller CSharp
-// Version: 1.3.0
+// Version: 1.4.0
 // Aciklama: Controller argument requestini parsera aktarir; process architecture-aware self-update ve ortak proxy politikasini compose eder
 //
 // Bagimli Oldugu Katman: Controller | Service | Tool | Config
@@ -89,17 +89,20 @@ internal static class Program
                         CancellationToken.None)
                     .ConfigureAwait(false);
 
+            BootstrapStartupDiagnostics.RecordExit((int)exitCode);
             return (int)exitCode;
         }
-        catch (FormatException)
+        catch (FormatException error)
         {
-            return (int)
-                BootstrapExitCode.InvalidInvocation;
+            BootstrapStartupDiagnostics.RecordException(
+                error, (int)BootstrapExitCode.InvalidInvocation);
+            return (int)BootstrapExitCode.InvalidInvocation;
         }
-        catch (Exception)
+        catch (Exception error)
         {
-            return (int)
-                BootstrapExitCode.RuntimeFailure;
+            BootstrapStartupDiagnostics.RecordException(
+                error, (int)BootstrapExitCode.RuntimeFailure);
+            return (int)BootstrapExitCode.RuntimeFailure;
         }
     }
 }

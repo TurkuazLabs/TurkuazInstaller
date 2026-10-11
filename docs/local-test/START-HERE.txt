@@ -45,3 +45,23 @@ does not run any unsigned executable.
 A green compilation/packaging CI does not yet prove this GUI will
 start on every user's Windows build. A signed release is REQUIRED
 before ordinary end-user installation or distribution.
+
+ 
+## Silent startup on Windows
+
+`TurkuazInstaller.Bootstrapper.exe` is a Windows-subsystem bootstrapper;
+double-clicking it does **not** create a console. If the initial checks fail,
+the previous build returned a numeric exit code without any visible error.
+The new local test build records non-sensitive diagnostic results at
+`%LOCALAPPDATA%\TurkuazInstaller\logs\bootstrap-startup.log`. An
+`HANDOFF_RETURNED exit=0` entry means the bootstrapper accepted the
+handoff, **not** that WinUI displayed a usable window. If the
+desktop failed later, inspect Windows Event Viewer → Windows Logs →
+Application for `TurkuazInstaller.WinUI.exe` faults.
+
+The hosted Windows distribution CI now verifies not only the ZIP
+layout but also **actually launches the bootstrapper and waits for a WinUI
+main window**. The test fails closed with Windows Application event
+diagnostics if no window appears. This is still not a guarantee of UI
+compatibility on every Windows build. Do not disable SmartScreen or
+AV/security protections to run unsigned archives.
