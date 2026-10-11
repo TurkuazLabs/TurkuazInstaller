@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/tools/WinUiStartupDiagnostics.cs
 // 📌 Amac: WinUI XAML olusumu ve aktivasyonunda yerel kullanici icin gizli olmayan startup asamalarini kaydeder
 // 📌 Modul - Tool CSharp
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Application crash/stowed exception asamasini token veya arguman kaydetmeden tespit eder
 //
 // Bagimli Oldugu Katman: Tool | View | Controller
@@ -41,6 +41,19 @@ internal static class WinUiStartupDiagnostics
                 row.Append(error.GetType().Name);
                 row.Append(" hresult=0x");
                 row.Append(error.HResult.ToString("X8"));
+                // Escape line breaks and cap the message: XamlParseException
+                // often identifies a missing runtime resource in the text.
+                // No command-line parameters or release credentials are read.
+                var safeMessage = error.Message
+                    .Replace("\r", " ", StringComparison.Ordinal)
+                    .Replace("\n", " ", StringComparison.Ordinal);
+                if (safeMessage.Length > 300)
+                {
+                    safeMessage = safeMessage[..300];
+                }
+
+                row.Append(" detail=");
+                row.Append(safeMessage);
             }
 
             row.AppendLine();
