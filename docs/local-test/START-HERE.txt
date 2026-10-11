@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/local-test/START-HERE.txt
 # 📌 Amac: TurkuazInstaller unsigned local test archive manual launch instructions
 # 📌 Modul - FileType: Text
-# Version: 0.1.0
+# Version: 0.1.1
 
 TURKUAZINSTALLER COMMUNITY — LOCAL TEST ONLY / UNSIGNED
 =========================================================
@@ -59,9 +59,10 @@ handoff, **not** that WinUI displayed a usable window. If the
 desktop failed later, inspect Windows Event Viewer → Windows Logs →
 Application for `TurkuazInstaller.WinUI.exe` faults.
 
-The hosted Windows distribution CI now verifies not only the ZIP
-layout but also **actually launches the bootstrapper and waits for a WinUI
-main window**. The test fails closed with Windows Application event
-diagnostics if no window appears. This is still not a guarantee of UI
+The hosted Windows distribution CI verifies the ZIP layout, launches
+the bootstrapper, and requires a NEW WinUI main window handle plus the
+MainWindowReady stage from that SAME process ID. CI fails closed if the
+window or readiness record is missing and collects Windows Application
+event diagnostics. This is still not a guarantee of UI
 compatibility on every Windows build. Do not disable SmartScreen or
 AV/security protections to run unsigned archives.
