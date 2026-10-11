@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/tools/WinUiStartupDiagnostics.cs
 // 📌 Amac: WinUI XAML olusumu ve aktivasyonunda yerel kullanici icin gizli olmayan startup asamalarini kaydeder
 // 📌 Modul - Tool CSharp
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: Application crash/stowed exception asamasini token veya arguman kaydetmeden tespit eder
 //
 // Bagimli Oldugu Katman: Tool | View | Controller
@@ -35,6 +35,8 @@ internal static class WinUiStartupDiagnostics
             row.Append(stage);
             row.Append(" osBuild=");
             row.Append(Environment.OSVersion.Version.Build);
+            row.Append(" pid=");
+            row.Append(Environment.ProcessId);
             if (error is not null)
             {
                 row.Append(" errorType=");
