@@ -245,6 +245,54 @@ public sealed class SignedFileManifestIntegrationTests
         public string TrustPath =>
             Path.Combine(_root, TrustFileName);
 
+        public string InstallPath => Path.Combine(_root, "installed-app");
+        public string StagingPath => Path.Combine(_root, "staging");
+
+        public async Task WriteSignedWorkflowManifestAsync(bool wrongPayloadDigest)
+        {
+            var artifactPath = Path.Combine(_root, "Fixture-Setup.exe");
+            var payload = Encoding.UTF8.GetBytes("isolated-ci-fixture-not-executable");
+            await File.WriteAllBytesAsync(artifactPath, payload);
+
+            var realDigest = Convert.ToHexString(
+                SHA256.HashData(payload)).ToLowerInvariant();
+            var declaredDigest = wrongPayloadDigest
+                ? new string('0', 64)
+                : realDigest;
+            var artifactUri = new UriBuilder(Uri.UriSchemeFile, string.Empty)
+            {
+                Path = artifactPath
+            }.Uri.AbsoluteUri;
+
+            // Payload Authenticode intentionally omitted in this fixture.
+            // This test only spans CMS manifest trust and SHA-256 gating.
+            var manifestYaml = $"""
+schema_version: 1
+package:
+  id: {{ProviderTestData.PackageId}}
+  version: {{FixtureVersion}}
+  channel: stable
+artifact:
+  uri: {{artifactUri}}
+  sha256: {{declaredDigest}}
+  size_bytes: {{payload.Length}}
+install:
+  mode: full
+  target: C:/Apps/Example
+  preserve_paths:
+    - UserData
+rollback:
+  supported: true
+  previous_version_required: true
+""";
+
+            var manifest = Encoding.UTF8.GetBytes(manifestYaml);
+            await File.WriteAllBytesAsync(ManifestPath, manifest);
+            await File.WriteAllBytesAsync(
+                SignaturePath,
+                Sign(manifest, _certificate));
+        }
+
         public static async Task<Fixture> CreateAsync()
         {
             var root = Path.Combine(
