@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/local-test-package.yml
 # 📌 Amac: Production signing sirlarini atlamadan Windows x64 lokal test ZIP artifacti uretmek
 # 📌 Modul - CI YAML
-# Version: 2.6.0
+# Version: 2.7.0
 # Aciklama: Test-only unsigned bootstrap/WinUI/CLI paketini dogrular, kisa sureli CI artifacti olarak yukler; GitHub Release/tag olusturmaz
 # Bagimli Oldugu Katman: Tool | Repo | Config
 
@@ -69,6 +69,15 @@ jobs:
         shell: pwsh
         run: |
           ./tools/New-CombinedDistribution.ps1 -BootstrapRoot artifacts/local-test/publish/bootstrap -WinUiRoot artifacts/local-test/publish/winui -CliRoot artifacts/local-test/publish/cli -OutputRoot artifacts/local-test/distribution
+
+      - name: Include extraction instructions and passive local diagnostics
+        shell: pwsh
+        run: |
+          $dist = 'artifacts/local-test/distribution'
+          Copy-Item -LiteralPath docs/local-test/START-HERE.txt -Destination (Join-Path $dist 'START-HERE.txt')
+          Copy-Item -LiteralPath tools/diagnostics/Diagnose-LocalTest.ps1 -Destination (Join-Path $dist 'Diagnose-LocalTest.ps1')
+          & (Join-Path $dist 'Diagnose-LocalTest.ps1')
+          if ($LASTEXITCODE -ne 0) { throw 'Distribution layout diagnostics failed' }
 
       - name: Produce reproducible test ZIP
         shell: pwsh

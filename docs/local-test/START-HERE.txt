@@ -1,0 +1,47 @@
+# 📄 Dosya Yolu: /docs/local-test/START-HERE.txt
+# 📌 Amac: TurkuazInstaller unsigned local test archive manual launch instructions
+# 📌 Modul - FileType: Text
+# Version: 0.1.0
+
+TURKUAZINSTALLER COMMUNITY — LOCAL TEST ONLY / UNSIGNED
+=========================================================
+
+IMPORTANT: The GitHub Actions artifact contains ANOTHER ZIP.
+Step 1: Download the GitHub Actions artifact named
+        TURKUAZINSTALLER-TEST-ONLY-UNSIGNED-win-x64.
+Step 2: Extract the outer ZIP.
+Step 3: Find TurkuazInstaller-UNSIGNED-LOCAL-TEST-win-x64.zip
+        and EXTRACT THIS SECOND ZIP into a fresh test folder.
+Step 4: In the second extracted folder, the layout must be:
+
+  TurkuazInstaller.Bootstrapper.exe     <-- Windows GUI entrypoint
+  Diagnose-LocalTest.ps1               <-- Passive layout diagnosis
+  START-HERE.txt
+  app/
+    TurkuazInstaller.WinUI.exe
+    (keep ALL adjacent DLL/native/runtime files here)
+  cli/
+    TurkuazInstaller.Cli.exe
+    (keep ALL adjacent DLL/native/runtime files here)
+
+Do not double-click either ZIP as if it were an installer.
+Do not move the Bootstrapper.exe out of its extracted root folder.
+Run only on a disposable Windows 10 (1809+) or Windows 11 x64 test VM.
+This unsigned file can be blocked by Windows SmartScreen/antivirus.
+DO NOT disable protections or force an exception to run it.
+
+If Windows permits execution, run TurkuazInstaller.Bootstrapper.exe.
+It is a launcher, not a Setup wizard, and may close after starting the
+separate WinUI GUI. The app/ and cli/ folders MUST stay alongside it.
+
+If it does nothing: check Event Viewer -> Windows Logs -> Application
+for faults naming TurkuazInstaller.Bootstrapper.exe or WinUI.exe.
+Send the error text or a screenshot. You may also open PowerShell in
+this extracted folder and run Diagnose-LocalTest.ps1 if your standard
+PowerShell execution policy permits it; DO NOT relax your policy.
+The diagnosis script only checks files, versions and signatures and
+does not run any unsigned executable.
+
+A green compilation/packaging CI does not yet prove this GUI will
+start on every user's Windows build. A signed release is REQUIRED
+before ordinary end-user installation or distribution.
