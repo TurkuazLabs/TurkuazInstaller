@@ -1,11 +1,12 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Packages/Velopack/VelopackPackageEngine.cs
 // 📌 Amac: Merkezi TurkuazInstaller icin Velopack staging, apply, repair, rollback ve uninstall adapterini uygular
 // 📌 Modul - Tool CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Dogrulanmis Setup/full/delta artifactlarini stage eder, delta paketi kurulu base full paketle reconstruct eder ve resmi Velopack CLI kontratini shell kullanmadan cagirir
 //
 // Bagimli Oldugu Katman: Service | Tool
 
+using System.Diagnostics;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Contracts.System;
 using TurkuazInstaller.Domain.Artifacts;
@@ -17,6 +18,8 @@ namespace TurkuazInstaller.Infrastructure.Packages.Velopack;
 public sealed class VelopackPackageEngine : IPackageEngine
 {
     private const int CopyBufferSize = 81920;
+    private const int UninstallCompletionTimeoutSeconds = 30;
+    private const int UninstallCompletionPollMilliseconds = 250;
 
     private readonly IProcessRunner _processRunner;
 
@@ -267,6 +270,46 @@ public sealed class VelopackPackageEngine : IPackageEngine
                 command,
                 cancellationToken)
             .ConfigureAwait(false);
+
+        // Update.exe may spawn a self-deletion helper. A successful process
+        // exit alone does not guarantee the Windows install is fully removed.
+        await VerifyUninstallCompletedAsync(
+                targetRoot,
+                updaterPath,
+                cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static async Task VerifyUninstallCompletedAsync(
+        string targetRoot,
+        string updaterPath,
+        CancellationToken cancellationToken)
+    {
+        var currentDirectory = Path.Combine(
+            targetRoot,
+            VelopackConventions.CurrentDirectoryName);
+
+        var elapsed = Stopwatch.StartNew();
+        while (
+            File.Exists(updaterPath) ||
+            Directory.Exists(currentDirectory))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (elapsed.Elapsed >= TimeSpan.FromSeconds(
+                    UninstallCompletionTimeoutSeconds))
+            {
+                throw new PackageEngineException(
+                    PackageEngineOperation.Uninstall,
+                    "Velopack exited successfully but its active install " +
+                    "files were not removed within the bounded timeout.");
+            }
+
+            await Task.Delay(
+                    UninstallCompletionPollMilliseconds,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
 
     private async Task<PackageStage> ReconstructDeltaAsync(

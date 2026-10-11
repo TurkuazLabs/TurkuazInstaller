@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_ADAPTER.md
 # 📌 Amac: Merkezi TurkuazInstaller ile Velopack arasindaki adapter sinirini ve runtime kontratini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Setup/full/delta staging, safe delta reconstruction/fallback ve install/update/repair/rollback/uninstall CLI sinirini dokumante eder
 # Bagimli Oldugu Katman: Service | Tool | Config
 
@@ -61,6 +61,15 @@ Update.exe --silent --rootDir <target> uninstall
 ```
 
 Package Engine basarisizsa install state silinmez.
+
+**Windows self-cleanup guarantee:** Velopack'in `Update.exe uninstall` process'i
+basarili exit koduyla donebilir, ancak `Update.exe` ve `current`
+klasorunun kaldirilmasi birkac saniye daha surebilir. Core adapter
+islemi tamamlanmis saymadan once bu aktif dosyalarin yok oldugunu
+250ms araliklarla en fazla 30 saniye dogrular. Cancellation veya timeout
+halinde basarili uninstall sonucu dondurmez ve ust katman install
+state'i silmemelidir. Test disindaki user data klasorleri bu
+dogrulama icin silinmez.
 
 ## Staging
 
