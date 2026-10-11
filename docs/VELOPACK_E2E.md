@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_E2E.md
 # 📌 Amac: TurkuazInstaller gercek Velopack E2E kalite kapisinin kapsamini ve failure anlamini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: vpk ile gercek Setup/full package uretimini ve Package Engine install-update-repair-rollback-uninstall test zincirini tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -35,3 +35,46 @@ olarak sunulmaz.
 vpk surumu config/velopack-e2e.psd1 icinde pinlenir.
 
 Bu workflow yesil olmadan Stable Community runtime gercek Velopack entegrasyonu tamamlanmis kabul edilmez.
+
+## Ephemeral CMS ile Signed Workflow Windows E2E
+
+Ayni hosted Windows test isinde ikinci bir izole kurulum root'u kullanilir.
+SignedWorkflowAcceptanceRunner gercek vpk Setup/full.nupkg fixture dosyalari
+icin iki surumun manifestlerini olusturur. Manifest byte'lari runtime'da
+uretilen ephemeral RSA/X.509 sertifikasi ile CMS detached .p7s olarak
+imzalanir; external YAML trust store ayri bir klasorde certificate
+SHA-256 pini ile olusturulur.
+
+Gercek adapter zinciri:
+
+- FileReleaseProvider + CmsManifestSignatureVerifier +
+  YamlManifestTrustPolicyRepository
+- InstallerWorkflowService + DefaultArtifactDownloader +
+  Sha256ArtifactVerifier
+- VelopackPackageEngine + SystemProcessRunner
+- JsonInstallStateRepository (kalici, ayri test state root)
+
+Olumlu akis: v1 Setup ile install; v2 full ile update ve repair;
+v1 full ile rollback; uninstall. Her adimda gerçek current surum
+marker'i ve kalici install state dogrulanir. UserData marker'i
+update/repair/rollback boyunca byte olarak korunmalidir.
+
+Olumsuz akis: imzali manifest byte'lari degistirilirse veya external
+certificate pini yanlissa release okunmamalidir; gecerli imzali
+manifest yanlis payload SHA-256 tasiyorsa UpdateAsync gercek
+package mutation ve state commit oncesinde fail-closed bitmelidir.
+
+CI beklenen cikti:
+- TURKUAZ_INSTALLER_SIGNED_WORKFLOW_FAIL_CLOSED_OK
+- TURKUAZ_INSTALLER_SIGNED_REAL_VELOPACK_WORKFLOW_E2E_OK
+
+Guvenlik ve kapsam sinirlari:
+- Test signer'i production disi, kisa omurlu ve yalniz testte kullanilir.
+- Gercek Velopack fixture Setup.exe ve full.nupkg Authenticode ile
+  production signer olarak imzalanmis degildir. Signed *manifest*
+  Authenticode-signed *artifact* ile ayni sey degildir.
+- Windows CI testi, izole manuel Windows 10/11 VM kabulunun,
+  kullaniciya ozel release artefaktlarinin veya antivirus verdict'inin
+  yerine gecmez.
+- Uninstall sonrasi UserData'nin korunmasi urun policy'sine gore
+  ayri test edilir. Test production release yayimlamaz.
