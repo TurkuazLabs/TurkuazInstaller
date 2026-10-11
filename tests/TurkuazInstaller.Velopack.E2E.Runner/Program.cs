@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Velopack.E2E.Runner/Program.cs
 // 📌 Amac: Gercek Velopack artifactlariyla TurkuazInstaller Package Engine yasam dongusunu uctan uca dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Gercek Velopack install-update-repair-rollback-uninstall ve current disindaki user data byte korumasini dogrular
 //
 // Bagimli Oldugu Katman: Service | Tool
@@ -99,6 +99,26 @@ internal static class Program
                 CancellationToken.None).ConfigureAwait(false);
 
             AssertUninstalled(installRoot);
+
+            // Additional isolated real Windows Velopack lifecycle through
+            // ephemeral-CMS-signed local manifests and independent trust pins.
+            // Never run this against an installed user application.
+            var signedInstallRoot = Path.Combine(
+                Path.GetDirectoryName(installRoot)!,
+                "signed-workflow-install");
+            var signedStagingRoot = Path.Combine(
+                Path.GetDirectoryName(stagingRoot)!,
+                "signed-workflow-staging");
+
+            await SignedWorkflowAcceptanceRunner.RunAsync(
+                setupV1,
+                fullV1,
+                fullV2,
+                signedInstallRoot,
+                signedStagingRoot,
+                markerFile,
+                dataDirectoryName,
+                dataMarkerFileName).ConfigureAwait(false);
 
             Console.WriteLine("TURKUAZ_INSTALLER_VELOPACK_USER_DATA_PRESERVED_OK");
             Console.WriteLine("TURKUAZ_INSTALLER_VELOPACK_E2E_OK");
