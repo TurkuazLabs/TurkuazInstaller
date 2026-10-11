@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/LOCAL_TEST_PACKAGE.md
 # 📌 Amac: Community'nin production signing tamamlanmadan sinirli Windows x64 manuel test paketini tarif etmek
 # 📌 Modul - Markdown
-# Version: 2.6.0
+# Version: 2.6.1
 # Aciklama: Kisa sureli unsigned GitHub Actions artifacti ile gercek imzali release'i guvenlik acisindan ayirir
 # Bagimli Oldugu Katman: Tool | Repo | Config
 
@@ -48,8 +48,14 @@ Tag, GitHub Release, production sertifikasi veya update feed uretilmez.
   zorunludur.
 - Test ZIP'i **urun manifesti signer yetkisi** vermez, package trust
   ve diger SHA-256/AuthentiCode enforcement aynen korunur.
-- CI unit/build ve reproducible ZIP kontroludur. Gercek urun icin
-  imzali manifest, temiz kurulum ve geri alma manuel kabulunu
-  tamamlamak hala ayri gerekir.
+- CI unit/build, reproducible ZIP, gercek WinUI pencere handle'i ve
+  ayni prosesin MainWindowReady asamasini kontrol eder. Bu test hosted
+  Windows CI ortamindadir; tum Windows 10 surumlerini kanitlamaz.
+  Gercek urun icin imzali manifest, temiz kurulum ve geri alma manuel
+  kabulunu tamamlamak hala ayri gerekir.
+- Kaspersky gibi urunlerde 'Dusuk Kisitlamali' uygulama grubu olayi tek
+  basina Trojan tespiti degildir. Ayrica zararli yazilim tespiti varsa
+  tehdit adi, tespit edilen dosya ve eylem bagimsiz incelenir; antivirus
+  istisnasi veya kapatmasi bu testin bir parcasi degildir.
 - ARM64 production readiness CI korunur; bu lokal test artifact'i
   bilerek yalnizca x64 hedefler.

@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.4.1
+// Version: 1.4.2
 // Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml;
 using TurkuazInstaller.Presentation.Controllers;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
+using TurkuazInstaller.WinUI.Tools;
 using Windows.Graphics;
 
 namespace TurkuazInstaller.WinUI.Views;
@@ -30,7 +31,9 @@ public sealed partial class MainWindow : Window
         InstallerDesktopService desktopService,
         IReadOnlyList<string> startupArguments)
     {
+        WinUiStartupDiagnostics.Record("MainWindowConstructorEntered");
         InitializeComponent();
+        WinUiStartupDiagnostics.Record("MainWindowXamlInitialized");
 
         ArgumentNullException.ThrowIfNull(
             startupArguments);
@@ -44,7 +47,9 @@ public sealed partial class MainWindow : Window
         MainRoot.DataContext = viewModel;
         Title = viewModel.WindowTitle;
 
+        WinUiStartupDiagnostics.Record("MainWindowResizeStarting");
         ResizeWindow();
+        WinUiStartupDiagnostics.Record("MainWindowResizeComplete");
         Activated += OnActivated;
         Closed += OnClosed;
     }
@@ -59,17 +64,27 @@ public sealed partial class MainWindow : Window
         }
 
         _startupHandled = true;
+        WinUiStartupDiagnostics.Record("ActivatedHandlerEntered");
+        try
+        {
+            await _controller
+                .StartAsync(
+                    _startupArguments)
+                .ConfigureAwait(true);
 
-        await _controller
-            .StartAsync(
-                _startupArguments)
-            .ConfigureAwait(true);
-
-        await _controller
-            .RunBackgroundUpdateCheckAsync()
-            .ConfigureAwait(true);
-
-        ConfigureBackgroundUpdateTimer();
+            WinUiStartupDiagnostics.Record("StartupControllerCompleted");
+            await _controller
+                .RunBackgroundUpdateCheckAsync()
+                .ConfigureAwait(true);
+            WinUiStartupDiagnostics.Record("BackgroundUpdateCheckCompleted");
+            ConfigureBackgroundUpdateTimer();
+            WinUiStartupDiagnostics.Record("MainWindowReady");
+        }
+        catch (Exception error)
+        {
+            WinUiStartupDiagnostics.Record("ActivatedHandlerFailed", error);
+            throw;
+        }
     }
 
     private void ConfigureBackgroundUpdateTimer()
