@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/local-test-package.yml
 # 📌 Amac: Production signing sirlarini atlamadan Windows x64 lokal test ZIP artifacti uretmek
 # 📌 Modul - CI YAML
-# Version: 2.8.0
+# Version: 2.8.1
 # Aciklama: Test-only unsigned bootstrap/WinUI/CLI paketini dogrular, kisa sureli CI artifacti olarak yukler; GitHub Release/tag olusturmaz
 # Bagimli Oldugu Katman: Tool | Repo | Config
 
@@ -78,6 +78,13 @@ jobs:
           Copy-Item -LiteralPath tools/diagnostics/Diagnose-LocalTest.ps1 -Destination (Join-Path $dist 'Diagnose-LocalTest.ps1')
           & (Join-Path $dist 'Diagnose-LocalTest.ps1')
           if (-not $?) { throw 'Distribution layout diagnostics failed' }
+
+      - name: Validate diagnostics with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./artifacts/local-test/distribution/Diagnose-LocalTest.ps1
+          if (-not $?) { throw 'Windows PowerShell 5.1 diagnostic validation failed' }
 
       - name: Real Windows GUI startup smoke before distributing unsigned ZIP
         shell: pwsh
