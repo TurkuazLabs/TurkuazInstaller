@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/diagnostics/Diagnose-LocalTest.ps1
 # 📌 Amac: Imzasiz TurkuazInstaller ZIP dosyasinin dogru acilip acilmadigini uygulama calistirmadan dogrulamak
 # 📌 Modul - Tool PowerShell
-# Version: 0.1.0
+# Version: 0.1.1
 # Aciklama: Sadece test paketi dosya/Windows kontrolu; izinlari degistirmez, AV/SmartScreen atlatmaz, ag kullanmaz
 # Bagimli Oldugu Katman: Tool | CI | Diagnostics
 
@@ -28,7 +28,7 @@ $winuiFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'app') -File -ErrorA
 if ($winuiFiles.Count -lt 10) {
     throw 'LOCAL_TEST_LAYOUT_ERROR: app/ native WinUI dependencies appear incomplete.'
 }
-if (-not $IsWindows) {
+if ([Environment]::OSVersion.Platform -ne [System.PlatformID]::Win32NT) {
     Write-Host 'LOCAL_TEST_LAYOUT_ONLY: Windows x64 is required to launch.'
     exit 0
 }
