@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/TurkuazInstaller.Infrastructure.Tests.csproj
 # 📌 Amac: Provider, manifest parser, detached signature ve repository adapterlari icin contract test projesini tanimlar
 # 📌 Modul - Test Project XML
-# Version: 1.1.0
+# Version: 1.1.1
 # Aciklama: GitHub, Gitea, HTTPS, file, manifest trust store ve gercek CMS detached signature davranislarini dis servise cikmadan dogrular
 
 Bagimli Oldugu Katman: Repo | Tool | Service
@@ -16,6 +16,9 @@ Bagimli Oldugu Katman: Repo | Tool | Service
     <ProjectReference Include="../../src/TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj" />
     <ProjectReference Include="../../src/TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
     <ProjectReference Include="../../src/TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="config/manifest-trust-ci.template.yml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
