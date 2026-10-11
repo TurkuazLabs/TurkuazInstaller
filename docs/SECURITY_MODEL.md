@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/SECURITY_MODEL.md
 # 📌 Amac: TurkuazInstaller Community install, update, repair, rollback ve uninstall guvenlik invariantlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 2.2.0
+# Version: 2.3.0
 # Aciklama: Trust, bounded full/delta transfer, reconstructed-full verification, retry-guvenli integration ve fail-safe bootstrap availability sinirlarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -20,6 +20,7 @@ Community baseline:
 - reconstructed delta outputunun target full artifact SHA-256/signature policy ile yeniden dogrulanmasi
 - manifest icin 1 MiB ve detached signature icin 256 KiB fail-closed input limiti
 - manifest signature deklarasyonu varsa Authenticode trust dogrulamasi
+- Authenticode icin native WinVerifyTrust whole-chain revocation (root haric) ve MD2/MD4 reddi
 - Authenticode publisher subject pinning
 - optional artifact certificate SHA-256 pinning
 - package-scoped cross-process operation lock
@@ -84,6 +85,31 @@ Apply oncesi:
 8. verification basarisizsa stage/apply baslamaz
 
 Signature deklarasyonu olmayan artifact SHA-256 baseline ile calisir.
+
+### Authenticode Revocation Baseline
+
+WindowsAuthenticodeArtifactSignatureVerifier, Windows WinVerifyTrust
+GENERIC_VERIFY_V2 policy kullandiginda su native flag'leri uygular:
+
+- fdwRevocationChecks = WTD_REVOKE_WHOLECHAIN (1)
+- dwProvFlags = WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT (0x80)
+  | WTD_DISABLE_MD2_MD4 (0x2000)
+
+Bu ayarlar zincir iptal sorgusunu acikca ister; root cert icin
+revocation check yapmaz. WTD_CACHE_ONLY_URL_RETRIEVAL kullanilmaz:
+Windows CRL/OCSP bilgisi icin normal ag/OS cache akislarini kullanabilir.
+Kritik nokta: WinVerifyTrust 0 disinda bir status dondururse
+TurkuazInstaller artifacti reddeder. Bunun hangi agirlikta
+revocation-unavailable veya offline hatasi urettigi Windows trust
+provider/OS konfigürasyonuna baglidir; tum cevrimdisi kosullarin
+otomatik olarak reddedildigi iddia edilmez. Windows test ortami bu
+davranisi farkli ag profilleriyle manuel kabulde dogrulamalidir.
+
+Bu politika signed artifact ve bootstrap self-update icin kullanilan
+ayni Windows verifier'da uygulanir. CMS detached manifest trust,
+Azure production code signing ve artifact SHA-256 kontrollerinin
+yerine gecmez. Uygulama antivirus istisnasi veya trusted root
+deposu mutasyonu yapmaz.
 
 Optional delta update optimization:
 

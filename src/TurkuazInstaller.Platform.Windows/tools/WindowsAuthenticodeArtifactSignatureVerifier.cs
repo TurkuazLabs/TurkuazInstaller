@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Platform.Windows/tools/WindowsAuthenticodeArtifactSignatureVerifier.cs
 // 📌 Amac: Authenticode artifactin Windows trust zinciri, publisher subject ve optional certificate SHA-256 pinini dogrular
 // 📌 Modul - Tool CSharp
-// Version: 1.1.0
-// Aciklama: WinVerifyTrust sonrasinda embedded signer certificate kimligini manifestte beklenen publisher policy ile fail-closed karsilastirir
+// Version: 1.2.0
+// Aciklama: WinVerifyTrust explicit revocation checks whole chain except root, rejects trust failures, then pins embedded signer identity
 //
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -19,7 +19,12 @@ public sealed class WindowsAuthenticodeArtifactSignatureVerifier
     : IArtifactSignatureVerifier
 {
     private const uint UiNone = 2;
-    private const uint RevokeNone = 0;
+    // WINTRUST_DATA fdwRevocationChecks: WTD_REVOKE_WHOLECHAIN.
+    private const uint RevokeWholeChain = 1;
+    // WINTRUST_DATA dwProvFlags: WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT.
+    private const uint RevocationCheckChainExcludeRoot = 0x00000080;
+    // Reject legacy MD2/MD4 signature algorithms on supported Windows.
+    private const uint DisableMd2Md4 = 0x00002000;
     private const uint ChoiceFile = 1;
     private const uint StateActionIgnore = 0;
 
@@ -206,7 +211,7 @@ public sealed class WindowsAuthenticodeArtifactSignatureVerifier
                     UiChoice =
                         UiNone,
                     RevocationChecks =
-                        RevokeNone,
+                        RevokeWholeChain,
                     UnionChoice =
                         ChoiceFile,
                     FileInfo =
@@ -218,7 +223,7 @@ public sealed class WindowsAuthenticodeArtifactSignatureVerifier
                     UrlReference =
                         IntPtr.Zero,
                     ProviderFlags =
-                        0,
+                        RevocationCheckChainExcludeRoot | DisableMd2Md4,
                     UiContext =
                         0,
                     SignatureSettings =
