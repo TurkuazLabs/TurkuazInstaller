@@ -269,13 +269,13 @@ public sealed class SignedFileManifestIntegrationTests
             var manifestYaml = $"""
 schema_version: 1
 package:
-  id: {{ProviderTestData.PackageId}}
-  version: {{FixtureVersion}}
+  id: {ProviderTestData.PackageId}
+  version: {FixtureVersion}
   channel: stable
 artifact:
-  uri: {{artifactUri}}
-  sha256: {{declaredDigest}}
-  size_bytes: {{payload.Length}}
+  uri: {artifactUri}
+  sha256: {declaredDigest}
+  size_bytes: {payload.Length}
 install:
   mode: full
   target: C:/Apps/Example
