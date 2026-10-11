@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/SignedFileManifestIntegrationTests.cs
 // 📌 Amac: Yerel manifest providerindan gercek detached CMS ve harici YAML trust pini ile signed manifest kabul/reddini dogrular
 // 📌 Modul - Test CSharp
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: Test sirasinda ephemeral RSA sertifikasi ile valid, tampered, yanlis pin, farkli signer, eksik signature ve eksik policy kontrolleri
 // Bagimli Oldugu Katman: Service | Repo | Tool | Config
 
@@ -9,6 +9,12 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Contracts.Packages;
+using TurkuazInstaller.Contracts.State;
+using TurkuazInstaller.Domain.Plans;
+using TurkuazInstaller.Domain.State;
+using TurkuazInstaller.Infrastructure.Artifacts;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Infrastructure.Manifests;
@@ -98,6 +104,116 @@ public sealed class SignedFileManifestIntegrationTests
         File.Delete(fixture.TrustPath);
 
         await AssertRejectedAsync(fixture);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InstallAsync_SignedManifestPayloadHashGateControlsMutation(
+        bool wrongPayloadDigest)
+    {
+        using var fixture = await Fixture.CreateAsync();
+        await fixture.WriteSignedWorkflowManifestAsync(wrongPayloadDigest);
+        var release = await fixture.CreateProvider().GetLatestReleaseAsync(
+            PackageId.Parse(ProviderTestData.PackageId),
+            ReleaseChannel.Stable,
+            CancellationToken.None);
+        Assert.NotNull(release);
+        var engine = new TrackingPackageEngine();
+        var states = new TrackingStateRepository();
+        using var http = new HttpClient();
+        var workflow = new InstallerWorkflowService(
+            new DefaultArtifactDownloader(http),
+            new Sha256ArtifactVerifier(),
+            engine,
+            states);
+
+        if (wrongPayloadDigest)
+        {
+            await Assert.ThrowsAsync<InvalidDataException>(
+                () => workflow.InstallAsync(
+                    release, fixture.InstallPath, fixture.StagingPath,
+                    null, CancellationToken.None));
+            Assert.Equal(0, engine.StageCalls);
+            Assert.Equal(0, engine.ApplyCalls);
+            Assert.Null(states.Current);
+            Assert.Equal(0, states.SaveCalls);
+        }
+        else
+        {
+            await workflow.InstallAsync(
+                release, fixture.InstallPath, fixture.StagingPath,
+                null, CancellationToken.None);
+            Assert.Equal(1, engine.StageCalls);
+            Assert.Equal(1, engine.ApplyCalls);
+            Assert.Equal(1, states.SaveCalls);
+            Assert.Equal(release.Version, states.Current?.Version);
+        }
+    }
+
+    private sealed class TrackingPackageEngine : IPackageEngine
+    {
+        public int StageCalls { get; private set; }
+        public int ApplyCalls { get; private set; }
+
+        public Task<PackageStage> StageAsync(
+            PackageStageRequest request, string verifiedArtifactPath,
+            string stagingDirectory, CancellationToken cancellationToken)
+        {
+            StageCalls++;
+            return Task.FromResult(new PackageStage(
+                request.Release.PackageId, request.Release.Version,
+                PackageArtifactKind.VelopackSetup, verifiedArtifactPath));
+        }
+
+        public Task ApplyAsync(
+            InstallPlan plan, PackageStage stage, CancellationToken cancellationToken)
+        {
+            ApplyCalls++;
+            return Task.CompletedTask;
+        }
+
+        public Task RepairAsync(
+            RepairPlan plan, PackageStage stage, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task RollbackAsync(
+            RollbackPlan plan, PackageStage stage, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
+        public Task UninstallAsync(
+            UninstallPlan plan, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    private sealed class TrackingStateRepository : IInstallStateRepository
+    {
+        public int SaveCalls { get; private set; }
+        public InstalledPackageState? Current { get; private set; }
+
+        public Task<InstalledPackageState?> GetAsync(
+            PackageId packageId, CancellationToken cancellationToken)
+            => Task.FromResult(Current);
+
+        public Task<IReadOnlyList<InstalledPackageState>> ListAsync(
+            CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyList<InstalledPackageState>>(
+                Current is null ? Array.Empty<InstalledPackageState>() : new[] { Current });
+
+        public Task SaveAsync(
+            InstalledPackageState state, CancellationToken cancellationToken)
+        {
+            SaveCalls++;
+            Current = state;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(
+            PackageId packageId, CancellationToken cancellationToken)
+        {
+            Current = null;
+            return Task.CompletedTask;
+        }
     }
 
     private static async Task AssertRejectedAsync(Fixture fixture)
