@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /tests/TurkuazInstaller.Velopack.E2E.Runner/TurkuazInstaller.Velopack.E2E.Runner.csproj
 # 📌 Amac: TurkuazInstaller VelopackPackageEngine adapterini gercek Setup.exe ve Update.exe ile calistiran Windows E2E runner projesini tanimlar
 # 📌 Modul - Test Project XML
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Install, update, repair, rollback ve uninstall zincirini fake process kullanmadan gercek Windows processleriyle dogrular
 
 Bagimli Oldugu Katman: Service | Tool
@@ -20,5 +20,9 @@ Bagimli Oldugu Katman: Service | Tool
     <ProjectReference Include="../../src/TurkuazInstaller.Contracts/TurkuazInstaller.Contracts.csproj" />
     <ProjectReference Include="../../src/TurkuazInstaller.Domain/TurkuazInstaller.Domain.csproj" />
     <ProjectReference Include="../../src/TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/TurkuazInstaller.Application/TurkuazInstaller.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>
 </Project>
