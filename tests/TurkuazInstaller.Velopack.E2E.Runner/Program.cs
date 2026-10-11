@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Velopack.E2E.Runner/Program.cs
 // 📌 Amac: Gercek Velopack artifactlariyla TurkuazInstaller Package Engine yasam dongusunu uctan uca dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.0.1
-// Aciklama: Yeni PackageStageRequest kontratiyla Setup install, full-package update, repair, rollback ve uninstall yasam dongusunu fail-fast dogrular
+// Version: 1.1.0
+// Aciklama: Gercek Velopack install-update-repair-rollback-uninstall ve current disindaki user data byte korumasini dogrular
 //
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -19,7 +19,8 @@ namespace TurkuazInstaller.Velopack.E2E.Runner;
 
 internal static class Program
 {
-    private const int ExpectedArgumentCount = 6;
+    private const int ExpectedArgumentCount = 8;
+    private const string CurrentDirectoryName = "current";
     private const string PackageIdValue = "turkuazlabs.turkuazinstaller.e2e";
     private const string VersionOne = "1.0.0";
     private const string VersionTwo = "2.0.0";
@@ -30,7 +31,7 @@ internal static class Program
         if (args.Length != ExpectedArgumentCount)
         {
             Console.Error.WriteLine(
-                "Expected arguments: <v1-setup> <v1-full> <v2-full> <install-root> <staging-root> <version-marker>.");
+                "Expected arguments: <v1-setup> <v1-full> <v2-full> <install-root> <staging-root> <version-marker> <data-dir> <data-file>.");
             return 2;
         }
 
@@ -40,6 +41,20 @@ internal static class Program
         var installRoot = Path.GetFullPath(args[3]);
         var stagingRoot = Path.GetFullPath(args[4]);
         var markerFile = args[5].Trim();
+        var dataDirectoryName = args[6].Trim();
+        var dataMarkerFileName = args[7].Trim();
+
+        if (
+            !IsSafePathSegment(dataDirectoryName) ||
+            !IsSafePathSegment(dataMarkerFileName) ||
+            string.Equals(
+                dataDirectoryName,
+                CurrentDirectoryName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            Console.Error.WriteLine("User data fixture path must use safe direct-child names outside current.");
+            return 2;
+        }
 
         var packageId = PackageId.Parse(PackageIdValue);
         var releaseV1 = CreateRelease(packageId, VersionOne, setupV1);
@@ -58,15 +73,26 @@ internal static class Program
 
             await InstallAsync(engine, releaseV1, installRoot, stagingRoot).ConfigureAwait(false);
             AssertInstalledVersion(installRoot, markerFile, VersionOne);
+            var dataMarkerPath = Path.Combine(
+                installRoot,
+                dataDirectoryName,
+                dataMarkerFileName);
+            var expectedData = Guid.NewGuid().ToString("N");
+            Directory.CreateDirectory(Path.GetDirectoryName(dataMarkerPath)!);
+            File.WriteAllText(dataMarkerPath, expectedData);
+            AssertPreservedUserData(dataMarkerPath, expectedData);
 
             await ApplyUpdateAsync(engine, releaseV2, installRoot, stagingRoot).ConfigureAwait(false);
             AssertInstalledVersion(installRoot, markerFile, VersionTwo);
+            AssertPreservedUserData(dataMarkerPath, expectedData);
 
             await RepairAsync(engine, releaseV2, installRoot, stagingRoot).ConfigureAwait(false);
             AssertInstalledVersion(installRoot, markerFile, VersionTwo);
+            AssertPreservedUserData(dataMarkerPath, expectedData);
 
             await RollbackAsync(engine, releaseV2, fullReleaseV1, installRoot, stagingRoot).ConfigureAwait(false);
             AssertInstalledVersion(installRoot, markerFile, VersionOne);
+            AssertPreservedUserData(dataMarkerPath, expectedData);
 
             await engine.UninstallAsync(
                 new UninstallPlan(packageId, fullReleaseV1.Version, installRoot),
@@ -74,6 +100,7 @@ internal static class Program
 
             AssertUninstalled(installRoot);
 
+            Console.WriteLine("TURKUAZ_INSTALLER_VELOPACK_USER_DATA_PRESERVED_OK");
             Console.WriteLine("TURKUAZ_INSTALLER_VELOPACK_E2E_OK");
             return 0;
         }
@@ -246,6 +273,34 @@ internal static class Program
                     ", actual ",
                     actual,
                     "."));
+        }
+    }
+
+    private static bool IsSafePathSegment(string name)
+    {
+        return
+            !string.IsNullOrWhiteSpace(name) &&
+            name != "." &&
+            name != ".." &&
+            string.Equals(
+                Path.GetFileName(name),
+                name,
+                StringComparison.Ordinal) &&
+            name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
+    }
+
+    private static void AssertPreservedUserData(
+        string markerPath,
+        string expectedData)
+    {
+        if (!File.Exists(markerPath) ||
+            !string.Equals(
+                File.ReadAllText(markerPath),
+                expectedData,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Persistent user data was removed or modified during the package lifecycle.");
         }
     }
 
