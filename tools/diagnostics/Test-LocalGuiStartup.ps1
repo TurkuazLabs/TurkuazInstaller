@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/diagnostics/Test-LocalGuiStartup.ps1
 # 📌 Amac: Gercek unsigned Installer bootstrap ile WinUI penceresini izole Windows CI icinde kontrol eder
 # 📌 Modul - Tool PowerShell
-# Version: 0.2.0
+# Version: 0.3.0
 # Aciklama: Kullanici kurulumunu degistirmez; CI disposable Windows GUI smoke ve fault diagnostics
 # Bagimli Oldugu Katman: CI | Diagnostics | Tool
 
@@ -23,21 +23,40 @@ if (-not (Test-Path -LiteralPath $bootstrap -PathType Leaf) -or
     throw 'Combined distribution layout lacks bootstrap or WinUI EXE.'
 }
 $startup = Get-Date
+$winUiLogPath = Join-Path $env:LOCALAPPDATA 'TurkuazInstaller/logs/winui-startup.log'
+$readyStagePattern = '(?:^|\s)stage=MainWindowReady(?:\s|$)'
+$existingUiProcessIds = @(
+    Get-CimInstance Win32_Process -Filter "Name = 'TurkuazInstaller.WinUI.exe'" -ErrorAction Stop |
+        Where-Object { $_.ExecutablePath -eq $appPath } |
+        ForEach-Object { [int]$_.ProcessId }
+)
 $bootstrapProcess = $null
 $uiProcess = $null
+$windowObserved = $false
 try {
     $bootstrapProcess = Start-Process -FilePath $bootstrap -WorkingDirectory $root -PassThru
     $deadline = [DateTime]::UtcNow.AddSeconds($WindowWaitSeconds)
     do {
         $candidate = @(Get-CimInstance Win32_Process -Filter "Name = 'TurkuazInstaller.WinUI.exe'" -ErrorAction Stop |
-            Where-Object { $_.ExecutablePath -eq $appPath })
+            Where-Object { $_.ExecutablePath -eq $appPath -and $existingUiProcessIds -notcontains [int]$_.ProcessId })
         foreach ($entry in $candidate) {
             $process = Get-Process -Id $entry.ProcessId -ErrorAction SilentlyContinue
             if ($null -ne $process) {
                 $uiProcess = $process
                 if ($process.MainWindowHandle -ne [IntPtr]::Zero) {
-                    Write-Host 'TURKUAZ_INSTALLER_REAL_WINUI_WINDOW_OK'
-                    exit 0
+                    $windowObserved = $true
+                    if (Test-Path -LiteralPath $winUiLogPath -PathType Leaf) {
+                        $processIdPattern = '(?:^|\s)pid=' + [regex]::Escape([string]$entry.ProcessId) + '(?:\s|$)'
+                        $readyEntries = @(
+                            Get-Content -LiteralPath $winUiLogPath -Tail 80 |
+                                Where-Object { $_ -match $readyStagePattern -and $_ -match $processIdPattern }
+                        )
+                        if ($readyEntries.Count -gt 0) {
+                            Write-Host 'TURKUAZ_INSTALLER_REAL_WINUI_WINDOW_OK'
+                            Write-Host 'TURKUAZ_INSTALLER_WINUI_MAINWINDOW_READY_OK'
+                            exit 0
+                        }
+                    }
                 }
             }
         }
@@ -47,6 +66,9 @@ try {
         Start-Sleep -Milliseconds 500
     } while ([DateTime]::UtcNow -lt $deadline)
 
+    if ($windowObserved) {
+        throw "WinUI created a main window but did not reach MainWindowReady within $WindowWaitSeconds seconds."
+    }
     throw "WinUI failed to create any main window within $WindowWaitSeconds seconds."
 }
 finally {
