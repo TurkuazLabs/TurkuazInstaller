@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.7.0
+# Version: 1.7.1
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -42,6 +42,15 @@ Records explicitly interrupted in pre-apply `Verifying` or `Staging`
 can be retried, subject to the normal signed-manifest checks and the
 package-scoped lock. A stale `Completed` record is not considered evidence
 of a partial mutation.
+
+A pre-apply record is **not** safe to retry when the journal package ID,
+committed state package ID, or installed target disagrees. Under the
+package lock, the live mutation workflow now reads committed state and
+uses the same metadata conflict predicate as the read-only assessment;
+conflicts retain the old journal and block download/stage/apply.
+Update/repair/rollback/uninstall journals without committed state are
+also held. A completed uninstall journal may legitimately have no
+committed state, and must not create an artificial recovery hold.
 
 ## Read-only recovery assessment
 
