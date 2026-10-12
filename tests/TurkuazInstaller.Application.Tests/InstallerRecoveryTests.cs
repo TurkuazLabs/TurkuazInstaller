@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerRecoveryTests.cs
 // 📌 Amac: Installer workflow hata durumlarinda state commit edilmemesi ve rollback state guvenligini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.4.0
+// Version: 1.4.1
 // Aciklama: Verification, package apply ve Windows integration failure senaryolarinda state commit sinirini ve retry-guvenli recovery davranisini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -267,6 +267,102 @@ public sealed class InstallerRecoveryTests
         Assert.Equal(1, engine.ApplyCalls);
         Assert.Equal(SemanticVersion.Parse("2.0.0"), state.CurrentState?.Version);
         Assert.Null(journal.Current);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PreApplyJournalTargetMismatch_DoesNotOverwriteCheckpoint()
+    {
+        var packageId = PackageId.Parse("example-app");
+        var initial = new InstalledPackageState(
+            packageId, SemanticVersion.Parse("1.0.0"),
+            ReleaseChannel.Stable, "C:/Apps/Example");
+        var now = DateTimeOffset.UtcNow;
+        var prior = new InstallerOperationJournalEntry(
+            Guid.NewGuid(), packageId, InstallerOperationType.Update,
+            "2.0.0", "C:/Apps/Other",
+            InstallerOperationPhase.Failed, now, now,
+            "Failed before apply",
+            InterruptedPhase: InstallerOperationPhase.Verifying);
+        var journal = new TrackingOperationJournal(prior);
+        var engine = new TrackingPackageEngine();
+        var state = new TrackingStateRepository(initial);
+
+        await Assert.ThrowsAsync<InstallerRecoveryRequiredException>(
+            () => CreateService(
+                engine, state, VerificationResult.Passed(),
+                journal: journal).UpdateAsync(
+                    CreateRelease("2.0.0", "Example-2.0.0-full.nupkg"),
+                    initial, "C:/Temp/TurkuazInstaller", null,
+                    CancellationToken.None));
+
+        Assert.Equal(prior, journal.Current);
+        Assert.Equal(0, engine.StageCalls);
+        Assert.Equal(0, engine.ApplyCalls);
+        Assert.Equal(0, state.SaveCalls);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PreApplyJournalWrongPackage_DoesNotOverwriteCheckpoint()
+    {
+        var packageId = PackageId.Parse("example-app");
+        var initial = new InstalledPackageState(
+            packageId, SemanticVersion.Parse("1.0.0"),
+            ReleaseChannel.Stable, "C:/Apps/Example");
+        var now = DateTimeOffset.UtcNow;
+        var prior = new InstallerOperationJournalEntry(
+            Guid.NewGuid(), PackageId.Parse("other-package"),
+            InstallerOperationType.Update, "2.0.0", initial.TargetPath,
+            InstallerOperationPhase.Failed, now, now,
+            "Failed before apply",
+            InterruptedPhase: InstallerOperationPhase.Verifying);
+        var journal = new TrackingOperationJournal(prior);
+        var engine = new TrackingPackageEngine();
+        var state = new TrackingStateRepository(initial);
+
+        await Assert.ThrowsAsync<InstallerRecoveryRequiredException>(
+            () => CreateService(
+                engine, state, VerificationResult.Passed(),
+                journal: journal).UpdateAsync(
+                    CreateRelease("2.0.0", "Example-2.0.0-full.nupkg"),
+                    initial, "C:/Temp/TurkuazInstaller", null,
+                    CancellationToken.None));
+
+        Assert.Equal(prior, journal.Current);
+        Assert.Equal(0, engine.StageCalls);
+        Assert.Equal(0, engine.ApplyCalls);
+        Assert.Equal(0, state.SaveCalls);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_PreApplyUpdateJournalWithoutCommittedState_FailsClosed()
+    {
+        var packageId = PackageId.Parse("example-app");
+        var initial = new InstalledPackageState(
+            packageId, SemanticVersion.Parse("1.0.0"),
+            ReleaseChannel.Stable, "C:/Apps/Example");
+        var now = DateTimeOffset.UtcNow;
+        var prior = new InstallerOperationJournalEntry(
+            Guid.NewGuid(), packageId, InstallerOperationType.Update,
+            "2.0.0", initial.TargetPath,
+            InstallerOperationPhase.Failed, now, now,
+            "Failed before apply",
+            InterruptedPhase: InstallerOperationPhase.Verifying);
+        var journal = new TrackingOperationJournal(prior);
+        var engine = new TrackingPackageEngine();
+        var state = new TrackingStateRepository();
+
+        await Assert.ThrowsAsync<InstallerRecoveryRequiredException>(
+            () => CreateService(
+                engine, state, VerificationResult.Passed(),
+                journal: journal).UpdateAsync(
+                    CreateRelease("2.0.0", "Example-2.0.0-full.nupkg"),
+                    initial, "C:/Temp/TurkuazInstaller", null,
+                    CancellationToken.None));
+
+        Assert.Equal(prior, journal.Current);
+        Assert.Equal(0, engine.StageCalls);
+        Assert.Equal(0, engine.ApplyCalls);
+        Assert.Equal(0, state.SaveCalls);
     }
 
     [Fact]
