@@ -19,5 +19,5 @@ public sealed record InstallerUiProfile(
             null,
             InstallerBrandingProfile.Empty,
             new Dictionary<InstallerUiLabelKey, string>(),
-            InstallerPromotionProfile.Default);
+            InstallerPromotionProfile.Empty);
 }
