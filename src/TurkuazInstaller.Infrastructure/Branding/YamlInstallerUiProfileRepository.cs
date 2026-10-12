@@ -89,18 +89,17 @@ public sealed class YamlInstallerUiProfileRepository
     private static InstallerPromotionProfile ParsePromotion(
         PromotionSection? section)
     {
-        var fallback = InstallerPromotionProfile.Default;
         if (section is null)
         {
-            return fallback;
+            return InstallerPromotionProfile.Empty;
         }
 
         return new InstallerPromotionProfile(
-            section.Enabled ?? fallback.Enabled,
-            NormalizeOptional(section.Eyebrow) ?? fallback.Eyebrow,
-            NormalizeOptional(section.Title) ?? fallback.Title,
-            NormalizeOptional(section.Description) ?? fallback.Description,
-            NormalizeOptional(section.Provider) ?? fallback.Provider);
+            section.Enabled,
+            NormalizeOptional(section.Eyebrow),
+            NormalizeOptional(section.Title),
+            NormalizeOptional(section.Description),
+            NormalizeOptional(section.Provider));
     }
 
     private static string? NormalizeCulture(
