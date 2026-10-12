@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_E2E.md
 # 📌 Amac: TurkuazInstaller gercek Velopack E2E kalite kapisinin kapsamini ve failure anlamini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: vpk ile gercek Setup/full package uretimini ve Package Engine install-update-repair-rollback-uninstall test zincirini tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -94,3 +94,23 @@ Guvenlik ve kapsam sinirlari:
   yerine gecmez.
 - Uninstall sonrasi UserData'nin korunmasi urun policy'sine gore
   ayri test edilir. Test production release yayimlamaz.
+
+## Running updater kill: process-level recovery evidence
+
+The crash journal E2E includes three isolated cases: before updater
+launch, after a successful updater and before state commit, and while
+a real `Update.exe` process is observable as running.
+
+The third fixture publishes the live updater PID in an atomically
+renamed signal file. The parent verifies that process, terminates
+the workflow process tree, waits for the updater to exit, and then
+requires that committed V1 state, the original `Applying` journal
+and outside-`current` UserData are preserved. New update/uninstall
+operations must remain blocked by the recovery hold.
+
+The current on-disk version is intentionally **not** asserted in
+the running-updater case: a process kill may leave a partial tree.
+This gate is about rejecting further mutation and preserving user
+data, not guaranteeing that the kill hit a specific file write or
+recovering a partial installation. Production-safe reconciliation
+still requires independently verified on-disk evidence.
