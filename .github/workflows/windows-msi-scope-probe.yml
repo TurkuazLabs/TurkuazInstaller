@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-msi-scope-probe.yml
 # 📌 Amac: Ortak installer icin iki MSI kurulum kapsamini Windows CI uzerinde paketler
 # 📌 Modul - CI YAML
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Gercek machine-wide install yapmadan per-user/per-machine MSI uretim kapisi
 # Bagimli Oldugu Katman: Config | Tool | CI
 
@@ -13,6 +13,7 @@ on:
     branches: [main]
     paths:
       - 'tools/Invoke-MsiScopeProbe.ps1'
+      - 'tools/Test-MsiPerMachineLifecycle.ps1'
       - 'config/velopack-e2e.psd1'
       - '.github/workflows/windows-msi-scope-probe.yml'
       - 'tests/TurkuazInstaller.Velopack.E2E.Fixture/**'
@@ -61,6 +62,10 @@ jobs:
       - name: Package both MSI installation scopes without installation
         shell: pwsh
         run: ./tools/Invoke-MsiScopeProbe.ps1
+
+      - name: Real LAB ONLY PerMachine Program Files install and uninstall
+        shell: pwsh
+        run: ./tools/Test-MsiPerMachineLifecycle.ps1
 
       - name: Upload MSI probe report only
         uses: actions/upload-artifact@v4
