@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiCatalog.cs
 // 📌 Amac: Varsayilan Language metinleri ile typed UI profile override degerlerini tek resolverda birlestirir
 // 📌 Modul - Language CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Branding ve tum desteklenen kullanici metinlerini tek typed localization katalogundan fallback-guvenli sunar
 //
 // Bagimli Oldugu Katman: Language | View | Service | Config
@@ -40,6 +40,9 @@ public sealed class InstallerUiCatalog
         ResolveBranding(
             _profile.Branding.HeaderSubtitle,
             InstallerUiLabels.HeaderSubtitle);
+
+    public InstallerPromotionProfile Promotion =>
+        _profile.Promotion ?? InstallerPromotionProfile.Default;
 
     public string Footer =>
         ResolveBranding(
