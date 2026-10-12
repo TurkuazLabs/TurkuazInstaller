@@ -12,12 +12,12 @@ Bagimli Oldugu Katman: View | Controller | Language
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:tools="using:TurkuazInstaller.WinUI.Tools">
-    <Window.Resources>
-        <tools:BooleanVisibilityConverter x:Key="PromotionVisibilityConverter" />
-    </Window.Resources>
     <Grid
         x:Name="MainRoot"
         Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.Resources>
+            <tools:BooleanVisibilityConverter x:Key="PromotionVisibilityConverter" />
+        </Grid.Resources>
         <ScrollViewer>
             <Grid
                 Padding="32"
