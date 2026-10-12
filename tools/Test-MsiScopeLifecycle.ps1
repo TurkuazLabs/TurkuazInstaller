@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiScopeLifecycle.ps1
 # 📌 Amac: Gecici Windows CI hostunda her lab MSI scope icin install ve uninstall testlerini tekrar kullanir
 # 📌 Modul - Tool PowerShell
-# Version: 1.2.0
+# Version: 1.3.0
 # Aciklama: Tek parametreli PerUser/PerMachine lifecycle, izole target, gercek install/uninstall ve dosya dogrulama
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -18,8 +18,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-if (-not $IsWindows -or -not $env:GITHUB_ACTIONS -or -not $env:RUNNER_TEMP) {
-    throw "Only disposable GitHub Windows CI hosts are allowed."
+if (-not $IsWindows -or
+    $env:GITHUB_ACTIONS -cne "true" -or
+    $env:RUNNER_ENVIRONMENT -cne "github-hosted" -or
+    [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
+    throw "MSI lab requires a disposable GitHub-hosted Windows runner; self-hosted FURY is forbidden."
 }
 
 $config = Import-PowerShellDataFile -LiteralPath (Resolve-Path -LiteralPath $ConfigPath)
