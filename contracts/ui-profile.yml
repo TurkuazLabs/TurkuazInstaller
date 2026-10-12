@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /contracts/ui-profile.yml
 # 📌 Amac: TurkuazInstaller branding ve localization extension contractini tanimlamak
 # 📌 Modul - YAML
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Local UI profile schema, branding alanlari ve tum kullaniciya gorunen typed label override anahtarlarini sabitler
 # Bagimli Oldugu Katman: Config | Repo | View | Language
 
@@ -24,6 +24,20 @@ branding:
     - header_subtitle
     - footer
   empty_value: fallback_to_builtin
+
+promotion:
+  optional: true
+  defaults: first_party_offline_showcase
+  fields:
+    - enabled
+    - eyebrow
+    - title
+    - description
+    - provider
+  remote_media: disabled
+  external_tracking: disabled
+  external_links: disabled
+  failure_behavior: never_blocks_installer
 
 labels:
   optional: true
