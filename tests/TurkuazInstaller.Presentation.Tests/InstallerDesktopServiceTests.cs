@@ -59,7 +59,11 @@ public sealed class InstallerDesktopServiceTests
     public async Task CustomUserInstall_RejectsUnsafePathBeforeRuntime()
     {
         var model = CreateViewModel();
-        model.TargetPath = Path.GetTempPath();
+        var appData = Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData);
+        model.TargetPath = Path.Combine(
+            Directory.GetParent(Path.GetFullPath(appData))!.FullName,
+            "OutsideAppData", "App");
         var runtime = new StubRuntimeService();
         using var service = new InstallerDesktopService(
             model, runtime, new InstallerResumeLaunchParser());
