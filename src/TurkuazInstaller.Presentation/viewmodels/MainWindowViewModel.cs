@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/viewmodels/MainWindowViewModel.cs
 // 📌 Amac: TurkuazInstaller ana penceresinin bind edilebilir UI state modelini tasir
 // 📌 Modul - ViewModel CSharp
-// Version: 1.5.0
+// Version: 1.6.0
 // Aciklama: Branding, channel, placeholder ve runtime state metinlerini tek typed localization katalogundan fallback-guvenli cozer
 //
 // Bagimli Oldugu Katman: View | Language
@@ -234,6 +234,21 @@ public sealed class MainWindowViewModel
     public string TargetPathPlaceholder =>
         _ui.Resolve(
             InstallerUiLabelKey.TargetPathPlaceholder);
+
+    public bool IsPromotionVisible =>
+        _ui.Promotion.Enabled;
+
+    public string PromotionEyebrow =>
+        _ui.Promotion.Eyebrow;
+
+    public string PromotionTitle =>
+        _ui.Promotion.Title;
+
+    public string PromotionDescription =>
+        _ui.Promotion.Description;
+
+    public string PromotionProvider =>
+        _ui.Promotion.Provider;
 
     public string FooterLabel =>
         _ui.Footer;
