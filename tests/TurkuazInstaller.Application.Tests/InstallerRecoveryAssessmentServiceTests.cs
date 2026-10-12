@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerRecoveryAssessmentServiceTests.cs
 // 📌 Amac: Salt-okunur recovery raporu tum tehlikeli checkpoint ve metadata uyusmazliklarini ayirt eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.1
+// Version: 1.0.2
 // Aciklama: Eski journal, reboot, gecersiz scope, pre-apply ve repository read failure guvenlik testi
 // Bagimli Oldugu Katman: Service | Repo | Model
 
@@ -189,6 +189,19 @@ public sealed class InstallerRecoveryAssessmentServiceTests
 
         Assert.Equal(InstallerRecoveryAssessmentStatus.MetadataConflict, report.Status);
         Assert.True(report.RequiresHumanReview);
+    }
+
+    [Fact]
+    public async Task AssessAsync_NoJournalWithForeignCommittedState_IsMetadataConflict()
+    {
+        var foreign = PackageId.Parse("other-recovery-package");
+        var state = State() with { PackageId = foreign };
+        var report = await Create(null, state).AssessAsync(
+            Package, CancellationToken.None);
+
+        Assert.Equal(InstallerRecoveryAssessmentStatus.MetadataConflict, report.Status);
+        Assert.True(report.RequiresHumanReview);
+        Assert.Null(report.OperationId);
     }
 
     [Fact]
