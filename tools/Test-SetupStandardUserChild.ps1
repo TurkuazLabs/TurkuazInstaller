@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-SetupStandardUserChild.ps1
 # 📌 Amac: Standart Windows hesabi ile Velopack Setup.exe per-user kurulumu ve kaldirmayi dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: MSI'yi reddeden sunucu ilkesinden bagimsiz gercek user-scope Setup kabul testi
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -110,8 +110,8 @@ finally {
 }
 
 $until = [DateTime]::UtcNow.AddSeconds(30)
-while ((Test-Path -LiteralPath (Join-Path $target "current") -or
-    Test-Path -LiteralPath $update) -and [DateTime]::UtcNow -lt $until) {
+while (((Test-Path -LiteralPath (Join-Path $target "current")) -or
+    (Test-Path -LiteralPath $update)) -and [DateTime]::UtcNow -lt $until) {
     Start-Sleep -Milliseconds 300
 }
 if ((Test-Path -LiteralPath $update) -or
