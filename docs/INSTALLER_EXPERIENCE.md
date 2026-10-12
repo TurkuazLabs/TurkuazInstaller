@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -77,6 +77,29 @@ The current release must not expose a fake functional Program Files button.
   rollback, maintenance, shortcuts and uninstall; not implemented yet.
 - Installer remains fast. No artificial wait or video/advertising gating.
 - Prior NSIS installations are not silently replaced.
+
+## Shared Windows MSI scope packaging probe
+
+The optional Windows MSI Scope Packaging Probe builds both `PerUser` and
+`PerMachine` MSI installers from one controlled .NET fixture using the same
+pinned `vpk 1.2.161` configuration as the existing Velopack E2E.
+
+It verifies that MSI artifacts are nonempty OLE compound-file packages and
+records their SHA-256 values. It deliberately does **not** execute either
+MSI, request administrator rights, change the registry, or publish any
+unsigned machine-wide executable. Only the textual test report is retained
+as a short-lived GitHub artifact.
+
+This test does not prove that the *MSI install scope property* or Windows
+Installer elevation and rollback work; those still require separate
+Windows 10/11 virtual machine scenarios. Do not enable PerMachine until
+installer lifecycle callbacks, maintenance ownership, HKLM and Windows
+integration policy have been verified.
+
+Velopack issue https://github.com/velopack/velopack/issues/1040 documents
+a known risk with per-machine lifecycle hook impersonation for the
+`Either` MSI scope. Avoid silent escalation, and keep the actual
+system-wide MSI execution in a separately reviewed privileged Tool adapter.
 
 ## Release and acceptance gates
 
