@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 1.6.0
+# Version: 1.7.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -131,10 +131,14 @@ The next LAB gate uses **two independent non-admin accounts** and one shared
 Velopack fixture. A and B each install into their own SID-resolved
 LocalAppData folder and write an isolated user-data marker. After A
 uninstalls, B must still have its application/version and an unchanged
-private data marker; then B uninstalls without destroying its separate
-user data. Both account SIDs must differ and no child may inherit the
-GitHub runner administrator profile. A failed phase fails the job; the
-tool attempts cleanup in a finally block.
+private data marker. A's user data must also survive A's uninstall.
+A then reinstalls into the same user's AppData target while B remains
+installed; A's data marker must keep its contents, and B's installation
+and data must remain unchanged throughout the reinstall. Finally, both
+accounts uninstall, and each account's separate data marker must survive.
+Both account SIDs must differ and no child may inherit the GitHub runner
+administrator profile. A failed phase fails the job; the tool attempts
+cleanup in a finally block.
 
 This is automated as `tools/Test-VelopackMultiUserChild.ps1`, orchestrated
 by `tools/Test-MsiStandardUser.ps1`, with a shared Velopack process
