@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -104,10 +104,24 @@ extra test skipped; there is no system-wide install or antivirus bypass.
 If the hosted check succeeds, its log contains
 `TURKUAZ_INSTALLER_REAL_PROCESS_KILL_APPLY_CHECKPOINT_HOLD_OK`.
 
-**Precise limitation:** the killed process is the .NET workflow process
-after the journal checkpoint, **before** `Update.exe` performs disk
-mutation. The earlier simulated file-mutation regression covers the
-disk-V2/state-V1 divergence. Killing a real updater *during* active
-file replacement and proving trusted reconciliation/automatic rollback
-are still outstanding, higher-risk acceptance gates. Neither type of
-test authorizes production machine-wide recovery.
+Two independently isolated windows-hosted scenarios now exercise the
+same recovery gate. The original scenario terminates the child **before**
+`Update.exe` starts and requires V1 on disk and V1 in the committed JSON.
+The second scenario invokes the **real Velopack `Update.exe`**, waits for
+successful exit and verifies the V2 version marker, then parks the workflow
+**before committing the new installed-state JSON** and terminates the real
+child process. Recovery must observe **disk V2 / committed JSON V1**,
+a durable orphaned `Applying` record, unchanged user data, and blocked
+update/uninstall requests. The two independent fixtures are removed only
+on the disposable GitHub-hosted Windows worker.
+
+Expected log markers:
+- `TURKUAZ_INSTALLER_REAL_PROCESS_KILL_APPLY_CHECKPOINT_HOLD_OK`
+- `TURKUAZ_INSTALLER_REAL_POST_UPDATER_KILL_DISK_STATE_DIVERGENCE_HOLD_OK`
+
+**Precise limitation:** this does not kill `Update.exe` *while* it writes
+files. The process terminated after the actual updater returned, but before
+the workflow committed new state. A real updater killed in the middle of
+a file replacement, signed artifact recovery, and trusted automatic
+reconciliation/rollback are still outstanding acceptance gates. Neither
+case authorizes production machine-wide recovery.
