@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiStandardUserChild.ps1
 # 📌 Amac: Gecici CI standard-user oturumunda gercek PerUser MSI install ve uninstall smoke
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Admin olmayan Windows tokeni ve kullaniciya ozgu MSI kaydini fail-closed dogrular
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -65,9 +65,13 @@ function Invoke-UserMsi {
             $null = $process.WaitForExit(5000)
             throw "Standard-user MSI $Action timed out."
         }
+        if ($process.ExitCode -eq 1625 -and $Action -ceq "install") {
+            return 1625
+        }
         if ($process.ExitCode -ne 0) {
             throw "Standard-user MSI $Action returned $($process.ExitCode)."
         }
+        return 0
     }
     finally {
         $process.Dispose()
@@ -108,7 +112,15 @@ function Get-UserMsiAssignment {
 $installed = $false
 $passed = $false
 try {
-    Invoke-UserMsi -Action install -LogPath $installerLog
+    $installExit = Invoke-UserMsi -Action install -LogPath $installerLog
+    if ($installExit -eq 1625) {
+        if (Test-Path -LiteralPath (Join-Path $target "Update.exe") -PathType Leaf) {
+            throw "Policy-blocked MSI nevertheless installed Update.exe."
+        }
+        [System.IO.File]::WriteAllText(
+            $ReportPath, "INSTALLER_MSI_NONADMIN_POLICY_BLOCK_1625")
+        exit 0
+    }
     $installed = $true
 
     $app = Join-Path $target "current/$($config.MainExecutable)"
