@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/viewmodels/MainWindowViewModel.cs
 // 📌 Amac: TurkuazInstaller ana penceresinin bind edilebilir UI state modelini tasir
 // 📌 Modul - ViewModel CSharp
-// Version: 1.6.0
+// Version: 1.7.0
 // Aciklama: Branding, channel, placeholder ve runtime state metinlerini tek typed localization katalogundan fallback-guvenli cozer
 //
 // Bagimli Oldugu Katman: View | Language
@@ -9,6 +9,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using TurkuazInstaller.Contracts.Branding;
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Presentation.Language;
 
 namespace TurkuazInstaller.Presentation.ViewModels;
@@ -52,6 +53,8 @@ public sealed class MainWindowViewModel
     private string _rollbackManifestSource = string.Empty;
     private string _targetPath = string.Empty;
     private int _selectedChannelIndex;
+    private InstallerInstallMode _selectedInstallMode = InstallerInstallMode.Quick;
+    private InstallerInstallScope _selectedInstallScope = InstallerInstallScope.PerUser;
     private int _progressValue;
     private string _statusMessage;
     private string _errorMessage = string.Empty;
@@ -249,6 +252,71 @@ public sealed class MainWindowViewModel
 
     public string PromotionProvider =>
         _ui.Promotion.Provider ?? string.Empty;
+
+    public string InstallOptionsTitle =>
+        _ui.Resolve(InstallerUiLabelKey.InstallOptionsTitle);
+
+    public string InstallOptionsDescription =>
+        _ui.Resolve(InstallerUiLabelKey.InstallOptionsDescription);
+
+    public string InstallModeHeader =>
+        _ui.Resolve(InstallerUiLabelKey.InstallModeHeader);
+
+    public string InstallScopeHeader =>
+        _ui.Resolve(InstallerUiLabelKey.InstallScopeHeader);
+
+    public string QuickInstallLabel =>
+        _ui.Resolve(InstallerUiLabelKey.QuickInstall);
+
+    public string CustomInstallLabel =>
+        _ui.Resolve(InstallerUiLabelKey.CustomInstall);
+
+    public string PerUserInstallLabel =>
+        _ui.Resolve(InstallerUiLabelKey.PerUserInstall);
+
+    public string PerMachineUnavailableLabel =>
+        _ui.Resolve(InstallerUiLabelKey.PerMachineUnavailable);
+
+    public string CustomTargetHeader =>
+        _ui.Resolve(InstallerUiLabelKey.CustomTargetHeader);
+
+    public InstallerInstallMode SelectedInstallMode => _selectedInstallMode;
+
+    public InstallerInstallScope SelectedInstallScope => _selectedInstallScope;
+
+    public bool IsCustomInstall =>
+        SelectedInstallMode == InstallerInstallMode.Custom;
+
+    public int SelectedInstallModeIndex
+    {
+        get => (int)_selectedInstallMode;
+        set
+        {
+            if (!Enum.IsDefined((InstallerInstallMode)value))
+            {
+                return;
+            }
+
+            if (SetProperty(ref _selectedInstallMode, (InstallerInstallMode)value))
+            {
+                OnPropertyChanged(nameof(IsCustomInstall));
+            }
+        }
+    }
+
+    public int SelectedInstallScopeIndex
+    {
+        get => (int)_selectedInstallScope;
+        set
+        {
+            if (!Enum.IsDefined((InstallerInstallScope)value))
+            {
+                return;
+            }
+
+            SetProperty(ref _selectedInstallScope, (InstallerInstallScope)value);
+        }
+    }
 
     public string FooterLabel =>
         _ui.Footer;
