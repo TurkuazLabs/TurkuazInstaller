@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 2.5.0
+// Version: 1.7.0
 // Aciklama: Optional staged update gate'i download oncesi ve pre-apply asamasinda fail-closed kontrol eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -610,6 +610,24 @@ public sealed class InstallerWorkflowService
                     cancellationToken)
                 .ConfigureAwait(false);
 
+        // An earlier process may have died after updating the files but
+        // before committing the installed version. Never overwrite the
+        // crash journal or apply another package until manual reconciliation.
+        if (resumeEntry is null && _operationJournal is not null)
+        {
+            var previous = await _operationJournal
+                .GetAsync(packageId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (previous is not null && RequiresExplicitRecovery(previous))
+            {
+                throw new InstallerRecoveryRequiredException(
+                    packageId,
+                    previous.Phase,
+                    previous.InterruptedPhase);
+            }
+        }
+
         var context =
             resumeEntry is null
                 ? await InstallerOperationContext
@@ -664,6 +682,40 @@ public sealed class InstallerWorkflowService
 
             throw;
         }
+    }
+
+    private static bool RequiresExplicitRecovery(
+        InstallerOperationJournalEntry entry)
+    {
+        if (IsPotentialMutationPhase(entry.Phase) ||
+            entry.Phase is InstallerOperationPhase.AwaitingReboot or
+                InstallerOperationPhase.RebootResumeArmed)
+        {
+            return true;
+        }
+
+        if (entry.Phase is not
+            (InstallerOperationPhase.Failed or InstallerOperationPhase.Cancelled))
+        {
+            return false;
+        }
+
+        // Old journal documents have no interrupted checkpoint. They are
+        // intentionally held rather than guessing whether apply began.
+        return entry.InterruptedPhase is null ||
+            IsPotentialMutationPhase(entry.InterruptedPhase.Value) ||
+            entry.InterruptedPhase is InstallerOperationPhase.AwaitingReboot or
+                InstallerOperationPhase.RebootResumeArmed;
+    }
+
+    private static bool IsPotentialMutationPhase(
+        InstallerOperationPhase phase)
+    {
+        return phase is
+            InstallerOperationPhase.Applying or
+            InstallerOperationPhase.ApplyingIntegrations or
+            InstallerOperationPhase.SavingState or
+            InstallerOperationPhase.RemovingState;
     }
 
     private async Task<InstallerOperationContext> ResumeOperationContextAsync(
