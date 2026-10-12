@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/Test-MsiScopeLifecycle.ps1
 # 📌 Amac: Gecici Windows CI hostunda her lab MSI scope icin install ve uninstall testlerini tekrar kullanir
 # 📌 Modul - Tool PowerShell
-# Version: 1.4.0
-# Aciklama: LAB MSI kurulum, kapsam, eksik dosyayi onarma ve kaldirma dogrulamasi tek scope araci uzerinden
+# Version: 1.5.0
+# Aciklama: LAB MSI kurulum, bozuk paket reddi, onarma, sahiplik ve kullanici verisi izolasyonu kontrolu
 # Bagimli Oldugu Katman: Tool | Config | CI
 
 [CmdletBinding()]
@@ -145,7 +145,8 @@ function Invoke-MsiChecked {
     param(
         [string[]]$Arguments,
         [string]$Operation,
-        [string]$LogPath
+        [string]$LogPath,
+        [int[]]$ExpectedErrorCodes = @()
     )
 
     $info = [System.Diagnostics.ProcessStartInfo]::new()
@@ -187,6 +188,14 @@ function Invoke-MsiChecked {
             $process.WaitForExit(5000) | Out-Null
             Write-LabMsiLogTail -LogPath $LogPath -Operation $Operation
             throw "MSI $Operation timeout"
+        }
+        if ($ExpectedErrorCodes.Count -gt 0) {
+            if ($process.ExitCode -notin $ExpectedErrorCodes) {
+                Write-LabMsiLogTail -LogPath $LogPath -Operation $Operation
+                throw "MSI $Operation expected one of $($ExpectedErrorCodes -join ', '), actual exit=$($process.ExitCode)"
+            }
+            Write-Host "INSTALLER_MSI_REJECTED_INVALID_PACKAGE_OK $Operation code=$($process.ExitCode)"
+            return
         }
         if ($process.ExitCode -ne 0) {
             Write-LabMsiLogTail -LogPath $LogPath -Operation $Operation
@@ -254,6 +263,33 @@ try {
         throw "$Scope MSI repair changed the installed user/machine assignment."
     }
     Write-Host "INSTALLER_MSI_SCOPE_REPAIR_OK $Scope assignment=$repairAssignment"
+
+    # A broken package must not mutate a previously installed LAB product.
+    # This tests MSI packaging failure handling, NOT signature verification,
+    # transaction rollback, or signed manifest enforcement.
+    $fixtureBefore = (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash
+    $updaterBefore = (Get-FileHash -LiteralPath $updater -Algorithm SHA256).Hash
+    $invalidPackage = Join-Path $logDirectory "invalid-payload.msi"
+    [IO.File]::WriteAllBytes($invalidPackage, [byte[]]::new(512))
+    Invoke-MsiChecked -Operation "invalid-update" -LogPath (Join-Path $logDirectory "invalid-update.log") -Arguments @(
+        "/i", $invalidPackage, "/qn", "/norestart"
+    ) -ExpectedErrorCodes @(1619, 1620)
+
+    if (-not (Test-Path -LiteralPath $fixture -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $updater -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $marker -PathType Leaf)) {
+        throw "$Scope invalid MSI unexpectedly removed installed product files."
+    }
+    if ((Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash -cne $fixtureBefore -or
+        (Get-FileHash -LiteralPath $updater -Algorithm SHA256).Hash -cne $updaterBefore -or
+        [IO.File]::ReadAllText($marker).Trim() -cne $config.VersionOne) {
+        throw "$Scope invalid MSI unexpectedly changed installed product content."
+    }
+    $assignmentAfterFailure = Get-LabInstalledAssignmentType -ProductCode $productCode
+    if ($assignmentAfterFailure -cne [string]$scopeProfile.MsiAssignmentType) {
+        throw "$Scope invalid MSI changed the installed assignment scope."
+    }
+    Write-Host "INSTALLER_MSI_INVALID_PACKAGE_PRESERVES_INSTALL_OK $Scope"
 }
 finally {
     try {
