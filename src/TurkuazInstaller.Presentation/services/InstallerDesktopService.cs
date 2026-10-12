@@ -165,12 +165,13 @@ public sealed class InstallerDesktopService
             return;
         }
 
-        await RunAsync(InstallerOperationKind.Install)
+        await RunAsync(InstallerOperationKind.Install, scope)
             .ConfigureAwait(true);
     }
 
     public async Task RunAsync(
-        InstallerOperationKind operation)
+        InstallerOperationKind operation,
+        InstallerInstallScope? installScope = null)
     {
         if (
             _viewModel.IsBusy ||
@@ -186,7 +187,8 @@ public sealed class InstallerDesktopService
         {
             request =
                 CreateRequest(
-                    operation);
+                    operation,
+                    installScope);
         }
         catch (Exception exception)
         {
@@ -326,7 +328,8 @@ public sealed class InstallerDesktopService
     }
 
     private InstallerDesktopRequest CreateRequest(
-        InstallerOperationKind operation)
+        InstallerOperationKind operation,
+        InstallerInstallScope? installScope = null)
     {
         if (
             string.IsNullOrWhiteSpace(
@@ -368,7 +371,8 @@ public sealed class InstallerDesktopService
                 _viewModel.RollbackManifestSource)
                 ? null
                 : _viewModel.RollbackManifestSource.Trim(),
-            _viewModel.TargetPath.Trim());
+            _viewModel.TargetPath.Trim(),
+            installScope);
     }
 
     private async Task ExecuteRequestAsync(
