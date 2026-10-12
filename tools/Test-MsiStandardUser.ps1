@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/Test-MsiStandardUser.ps1
 # 📌 Amac: Gecici GitHub Windows ortaminda admin olmayan ayri hesapla PerUser MSI testini calistirir
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.2
-# Aciklama: Tek kullanimlik standard user, erisim izinleri, smoke testi ve guvenli cleanup
+# Version: 1.1.0
+# Aciklama: Standard user MSI policy sonucu ve Velopack Setup lifecycle testi, tek hesaptan ve cleanup ile
 # Bagimli Oldugu Katman: Tool | Config | CI
 
 [CmdletBinding()]
@@ -38,6 +38,10 @@ $package = @(Get-ChildItem -LiteralPath (Join-Path $root "PerUser") -Filter "*.m
 if ($package.Count -ne 1) {
     throw "Standard-user lab requires exactly one PerUser MSI."
 }
+$setupFiles = @(Get-ChildItem -LiteralPath (Join-Path $root "PerUser") -Filter "*Setup.exe" -File)
+if ($setupFiles.Count -ne 1) {
+    throw "Standard-user lab requires exactly one PerUser Setup.exe."
+}
 
 $nonce = [guid]::NewGuid().ToString("N")
 $name = "timsilab" + $nonce.Substring(0, 8)
@@ -61,11 +65,16 @@ try {
 
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
     $child = Join-Path $stage "Test-MsiStandardUserChild.ps1"
+    $setupChild = Join-Path $stage "Test-SetupStandardUserChild.ps1"
     $childMsi = Join-Path $stage "lab-peruser.msi"
+    $setupExe = Join-Path $stage "lab-peruser-Setup.exe"
     $childConfig = Join-Path $stage "velopack-e2e.psd1"
-    $report = Join-Path $stage "result.txt"
+    $msiReport = Join-Path $stage "msi-result.txt"
+    $setupReport = Join-Path $stage "setup-result.txt"
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Test-MsiStandardUserChild.ps1") -Destination $child -Force
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Test-SetupStandardUserChild.ps1") -Destination $setupChild -Force
     Copy-Item -LiteralPath $package[0].FullName -Destination $childMsi -Force
+    Copy-Item -LiteralPath $setupFiles[0].FullName -Destination $setupExe -Force
     Copy-Item -LiteralPath (Resolve-Path -LiteralPath $ConfigPath).Path -Destination $childConfig -Force
 
     & icacls.exe $stage /grant "*$($sid):(OI)(CI)M" /T | Out-Null
@@ -76,53 +85,77 @@ try {
     $identity = "$env:COMPUTERNAME\$name"
     $credential = [System.Management.Automation.PSCredential]::new($identity, $password)
     $shell = (Get-Command pwsh.exe -ErrorAction Stop).Source
-    $args = '-NoProfile -NonInteractive -File "' + $child + '"' +
-        ' -PackagePath "' + $childMsi + '"' +
-        ' -ConfigPath "' + $childConfig + '"' +
-        ' -ReportPath "' + $report + '"' +
-        ' -ExpectedSid "' + $sid + '"'
+    function Invoke-NonAdminLabChild {
+        param(
+            [string]$ScriptFile,
+            [string]$InstallerFile,
+            [string]$OutputReport,
+            [string]$Label
+        )
 
-    Write-Host "INSTALLER_MSI_NONADMIN_STARTED"
-    $childOut = Join-Path $stage "child-stdout.txt"
-    $childErr = Join-Path $stage "child-stderr.txt"
-    $launch = @{
-        FilePath = $shell
-        Credential = $credential
-        WorkingDirectory = $stage
-        ArgumentList = $args
-        PassThru = $true
-        RedirectStandardOutput = $childOut
-        RedirectStandardError = $childErr
-        ErrorAction = "Stop"
-    }
-    $process = Start-Process @launch
-    try {
-        if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-            $process.Kill($true)
-            $null = $process.WaitForExit(5000)
-            throw "Standard-user MSI process timed out."
+        $childArgs = '-NoProfile -NonInteractive -File "' + $ScriptFile + '"' +
+            ' -PackagePath "' + $InstallerFile + '"' +
+            ' -ConfigPath "' + $childConfig + '"' +
+            ' -ReportPath "' + $OutputReport + '"' +
+            ' -ExpectedSid "' + $sid + '"'
+        $childOut = Join-Path $stage "$Label-stdout.txt"
+        $childErr = Join-Path $stage "$Label-stderr.txt"
+        $launch = @{
+            FilePath = $shell
+            Credential = $credential
+            WorkingDirectory = $stage
+            ArgumentList = $childArgs
+            PassThru = $true
+            RedirectStandardOutput = $childOut
+            RedirectStandardError = $childErr
+            ErrorAction = "Stop"
         }
-        if ($process.ExitCode -ne 0) {
-            if (Test-Path -LiteralPath $childErr -PathType Leaf) {
-                Get-Content -LiteralPath $childErr -Tail 28 | ForEach-Object { Write-Host "NONADMIN_ERROR: $_" }
+        Write-Host "INSTALLER_NONADMIN_LAB_START $Label"
+        $process = Start-Process @launch
+        try {
+            if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+                $process.Kill($true)
+                $null = $process.WaitForExit(5000)
+                throw "$Label standard-user process timed out."
             }
-            $installLog = Join-Path $stage "standard-install.log"
-            if (Test-Path -LiteralPath $installLog -PathType Leaf) {
-                Get-Content -LiteralPath $installLog -Tail 28 | ForEach-Object { Write-Host "NONADMIN_MSI_LOG: $_" }
+            if ($process.ExitCode -ne 0) {
+                if (Test-Path -LiteralPath $childErr -PathType Leaf) {
+                    Get-Content -LiteralPath $childErr -Tail 30 |
+                        ForEach-Object { Write-Host "NONADMIN_ERROR: $_" }
+                }
+                $installLog = Join-Path $stage "standard-install.log"
+                if (Test-Path -LiteralPath $installLog -PathType Leaf) {
+                    Get-Content -LiteralPath $installLog -Tail 28 |
+                        ForEach-Object { Write-Host "NONADMIN_MSI_LOG: $_" }
+                }
+                throw "$Label standard-user process failed exit=$($process.ExitCode)."
             }
-            throw "Standard-user MSI process failed with exit=$($process.ExitCode)."
         }
-    }
-    finally {
-        $process.Dispose()
+        finally {
+            $process.Dispose()
+        }
+        if (-not (Test-Path -LiteralPath $OutputReport -PathType Leaf)) {
+            throw "$Label standard-user report was not written."
+        }
+        return (Get-Content -LiteralPath $OutputReport -Raw).Trim()
     }
 
-    if (-not (Test-Path -LiteralPath $report -PathType Leaf) -or
-        (Get-Content -LiteralPath $report -Raw).Trim() -cne
-            "INSTALLER_MSI_NONADMIN_PERUSER_LIFECYCLE_OK") {
-        throw "Standard-user MSI child did not produce a passing report."
+    $msiResult = Invoke-NonAdminLabChild -ScriptFile $child -InstallerFile $childMsi -OutputReport $msiReport -Label "MSI"
+    if ($msiResult -ceq "INSTALLER_MSI_NONADMIN_POLICY_BLOCK_1625") {
+        Write-Host "INSTALLER_MSI_NONADMIN_POLICY_BLOCK_1625"
     }
-    Write-Host "INSTALLER_MSI_NONADMIN_PERUSER_LIFECYCLE_OK"
+    elseif ($msiResult -ceq "INSTALLER_MSI_NONADMIN_PERUSER_LIFECYCLE_OK") {
+        Write-Host "INSTALLER_MSI_NONADMIN_PERUSER_LIFECYCLE_OK"
+    }
+    else {
+        throw "Unexpected standard-user MSI outcome."
+    }
+
+    $setupResult = Invoke-NonAdminLabChild -ScriptFile $setupChild -InstallerFile $setupExe -OutputReport $setupReport -Label "Setup"
+    if ($setupResult -cne "INSTALLER_SETUP_NONADMIN_PERUSER_LIFECYCLE_OK") {
+        throw "Non-admin user-scope Setup did not pass."
+    }
+    Write-Host "INSTALLER_SETUP_NONADMIN_PERUSER_LIFECYCLE_OK"
 }
 finally {
     if ($accountCreated) {
