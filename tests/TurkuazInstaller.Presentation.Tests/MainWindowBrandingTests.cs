@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/MainWindowBrandingTests.cs
 // 📌 Amac: MainWindowViewModel branding/localization override ve fallback davranisini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Branding, channel, placeholder ve runtime initial state override davranisini built-in fallback ile birlikte dogrular
 //
 // Bagimli Oldugu Katman: View | Language | Config
@@ -15,6 +15,27 @@ namespace TurkuazInstaller.Presentation.Tests;
 
 public sealed class MainWindowBrandingTests
 {
+    [Fact]
+    public void Promotion_UsesSharedDefaultWithoutPerProductUi()
+    {
+        var model = new MainWindowViewModel(InstallerUiProfile.Empty);
+        Assert.True(model.IsPromotionVisible);
+        Assert.Equal("TurkuazLabs Community", model.PromotionProvider);
+    }
+
+    [Fact]
+    public void Promotion_CanBeOverriddenAndDisabled()
+    {
+        var model = new MainWindowViewModel(
+            new InstallerUiProfile(
+                null,
+                InstallerBrandingProfile.Empty,
+                new Dictionary<InstallerUiLabelKey, string>(),
+                new InstallerPromotionProfile(false, "BRAND", "Pro", "Test", "Company")));
+        Assert.False(model.IsPromotionVisible);
+        Assert.Equal("Pro", model.PromotionTitle);
+    }
+
     [Fact]
     public void Constructor_AppliesOverridesAndPreservesFallbacks()
     {
