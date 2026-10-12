@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/InstallerPersistedRecoverySafetyTests.cs
 // 📌 Amac: Farkli service instance'larinda gercek JSON journal ve dosya durumu uzerinden crash safety hold test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
+// Version: 1.1.0
 // Aciklama: Apply sonrasi fake crash, committed state/disk uyusmazligi ve ikinci islemde fail-closed
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -82,6 +82,30 @@ public sealed class InstallerPersistedRecoverySafetyTests
                 new JsonInstallStateRepositoryOptions(stateDirectory));
             var restartedJournal = new JsonOperationJournalRepository(
                 new JsonOperationJournalRepositoryOptions(journalDirectory));
+            // Assessment is purely observational. Inspect the actual JSON
+            // bytes before and after it reads the persisted crash evidence.
+            var stateDocument = Directory.GetFiles(stateDirectory, "*.json").Single();
+            var journalDocument = Directory.GetFiles(journalDirectory, "*.json").Single();
+            var stateBytesBefore = await File.ReadAllBytesAsync(stateDocument);
+            var journalBytesBefore = await File.ReadAllBytesAsync(journalDocument);
+            var assessment = await new InstallerRecoveryAssessmentService(
+                restartedState, restartedJournal).AssessAsync(
+                    packageId, CancellationToken.None);
+
+            Assert.Equal(
+                InstallerRecoveryAssessmentStatus.RecoveryRequired, assessment.Status);
+            Assert.True(assessment.RequiresHumanReview);
+            Assert.Equal(operationId, assessment.OperationId);
+            Assert.Equal(InstallerOperationPhase.Failed, assessment.JournalPhase);
+            Assert.Equal(InstallerOperationPhase.Applying, assessment.InterruptedPhase);
+            Assert.Equal(InstalledVersion, assessment.CommittedVersion);
+            Assert.Equal(PendingVersion, assessment.RequestedVersion);
+            Assert.Equal(stateBytesBefore, await File.ReadAllBytesAsync(stateDocument));
+            Assert.Equal(journalBytesBefore, await File.ReadAllBytesAsync(journalDocument));
+            Assert.Equal(PendingVersion, await File.ReadAllTextAsync(marker));
+            Assert.Equal("USER_PREFERENCES_MUST_SURVIVE",
+                await File.ReadAllTextAsync(userData));
+
             var retryEngine = new FileMarkerPackageEngine(marker);
             var secondService = CreateService(
                 retryEngine, restartedState, restartedJournal);
