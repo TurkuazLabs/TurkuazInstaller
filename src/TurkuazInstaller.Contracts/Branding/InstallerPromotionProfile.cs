@@ -9,17 +9,12 @@
 namespace TurkuazInstaller.Contracts.Branding;
 
 public sealed record InstallerPromotionProfile(
-    bool Enabled,
-    string Eyebrow,
-    string Title,
-    string Description,
-    string Provider)
+    bool? Enabled,
+    string? Eyebrow,
+    string? Title,
+    string? Description,
+    string? Provider)
 {
-    public static InstallerPromotionProfile Default { get; } =
-        new(
-            true,
-            "TURKUAZ EKOSISTEMI",
-            "Daha fazlasini birlikte uretin",
-            "Turkuaz Office, UniZip ve acik kaynak araclarimizi kesfedin.",
-            "TurkuazLabs Community");
+    public static InstallerPromotionProfile Empty { get; } =
+        new(null, null, null, null, null);
 }
