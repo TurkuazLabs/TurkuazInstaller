@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-SetupStandardUserChild.ps1
 # 📌 Amac: Standart Windows hesabi ile Velopack Setup.exe per-user kurulumu ve kaldirmayi dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.2
+# Version: 1.1.0
 # Aciklama: MSI'yi reddeden sunucu ilkesinden bagimsiz gercek user-scope Setup kabul testi
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -23,7 +23,8 @@ if (-not $IsWindows -or $identity.User.Value -cne $ExpectedSid -or
 }
 
 $config = Import-PowerShellDataFile -LiteralPath $ConfigPath
-$userRoot = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+. (Join-Path $PSScriptRoot "Initialize-MsiLabStandardUserProfile.ps1")
+$userRoot = Initialize-MsiLabStandardUserProfile -ExpectedSid $ExpectedSid
 if ([string]::IsNullOrWhiteSpace($userRoot)) {
     throw "Windows standard-user LocalAppData not initialized."
 }
