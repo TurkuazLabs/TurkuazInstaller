@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 1.4.0
+# Version: 1.5.0
 # Aciklama: Kurulu uygulama katalogu, read-only update discovery, installer operations, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
@@ -414,5 +414,45 @@ Bagimli Oldugu Katman: View | Controller | Language
                     Opacity="0.55" />
             </Grid>
         </ScrollViewer>
+
+        <!-- One shared installer dialog for every product; mutations remain in Service. -->
+        <ContentDialog
+            x:Name="InstallChoiceDialog"
+            Title="{Binding InstallOptionsTitle}"
+            PrimaryButtonText="{Binding InstallLabel}"
+            CloseButtonText="{Binding CancelLabel}"
+            DefaultButton="Primary">
+            <StackPanel Spacing="18" MinWidth="440" MaxWidth="540">
+                <TextBlock
+                    Text="{Binding InstallOptionsDescription}"
+                    TextWrapping="Wrap"
+                    Opacity="0.74" />
+
+                <RadioButtons
+                    Header="{Binding InstallModeHeader}"
+                    SelectedIndex="{Binding SelectedInstallModeIndex, Mode=TwoWay}">
+                    <RadioButton Content="{Binding QuickInstallLabel}" />
+                    <RadioButton Content="{Binding CustomInstallLabel}" />
+                </RadioButtons>
+
+                <RadioButtons
+                    Header="{Binding InstallScopeHeader}"
+                    SelectedIndex="{Binding SelectedInstallScopeIndex, Mode=TwoWay}">
+                    <RadioButton Content="{Binding PerUserInstallLabel}" />
+                    <RadioButton
+                        Content="{Binding PerMachineUnavailableLabel}"
+                        IsEnabled="False" />
+                </RadioButtons>
+
+                <StackPanel
+                    Spacing="6"
+                    Visibility="{Binding IsCustomInstall, Converter={StaticResource PromotionVisibilityConverter}}">
+                    <TextBlock Text="{Binding CustomTargetHeader}" />
+                    <TextBox
+                        Text="{Binding TargetPath, Mode=TwoWay}"
+                        PlaceholderText="{Binding CustomTargetHeader}" />
+                </StackPanel>
+            </StackPanel>
+        </ContentDialog>
     </Grid>
 </Window>
