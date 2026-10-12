@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.4.2
+// Version: 1.5.0
 // Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
@@ -9,6 +9,7 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using TurkuazInstaller.Presentation.Controllers;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
@@ -20,6 +21,7 @@ namespace TurkuazInstaller.WinUI.Views;
 public sealed partial class MainWindow : Window
 {
     private readonly MainWindowController _controller;
+    private readonly MainWindowViewModel _viewModel;
     private readonly InstallerDesktopService _desktopService;
     private readonly IReadOnlyList<string> _startupArguments;
     private DispatcherQueueTimer? _backgroundUpdateTimer;
@@ -39,6 +41,7 @@ public sealed partial class MainWindow : Window
             startupArguments);
 
         _controller = controller;
+        _viewModel = viewModel;
         _desktopService = desktopService;
         _startupArguments =
             Array.AsReadOnly(
@@ -156,8 +159,21 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        await _controller
-            .InstallAsync()
+        if (!_viewModel.CanRun)
+        {
+            return;
+        }
+
+        InstallChoiceDialog.XamlRoot = MainRoot.XamlRoot;
+        var result = await InstallChoiceDialog.ShowAsync();
+        if (result != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        await _controller.InstallWithChoicesAsync(
+                _viewModel.SelectedInstallMode,
+                _viewModel.SelectedInstallScope)
             .ConfigureAwait(true);
     }
 
