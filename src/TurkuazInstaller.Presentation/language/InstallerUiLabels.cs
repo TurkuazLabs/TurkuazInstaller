@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiLabels.cs
 // 📌 Amac: TurkuazInstaller masaustu arayuzundeki kullanici metinlerini merkezi Language katmaninda tanimlar
 // 📌 Modul - Language CSharp
-// Version: 1.5.0
+// Version: 1.6.0
 // Aciklama: Install/update/recovery metinlerine ek olarak katalog, discovery, background update ve version skip/pinning UX metinlerini tutar
 //
 // Bagimli Oldugu Katman: Language
@@ -10,6 +10,11 @@ namespace TurkuazInstaller.Presentation.Language;
 
 public static class InstallerUiLabels
 {
+    public const string PromotionEyebrow = "TURKUAZ EKOSISTEMI";
+    public const string PromotionTitle = "Daha fazlasini birlikte uretin";
+    public const string PromotionDescription = "Turkuaz Office, UniZip ve topluluk araclarimizi kesfedin.";
+    public const string PromotionProvider = "TurkuazLabs Community";
+
     public const string WindowTitle = "TurkuazInstaller";
     public const string HeaderTitle = "Turkuaz Installer";
     public const string HeaderSubtitle =
