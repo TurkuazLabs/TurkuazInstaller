@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 2.6.0
+// Version: 2.7.0
 // Aciklama: Optional staged update gate'i download oncesi ve pre-apply asamasinda fail-closed kontrol eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -625,6 +625,28 @@ public sealed class InstallerWorkflowService
                     packageId,
                     previous.Phase,
                     previous.InterruptedPhase);
+            }
+        }
+
+        // Resume callers must not be able to replace an orphaned Applying
+        // journal by supplying a fabricated reboot-safe checkpoint. Only
+        // the *same durable* operation may continue under this package lock.
+        if (resumeEntry is not null)
+        {
+            if (_operationJournal is null)
+            {
+                throw new InvalidOperationException(
+                    "Reboot resume requires a durable operation journal.");
+            }
+
+            var persisted = await _operationJournal
+                .GetAsync(packageId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (persisted is null || !Equals(persisted, resumeEntry))
+            {
+                throw new InvalidOperationException(
+                    "Reboot resume request does not match the persisted operation journal.");
             }
         }
 
