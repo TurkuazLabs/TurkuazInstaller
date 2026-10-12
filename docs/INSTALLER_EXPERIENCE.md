@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 1.4.0
+# Version: 1.5.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -115,9 +115,23 @@ Both installed product versions were then successfully uninstalled.
 This closes the LAB *packaging + basic install/uninstall + registry context*
 gate, **not** the production system-wide installer acceptance gate.
 
-This test does not yet prove a trusted production MSI install, standard-user
-interactive UAC, all-users registry/shortcut ownership, or update/repair/
-rollback. Those require separate Windows 10/11 isolated-machine scenarios.
+Additional [non-admin CI #38234536955](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/38234536955)
+created a temporary real standard Windows user account. On the GitHub-hosted
+Windows Server environment, this user's PerUser MSI attempt was **blocked
+by Windows Installer policy 1625** ("non-assigned apps are disabled for
+non-admin users"). The test did not weaken or modify this policy.
+
+The same non-admin account **successfully installed and uninstalled**
+the Velopack PerUser `Setup.exe`. The tests now load the local account's
+profile, resolve its AppData from the authenticated Windows SID, and
+reject inherited `runneradmin` paths; a prior test failure demonstrated
+why explicit profile isolation is required.
+
+This establishes PerUser Velopack one-click install/uninstall on a
+non-admin CI account. It does **not** establish PerUser MSI under restrictive
+Windows Server policy, nor interactive UAC accept/deny, actual Windows 10/11
+desktop onboarding, trusted signed production MSI, all-users ownership,
+or update/repair/rollback. Those remain separate acceptance scenarios.
 Do not enable PerMachine until
 installer lifecycle callbacks, maintenance ownership, HKLM and Windows
 integration policy have been verified.
