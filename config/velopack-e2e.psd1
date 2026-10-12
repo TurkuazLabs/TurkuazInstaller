@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /config/velopack-e2e.psd1
 # 📌 Amac: Gercek Velopack E2E kalite kapisi icin tool ve fixture sabitlerini merkezi config olarak tanimlar
 # 📌 Modul - Config PowerShell
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: vpk surumu, test package kimligi, iki test surumu ve marker dosyasi ayarlarini tek yerde tutar
 # Bagimli Oldugu Katman: Config | Tool
 
@@ -19,12 +19,14 @@
             SpecialFolder = "LocalApplicationData"
             Subdirectory = "Programs"
             RequiresElevation = $false
+            MsiAssignmentType = "0"
         }
         @{
             Name = "PerMachine"
             SpecialFolder = "ProgramFiles"
             Subdirectory = ""
             RequiresElevation = $true
+            MsiAssignmentType = "1"
         }
     )
     MainExecutable = "TurkuazInstaller.Velopack.E2E.Fixture.exe"
