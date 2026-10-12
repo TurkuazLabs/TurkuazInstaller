@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.5.0
+# Version: 1.6.0
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -42,6 +42,35 @@ Records explicitly interrupted in pre-apply `Verifying` or `Staging`
 can be retried, subject to the normal signed-manifest checks and the
 package-scoped lock. A stale `Completed` record is not considered evidence
 of a partial mutation.
+
+## Read-only recovery assessment
+
+`InstallerRecoveryAssessmentService` provides a typed, **read-only**
+diagnostic snapshot for the installer UI / future recovery tooling. It reads
+the persisted operation journal and committed installed-state repository,
+using the **same mutation/reboot checkpoint policy as the live workflow**.
+
+The report exposes the operation ID, requested and committed version,
+journal phase, interrupted phase and recorded target paths. It distinguishes
+`NoJournal`, `NoMutationHold`, `PendingRebootResume`,
+`RecoveryRequired`, and `MetadataConflict` (including a persisted
+update journal with missing committed state or mismatched install target).
+
+This is **not** an authorization to repair, retry or remove any package:
+- `NoMutationHold` only says the journal has no known unsafe mutation
+  checkpoint; signed-manifest and runtime policy validation are still required.
+- A report does **not** scan actual installed binaries, verify their
+  Authenticode publisher, prove folder ownership, or trust journal version
+  fields as on-disk evidence.
+- Reads are observational, not an atomic snapshot with the updater; callers
+  must never clear a lock based on the result.
+- Storage read failures propagate instead of being treated as `NoJournal`.
+  The assessment deliberately never invokes `SaveAsync` or `DeleteAsync`.
+
+Infrastructure regression tests compare the raw persisted state/journal
+JSON bytes before and after inspecting the disk-V2/state-V1 scenario. Both
+real Windows process-kill scenarios also assert that the read-only report
+detects their orphaned `Applying` operation without unlocking it.
 
 ## Important limits
 
