@@ -42,7 +42,12 @@ public sealed class InstallerUiCatalog
             InstallerUiLabels.HeaderSubtitle);
 
     public InstallerPromotionProfile Promotion =>
-        _profile.Promotion ?? InstallerPromotionProfile.Default;
+        new(
+            _profile.Promotion?.Enabled ?? true,
+            ResolveBranding(_profile.Promotion?.Eyebrow, InstallerUiLabels.PromotionEyebrow),
+            ResolveBranding(_profile.Promotion?.Title, InstallerUiLabels.PromotionTitle),
+            ResolveBranding(_profile.Promotion?.Description, InstallerUiLabels.PromotionDescription),
+            ResolveBranding(_profile.Promotion?.Provider, InstallerUiLabels.PromotionProvider));
 
     public string Footer =>
         ResolveBranding(
