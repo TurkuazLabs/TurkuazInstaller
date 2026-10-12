@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.7.0
+// Version: 2.6.0
 // Aciklama: Optional staged update gate'i download oncesi ve pre-apply asamasinda fail-closed kontrol eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
