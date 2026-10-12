@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerRecoveryAssessmentServiceTests.cs
 // 📌 Amac: Salt-okunur recovery raporu tum tehlikeli checkpoint ve metadata uyusmazliklarini ayirt eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: Eski journal, reboot, gecersiz scope, pre-apply ve repository read failure guvenlik testi
 // Bagimli Oldugu Katman: Service | Repo | Model
 
@@ -126,6 +126,82 @@ public sealed class InstallerRecoveryAssessmentServiceTests
             () => service.AssessAsync(Package, CancellationToken.None));
     }
 
+
+    [Theory]
+    [InlineData(InstallerOperationPhase.Failed, InstallerOperationPhase.Applying)]
+    [InlineData(InstallerOperationPhase.Failed, InstallerOperationPhase.ApplyingIntegrations)]
+    [InlineData(InstallerOperationPhase.Failed, InstallerOperationPhase.SavingState)]
+    [InlineData(InstallerOperationPhase.Failed, InstallerOperationPhase.RemovingState)]
+    [InlineData(InstallerOperationPhase.Cancelled, InstallerOperationPhase.Applying)]
+    [InlineData(InstallerOperationPhase.Cancelled, InstallerOperationPhase.ApplyingIntegrations)]
+    [InlineData(InstallerOperationPhase.Cancelled, InstallerOperationPhase.SavingState)]
+    [InlineData(InstallerOperationPhase.Cancelled, InstallerOperationPhase.RemovingState)]
+    public async Task AssessAsync_FailedOrCancelledAfterMutation_RequiresRecovery(
+        InstallerOperationPhase finalPhase,
+        InstallerOperationPhase interruptedPhase)
+    {
+        var journal = Journal(finalPhase, interruptedPhase: interruptedPhase);
+        var report = await Create(journal, State()).AssessAsync(
+            Package, CancellationToken.None);
+
+        Assert.Equal(InstallerRecoveryAssessmentStatus.RecoveryRequired, report.Status);
+        Assert.True(report.RequiresHumanReview);
+        Assert.Equal(journal.OperationId, report.OperationId);
+        Assert.Equal(interruptedPhase, report.InterruptedPhase);
+    }
+
+    [Theory]
+    [InlineData(InstallerOperationPhase.Failed)]
+    [InlineData(InstallerOperationPhase.Cancelled)]
+    public async Task AssessAsync_InterruptedBeforeMutation_DoesNotInventRecoveryHold(
+        InstallerOperationPhase finalPhase)
+    {
+        var journal = Journal(
+            finalPhase, interruptedPhase: InstallerOperationPhase.Verifying);
+        var report = await Create(journal, State()).AssessAsync(
+            Package, CancellationToken.None);
+
+        Assert.Equal(InstallerRecoveryAssessmentStatus.NoMutationHold, report.Status);
+        Assert.False(report.RequiresHumanReview);
+    }
+
+    [Fact]
+    public async Task AssessAsync_WrongJournalPackage_ReportsMetadataConflict()
+    {
+        var foreign = PackageId.Parse("other-recovery-package");
+        var journal = Journal(
+            InstallerOperationPhase.Verifying) with { PackageId = foreign };
+        var report = await Create(journal, State()).AssessAsync(
+            Package, CancellationToken.None);
+
+        Assert.Equal(InstallerRecoveryAssessmentStatus.MetadataConflict, report.Status);
+        Assert.True(report.RequiresHumanReview);
+        Assert.Equal(journal.OperationId, report.OperationId);
+    }
+
+    [Fact]
+    public async Task AssessAsync_WrongCommittedPackage_ReportsMetadataConflict()
+    {
+        var foreign = PackageId.Parse("other-recovery-package");
+        var state = State() with { PackageId = foreign };
+        var report = await Create(Journal(InstallerOperationPhase.Verifying), state)
+            .AssessAsync(Package, CancellationToken.None);
+
+        Assert.Equal(InstallerRecoveryAssessmentStatus.MetadataConflict, report.Status);
+        Assert.True(report.RequiresHumanReview);
+    }
+
+    [Fact]
+    public async Task AssessAsync_StateReadError_DoesNotMasqueradeAsNoJournal()
+    {
+        var service = new InstallerRecoveryAssessmentService(
+            new ReadOnlyStateRepository(null, failRead: true),
+            new ReadOnlyJournalRepository(null));
+
+        await Assert.ThrowsAsync<IOException>(
+            () => service.AssessAsync(Package, CancellationToken.None));
+    }
+
     private static InstallerRecoveryAssessmentService Create(
         InstallerOperationJournalEntry? journal,
         InstalledPackageState? state) => new(
@@ -182,12 +258,21 @@ public sealed class InstallerRecoveryAssessmentServiceTests
     private sealed class ReadOnlyStateRepository : IInstallStateRepository
     {
         private readonly InstalledPackageState? _state;
+        private readonly bool _failRead;
 
-        public ReadOnlyStateRepository(InstalledPackageState? state) => _state = state;
+        public ReadOnlyStateRepository(
+            InstalledPackageState? state, bool failRead = false)
+        {
+            _state = state;
+            _failRead = failRead;
+        }
 
         public Task<InstalledPackageState?> GetAsync(
             PackageId packageId, CancellationToken cancellationToken)
-            => Task.FromResult(_state);
+            => _failRead
+                ? Task.FromException<InstalledPackageState?>(
+                    new IOException("Simulated committed-state read failure."))
+                : Task.FromResult(_state);
 
         public Task<IReadOnlyList<InstalledPackageState>> ListAsync(
             CancellationToken cancellationToken)
