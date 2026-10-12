@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiLabels.cs
 // 📌 Amac: TurkuazInstaller masaustu arayuzundeki kullanici metinlerini merkezi Language katmaninda tanimlar
 // 📌 Modul - Language CSharp
-// Version: 1.6.0
+// Version: 1.7.0
 // Aciklama: Install/update/recovery metinlerine ek olarak katalog, discovery, background update ve version skip/pinning UX metinlerini tutar
 //
 // Bagimli Oldugu Katman: Language
@@ -14,6 +14,21 @@ public static class InstallerUiLabels
     public const string PromotionTitle = "Daha fazlasini birlikte uretin";
     public const string PromotionDescription = "Turkuaz Office, UniZip ve topluluk araclarimizi kesfedin.";
     public const string PromotionProvider = "TurkuazLabs Community";
+
+    public const string InstallOptionsTitle = "Kurulum Secenekleri";
+    public const string InstallOptionsDescription =
+        "Yuklemeden once kurulum seklini ve kimlerin kullanacagini secin.";
+    public const string InstallModeHeader = "Kurulum Modu";
+    public const string InstallScopeHeader = "Kullanim Kapsami";
+    public const string QuickInstall = "Hizli Kurulum";
+    public const string CustomInstall = "Ozellestirilmis Kurulum";
+    public const string PerUserInstall = "Yalnizca benim icin (AppData)";
+    public const string PerMachineUnavailable =
+        "Tum kullanicilar (Program Files) - yakinda";
+    public const string CustomTargetHeader =
+        "AppData altinda ozel kurulum klasoru";
+    public const string CustomTargetRequired =
+        "Ozellestirilmis kurulumda AppData icinde kurulum klasoru girilmelidir.";
 
     public const string WindowTitle = "TurkuazInstaller";
     public const string HeaderTitle = "Turkuaz Installer";
