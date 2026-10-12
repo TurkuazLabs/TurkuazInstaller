@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Invoke-MsiScopeProbe.ps1
 # 📌 Amac: Ortak Velopack MSI PerUser ve PerMachine paketleme kabiliyetini lab ortaminda dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.2.1
+# Version: 1.3.0
 # Aciklama: Gercek kurulum/UAC yapmadan pinned vpk ile iki farkli MSI scope paketi olusturur
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -14,8 +14,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-if (-not $IsWindows) {
-    throw "MSI scope probe is Windows-only."
+if (-not $IsWindows -or
+    $env:GITHUB_ACTIONS -cne "true" -or
+    $env:RUNNER_ENVIRONMENT -cne "github-hosted" -or
+    [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
+    throw "MSI lab requires a disposable GitHub-hosted Windows runner; self-hosted FURY is forbidden."
 }
 
 $config = Import-PowerShellDataFile -LiteralPath (Resolve-Path -LiteralPath $ConfigPath)
