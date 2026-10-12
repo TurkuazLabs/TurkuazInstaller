@@ -1,6 +1,6 @@
 // Dosya: /tests/TurkuazInstaller.Velopack.E2E.Runner/SignedWorkflowAcceptanceRunner.cs
 // Amac: Gecici CMS imzali local manifest ile gercek Velopack package engine ve kalici state lifecycle testini birlestirir
-// Version: 0.1.0
+// Version: 0.2.0
 // Guvenlik: Ephemeral CI certificate, external trust pin, unsigned fixture; production signing veya VM kabul testi degildir
 
 using System.Security.Cryptography;
@@ -8,6 +8,7 @@ using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Domain.State;
@@ -76,12 +77,26 @@ internal static class SignedWorkflowAcceptanceRunner
         var v2Manifest = Path.Combine(manifestRoot, "v2-update.yml");
         var v1FullManifest = Path.Combine(manifestRoot, "v1-rollback.yml");
         var v2BadDigestManifest = Path.Combine(manifestRoot, "v2-wrong-hash.yml");
+        var v2BrokenArchiveManifest = Path.Combine(manifestRoot, "v2-broken-archive.yml");
+        var brokenArchiveRoot = Path.Combine(stagingRoot, "invalid-payload");
+        Directory.CreateDirectory(brokenArchiveRoot);
+        var brokenArchivePath = Path.Combine(
+            brokenArchiveRoot, Path.GetFileName(fullV2));
+        await File.WriteAllBytesAsync(
+            brokenArchivePath,
+            Encoding.ASCII.GetBytes("TURKUAZ-LAB-INVALID-NUPKG-NOT-A-ZIP"));
+
 
         await WriteSignedManifestAsync(v1SetupManifest, setupV1, VersionOne, certificate);
         await WriteSignedManifestAsync(v2Manifest, fullV2, VersionTwo, certificate);
         await WriteSignedManifestAsync(v1FullManifest, fullV1, VersionOne, certificate);
         await WriteSignedManifestAsync(
             v2BadDigestManifest, fullV2, VersionTwo, certificate, wrongDigest: true);
+        // This manifest is genuinely CMS-signed and the SHA-256 matches the
+        // bytes, but the artifact is deliberately not a valid Velopack ZIP.
+        // A valid digest is not the same as a valid installable package.
+        await WriteSignedManifestAsync(
+            v2BrokenArchiveManifest, brokenArchivePath, VersionTwo, certificate);
 
         var stateRepository = new JsonInstallStateRepository(
             new JsonInstallStateRepositoryOptions(stateRoot));
@@ -155,6 +170,35 @@ internal static class SignedWorkflowAcceptanceRunner
             stateRepository, packageId, installRoot, versionMarker, VersionOne);
         AssertUserData(userDataPath, userData);
         Console.WriteLine("TURKUAZ_INSTALLER_SIGNED_WORKFLOW_FAIL_CLOSED_OK");
+
+        // Different failure boundary: the manifest is valid, the artifact
+        // digest is correct, but the package itself is malformed. Verify
+        // that the real Windows updater rejects it without committing V2
+        // or modifying the existing version and user data.
+        var brokenRelease = await ReadVerifiedAsync(v2BrokenArchiveManifest);
+        var brokenRejected = false;
+        try
+        {
+            await workflow.UpdateAsync(
+                brokenRelease,
+                await RequireStateAsync(stateRepository, packageId),
+                stagingRoot, null, CancellationToken.None);
+        }
+        catch (PackageEngineException)
+        {
+            brokenRejected = true;
+        }
+
+        if (!brokenRejected)
+        {
+            throw new InvalidOperationException(
+                "A validly signed manifest with an invalid nupkg unexpectedly succeeded.");
+        }
+
+        await AssertVersionAsync(
+            stateRepository, packageId, installRoot, versionMarker, VersionOne);
+        AssertUserData(userDataPath, userData);
+        Console.WriteLine("TURKUAZ_INSTALLER_SIGNED_BROKEN_ARTIFACT_FAIL_CLOSED_OK");
 
         // The same real signed-manifest pipeline now drives real Velopack
         // update/repair/rollback and a persisted JSON state repository.
