@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiStandardUser.ps1
 # 📌 Amac: Gecici GitHub Windows ortaminda admin olmayan ayri hesapla PerUser MSI testini calistirir
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: Tek kullanimlik standard user, erisim izinleri, smoke testi ve guvenli cleanup
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -83,7 +83,19 @@ try {
         ' -ExpectedSid "' + $sid + '"'
 
     Write-Host "INSTALLER_MSI_NONADMIN_STARTED"
-    $process = Start-Process -FilePath $shell -Credential $credential -WorkingDirectory $stage -ArgumentList $args -PassThru -ErrorAction Stop
+    $childOut = Join-Path $stage "child-stdout.txt"
+    $childErr = Join-Path $stage "child-stderr.txt"
+    $launch = @{
+        FilePath = $shell
+        Credential = $credential
+        WorkingDirectory = $stage
+        ArgumentList = $args
+        PassThru = $true
+        RedirectStandardOutput = $childOut
+        RedirectStandardError = $childErr
+        ErrorAction = "Stop"
+    }
+    $process = Start-Process @launch
     try {
         if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
             $process.Kill($true)
@@ -91,6 +103,13 @@ try {
             throw "Standard-user MSI process timed out."
         }
         if ($process.ExitCode -ne 0) {
+            if (Test-Path -LiteralPath $childErr -PathType Leaf) {
+                Get-Content -LiteralPath $childErr -Tail 28 | ForEach-Object { Write-Host "NONADMIN_ERROR: $_" }
+            }
+            $installLog = Join-Path $stage "standard-install.log"
+            if (Test-Path -LiteralPath $installLog -PathType Leaf) {
+                Get-Content -LiteralPath $installLog -Tail 28 | ForEach-Object { Write-Host "NONADMIN_MSI_LOG: $_" }
+            }
             throw "Standard-user MSI process failed with exit=$($process.ExitCode)."
         }
     }
