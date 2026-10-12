@@ -1,13 +1,13 @@
 # 📄 Dosya Yolu: /tools/Test-VelopackMultiUserChild.ps1
 # 📌 Amac: Iki farkli Windows kullanicisinda Velopack kurulum veri ve uninstall izolasyonunu dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.1
+# Version: 1.1.0
 # Aciklama: Kurulum, kontrol, kaldirma ve diger hesapta yokluk asamalari paylasilan Tool ile calisir
 # Bagimli Oldugu Katman: Tool | Config | CI
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)] [ValidateSet("Absent", "Install", "Verify", "Uninstall")] [string]$Phase,
+    [Parameter(Mandatory = $true)] [ValidateSet("Absent", "Install", "Verify", "Uninstall", "DataOnly")] [string]$Phase,
     [Parameter(Mandatory = $true)] [ValidatePattern("^[a-f0-9]{16,32}$")] [string]$RunId,
     [Parameter(Mandatory = $true)] [string]$PackagePath,
     [Parameter(Mandatory = $true)] [string]$ConfigPath,
@@ -40,8 +40,9 @@ if ($Phase -eq "Absent") {
     }
 }
 elseif ($Phase -eq "Install") {
-    if (Test-Path -LiteralPath $target) {
-        throw "Multi-user installation target already exists."
+    if ((Test-Path -LiteralPath $updater -PathType Leaf) -or
+        (Test-Path -LiteralPath (Join-Path $target "current") -PathType Container)) {
+        throw "Multi-user application is already installed."
     }
     Invoke-MsiLabVelopackProcess -File $setup -Operation "multiuser-install" -Arguments @(
         "--silent", "--installto", $target
@@ -60,8 +61,25 @@ elseif ($Phase -eq "Install") {
     if ((Get-Content -LiteralPath $version -Raw).Trim() -cne $config.VersionOne) {
         throw "Multi-user fixture version marker differs from signed package."
     }
-    New-Item -Path $dataDirectory -ItemType Directory -Force | Out-Null
-    [IO.File]::WriteAllText($dataMarker, $markerContent)
+    if (Test-Path -LiteralPath $dataMarker -PathType Leaf) {
+        if ([IO.File]::ReadAllText($dataMarker) -cne $markerContent) {
+            throw "Reinstall must preserve the existing user-data marker."
+        }
+    }
+    else {
+        New-Item -Path $dataDirectory -ItemType Directory -Force | Out-Null
+        [IO.File]::WriteAllText($dataMarker, $markerContent)
+    }
+}
+elseif ($Phase -eq "DataOnly") {
+    if ((Test-Path -LiteralPath $updater -PathType Leaf) -or
+        (Test-Path -LiteralPath (Join-Path $target "current") -PathType Container)) {
+        throw "Uninstall must remove the app before reinstallation."
+    }
+    if (-not (Test-Path -LiteralPath $dataMarker -PathType Leaf) -or
+        [IO.File]::ReadAllText($dataMarker) -cne $markerContent) {
+        throw "Uninstall must preserve the same user's application-independent data."
+    }
 }
 elseif ($Phase -eq "Verify" -or $Phase -eq "Uninstall") {
     if (-not (Test-Path -LiteralPath $updater -PathType Leaf) -or
