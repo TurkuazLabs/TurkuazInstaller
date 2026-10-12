@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.2.0
+# Version: 1.3.0
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -31,6 +31,12 @@ Legacy `Failed`/`Cancelled` journal records whose interrupted phase cannot
 be determined are also held. An `AwaitingReboot` or `RebootResumeArmed`
 journal blocks a *new manual* operation; only the existing authenticated
 reboot-resume path can continue those checkpoints.
+
+The Application layer also checks the requested `resumeEntry` against
+the **exact persisted journal record under the package lock**, including
+operation ID and phase. A missing journal or fabricated reboot-safe record
+must never bypass an orphaned `Applying` checkpoint. CLI request
+validation remains independently required; this is defense in depth.
 
 Records explicitly interrupted in pre-apply `Verifying` or `Staging`
 can be retried, subject to the normal signed-manifest checks and the
