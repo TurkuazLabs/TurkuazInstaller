@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Invoke-MsiScopeProbe.ps1
 # 📌 Amac: Ortak Velopack MSI PerUser ve PerMachine paketleme kabiliyetini lab ortaminda dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Gercek kurulum/UAC yapmadan pinned vpk ile iki farkli MSI scope paketi olusturur
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -54,7 +54,8 @@ if (-not (Test-Path -LiteralPath $fixtureExe -PathType Leaf)) {
 Set-Content -LiteralPath (Join-Path $payload $config.VersionMarkerFile) -Value $config.VersionOne -NoNewline -Encoding utf8
 $allDigests = @()
 
-foreach ($scope in @("PerUser", "PerMachine")) {
+foreach ($scopeProfile in $config.MsiProbeScopes) {
+    $scope = [string]$scopeProfile.Name
     $output = Join-Path $root $scope
     New-Item -ItemType Directory -Path $output -Force | Out-Null
     $packageId = "$($config.MsiProbePackageId).$($scope.ToLowerInvariant())"
