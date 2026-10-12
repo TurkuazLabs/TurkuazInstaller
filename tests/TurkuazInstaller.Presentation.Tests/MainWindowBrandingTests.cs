@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/MainWindowBrandingTests.cs
 // 📌 Amac: MainWindowViewModel branding/localization override ve fallback davranisini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.2.0
+// Version: 1.3.0
 // Aciklama: Branding, channel, placeholder ve runtime initial state override davranisini built-in fallback ile birlikte dogrular
 //
 // Bagimli Oldugu Katman: View | Language | Config
 
 using TurkuazInstaller.Contracts.Branding;
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Presentation.Language;
 using TurkuazInstaller.Presentation.ViewModels;
 using Xunit;
@@ -34,6 +35,36 @@ public sealed class MainWindowBrandingTests
                 new InstallerPromotionProfile(false, "BRAND", "Pro", "Test", "Company")));
         Assert.False(model.IsPromotionVisible);
         Assert.Equal("Pro", model.PromotionTitle);
+    }
+
+    [Fact]
+    public void Wizard_DefaultsToQuickPerUser()
+    {
+        var model = new MainWindowViewModel(InstallerUiProfile.Empty);
+
+        Assert.Equal(InstallerInstallMode.Quick, model.SelectedInstallMode);
+        Assert.Equal(InstallerInstallScope.PerUser, model.SelectedInstallScope);
+        Assert.False(model.IsCustomInstall);
+    }
+
+    [Fact]
+    public void Wizard_CustomSelectionTogglesTargetField()
+    {
+        var model = new MainWindowViewModel(InstallerUiProfile.Empty);
+        model.SelectedInstallModeIndex = (int)InstallerInstallMode.Custom;
+
+        Assert.True(model.IsCustomInstall);
+        Assert.Equal(InstallerInstallMode.Custom, model.SelectedInstallMode);
+        Assert.Equal(InstallerUiLabels.CustomTargetHeader, model.CustomTargetHeader);
+    }
+
+    [Fact]
+    public void Wizard_UnknownSelectionDoesNotActivateNewScope()
+    {
+        var model = new MainWindowViewModel(InstallerUiProfile.Empty);
+        model.SelectedInstallScopeIndex = -1;
+
+        Assert.Equal(InstallerInstallScope.PerUser, model.SelectedInstallScope);
     }
 
     [Fact]
