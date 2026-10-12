@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/InstallerDesktopServiceTests.cs
 // 📌 Amac: InstallerDesktopService progress, success ve recovery state davranisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.4.0
+// Version: 1.5.0
 // Aciklama: Progress/reboot resume/catalog davranisina ek olarak read-only update discovery state ve hata ayrimini test eder
 //
 // Bagimli Oldugu Katman: Service | View
@@ -9,6 +9,7 @@
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Application.Updates;
 using TurkuazInstaller.Contracts.Branding;
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Products;
@@ -23,6 +24,72 @@ namespace TurkuazInstaller.Presentation.Tests;
 
 public sealed class InstallerDesktopServiceTests
 {
+    [Fact]
+    public async Task QuickInstall_UsesSignedDefaultTargetAndUserScope()
+    {
+        var model = CreateViewModel();
+        var runtime = new StubRuntimeService();
+        using var service = new InstallerDesktopService(
+            model, runtime, new InstallerResumeLaunchParser());
+
+        await service.InstallWithChoicesAsync(
+            InstallerInstallMode.Quick, InstallerInstallScope.PerUser);
+
+        Assert.NotNull(runtime.LastRequest);
+        Assert.Equal(string.Empty, runtime.LastRequest!.TargetPath);
+        Assert.Equal(InstallerInstallScope.PerUser, runtime.LastRequest.InstallScope);
+    }
+
+    [Fact]
+    public async Task MachineInstall_DoesNotCallRuntimeBeforeMsiSupport()
+    {
+        var model = CreateViewModel();
+        var runtime = new StubRuntimeService();
+        using var service = new InstallerDesktopService(
+            model, runtime, new InstallerResumeLaunchParser());
+
+        await service.InstallWithChoicesAsync(
+            InstallerInstallMode.Quick, InstallerInstallScope.PerMachine);
+
+        Assert.Null(runtime.LastRequest);
+        Assert.True(model.HasError);
+    }
+
+    [Fact]
+    public async Task CustomUserInstall_RejectsUnsafePathBeforeRuntime()
+    {
+        var model = CreateViewModel();
+        model.TargetPath = Path.GetTempPath();
+        var runtime = new StubRuntimeService();
+        using var service = new InstallerDesktopService(
+            model, runtime, new InstallerResumeLaunchParser());
+
+        await service.InstallWithChoicesAsync(
+            InstallerInstallMode.Custom, InstallerInstallScope.PerUser);
+
+        Assert.Null(runtime.LastRequest);
+        Assert.True(model.HasError);
+    }
+
+    [Fact]
+    public async Task CustomUserInstall_PreservesAllowedTarget()
+    {
+        var model = CreateViewModel();
+        model.TargetPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs", "InstallerExample");
+        var runtime = new StubRuntimeService();
+        using var service = new InstallerDesktopService(
+            model, runtime, new InstallerResumeLaunchParser());
+
+        await service.InstallWithChoicesAsync(
+            InstallerInstallMode.Custom, InstallerInstallScope.PerUser);
+
+        Assert.NotNull(runtime.LastRequest);
+        Assert.Equal(model.TargetPath, runtime.LastRequest!.TargetPath);
+        Assert.Equal(InstallerInstallScope.PerUser, runtime.LastRequest.InstallScope);
+    }
+
     [Fact]
     public async Task RunAsync_Success_UpdatesCompletedState()
     {
