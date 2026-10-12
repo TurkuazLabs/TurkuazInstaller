@@ -1,16 +1,46 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerRecoveryPolicy.cs
 // 📌 Amac: Kesintiye ugrayan operasyonlarin recovery kilidini tek typed kuralla belirler
 // 📌 Modul - Service CSharp
-// Version: 1.0.0
+// Version: 1.1.0
 // Aciklama: Workflow mutation guard ve salt-okunur recovery inceleme ayni policy'yi kullanir
 // Bagimli Oldugu Katman: Service | Domain
 
 using TurkuazInstaller.Domain.Operations;
+using TurkuazInstaller.Domain.Products;
+using TurkuazInstaller.Domain.State;
 
 namespace TurkuazInstaller.Application.Operations;
 
 internal static class InstallerRecoveryPolicy
 {
+    public static bool HasMetadataConflict(
+        PackageId packageId,
+        InstallerOperationJournalEntry entry,
+        InstalledPackageState? state)
+    {
+        ArgumentNullException.ThrowIfNull(packageId);
+        ArgumentNullException.ThrowIfNull(entry);
+
+        if (entry.PackageId != packageId)
+        {
+            return true;
+        }
+
+        if (state is null)
+        {
+            // A clean first-time install may not have committed state yet.
+            return entry.Operation != InstallerOperationType.Install;
+        }
+
+        return state.PackageId != packageId ||
+            !string.Equals(
+                entry.TargetPath,
+                state.TargetPath,
+                OperatingSystem.IsWindows()
+                    ? StringComparison.OrdinalIgnoreCase
+                    : StringComparison.Ordinal);
+    }
+
     public static bool RequiresExplicitRecovery(
         InstallerOperationJournalEntry entry)
     {
