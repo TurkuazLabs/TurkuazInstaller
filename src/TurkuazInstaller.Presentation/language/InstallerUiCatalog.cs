@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiCatalog.cs
 // 📌 Amac: Varsayilan Language metinleri ile typed UI profile override degerlerini tek resolverda birlestirir
 // 📌 Modul - Language CSharp
-// Version: 1.2.0
+// Version: 1.3.0
 // Aciklama: Branding ve tum desteklenen kullanici metinlerini tek typed localization katalogundan fallback-guvenli sunar
 //
 // Bagimli Oldugu Katman: Language | View | Service | Config
@@ -131,6 +131,16 @@ public sealed class InstallerUiCatalog
             InstallerUiLabelKey.ManifestPlaceholder => InstallerUiLabels.ManifestPlaceholder,
             InstallerUiLabelKey.RollbackManifestPlaceholder => InstallerUiLabels.RollbackManifestPlaceholder,
             InstallerUiLabelKey.TargetPathPlaceholder => InstallerUiLabels.TargetPathPlaceholder,
+            InstallerUiLabelKey.InstallOptionsTitle => InstallerUiLabels.InstallOptionsTitle,
+            InstallerUiLabelKey.InstallOptionsDescription => InstallerUiLabels.InstallOptionsDescription,
+            InstallerUiLabelKey.InstallModeHeader => InstallerUiLabels.InstallModeHeader,
+            InstallerUiLabelKey.InstallScopeHeader => InstallerUiLabels.InstallScopeHeader,
+            InstallerUiLabelKey.QuickInstall => InstallerUiLabels.QuickInstall,
+            InstallerUiLabelKey.CustomInstall => InstallerUiLabels.CustomInstall,
+            InstallerUiLabelKey.PerUserInstall => InstallerUiLabels.PerUserInstall,
+            InstallerUiLabelKey.PerMachineUnavailable => InstallerUiLabels.PerMachineUnavailable,
+            InstallerUiLabelKey.CustomTargetHeader => InstallerUiLabels.CustomTargetHeader,
+            InstallerUiLabelKey.CustomTargetRequired => InstallerUiLabels.CustomTargetRequired,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(key),
                 key,
