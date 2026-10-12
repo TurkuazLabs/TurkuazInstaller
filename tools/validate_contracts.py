@@ -111,6 +111,16 @@ EXPECTED_UI_PROFILE_LABELS = {
     "manifest_placeholder",
     "rollback_manifest_placeholder",
     "target_path_placeholder",
+    "install_options_title",
+    "install_options_description",
+    "install_mode_header",
+    "install_scope_header",
+    "quick_install",
+    "custom_install",
+    "per_user_install",
+    "per_machine_unavailable",
+    "custom_target_header",
+    "custom_target_required",
 }
 
 
@@ -2128,6 +2138,30 @@ if (
         "ui profile branding empty value policy drifted"
     )
 
+ui_profile_promotion = ui_profile.get(
+    "promotion",
+    {},
+)
+
+if ui_profile_promotion.get("optional") is not True:
+    fail("ui profile promotion must remain optional")
+
+if set(ui_profile_promotion.get("fields", [])) != {
+    "enabled",
+    "eyebrow",
+    "title",
+    "description",
+    "provider",
+}:
+    fail("ui profile promotion field set drifted")
+
+for key in ("remote_media", "external_tracking", "external_links"):
+    if ui_profile_promotion.get(key) != "disabled":
+        fail(f"ui profile promotion policy must disable: {key}")
+
+if ui_profile_promotion.get("failure_behavior") != "never_blocks_installer":
+    fail("ui profile promotion must never block package installation")
+
 ui_profile_labels = ui_profile.get(
     "labels",
     {},
@@ -2202,6 +2236,24 @@ if (
     fail(
         "ui profile example contains unsupported branding fields"
     )
+
+example_promotion = ui_profile_example.get("promotion", {})
+if not isinstance(example_promotion, dict):
+    fail("ui profile example promotion must be a mapping")
+if set(example_promotion) - {
+    "enabled", "eyebrow", "title", "description", "provider"
+}:
+    fail("ui profile example contains unsupported promotion fields")
+if "enabled" in example_promotion and not isinstance(
+    example_promotion["enabled"], bool
+):
+    fail("ui profile example promotion enabled must be boolean")
+for key in ("eyebrow", "title", "description", "provider"):
+    if key in example_promotion and (
+        not isinstance(example_promotion[key], str)
+        or not example_promotion[key].strip()
+    ):
+        fail(f"ui profile example promotion {key} must be nonempty")
 
 example_labels = ui_profile_example.get(
     "labels",
