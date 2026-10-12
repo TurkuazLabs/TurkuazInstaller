@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 1.2.0
+# Version: 1.3.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -85,14 +85,26 @@ The optional Windows MSI Scope Packaging Probe builds both `PerUser` and
 pinned `vpk 1.2.161` configuration as the existing Velopack E2E.
 
 It verifies that MSI artifacts are nonempty OLE compound-file packages and
-records their SHA-256 values. It deliberately does **not** execute either
-MSI, request administrator rights, change the registry, or publish any
-unsigned machine-wide executable. Only the textual test report is retained
-as a short-lived GitHub artifact.
+records their SHA-256 values. It does not publish unsigned MSI executables;
+only the textual package report is retained as a short-lived GitHub artifact.
 
-This test does not prove that the *MSI install scope property* or Windows
-Installer elevation and rollback work; those still require separate
-Windows 10/11 virtual machine scenarios. Do not enable PerMachine until
+A separate **LAB ONLY** step on the disposable GitHub-hosted Windows runner
+attempts `PerMachine` MSI installation under a unique Program Files child,
+checks the fixture and then uses official `msiexec /x` for removal. It refuses
+to run outside GitHub's Windows CI host and requires an administrator token.
+Timeout, nonzero exit and residual executable checks fail closed. This test
+modifies only the temporary Windows runner, never customer machines or
+existing NSIS installations.
+
+The initial E2E run [#38213314813](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/38213314813)
+failed with a 180-second `msiexec` install timeout and uninstall code 1605
+(product not registered). A new diagnostic test reports bounded MSI log lines
+and stops sooner; **no machine-wide acceptance is claimed**.
+
+This test does not yet prove a trusted production MSI install, standard-user
+interactive UAC, all-users registry/shortcut ownership, or update/repair/
+rollback. Those require separate Windows 10/11 isolated-machine scenarios.
+Do not enable PerMachine until
 installer lifecycle callbacks, maintenance ownership, HKLM and Windows
 integration policy have been verified.
 
