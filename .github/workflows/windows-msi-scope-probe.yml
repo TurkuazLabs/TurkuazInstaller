@@ -1,0 +1,71 @@
+# 📄 Dosya Yolu: /.github/workflows/windows-msi-scope-probe.yml
+# 📌 Amac: Ortak installer icin iki MSI kurulum kapsamini Windows CI uzerinde paketler
+# 📌 Modul - CI YAML
+# Version: 1.0.0
+# Aciklama: Gercek machine-wide install yapmadan per-user/per-machine MSI uretim kapisi
+# Bagimli Oldugu Katman: Config | Tool | CI
+
+name: Windows MSI Scope Packaging Probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/Invoke-MsiScopeProbe.ps1'
+      - 'config/velopack-e2e.psd1'
+      - '.github/workflows/windows-msi-scope-probe.yml'
+      - 'tests/TurkuazInstaller.Velopack.E2E.Fixture/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/Invoke-MsiScopeProbe.ps1'
+      - 'config/velopack-e2e.psd1'
+      - '.github/workflows/windows-msi-scope-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-msi-scope-probe-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  msi-scope-probe:
+    name: Lab-only MSI PerUser and PerMachine packaging
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Parse MSI probe script
+        shell: pwsh
+        run: |
+          $parseErrors = $null
+          $tokens = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "tools/Invoke-MsiScopeProbe.ps1").Path,
+            [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count -gt 0) {
+            foreach ($item in $parseErrors) { Write-Host $item.ToString() }
+            throw "MSI scope PowerShell parse failed"
+          }
+
+      - name: Package both MSI installation scopes without installation
+        shell: pwsh
+        run: ./tools/Invoke-MsiScopeProbe.ps1
+
+      - name: Upload MSI probe report only
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurkuazInstaller-MSI-SCOPE-LAB-ONLY-REPORT
+          path: artifacts/installer-msi-scope-probe/MSI-SCOPE-LAB-ONLY.txt
+          if-no-files-found: error
+          retention-days: 3
