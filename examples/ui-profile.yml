@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /examples/ui-profile.yml
 # 📌 Amac: Branding ve localization extension icin kopyalanabilir ornek UI profili sunar
 # 📌 Modul - Config YAML
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Branding ile statik/runtime UI metinlerinin kismi override ve culture kullanimini gosterir
 # Bagimli Oldugu Katman: Config | Repo | View | Language
 
@@ -13,6 +13,13 @@ branding:
   header_title: Turkuaz Installer
   header_subtitle: Install and update center
   footer: TurkuazLabs Community
+
+promotion:
+  enabled: true
+  eyebrow: TURKUAZ EKOSISTEMI
+  title: Daha fazlasini birlikte uretin
+  description: Turkuaz Office, UniZip ve gelistirici araclarimizi kesfedin.
+  provider: TurkuazLabs Community
 
 labels:
   stable: Stable
