@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerRecoveryTests.cs
 // 📌 Amac: Installer workflow hata durumlarinda state commit edilmemesi ve rollback state guvenligini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.3.0
+// Version: 1.4.0
 // Aciklama: Verification, package apply ve Windows integration failure senaryolarinda state commit sinirini ve retry-guvenli recovery davranisini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -94,7 +94,7 @@ public sealed class InstallerRecoveryTests
     }
 
     [Fact]
-    public async Task UpdateAsync_ExactPersistedResumeCheckpoint_MayContinue()
+    public async Task UpdateAsync_ExactPersistedResumeCheckpoint_ReachesManifestValidation()
     {
         var packageId = PackageId.Parse("example-app");
         var initial = new InstalledPackageState(
@@ -110,16 +110,20 @@ public sealed class InstallerRecoveryTests
         var engine = new TrackingPackageEngine();
         var state = new TrackingStateRepository(initial);
 
-        await CreateService(
-            engine, state, VerificationResult.Passed(),
-            journal: journal).UpdateAsync(
-                CreateRelease("2.0.0", "Example-2.0.0-full.nupkg"),
-                initial, "C:/Temp/TurkuazInstaller", null,
-                CancellationToken.None, resumeEntry: resume);
+        // The exact persisted record clears the resume ID/phase gate,
+        // then fails for the *separate* missing prerequisite in the
+        // fixture manifest. A forged resume would be rejected earlier.
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreateService(
+                engine, state, VerificationResult.Passed(),
+                journal: journal).UpdateAsync(
+                    CreateRelease("2.0.0", "Example-2.0.0-full.nupkg"),
+                    initial, "C:/Temp/TurkuazInstaller", null,
+                    CancellationToken.None, resumeEntry: resume));
 
-        Assert.Equal(1, engine.ApplyCalls);
-        Assert.Equal(SemanticVersion.Parse("2.0.0"), state.CurrentState?.Version);
-        Assert.Null(journal.Current);
+        Assert.Contains("Pending reboot prerequisite", error.Message);
+        Assert.Equal(0, engine.ApplyCalls);
+        Assert.Equal(initial.Version, state.CurrentState?.Version);
     }
 
     [Fact]
