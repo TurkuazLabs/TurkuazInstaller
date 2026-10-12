@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerRecoveryTests.cs
 // 📌 Amac: Installer workflow hata durumlarinda state commit edilmemesi ve rollback state guvenligini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.2.0
+// Version: 1.3.0
 // Aciklama: Verification, package apply ve Windows integration failure senaryolarinda state commit sinirini ve retry-guvenli recovery davranisini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -28,6 +28,99 @@ public sealed class InstallerRecoveryTests
 {
     private const string Digest =
         "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    [Fact]
+    public async Task UpdateAsync_ForgedRebootResume_DoesNotReplaceApplyingJournal()
+    {
+        var packageId = PackageId.Parse("example-app");
+        var initial = new InstalledPackageState(
+            packageId, SemanticVersion.Parse("1.0.0"),
+            ReleaseChannel.Stable, "C:/Apps/Example");
+        var now = DateTimeOffset.UtcNow;
+        var interrupted = new InstallerOperationJournalEntry(
+            Guid.NewGuid(), packageId, InstallerOperationType.Update,
+            "2.0.0", initial.TargetPath,
+            InstallerOperationPhase.Applying, now, now, null);
+        var forged = interrupted with
+        {
+            OperationId = Guid.NewGuid(),
+            Phase = InstallerOperationPhase.RebootResumeArmed,
+            PendingPrerequisiteId = "fake-prerequisite"
+        };
+        var journal = new TrackingOperationJournal(interrupted);
+        var engine = new TrackingPackageEngine();
+        var state = new TrackingStateRepository(initial);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreateService(
+                engine, state, VerificationResult.Passed(),
+                journal: journal).UpdateAsync(
+                    CreateRelease("2.0.0", "Example-2.0.0-full.nupkg"),
+                    initial, "C:/Temp/TurkuazInstaller", null,
+                    CancellationToken.None, resumeEntry: forged));
+
+        Assert.Equal(interrupted, journal.Current);
+        Assert.Equal(0, engine.StageCalls);
+        Assert.Equal(0, engine.ApplyCalls);
+        Assert.Equal(0, state.SaveCalls);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_RebootResumeWithoutDurableJournal_FailsClosed()
+    {
+        var packageId = PackageId.Parse("example-app");
+        var initial = new InstalledPackageState(
+            packageId, SemanticVersion.Parse("1.0.0"),
+            ReleaseChannel.Stable, "C:/Apps/Example");
+        var now = DateTimeOffset.UtcNow;
+        var resume = new InstallerOperationJournalEntry(
+            Guid.NewGuid(), packageId, InstallerOperationType.Update,
+            "2.0.0", initial.TargetPath,
+            InstallerOperationPhase.RebootResumeArmed, now, now, null,
+            PendingPrerequisiteId: "fixture-prerequisite");
+        var engine = new TrackingPackageEngine();
+        var state = new TrackingStateRepository(initial);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CreateService(
+                engine, state, VerificationResult.Passed()).UpdateAsync(
+                    CreateRelease("2.0.0", "Example-2.0.0-full.nupkg"),
+                    initial, "C:/Temp/TurkuazInstaller", null,
+                    CancellationToken.None, resumeEntry: resume));
+
+        Assert.Equal(0, engine.StageCalls);
+        Assert.Equal(0, engine.ApplyCalls);
+        Assert.Equal(0, state.SaveCalls);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ExactPersistedResumeCheckpoint_MayContinue()
+    {
+        var packageId = PackageId.Parse("example-app");
+        var initial = new InstalledPackageState(
+            packageId, SemanticVersion.Parse("1.0.0"),
+            ReleaseChannel.Stable, "C:/Apps/Example");
+        var now = DateTimeOffset.UtcNow;
+        var resume = new InstallerOperationJournalEntry(
+            Guid.NewGuid(), packageId, InstallerOperationType.Update,
+            "2.0.0", initial.TargetPath,
+            InstallerOperationPhase.RebootResumeArmed, now, now, null,
+            PendingPrerequisiteId: "fixture-prerequisite");
+        var journal = new TrackingOperationJournal(resume);
+        var engine = new TrackingPackageEngine();
+        var state = new TrackingStateRepository(initial);
+
+        await CreateService(
+            engine, state, VerificationResult.Passed(),
+            journal: journal).UpdateAsync(
+                CreateRelease("2.0.0", "Example-2.0.0-full.nupkg"),
+                initial, "C:/Temp/TurkuazInstaller", null,
+                CancellationToken.None, resumeEntry: resume);
+
+        Assert.Equal(1, engine.ApplyCalls);
+        Assert.Equal(SemanticVersion.Parse("2.0.0"), state.CurrentState?.Version);
+        Assert.Null(journal.Current);
+    }
 
     [Fact]
     public async Task UpdateAsync_FailureAfterApplyCheckpoint_BlocksNextAutomaticRetry()
