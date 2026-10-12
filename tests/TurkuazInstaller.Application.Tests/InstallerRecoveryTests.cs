@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/InstallerRecoveryTests.cs
 // 📌 Amac: Installer workflow hata durumlarinda state commit edilmemesi ve rollback state guvenligini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.4.1
+// Version: 1.4.2
 // Aciklama: Verification, package apply ve Windows integration failure senaryolarinda state commit sinirini ve retry-guvenli recovery davranisini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -363,6 +363,32 @@ public sealed class InstallerRecoveryTests
         Assert.Equal(0, engine.StageCalls);
         Assert.Equal(0, engine.ApplyCalls);
         Assert.Equal(0, state.SaveCalls);
+    }
+
+    [Fact]
+    public async Task InstallAsync_CompletedUninstallJournalWithoutState_AllowsNewInstall()
+    {
+        var packageId = PackageId.Parse("example-app");
+        var now = DateTimeOffset.UtcNow;
+        var completed = new InstallerOperationJournalEntry(
+            Guid.NewGuid(), packageId, InstallerOperationType.Uninstall,
+            "1.0.0", "C:/Apps/Example",
+            InstallerOperationPhase.Completed, now, now, null);
+        var journal = new TrackingOperationJournal(completed);
+        var engine = new TrackingPackageEngine();
+        var state = new TrackingStateRepository();
+
+        await CreateService(
+            engine, state, VerificationResult.Passed(),
+            journal: journal).InstallAsync(
+                CreateRelease("1.0.0", "Example-Setup.exe"),
+                "C:/Apps/Example", "C:/Temp/TurkuazInstaller",
+                null, CancellationToken.None);
+
+        Assert.Equal(1, engine.ApplyCalls);
+        Assert.Equal(1, state.SaveCalls);
+        Assert.Equal(SemanticVersion.Parse("1.0.0"), state.CurrentState?.Version);
+        Assert.Null(journal.Current);
     }
 
     [Fact]
