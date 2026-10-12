@@ -18,6 +18,8 @@ using TurkuazInstaller.Domain.State;
 using TurkuazInstaller.Presentation.Language;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
+using TurkuazInstaller.Contracts.Operations;
+using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.WinUI.Config;
 using TurkuazInstaller.WinUI.Tools;
 
@@ -247,9 +249,10 @@ internal sealed class WinUiInstallerRuntimeService
                             () =>
                                 _workflowService.InstallAsync(
                                     release,
-                                    ResolveInstallTarget(
+                                    ResolveScopedInstallTarget(
                                         request.TargetPath,
-                                        release),
+                                        release,
+                                        request.InstallScope),
                                     operationStagingRoot,
                                     progress,
                                     cancellationToken,
@@ -545,6 +548,21 @@ internal sealed class WinUiInstallerRuntimeService
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 InstalledStateNotFoundMessage);
+    }
+
+    private static string ResolveScopedInstallTarget(
+        string requestedTarget,
+        PackageRelease release,
+        InstallerInstallScope? scope)
+    {
+        var target = ResolveInstallTarget(requestedTarget, release);
+        if (scope.HasValue)
+        {
+            InstallerInstallScopePolicy.ValidateCurrentRuntime(scope.Value);
+            InstallerInstallScopePolicy.ValidatePerUserTarget(target);
+        }
+
+        return target;
     }
 
     private static string ResolveInstallTarget(
