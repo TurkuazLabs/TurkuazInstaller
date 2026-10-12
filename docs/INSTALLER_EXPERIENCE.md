@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -51,7 +51,20 @@ Velopack, so adopting this UI is a separate signed-manifest integration task.
 
 ## Quick install vs custom install
 
-Both intended UX modes must ask for `PerUser` or `PerMachine`.
+The native WinUI Install button now opens a confirmation dialog with Quick
+and Custom modes and the installation scope options.
+
+- Quick is selected by default, clears any manual target override and uses
+  the **signed manifest** default target. The target is checked against the
+  current user's LocalAppData location once the release is resolved.
+- Custom reveals a target field; current policy restricts it to the current
+  user's LocalAppData subtree and rejects traversal outside it.
+- Both modes show the scope selection; `PerMachine` is visible but disabled
+  until the real machine-wide pipeline is accepted.
+- The dialog's secondary action exits without installing. Its primary
+  action delegates to Controller -> Service -> signed Runtime.
+
+Both modes must eventually support choosing `PerUser` or `PerMachine`.
 Quick install skips optional shortcut/path pages, never the scope decision.
 Use `InstallerInstallScope` enum and `InstallerInstallScopePolicy`, not string
 path prefix checks. Current runtime is per-user only; machine-wide selection
