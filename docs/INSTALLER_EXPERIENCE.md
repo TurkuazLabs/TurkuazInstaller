@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 1.7.0
+# Version: 1.8.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -158,6 +158,23 @@ Velopack issue https://github.com/velopack/velopack/issues/1040 documents
 a known risk with per-machine lifecycle hook impersonation for the
 `Either` MSI scope. Avoid silent escalation, and keep the actual
 system-wide MSI execution in a separately reviewed privileged Tool adapter.
+
+## MSI repair regression (experimental LAB gate)
+
+After MSI install and assignment verification, the shared
+`Test-MsiScopeLifecycle.ps1` now deliberately removes **only a version
+marker inside the unique disposable test fixture**. It then attempts
+Windows Installer `/fa` repair in the same scope and original target,
+requiring the marker, main executable, updater and registered assignment
+to remain correct before uninstalling the fixture.
+
+This is a **new acceptance experiment**, not evidence that Velopack MSI
+repair already works. A failed test means native MSI repair is not approved
+for production, even if normal install and uninstall pass. If Velopack's MSI
+wrap does not repair application payloads, the user-facing `Onar` operation
+must be an explicit, signed, manifest-checked installer workflow rather than
+a misleading raw Windows Installer maintenance command. Do not delete
+actual user binaries to simulate this experiment on production machines.
 
 ## Release and acceptance gates
 
