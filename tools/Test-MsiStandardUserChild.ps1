@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiStandardUserChild.ps1
 # 📌 Amac: Gecici CI standard-user oturumunda gercek PerUser MSI install ve uninstall smoke
 # 📌 Modul - Tool PowerShell
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Admin olmayan Windows tokeni ve kullaniciya ozgu MSI kaydini fail-closed dogrular
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -28,7 +28,8 @@ if ($profile.Count -ne 1 -or $profile[0].RequiresElevation) {
     throw "PerUser MSI scope configuration is invalid."
 }
 
-$root = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)
+. (Join-Path $PSScriptRoot "Initialize-MsiLabStandardUserProfile.ps1")
+$root = Initialize-MsiLabStandardUserProfile -ExpectedSid $ExpectedSid
 if ([string]::IsNullOrWhiteSpace($root)) {
     throw "LocalAppData profile has not initialized for the standard user."
 }
