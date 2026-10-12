@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.6.0
+# Version: 1.7.0
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -160,3 +160,32 @@ the workflow committed new state. A real updater killed in the middle of
 a file replacement, signed artifact recovery, and trusted automatic
 reconciliation/rollback are still outstanding acceptance gates. Neither
 case authorizes production machine-wide recovery.
+
+## Running-updater process termination LAB gate
+
+The hosted-Windows E2E now includes a third **isolated, disposable**
+scenario. After the real workflow persists `Applying`, the fixture
+runner starts the real install-root `Update.exe`. A signal publishes
+the updater PID only after process creation. The parent requires that
+this PID still identifies a live `Update.exe`, then kills the
+workflow process tree and waits for that updater process to exit.
+
+A successful check establishes that:
+- the real updater process was running when the parent observed it,
+  and was terminated with the fixture workflow process tree;
+- committed JSON remains V1 and the orphaned `Applying` journal
+  retains the same operation ID;
+- the read-only assessment requires human review;
+- new update/uninstall operations are refused without journal rewrite;
+- external fixture UserData bytes survive unchanged.
+
+The current on-disk application marker is **not** required to equal V1
+or V2 after this test. It may be missing or mixed after a process
+termination. Neither a V1 nor V2 marker can authorize reconciliation.
+
+This does **not** prove that termination fell inside a specific file
+write or filesystem replacement. It also does not prove completeness
+of a partial payload. A reproducible mid-file fault injection, full
+on-disk inventory, signed recovery package verification, and explicit
+privileged repair remain separate acceptance gates. The test stays
+GitHub-hosted Windows LAB only; it must not target customer installs.
