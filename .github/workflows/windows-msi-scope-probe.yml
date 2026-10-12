@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-msi-scope-probe.yml
 # 📌 Amac: Ortak installer icin iki MSI kurulum kapsamini Windows CI uzerinde paketler
 # 📌 Modul - CI YAML
-# Version: 1.2.0
-# Aciklama: Gercek machine-wide install yapmadan per-user/per-machine MSI uretim kapisi
+# Version: 1.3.0
+# Aciklama: Izole Windows CI icin iki MSI scope gercek install-uninstall ve kayit baglami kabul testi
 # Bagimli Oldugu Katman: Config | Tool | CI
 
 name: Windows MSI Scope Packaging Probe
