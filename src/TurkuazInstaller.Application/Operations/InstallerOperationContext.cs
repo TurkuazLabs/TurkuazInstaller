@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerOperationContext.cs
 // 📌 Amac: Bir installer operasyonunun crash journal ve structured log checkpoint yasam dongusunu koordine eder
 // 📌 Modul - Service CSharp
-// Version: 1.5.0
+// Version: 1.6.0
 // Aciklama: Diagnostics storage hatalarini izole eder; reboot checkpointlerine ek olarak non-terminal warning event yazimini destekler
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -108,15 +108,25 @@ internal sealed class InstallerOperationContext
             {
                 Phase = phase,
                 UpdatedAtUtc = DateTimeOffset.UtcNow,
-                Failure = null
+                Failure = null,
+                InterruptedPhase = null
             };
+
+        // Package mutation must never begin without its durable journal
+        // checkpoint. Diagnostics for nonmutating phases remain best-effort.
+        var requireCheckpoint = phase is
+            InstallerOperationPhase.Applying or
+            InstallerOperationPhase.ApplyingIntegrations or
+            InstallerOperationPhase.SavingState or
+            InstallerOperationPhase.RemovingState;
 
         await PersistBestEffortAsync(
                 InstallerEventLevel.Information,
                 eventName,
                 message,
                 null,
-                cancellationToken)
+                cancellationToken,
+                requireCheckpoint)
             .ConfigureAwait(false);
     }
 
@@ -297,7 +307,8 @@ internal sealed class InstallerOperationContext
             {
                 Phase = phase,
                 UpdatedAtUtc = DateTimeOffset.UtcNow,
-                Failure = message
+                Failure = message,
+                InterruptedPhase = _entry.Phase
             };
 
         await PersistBestEffortAsync(
@@ -314,7 +325,8 @@ internal sealed class InstallerOperationContext
         string eventName,
         string message,
         string? errorType,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool requireCheckpoint = false)
     {
         if (_journal is not null)
         {
@@ -326,7 +338,7 @@ internal sealed class InstallerOperationContext
                         cancellationToken)
                     .ConfigureAwait(false);
             }
-            catch
+            catch when (!requireCheckpoint)
             {
             }
         }
