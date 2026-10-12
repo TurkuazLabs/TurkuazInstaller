@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-msi-scope-probe.yml
 # 📌 Amac: Ortak installer icin iki MSI kurulum kapsamini Windows CI uzerinde paketler
 # 📌 Modul - CI YAML
-# Version: 1.5.0
+# Version: 1.6.0
 # Aciklama: Izole Windows CI icin iki MSI scope gercek install-uninstall ve kayit baglami kabul testi
 # Bagimli Oldugu Katman: Config | Tool | CI
 
@@ -73,6 +73,25 @@ jobs:
           if ($parseErrors.Count -gt 0) {
             foreach ($item in $parseErrors) { Write-Host $item.ToString() }
             throw "Shared MSI scope lifecycle tool failed to parse"
+          }
+
+      - name: Parse non-admin MSI and Setup lifecycle scripts
+        shell: pwsh
+        run: |
+          $files = @(
+            'tools/Test-MsiStandardUser.ps1'
+            'tools/Test-MsiStandardUserChild.ps1'
+            'tools/Test-SetupStandardUserChild.ps1'
+          )
+          foreach ($file in $files) {
+            $parseErrors = $null
+            $tokens = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file).Path, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count -gt 0) {
+              foreach ($item in $parseErrors) { Write-Host "$($file): $item" }
+              throw "Non-admin lifecycle PowerShell parse failed"
+            }
           }
 
       - name: Package both MSI installation scopes without installation
