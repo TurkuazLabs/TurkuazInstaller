@@ -236,19 +236,19 @@ public sealed class MainWindowViewModel
             InstallerUiLabelKey.TargetPathPlaceholder);
 
     public bool IsPromotionVisible =>
-        _ui.Promotion.Enabled;
+        _ui.Promotion.Enabled == true;
 
     public string PromotionEyebrow =>
-        _ui.Promotion.Eyebrow;
+        _ui.Promotion.Eyebrow ?? string.Empty;
 
     public string PromotionTitle =>
-        _ui.Promotion.Title;
+        _ui.Promotion.Title ?? string.Empty;
 
     public string PromotionDescription =>
-        _ui.Promotion.Description;
+        _ui.Promotion.Description ?? string.Empty;
 
     public string PromotionProvider =>
-        _ui.Promotion.Provider;
+        _ui.Promotion.Provider ?? string.Empty;
 
     public string FooterLabel =>
         _ui.Footer;
