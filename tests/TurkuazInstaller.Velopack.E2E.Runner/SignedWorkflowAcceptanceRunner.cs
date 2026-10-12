@@ -1,6 +1,6 @@
 // Dosya: /tests/TurkuazInstaller.Velopack.E2E.Runner/SignedWorkflowAcceptanceRunner.cs
 // Amac: Gecici CMS imzali local manifest ile gercek Velopack package engine ve kalici state lifecycle testini birlestirir
-// Version: 0.2.0
+// Version: 0.3.0
 // Guvenlik: Ephemeral CI certificate, external trust pin, unsigned fixture; production signing veya VM kabul testi degildir
 
 using System.Security.Cryptography;
@@ -76,6 +76,8 @@ internal static class SignedWorkflowAcceptanceRunner
         var v1SetupManifest = Path.Combine(manifestRoot, "v1-install.yml");
         var v2Manifest = Path.Combine(manifestRoot, "v2-update.yml");
         var v1FullManifest = Path.Combine(manifestRoot, "v1-rollback.yml");
+        var v1BadRollbackDigestManifest =
+            Path.Combine(manifestRoot, "v1-rollback-wrong-hash.yml");
         var v2BadDigestManifest = Path.Combine(manifestRoot, "v2-wrong-hash.yml");
         var v2BrokenArchiveManifest = Path.Combine(manifestRoot, "v2-broken-archive.yml");
         var brokenArchiveRoot = Path.Combine(stagingRoot, "invalid-payload");
@@ -90,6 +92,9 @@ internal static class SignedWorkflowAcceptanceRunner
         await WriteSignedManifestAsync(v1SetupManifest, setupV1, VersionOne, certificate);
         await WriteSignedManifestAsync(v2Manifest, fullV2, VersionTwo, certificate);
         await WriteSignedManifestAsync(v1FullManifest, fullV1, VersionOne, certificate);
+        await WriteSignedManifestAsync(
+            v1BadRollbackDigestManifest, fullV1, VersionOne, certificate,
+            wrongDigest: true);
         await WriteSignedManifestAsync(
             v2BadDigestManifest, fullV2, VersionTwo, certificate, wrongDigest: true);
         // This manifest is genuinely CMS-signed and the SHA-256 matches the
@@ -218,6 +223,30 @@ internal static class SignedWorkflowAcceptanceRunner
         await AssertVersionAsync(
             stateRepository, packageId, installRoot, versionMarker, VersionTwo);
         AssertUserData(userDataPath, userData);
+
+        // Rollback is a separate integrity boundary. A correctly signed
+        // previous-release manifest carrying the wrong payload digest
+        // must not replace the installed V2 binaries or commit V1 state.
+        var invalidRollback = await ReadVerifiedAsync(v1BadRollbackDigestManifest);
+        try
+        {
+            await workflow.RollbackAsync(
+                releaseV2,
+                invalidRollback,
+                await RequireStateAsync(stateRepository, packageId),
+                stagingRoot, null, CancellationToken.None);
+            throw new InvalidOperationException(
+                "A signed rollback manifest with an invalid package digest unexpectedly succeeded.");
+        }
+        catch (InvalidDataException)
+        {
+            // Expected: artifact verifier fails before rollback apply.
+        }
+
+        await AssertVersionAsync(
+            stateRepository, packageId, installRoot, versionMarker, VersionTwo);
+        AssertUserData(userDataPath, userData);
+        Console.WriteLine("TURKUAZ_INSTALLER_SIGNED_ROLLBACK_BAD_HASH_FAIL_CLOSED_OK");
 
         var rollbackRelease = await ReadVerifiedAsync(v1FullManifest);
         await workflow.RollbackAsync(
