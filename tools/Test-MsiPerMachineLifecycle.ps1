@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiPerMachineLifecycle.ps1
 # 📌 Amac: Gecici Windows CI hostunda yalniz lab MSI'yi Program Files'a kurup resmi msiexec ile kaldirir
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.1
+# Version: 1.0.2
 # Aciklama: UAC/production signing iddiasi olmadan test fixture ile gercek per-machine install-uninstall kaniti
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -76,13 +76,31 @@ function Invoke-MsiChecked {
     $info.FileName = Join-Path $env:SystemRoot "System32/msiexec.exe"
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
-    foreach ($argument in $Arguments) {
-        $info.ArgumentList.Add($argument)
+    # Windows Installer parses PUBLICPROPERTY="value with spaces" itself.
+    # ProcessStartInfo.ArgumentList instead wraps the entire assignment in
+    # quotes, which can be interpreted as a malformed msiexec command line.
+    $commandParts = foreach ($argument in $Arguments) {
+        if ($argument.Contains('"')) {
+            throw "MSI lab argument contains unexpected quotation characters."
+        }
+        if ($argument.StartsWith("VELOPACK_INSTALLDIR=", [StringComparison]::Ordinal)) {
+            $target = $argument.Substring("VELOPACK_INSTALLDIR=".Length)
+            'VELOPACK_INSTALLDIR="' + $target + '"'
+        }
+        elseif ($argument.StartsWith("/")) {
+            $argument
+        }
+        else {
+            '"' + $argument + '"'
+        }
     }
-    $info.ArgumentList.Add("/l*v")
-    $info.ArgumentList.Add($LogPath)
+    if ($LogPath.Contains('"')) {
+        throw "MSI lab log path contains invalid quotes."
+    }
+    $info.Arguments = (($commandParts + @("/l*v", ('"' + $LogPath + '"'))) -join " ")
 
     Write-Host "INSTALLER_MSI_LAB_START $Operation (timeout=$TimeoutSeconds)"
+    Write-Host "INSTALLER_MSI_LAB_ARGUMENT_MODE explicit-property-value-quotes"
     $process = [System.Diagnostics.Process]::Start($info)
     if ($null -eq $process) {
         throw "msiexec process could not start for $Operation"
