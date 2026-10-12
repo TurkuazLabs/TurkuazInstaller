@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /tools/Test-MsiScopeLifecycle.ps1
 # 📌 Amac: Gecici Windows CI hostunda her lab MSI scope icin install ve uninstall testlerini tekrar kullanir
 # 📌 Modul - Tool PowerShell
-# Version: 1.3.0
-# Aciklama: Tek parametreli PerUser/PerMachine lifecycle, izole target, gercek install/uninstall ve dosya dogrulama
+# Version: 1.4.0
+# Aciklama: LAB MSI kurulum, kapsam, eksik dosyayi onarma ve kaldirma dogrulamasi tek scope araci uzerinden
 # Bagimli Oldugu Katman: Tool | Config | CI
 
 [CmdletBinding()]
@@ -227,6 +227,33 @@ try {
     }
     Write-Host "INSTALLER_MSI_SCOPE_REGISTRATION_OK $Scope assignment=$assignmentType"
     Write-Host "INSTALLER_MSI_SCOPE_INSTALLED_OK $Scope"
+
+    # Test-only damage: delete one marker inside this uniquely named fixture.
+    # The OS MSI repair must recover the same manifest version without moving
+    # the application outside the scope or breaking its updater executable.
+    Remove-Item -LiteralPath $marker -Force -ErrorAction Stop
+    if (Test-Path -LiteralPath $marker -PathType Leaf) {
+        throw "$Scope LAB marker deletion did not take effect."
+    }
+    Write-Host "INSTALLER_MSI_SCOPE_REPAIR_FIXTURE_DAMAGED $Scope"
+
+    Invoke-MsiChecked -Operation "repair" -LogPath (Join-Path $logDirectory "repair.log") -Arguments @(
+        "/fa", $msi, "/qn", "/norestart", "$installPropertyPrefix$installTarget"
+    )
+
+    if (-not (Test-Path -LiteralPath $marker -PathType Leaf) -or
+        [System.IO.File]::ReadAllText($marker).Trim() -cne $config.VersionOne) {
+        throw "$Scope MSI repair did not restore fixture marker contents."
+    }
+    if (-not (Test-Path -LiteralPath $fixture -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $updater -PathType Leaf)) {
+        throw "$Scope MSI repair removed other application binaries."
+    }
+    $repairAssignment = Get-LabInstalledAssignmentType -ProductCode $productCode
+    if ($repairAssignment -cne [string]$scopeProfile.MsiAssignmentType) {
+        throw "$Scope MSI repair changed the installed user/machine assignment."
+    }
+    Write-Host "INSTALLER_MSI_SCOPE_REPAIR_OK $Scope assignment=$repairAssignment"
 }
 finally {
     try {
