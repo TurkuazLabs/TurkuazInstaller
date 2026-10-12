@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Velopack.E2E.Runner/Program.cs
 // 📌 Amac: Gercek Velopack artifactlariyla TurkuazInstaller Package Engine yasam dongusunu uctan uca dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.2.0
+// Version: 1.3.0
 // Aciklama: Gercek Velopack install-update-repair-rollback-uninstall ve current disindaki user data byte korumasini dogrular
 //
 // Bagimli Oldugu Katman: Service | Tool
@@ -28,6 +28,22 @@ internal static class Program
     public static async Task<int> Main(
         string[] args)
     {
+        if (args.Length > 0 &&
+            string.Equals(args[0], "--crash-child", StringComparison.Ordinal))
+        {
+            try
+            {
+                await CrashJournalProcessAcceptanceRunner.RunChildAsync(
+                    args[1..]).ConfigureAwait(false);
+                return 0;
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine(exception.ToString());
+                return 1;
+            }
+        }
+
         if (args.Length != ExpectedArgumentCount)
         {
             Console.Error.WriteLine(
@@ -119,6 +135,13 @@ internal static class Program
                 markerFile,
                 dataDirectoryName,
                 dataMarkerFileName).ConfigureAwait(false);
+
+            // Real OS process kill at the durable Applying checkpoint.
+            // This does not kill the updater during file mutation; it
+            // validates the restart hold before the updater is launched.
+            await CrashJournalProcessAcceptanceRunner.RunAsync(
+                setupV1, fullV2, stagingRoot, markerFile,
+                dataDirectoryName, dataMarkerFileName).ConfigureAwait(false);
 
             Console.WriteLine("TURKUAZ_INSTALLER_VELOPACK_USER_DATA_PRESERVED_OK");
             Console.WriteLine("TURKUAZ_INSTALLER_VELOPACK_E2E_OK");
