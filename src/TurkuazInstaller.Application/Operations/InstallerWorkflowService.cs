@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 2.8.0
+// Version: 2.8.1
 // Aciklama: Optional staged update gate'i download oncesi ve pre-apply asamasinda fail-closed kontrol eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -619,12 +619,24 @@ public sealed class InstallerWorkflowService
                 .GetAsync(packageId, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (previous is not null && InstallerRecoveryPolicy.RequiresExplicitRecovery(previous))
+            if (previous is not null)
             {
-                throw new InstallerRecoveryRequiredException(
-                    packageId,
-                    previous.Phase,
-                    previous.InterruptedPhase);
+                // A pre-apply checkpoint is retry-safe only when it still
+                // belongs to this package and its committed install target.
+                // Evaluate this under the same package lock used for mutation.
+                var committed = await _stateRepository
+                    .GetAsync(packageId, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (InstallerRecoveryPolicy.RequiresExplicitRecovery(previous) ||
+                    InstallerRecoveryPolicy.HasMetadataConflict(
+                        packageId, previous, committed))
+                {
+                    throw new InstallerRecoveryRequiredException(
+                        packageId,
+                        previous.Phase,
+                        previous.InterruptedPhase);
+                }
             }
         }
 
