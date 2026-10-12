@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Velopack.E2E.Runner/CrashJournalProcessAcceptanceRunner.cs
 // 📌 Amac: GitHub-hosted Windows'ta gercek workflow process kill ve Applying checkpoint recovery-hold E2E
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Update.exe once ve tamamlandiktan sonra child kill, disk-state farki, journal ve user data korunumu
 // Bagimli Oldugu Katman: Service | Repo | Tool | CI
 
@@ -209,6 +209,26 @@ internal static class CrashJournalProcessAcceptanceRunner
                     new JsonOperationJournalRepositoryOptions(journalRoot));
                 var reopenedState = new JsonInstallStateRepository(
                     new JsonInstallStateRepositoryOptions(stateRoot));
+
+                var assessment = await new InstallerRecoveryAssessmentService(
+                    reopenedState, reopenedJournal).AssessAsync(
+                        packageId, CancellationToken.None);
+                if (assessment.Status !=
+                        InstallerRecoveryAssessmentStatus.RecoveryRequired ||
+                    assessment.OperationId != checkpoint.OperationId ||
+                    assessment.JournalPhase != InstallerOperationPhase.Applying ||
+                    assessment.CommittedVersion != VersionOne ||
+                    assessment.RequestedVersion != VersionTwo ||
+                    !assessment.RequiresHumanReview)
+                {
+                    throw new InvalidOperationException(
+                        "Read-only recovery assessment missed the orphaned Applying checkpoint.");
+                }
+                Console.WriteLine(
+                    afterUpdater
+                        ? "TURKUAZ_INSTALLER_POST_APPLY_READ_ONLY_RECOVERY_REPORT_OK"
+                        : "TURKUAZ_INSTALLER_PRE_APPLY_READ_ONLY_RECOVERY_REPORT_OK");
+
                 var retry = new InstallerWorkflowService(
                     new DefaultArtifactDownloader(client),
                     new Sha256ArtifactVerifier(), actualEngine, reopenedState,
