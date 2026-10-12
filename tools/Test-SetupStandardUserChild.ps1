@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-SetupStandardUserChild.ps1
 # 📌 Amac: Standart Windows hesabi ile Velopack Setup.exe per-user kurulumu ve kaldirmayi dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.1
+# Version: 1.0.2
 # Aciklama: MSI'yi reddeden sunucu ilkesinden bagimsiz gercek user-scope Setup kabul testi
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -45,6 +45,8 @@ function Invoke-VeloTestProcess {
     $info.FileName = $File
     $info.UseShellExecute = $false
     $info.CreateNoWindow = $true
+    $info.RedirectStandardOutput = $true
+    $info.RedirectStandardError = $true
     foreach ($arg in $Arguments) {
         $info.ArgumentList.Add($arg)
     }
@@ -53,12 +55,22 @@ function Invoke-VeloTestProcess {
         throw "Velopack $Operation could not start."
     }
     try {
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
         if (-not $process.WaitForExit(90000)) {
             $process.Kill($true)
             $null = $process.WaitForExit(5000)
             throw "Velopack $Operation timed out."
         }
         if ($process.ExitCode -ne 0) {
+            $stdout = $stdoutTask.GetAwaiter().GetResult()
+            $stderr = $stderrTask.GetAwaiter().GetResult()
+            if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+                Write-Host "VELO_LAB_STDOUT: $($stdout.Substring([Math]::Max(0, $stdout.Length - 3000)))"
+            }
+            if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+                Write-Warning "VELO_LAB_STDERR: $($stderr.Substring([Math]::Max(0, $stderr.Length - 3000)))"
+            }
             throw "Velopack $Operation failed with exit code $($process.ExitCode)."
         }
     }
