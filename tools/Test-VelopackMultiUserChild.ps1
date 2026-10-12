@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-VelopackMultiUserChild.ps1
 # 📌 Amac: Iki farkli Windows kullanicisinda Velopack kurulum veri ve uninstall izolasyonunu dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: Kurulum, kontrol, kaldirma ve diger hesapta yokluk asamalari paylasilan Tool ile calisir
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -34,8 +34,8 @@ $markerContent = "$RunId|$ExpectedSid"
 $setup = [IO.Path]::GetFullPath($PackagePath)
 
 if ($Phase -eq "Absent") {
-    if (Test-Path -LiteralPath $target -PathType Container -or
-        Test-Path -LiteralPath $dataMarker -PathType Leaf) {
+    if ((Test-Path -LiteralPath $target -PathType Container) -or
+        (Test-Path -LiteralPath $dataMarker -PathType Leaf)) {
         throw "This user already has another user's isolated installation/data."
     }
 }
