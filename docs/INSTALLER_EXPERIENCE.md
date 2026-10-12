@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 1.8.0
+# Version: 1.9.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -168,13 +168,21 @@ Windows Installer `/fa` repair in the same scope and original target,
 requiring the marker, main executable, updater and registered assignment
 to remain correct before uninstalling the fixture.
 
-This is a **new acceptance experiment**, not evidence that Velopack MSI
-repair already works. A failed test means native MSI repair is not approved
-for production, even if normal install and uninstall pass. If Velopack's MSI
-wrap does not repair application payloads, the user-facing `Onar` operation
-must be an explicit, signed, manifest-checked installer workflow rather than
-a misleading raw Windows Installer maintenance command. Do not delete
-actual user binaries to simulate this experiment on production machines.
+[Windows MSI Scope CI #38261820518](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/38261820518)
+passed the actual **PerUser and PerMachine `msiexec /fa` repair** after
+deliberate deletion of the test fixture's version marker. The CI verified
+that the marker was restored with the original contents, the application's
+main executable and updater survived, the Windows Installer assignment
+remained `0` / `1`, and uninstall succeeded. The same run passed the
+two-user non-admin uninstall/reinstall user-data isolation regression.
+
+This is accepted **only** as basic LAB file-repair behavior for the pinned
+Velopack MSI fixture. It does not prove all application binaries, signed
+artifact validation during repair, privileged lifecycle hooks, production
+installer UI, multi-user MSI repair or rollback. The user-facing `Onar`
+workflow must still enforce signed-manifest policy and keep real user data
+safe. Do not intentionally delete user binaries on production machines
+for this test.
 
 ## Release and acceptance gates
 
