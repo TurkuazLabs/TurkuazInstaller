@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 1.9.0
+# Version: 2.0.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -183,6 +183,26 @@ installer UI, multi-user MSI repair or rollback. The user-facing `Onar`
 workflow must still enforce signed-manifest policy and keep real user data
 safe. Do not intentionally delete user binaries on production machines
 for this test.
+
+## Malformed MSI failure isolation (LAB acceptance)
+
+The shared MSI scope test now adds a controlled **invalid package** operation
+after the successful repair, before normal uninstall. A deliberately
+malformed, locally generated MSI file must be rejected with Windows Installer
+error 1619 or 1620. The valid installed application's executable and updater
+SHA-256 digests, its version marker and registered Windows Installer
+`AssignmentType` must remain unchanged in both PerUser and PerMachine scopes.
+
+A separate LAB user-data marker outside the application install root must
+also survive repair, invalid package rejection and uninstall. The marker
+is created solely in the disposable GitHub-hosted runner's temporary area
+and removed when the test succeeds. No real user data is touched.
+
+This is a **malformed-package rejection test**, not cryptographic signature
+verification, transactional update rollback, signed-manifest authorization,
+or a machine-wide multi-user upgrade test. Never equate a green test with
+production update/rollback acceptance. It deliberately does not enable the
+Program Files installation option in the WinUI wizard.
 
 ## Release and acceptance gates
 
