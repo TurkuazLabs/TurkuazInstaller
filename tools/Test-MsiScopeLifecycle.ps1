@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiScopeLifecycle.ps1
 # 📌 Amac: Gecici Windows CI hostunda her lab MSI scope icin install ve uninstall testlerini tekrar kullanir
 # 📌 Modul - Tool PowerShell
-# Version: 1.5.0
+# Version: 1.6.0
 # Aciklama: LAB MSI kurulum, bozuk paket reddi, onarma, sahiplik ve kullanici verisi izolasyonu kontrolu
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -69,6 +69,21 @@ if (Test-Path -LiteralPath $installTarget) {
 $msi = $msis[0].FullName
 $installSucceeded = $false
 $uninstallSucceeded = $false
+
+# LAB-only stand-in for user data, stored outside the application target.
+# A repair, rejected package, or uninstall must never mutate this marker.
+$dataRoot = Join-Path $env:RUNNER_TEMP "installer-msi-userdata-$runId"
+New-Item -ItemType Directory -Path $dataRoot -Force | Out-Null
+$dataMarker = Join-Path $dataRoot "profile-state.txt"
+$dataContent = "scope=$Scope;run=$runId"
+[IO.File]::WriteAllText($dataMarker, $dataContent)
+
+function Assert-LabUserDataUnchanged {
+    if (-not (Test-Path -LiteralPath $dataMarker -PathType Leaf) -or
+        [IO.File]::ReadAllText($dataMarker) -cne $dataContent) {
+        throw "$Scope LAB user data changed during maintenance."
+    }
+}
 
 function Get-LabMsiProductCode {
     param([string]$PackagePath)
@@ -262,6 +277,7 @@ try {
     if ($repairAssignment -cne [string]$scopeProfile.MsiAssignmentType) {
         throw "$Scope MSI repair changed the installed user/machine assignment."
     }
+    Assert-LabUserDataUnchanged
     Write-Host "INSTALLER_MSI_SCOPE_REPAIR_OK $Scope assignment=$repairAssignment"
 
     # A broken package must not mutate a previously installed LAB product.
@@ -289,6 +305,7 @@ try {
     if ($assignmentAfterFailure -cne [string]$scopeProfile.MsiAssignmentType) {
         throw "$Scope invalid MSI changed the installed assignment scope."
     }
+    Assert-LabUserDataUnchanged
     Write-Host "INSTALLER_MSI_INVALID_PACKAGE_PRESERVES_INSTALL_OK $Scope"
 }
 finally {
@@ -319,4 +336,7 @@ if ($hasActive -or $hasUpdater) {
     throw "$Scope MSI uninstall left active application binaries."
 }
 
+Assert-LabUserDataUnchanged
+Remove-Item -LiteralPath $dataRoot -Recurse -Force
+Write-Host "INSTALLER_MSI_SCOPE_USER_DATA_PROTECTED_OK $Scope"
 Write-Host "INSTALLER_MSI_SCOPE_LIFECYCLE_OK $Scope"
