@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiPerMachineLifecycle.ps1
 # 📌 Amac: Gecici Windows CI hostunda yalniz lab MSI'yi Program Files'a kurup resmi msiexec ile kaldirir
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: UAC/production signing iddiasi olmadan test fixture ile gercek per-machine install-uninstall kaniti
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -10,7 +10,7 @@ param(
     [string]$ConfigPath = "config/velopack-e2e.psd1",
     [string]$ArtifactsRoot = "artifacts/installer-msi-scope-probe",
     [ValidateRange(20, 240)]
-    [int]$TimeoutSeconds = 180
+    [int]$TimeoutSeconds = 90
 )
 
 Set-StrictMode -Version Latest
@@ -46,6 +46,25 @@ $msi = $msis[0].FullName
 $installSucceeded = $false
 $uninstallSucceeded = $false
 
+function Write-LabMsiLogTail {
+    param(
+        [string]$LogPath,
+        [string]$Operation
+    )
+
+    if (-not (Test-Path -LiteralPath $LogPath -PathType Leaf)) {
+        Write-Warning "MSI lab log missing for $Operation"
+        return
+    }
+
+    Write-Host "INSTALLER_MSI_LAB_LOG_TAIL_BEGIN $Operation"
+    Get-Content -LiteralPath $LogPath -Tail 90 |
+        ForEach-Object {
+            Write-Host "MSI_LAB_LOG: $_"
+        }
+    Write-Host "INSTALLER_MSI_LAB_LOG_TAIL_END $Operation"
+}
+
 function Invoke-MsiChecked {
     param(
         [string[]]$Arguments,
@@ -63,6 +82,7 @@ function Invoke-MsiChecked {
     $info.ArgumentList.Add("/l*v")
     $info.ArgumentList.Add($LogPath)
 
+    Write-Host "INSTALLER_MSI_LAB_START $Operation (timeout=$TimeoutSeconds)"
     $process = [System.Diagnostics.Process]::Start($info)
     if ($null -eq $process) {
         throw "msiexec process could not start for $Operation"
@@ -71,9 +91,11 @@ function Invoke-MsiChecked {
         if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
             $process.Kill($true)
             $process.WaitForExit(5000) | Out-Null
+            Write-LabMsiLogTail -LogPath $LogPath -Operation $Operation
             throw "MSI $Operation timeout"
         }
         if ($process.ExitCode -ne 0) {
+            Write-LabMsiLogTail -LogPath $LogPath -Operation $Operation
             throw "MSI $Operation failed, exit=$($process.ExitCode)"
         }
         Write-Host "INSTALLER_MSI_MACHINE_PROCESS_OK $Operation"
