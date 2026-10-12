@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerRecoveryPolicy.cs
 // 📌 Amac: Kesintiye ugrayan operasyonlarin recovery kilidini tek typed kuralla belirler
 // 📌 Modul - Service CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Workflow mutation guard ve salt-okunur recovery inceleme ayni policy'yi kullanir
 // Bagimli Oldugu Katman: Service | Domain
 
@@ -24,6 +24,13 @@ internal static class InstallerRecoveryPolicy
         if (entry.PackageId != packageId)
         {
             return true;
+        }
+
+        // A durable Completed checkpoint is not evidence of a partial
+        // mutation. A completed uninstall legitimately has no state.
+        if (entry.Phase == InstallerOperationPhase.Completed)
+        {
+            return false;
         }
 
         if (state is null)
