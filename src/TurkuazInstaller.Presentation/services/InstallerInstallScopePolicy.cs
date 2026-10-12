@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerInstallScopePolicy.cs
 // 📌 Amac: Hedef kurulum motoru sistem genelinde kuruluma hazir degilken fail-closed karar verir
 // 📌 Modul - Service CSharp
-// Version: 1.0.0
+// Version: 1.1.0
 // Aciklama: Ortak wizard secimlerini ayrik typed scope policy ile dogrular
 //
 // Bagimli Oldugu Katman: Service | Tool | Config
@@ -31,4 +31,32 @@ public static class InstallerInstallScopePolicy
             selectedScope,
             "Gecersiz kurulum kapsami.");
     }
+    public static void ValidatePerUserTarget(string targetPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+
+        var userDataRoot = Environment.GetFolderPath(
+            Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(userDataRoot))
+        {
+            throw new InvalidOperationException(
+                "Current user AppData directory cannot be resolved.");
+        }
+
+        var root = Path.GetFullPath(userDataRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        var target = Path.GetFullPath(
+            Environment.ExpandEnvironmentVariables(targetPath));
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        if (!target.StartsWith(root, comparison))
+        {
+            throw new InvalidOperationException(
+                "Per-user custom install must remain inside current user AppData.");
+        }
+    }
+
 }
