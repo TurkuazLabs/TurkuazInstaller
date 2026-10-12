@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiStandardUser.ps1
 # 📌 Amac: Gecici GitHub Windows ortaminda admin olmayan ayri hesapla PerUser MSI testini calistirir
 # 📌 Modul - Tool PowerShell
-# Version: 1.1.0
+# Version: 1.1.1
 # Aciklama: Standard user MSI policy sonucu ve Velopack Setup lifecycle testi, tek hesaptan ve cleanup ile
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -119,6 +119,10 @@ try {
                 throw "$Label standard-user process timed out."
             }
             if ($process.ExitCode -ne 0) {
+                if (Test-Path -LiteralPath $childOut -PathType Leaf) {
+                    Get-Content -LiteralPath $childOut -Tail 35 |
+                        ForEach-Object { Write-Host "NONADMIN_STDOUT: $_" }
+                }
                 if (Test-Path -LiteralPath $childErr -PathType Leaf) {
                     Get-Content -LiteralPath $childErr -Tail 30 |
                         ForEach-Object { Write-Host "NONADMIN_ERROR: $_" }
