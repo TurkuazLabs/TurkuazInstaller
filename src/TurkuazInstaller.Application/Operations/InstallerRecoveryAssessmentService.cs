@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerRecoveryAssessmentService.cs
 // 📌 Amac: Kurulum journal ve committed state kayitlarini salt-okunur inceleyerek kurtarma ihtiyacini bildirir
 // 📌 Modul - Service CSharp
-// Version: 1.0.0
+// Version: 1.1.0
 // Aciklama: Kayit uyumsuzlugunu ve mutation checkpointlerini fail-closed siniflandirir, hicbir kaydi degistirmez
 // Bagimli Oldugu Katman: Service | Repo | Domain
 
@@ -44,19 +44,16 @@ public sealed class InstallerRecoveryAssessmentService
         if (entry is null)
         {
             return new InstallerRecoveryAssessment(
-                packageId, InstallerRecoveryAssessmentStatus.NoJournal,
+                packageId,
+                state is not null && state.PackageId != packageId
+                    ? InstallerRecoveryAssessmentStatus.MetadataConflict
+                    : InstallerRecoveryAssessmentStatus.NoJournal,
                 null, null, null, null, state?.Version.ToString(),
                 null, state?.TargetPath);
         }
 
-        var mismatch = entry.PackageId != packageId ||
-            state is not null &&
-            (state.PackageId != packageId ||
-                !string.Equals(entry.TargetPath, state.TargetPath,
-                    OperatingSystem.IsWindows()
-                        ? StringComparison.OrdinalIgnoreCase
-                        : StringComparison.Ordinal)) ||
-            state is null && entry.Operation != InstallerOperationType.Install;
+        var mismatch = InstallerRecoveryPolicy.HasMetadataConflict(
+            packageId, entry, state);
 
         var status = mismatch
             ? InstallerRecoveryAssessmentStatus.MetadataConflict
