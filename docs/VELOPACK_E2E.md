@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_E2E.md
 # 📌 Amac: TurkuazInstaller gercek Velopack E2E kalite kapisinin kapsamini ve failure anlamini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.2.0
+# Version: 1.3.0
 # Aciklama: vpk ile gercek Setup/full package uretimini ve Package Engine install-update-repair-rollback-uninstall test zincirini tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -64,8 +64,24 @@ certificate pini yanlissa release okunmamalidir; gecerli imzali
 manifest yanlis payload SHA-256 tasiyorsa UpdateAsync gercek
 package mutation ve state commit oncesinde fail-closed bitmelidir.
 
+Ek olumsuz akislar:
+- CMS manifest imzasi ve artifact SHA-256 eslesse dahi `nupkg`
+  arsivi bozuksa gercek Velopack updater paketi reddetmeli; V1
+  install state, aktif surum ve UserData korunmalidir.
+- V2 basarili update/repair sonrasinda, V1 geri alma manifesti
+  imzali olmasina ragmen paket SHA-256 degeri yanlissa rollback
+  uygulanmamali; V2 state/disk marker ve UserData korunmalidir.
+  Ardindan gecerli V1 manifestiyle normal geri alma basarmalidir.
+
+Bu testler gecersiz paket/rollback girisinin fail-closed oldugunu
+kanitlar; paket kopyalanmaya basladiktan sonra beklenmedik crash,
+atik olmadan otomatik recovery ya da production Authenticode
+imzasi/Windows 10 UAC davranisini kanitlamaz.
+
 CI beklenen cikti:
 - TURKUAZ_INSTALLER_SIGNED_WORKFLOW_FAIL_CLOSED_OK
+- TURKUAZ_INSTALLER_SIGNED_BROKEN_ARTIFACT_FAIL_CLOSED_OK
+- TURKUAZ_INSTALLER_SIGNED_ROLLBACK_BAD_HASH_FAIL_CLOSED_OK
 - TURKUAZ_INSTALLER_SIGNED_REAL_VELOPACK_WORKFLOW_E2E_OK
 
 Guvenlik ve kapsam sinirlari:
