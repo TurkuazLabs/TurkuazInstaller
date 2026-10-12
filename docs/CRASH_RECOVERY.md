@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -63,5 +63,20 @@ real process-termination-during-update E2E remain separate acceptance gates.
 
 Unit tests cover simulated apply failure followed by a new service instance,
 orphaned mutation phases, legacy journal records, safe pre-apply retry,
-failed durable apply checkpoint and JSON phase round-tripping. These simulate
-recovery boundaries; they do **not** kill a real Windows installer process.
+failed durable apply checkpoint and JSON phase round-tripping.
+
+A separate **persisted-disk integration regression**
+(`InstallerPersistedRecoverySafetyTests` in Infrastructure tests) uses
+real filesystem application markers, a separate user-data file, an actual
+atomic JSON installed-state repository and an actual JSON operation journal.
+The controlled LAB package adapter modifies the V2 marker *before* failing.
+A fresh service and freshly opened repositories must then reject update
+and uninstall, leave the committed V1 state untouched, preserve the
+interrupted operation ID and keep user data unchanged. Another test
+loads an orphaned `Applying` checkpoint directly from persisted JSON.
+This detects the dangerous disk-V2/state-V1 divergence across process
+service instances, without inventing an automatic fix.
+
+These tests simulate interruption after file mutation; they **do not**
+terminate a real Velopack or Windows Installer process and do not prove
+transactional recovery for all disk states.
