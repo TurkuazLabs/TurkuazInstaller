@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Invoke-MsiScopeProbe.ps1
 # 📌 Amac: Ortak Velopack MSI PerUser ve PerMachine paketleme kabiliyetini lab ortaminda dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Gercek kurulum/UAC yapmadan pinned vpk ile iki farkli MSI scope paketi olusturur
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -57,11 +57,11 @@ $allDigests = @()
 foreach ($scope in @("PerUser", "PerMachine")) {
     $output = Join-Path $root $scope
     New-Item -ItemType Directory -Path $output -Force | Out-Null
-    $packageId = "$($config.PackId).msi.$($scope.ToLowerInvariant())"
+    $packageId = "$($config.MsiProbePackageId).$($scope.ToLowerInvariant())"
     $packLog = & $vpk --legacyConsole true --yes true --skip-updates true pack `
         --runtime win-x64 `
         --packId $packageId `
-        --packTitle "TurkuazInstaller MSI Scope LAB ONLY" `
+        --packTitle $config.MsiProbeTitle `
         --packVersion $config.VersionOne `
         --msiVersion "$($config.VersionOne).0" `
         --packDir $payload `
