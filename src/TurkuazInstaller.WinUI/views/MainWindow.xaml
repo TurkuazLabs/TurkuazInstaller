@@ -10,7 +10,11 @@ Bagimli Oldugu Katman: View | Controller | Language
 <Window
     x:Class="TurkuazInstaller.WinUI.Views.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:tools="using:TurkuazInstaller.WinUI.Tools">
+    <Window.Resources>
+        <tools:BooleanVisibilityConverter x:Key="PromotionVisibilityConverter" />
+    </Window.Resources>
     <Grid
         x:Name="MainRoot"
         Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
@@ -324,7 +328,7 @@ Bagimli Oldugu Katman: View | Controller | Language
                         <!-- Shared first-party showcase; this card never downloads ads or blocks install. -->
                         <Border
                             x:Name="PromotionPanel"
-                            x:Load="{Binding IsPromotionVisible}"
+                            Visibility="{Binding IsPromotionVisible, Converter={StaticResource PromotionVisibilityConverter}}"
                             CornerRadius="20"
                             BorderBrush="#226EDAD6"
                             BorderThickness="1"
