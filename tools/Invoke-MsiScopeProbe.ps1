@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Invoke-MsiScopeProbe.ps1
 # 📌 Amac: Ortak Velopack MSI PerUser ve PerMachine paketleme kabiliyetini lab ortaminda dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.2.0
+# Version: 1.2.1
 # Aciklama: Gercek kurulum/UAC yapmadan pinned vpk ile iki farkli MSI scope paketi olusturur
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -108,8 +108,9 @@ foreach ($scopeProfile in $config.MsiProbeScopes) {
 $reportPath = Join-Path $root "MSI-SCOPE-LAB-ONLY.txt"
 $report = @(
     "TURKUAZINSTALLER MSI SCOPE PACKAGING PROBE"
-    "LAB ONLY - UNSIGNED - NO INSTALLATION OR ELEVATION"
-    "No real Program Files deployment or multi-user lifecycle is proven."
+    "LAB ONLY - UNSIGNED; PACKAGE HASHES ONLY"
+    "CI validates isolated installation, registered context, and uninstall separately."
+    "No interactive standard-user UAC, multi-user lifecycle, or production readiness is claimed."
 ) + $allDigests
 [System.IO.File]::WriteAllLines($reportPath, $report, [System.Text.UTF8Encoding]::new($false))
 Write-Host "INSTALLER_MSI_SCOPE_PACKAGING_PROBE_OK"
