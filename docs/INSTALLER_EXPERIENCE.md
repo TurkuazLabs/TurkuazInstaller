@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 1.5.0
+# Version: 1.6.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -126,6 +126,20 @@ the Velopack PerUser `Setup.exe`. The tests now load the local account's
 profile, resolve its AppData from the authenticated Windows SID, and
 reject inherited `runneradmin` paths; a prior test failure demonstrated
 why explicit profile isolation is required.
+
+The next LAB gate uses **two independent non-admin accounts** and one shared
+Velopack fixture. A and B each install into their own SID-resolved
+LocalAppData folder and write an isolated user-data marker. After A
+uninstalls, B must still have its application/version and an unchanged
+private data marker; then B uninstalls without destroying its separate
+user data. Both account SIDs must differ and no child may inherit the
+GitHub runner administrator profile. A failed phase fails the job; the
+tool attempts cleanup in a finally block.
+
+This is automated as `tools/Test-VelopackMultiUserChild.ps1`, orchestrated
+by `tools/Test-MsiStandardUser.ps1`, with a shared Velopack process
+adapter to avoid copying process/timeout logic. No production binaries,
+HKLM configuration or user security policies are modified.
 
 This establishes PerUser Velopack one-click install/uninstall on a
 non-admin CI account. It does **not** establish PerUser MSI under restrictive
