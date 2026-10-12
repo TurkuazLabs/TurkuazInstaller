@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiStandardUser.ps1
 # 📌 Amac: Gecici GitHub Windows ortaminda admin olmayan ayri hesapla PerUser MSI testini calistirir
 # 📌 Modul - Tool PowerShell
-# Version: 1.1.1
+# Version: 1.2.0
 # Aciklama: Standard user MSI policy sonucu ve Velopack Setup lifecycle testi, tek hesaptan ve cleanup ile
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -64,6 +64,7 @@ try {
     $sid = $user.SID.Value
 
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
+    $profileTool = Join-Path $stage "Initialize-MsiLabStandardUserProfile.ps1"
     $child = Join-Path $stage "Test-MsiStandardUserChild.ps1"
     $setupChild = Join-Path $stage "Test-SetupStandardUserChild.ps1"
     $childMsi = Join-Path $stage "lab-peruser.msi"
@@ -71,6 +72,7 @@ try {
     $childConfig = Join-Path $stage "velopack-e2e.psd1"
     $msiReport = Join-Path $stage "msi-result.txt"
     $setupReport = Join-Path $stage "setup-result.txt"
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Initialize-MsiLabStandardUserProfile.ps1") -Destination $profileTool -Force
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Test-MsiStandardUserChild.ps1") -Destination $child -Force
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Test-SetupStandardUserChild.ps1") -Destination $setupChild -Force
     Copy-Item -LiteralPath $package[0].FullName -Destination $childMsi -Force
@@ -103,6 +105,7 @@ try {
         $launch = @{
             FilePath = $shell
             Credential = $credential
+            LoadUserProfile = $true
             WorkingDirectory = $stage
             ArgumentList = $childArgs
             PassThru = $true
