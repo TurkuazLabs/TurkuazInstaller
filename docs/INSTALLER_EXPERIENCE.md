@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 2.0.0
+# Version: 2.1.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -203,6 +203,24 @@ verification, transactional update rollback, signed-manifest authorization,
 or a machine-wide multi-user upgrade test. Never equate a green test with
 production update/rollback acceptance. It deliberately does not enable the
 Program Files installation option in the WinUI wizard.
+
+## Interrupted apply safety hold
+
+The workflow now checks a package-scoped operation journal **under the
+operation lock** before starting another manual operation. An interrupted
+package mutation (`Applying`, `ApplyingIntegrations`, `SavingState` or
+`RemovingState`) or a failed/cancelled journal referring to such a phase
+blocks a blind retry with a typed recovery-required error. Required
+mutation-phase journal writes fail closed before the package engine starts.
+
+An older failure record without enough evidence also blocks a retry.
+Pre-apply failures can be retried through the normal signed-manifest path.
+An authenticated reboot-resume operation remains a distinct permitted path.
+
+This is a **safety hold**, not automatic rollback, and an actual Windows
+process-kill-during-update end-to-end test is still outstanding. The journal
+must not be cleared or reinterpreted as evidence that the on-disk version
+matches the committed state. See [Crash Recovery](CRASH_RECOVERY.md).
 
 ## Release and acceptance gates
 
