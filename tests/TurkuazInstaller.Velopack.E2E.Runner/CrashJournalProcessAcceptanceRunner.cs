@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Velopack.E2E.Runner/CrashJournalProcessAcceptanceRunner.cs
 // 📌 Amac: GitHub-hosted Windows'ta gercek workflow process kill ve Applying checkpoint recovery-hold E2E
 // 📌 Modul - Test CSharp
-// Version: 1.2.0
-// Aciklama: Update.exe once ve tamamlandiktan sonra child kill, disk-state farki, journal ve user data korunumu
+// Version: 1.3.0
+// Aciklama: Update.exe oncesi, sonrasi ve aktif process kesintisinde journal, state ve user data korumasini denetler
 // Bagimli Oldugu Katman: Service | Repo | Tool | CI
 
 using System.Diagnostics;
@@ -29,6 +29,16 @@ internal static class CrashJournalProcessAcceptanceRunner
     private const string VersionTwo = "2.0.0";
     private const string SignalText = "UPDATE_APPLY_READY";
     private const string SignalAfterApplyText = "UPDATER_APPLIED_BEFORE_STATE_COMMIT";
+    private const string SignalWhileRunningText = "UPDATER_PROCESS_RUNNING";
+    private const string UpdaterExecutableName = "Update";
+    private const char SignalSeparator = '|';
+
+    private enum CrashBoundaryMode
+    {
+        BeforeUpdater,
+        AfterUpdater,
+        DuringUpdater
+    }
     private static readonly TimeSpan SignalTimeout = TimeSpan.FromSeconds(60);
 
     public static async Task RunAsync(
@@ -41,10 +51,13 @@ internal static class CrashJournalProcessAcceptanceRunner
     {
         await RunScenarioAsync(
             setupV1, fullV2, parentStagingRoot, versionMarker,
-            userDataDirectory, userDataMarker, afterUpdater: false);
+            userDataDirectory, userDataMarker, mode: CrashBoundaryMode.BeforeUpdater);
         await RunScenarioAsync(
             setupV1, fullV2, parentStagingRoot, versionMarker,
-            userDataDirectory, userDataMarker, afterUpdater: true);
+            userDataDirectory, userDataMarker, mode: CrashBoundaryMode.AfterUpdater);
+        await RunScenarioAsync(
+            setupV1, fullV2, parentStagingRoot, versionMarker,
+            userDataDirectory, userDataMarker, mode: CrashBoundaryMode.DuringUpdater);
     }
 
     private static async Task RunScenarioAsync(
@@ -54,7 +67,7 @@ internal static class CrashJournalProcessAcceptanceRunner
         string versionMarker,
         string userDataDirectory,
         string userDataMarker,
-        bool afterUpdater)
+        CrashBoundaryMode mode)
     {
         if (!OperatingSystem.IsWindows() ||
             !string.Equals(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"),
@@ -70,7 +83,13 @@ internal static class CrashJournalProcessAcceptanceRunner
         // root can be deleted. Never point this at a user application.
         var root = Path.Combine(
             Path.GetFullPath(parentStagingRoot),
-            afterUpdater ? "crash-post-updater-lab" : "crash-journal-lab");
+            mode switch
+            {
+                CrashBoundaryMode.BeforeUpdater => "crash-journal-lab",
+                CrashBoundaryMode.AfterUpdater => "crash-post-updater-lab",
+                CrashBoundaryMode.DuringUpdater => "crash-running-updater-lab",
+                _ => throw new ArgumentOutOfRangeException(nameof(mode))
+            });
         if (Directory.Exists(root))
         {
             Directory.Delete(root, recursive: true);
@@ -108,9 +127,9 @@ internal static class CrashJournalProcessAcceptanceRunner
 
             // The child starts a real InstallerWorkflowService UpdateAsync
             // with real artifact verification, staging, and journal writes.
-            // Before mode gates prior to Update.exe; after mode executes
-            // the real updater and gates prior to the state commit. Neither
-            // mode terminates Update.exe while it is actively writing.
+            // Before and after modes are deterministic state boundaries.
+            // During mode terminates a verified, live Update.exe process;
+            // it does not claim that a particular file write was interrupted.
             var assembly = typeof(Program).Assembly.Location;
             var start = new ProcessStartInfo
             {
@@ -125,7 +144,7 @@ internal static class CrashJournalProcessAcceptanceRunner
             {
                 assembly, "--crash-child", fullV2, installRoot,
                 stageRoot, stateRoot, journalRoot, signal,
-                afterUpdater ? "after" : "before", versionMarker
+                mode.ToString(), versionMarker
             })
             {
                 start.ArgumentList.Add(argument);
@@ -159,12 +178,37 @@ internal static class CrashJournalProcessAcceptanceRunner
                     throw new TimeoutException(
                         "Crash LAB child never reached the requested updater boundary.");
                 }
-                if (!string.Equals(await File.ReadAllTextAsync(signal),
-                    afterUpdater ? SignalAfterApplyText : SignalText,
-                    StringComparison.Ordinal))
+                var signalContent = await File.ReadAllTextAsync(signal);
+                Process? liveUpdater = null;
+                try
                 {
-                    throw new InvalidDataException("Crash LAB signal was invalid.");
-                }
+                    if (mode == CrashBoundaryMode.DuringUpdater)
+                    {
+                        var prefix = SignalWhileRunningText + SignalSeparator;
+                        if (!signalContent.StartsWith(prefix, StringComparison.Ordinal) ||
+                            !int.TryParse(signalContent[prefix.Length..], out var updaterPid) ||
+                            updaterPid <= 0)
+                        {
+                            throw new InvalidDataException(
+                                "Crash LAB updater PID signal was invalid.");
+                        }
+
+                        liveUpdater = Process.GetProcessById(updaterPid);
+                        if (liveUpdater.HasExited ||
+                            !string.Equals(liveUpdater.ProcessName,
+                                UpdaterExecutableName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidOperationException(
+                                "Crash LAB did not observe a running Update.exe.");
+                        }
+                    }
+                    else if (!string.Equals(signalContent,
+                        mode == CrashBoundaryMode.AfterUpdater
+                            ? SignalAfterApplyText : SignalText,
+                        StringComparison.Ordinal))
+                    {
+                        throw new InvalidDataException("Crash LAB signal was invalid.");
+                    }
 
                 var checkpoint = await journal.GetAsync(
                     packageId, CancellationToken.None);
@@ -187,14 +231,28 @@ internal static class CrashJournalProcessAcceptanceRunner
                 {
                     throw new InvalidOperationException("Crash LAB child was not terminated.");
                 }
+                if (liveUpdater is not null)
+                {
+                    using var updaterWait = new CancellationTokenSource(
+                        TimeSpan.FromSeconds(12));
+                    await liveUpdater.WaitForExitAsync(updaterWait.Token);
+                }
                 await output;
                 await errors;
 
                 // The process dies before the journal can commit V2.
                 // After-mode has actually applied V2 on disk; before-mode
                 // has not launched Update.exe. Both retain committed V1.
-                var expectedDiskVersion = afterUpdater ? VersionTwo : VersionOne;
-                CheckVersionAndData(marker, dataFile, expectedDiskVersion, userBytes);
+                var expectedDiskVersion = mode == CrashBoundaryMode.AfterUpdater
+                    ? VersionTwo : VersionOne;
+                if (mode == CrashBoundaryMode.DuringUpdater)
+                {
+                    CheckUserData(dataFile, userBytes);
+                }
+                else
+                {
+                    CheckVersionAndData(marker, dataFile, expectedDiskVersion, userBytes);
+                }
                 var committed = await state.GetAsync(
                     packageId, CancellationToken.None)
                     ?? throw new InvalidOperationException(
@@ -225,9 +283,14 @@ internal static class CrashJournalProcessAcceptanceRunner
                         "Read-only recovery assessment missed the orphaned Applying checkpoint.");
                 }
                 Console.WriteLine(
-                    afterUpdater
-                        ? "TURKUAZ_INSTALLER_POST_APPLY_READ_ONLY_RECOVERY_REPORT_OK"
-                        : "TURKUAZ_INSTALLER_PRE_APPLY_READ_ONLY_RECOVERY_REPORT_OK");
+                    mode switch
+                    {
+                        CrashBoundaryMode.BeforeUpdater =>
+                            "TURKUAZ_INSTALLER_PRE_APPLY_READ_ONLY_RECOVERY_REPORT_OK",
+                        CrashBoundaryMode.AfterUpdater =>
+                            "TURKUAZ_INSTALLER_POST_APPLY_READ_ONLY_RECOVERY_REPORT_OK",
+                        _ => "TURKUAZ_INSTALLER_RUNNING_UPDATER_READ_ONLY_RECOVERY_REPORT_OK"
+                    });
 
                 var retry = new InstallerWorkflowService(
                     new DefaultArtifactDownloader(client),
@@ -273,17 +336,24 @@ internal static class CrashJournalProcessAcceptanceRunner
                     throw new InvalidOperationException(
                         "Post-crash retry overwrote the orphaned journal.");
                 }
-                CheckVersionAndData(
-                    marker, dataFile, expectedDiskVersion, userBytes);
-                if (afterUpdater)
+                if (mode == CrashBoundaryMode.DuringUpdater)
                 {
+                    CheckUserData(dataFile, userBytes);
                     Console.WriteLine(
-                        "TURKUAZ_INSTALLER_REAL_POST_UPDATER_KILL_DISK_STATE_DIVERGENCE_HOLD_OK");
+                        "TURKUAZ_INSTALLER_RUNNING_UPDATER_PROCESS_KILL_HOLD_OK");
                 }
                 else
                 {
-                    Console.WriteLine(
-                        "TURKUAZ_INSTALLER_REAL_PROCESS_KILL_APPLY_CHECKPOINT_HOLD_OK");
+                    CheckVersionAndData(
+                        marker, dataFile, expectedDiskVersion, userBytes);
+                    Console.WriteLine(mode == CrashBoundaryMode.AfterUpdater
+                        ? "TURKUAZ_INSTALLER_REAL_POST_UPDATER_KILL_DISK_STATE_DIVERGENCE_HOLD_OK"
+                        : "TURKUAZ_INSTALLER_REAL_PROCESS_KILL_APPLY_CHECKPOINT_HOLD_OK");
+                }
+                }
+                finally
+                {
+                    liveUpdater?.Dispose();
                 }
             }
             finally
@@ -343,13 +413,12 @@ internal static class CrashJournalProcessAcceptanceRunner
             new Sha256ArtifactVerifier(),
             new VelopackPackageEngine(new LabGatedUpdaterRunner(
                 installRoot, args[5],
-                afterUpdater: args[6] switch
-                {
-                    "before" => false,
-                    "after" => true,
-                    _ => throw new InvalidOperationException(
-                        "Unexpected LAB updater boundary.")
-                },
+                mode: Enum.TryParse<CrashBoundaryMode>(
+                    args[6], ignoreCase: false, out var parsedMode) &&
+                    Enum.IsDefined(parsedMode)
+                    ? parsedMode
+                    : throw new InvalidOperationException(
+                        "Unexpected LAB updater boundary."),
                 versionMarker: args[7])),
             state,
             operationJournal: journal);
@@ -388,10 +457,17 @@ internal static class CrashJournalProcessAcceptanceRunner
         {
             throw new InvalidOperationException("Crash LAB installed version differs.");
         }
-        if (expectedData is not null &&
-            (!File.Exists(dataFile) ||
+        if (expectedData is not null)
+        {
+            CheckUserData(dataFile, expectedData);
+        }
+    }
+
+    private static void CheckUserData(string dataFile, string expectedData)
+    {
+        if (!File.Exists(dataFile) ||
             !string.Equals(File.ReadAllText(dataFile), expectedData,
-                StringComparison.Ordinal)))
+                StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Crash LAB user data changed.");
         }
@@ -401,16 +477,16 @@ internal static class CrashJournalProcessAcceptanceRunner
     {
         private readonly string _installRoot;
         private readonly string _signal;
-        private readonly bool _afterUpdater;
+        private readonly CrashBoundaryMode _mode;
         private readonly string _versionMarker;
 
         public LabGatedUpdaterRunner(
-            string installRoot, string signal, bool afterUpdater,
+            string installRoot, string signal, CrashBoundaryMode mode,
             string versionMarker)
         {
             _installRoot = Path.GetFullPath(installRoot);
             _signal = Path.GetFullPath(signal);
-            _afterUpdater = afterUpdater;
+            _mode = mode;
             if (string.IsNullOrWhiteSpace(versionMarker) ||
                 Path.GetFileName(versionMarker) != versionMarker)
             {
@@ -436,7 +512,45 @@ internal static class CrashJournalProcessAcceptanceRunner
                     "Crash LAB expected Velopack apply command.");
             }
 
-            if (_afterUpdater)
+            if (_mode == CrashBoundaryMode.DuringUpdater)
+            {
+                var start = new ProcessStartInfo
+                {
+                    FileName = command.FileName,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true,
+                    WorkingDirectory = command.WorkingDirectory ?? _installRoot
+                };
+                foreach (var argument in command.Arguments)
+                {
+                    start.ArgumentList.Add(argument);
+                }
+
+                using var updater = new Process { StartInfo = start };
+                if (!updater.Start() || updater.HasExited)
+                {
+                    throw new InvalidOperationException(
+                        "Crash LAB Update.exe was not running after launch.");
+                }
+
+                // The parent will check the live PID and terminate the
+                // workflow process tree. Never return to state commit even
+                // if the updater wins the race and exits first.
+                var stdout = updater.StandardOutput.ReadToEndAsync(cancellationToken);
+                var stderr = updater.StandardError.ReadToEndAsync(cancellationToken);
+                await WriteSignalAsync(
+                    SignalWhileRunningText + SignalSeparator + updater.Id,
+                    cancellationToken);
+                await updater.WaitForExitAsync(cancellationToken);
+                await Task.WhenAll(stdout, stderr);
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                throw new InvalidOperationException(
+                    "Crash LAB updater-running boundary unexpectedly returned.");
+            }
+
+            if (_mode == CrashBoundaryMode.AfterUpdater)
             {
                 // The real, hosted-Windows Velopack updater replaces the
                 // synthetic fixture before the child process is suspended.
@@ -462,13 +576,22 @@ internal static class CrashJournalProcessAcceptanceRunner
                 }
             }
 
-            await File.WriteAllTextAsync(
-                _signal,
-                _afterUpdater ? SignalAfterApplyText : SignalText,
+            await WriteSignalAsync(
+                _mode == CrashBoundaryMode.AfterUpdater
+                    ? SignalAfterApplyText : SignalText,
                 cancellationToken);
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             throw new InvalidOperationException(
                 "Crash LAB gate must not return to the workflow.");
+        }
+
+        private async Task WriteSignalAsync(
+            string signalText, CancellationToken cancellationToken)
+        {
+            var partialSignal = _signal + ".tmp";
+            await File.WriteAllTextAsync(
+                partialSignal, signalText, cancellationToken);
+            File.Move(partialSignal, _signal, overwrite: true);
         }
     }
 }
