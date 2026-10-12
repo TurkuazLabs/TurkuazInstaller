@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -77,6 +77,31 @@ loads an orphaned `Applying` checkpoint directly from persisted JSON.
 This detects the dangerous disk-V2/state-V1 divergence across process
 service instances, without inventing an automatic fix.
 
-These tests simulate interruption after file mutation; they **do not**
-terminate a real Velopack or Windows Installer process and do not prove
-transactional recovery for all disk states.
+These persisted-disk tests simulate interruption after file mutation;
+they **do not** terminate a real Velopack or Windows Installer process.
+
+A separate hosted-Windows Velopack E2E gate now starts a second .NET
+workflow process against a genuine V1 Velopack fixture and real atomic
+JSON state/journal stores. After signed-size/digest-checked artifact
+download and staging, the child reaches the durable `Applying` checkpoint.
+A **test-only** process adapter signals immediately before launching
+`Update.exe` and suspends; the parent kills the actual child OS process.
+After restart, the orphaned `Applying` journal must still exist, state,
+installed V1 files and user data must remain intact, and both new update
+and uninstall requests must be rejected with
+`InstallerRecoveryRequiredException`. The parent cleans up only its
+disposable LAB fixture using the real Velopack uninstall adapter.
+
+The test only runs when `GITHUB_ACTIONS=true` and
+`RUNNER_ENVIRONMENT=github-hosted`. Local runs explicitly mark this
+extra test skipped; there is no system-wide install or antivirus bypass.
+If the hosted check succeeds, its log contains
+`TURKUAZ_INSTALLER_REAL_PROCESS_KILL_APPLY_CHECKPOINT_HOLD_OK`.
+
+**Precise limitation:** the killed process is the .NET workflow process
+after the journal checkpoint, **before** `Update.exe` performs disk
+mutation. The earlier simulated file-mutation regression covers the
+disk-V2/state-V1 divergence. Killing a real updater *during* active
+file replacement and proving trusted reconciliation/automatic rollback
+are still outstanding, higher-risk acceptance gates. Neither type of
+test authorizes production machine-wide recovery.
