@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -96,10 +96,24 @@ Timeout, nonzero exit and residual executable checks fail closed. This test
 modifies only the temporary Windows runner, never customer machines or
 existing NSIS installations.
 
-The initial E2E run [#38213314813](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/38213314813)
-failed with a 180-second `msiexec` install timeout and uninstall code 1605
-(product not registered). A new diagnostic test reports bounded MSI log lines
-and stops sooner; **no machine-wide acceptance is claimed**.
+The first two E2E attempts failed: [#38213314813](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/38213314813)
+timed out during MSI invocation, and the second diagnostic job confirmed that
+install logging had not started. Explicit quotation of the `VELOPACK_INSTALLDIR`
+property value fixed the command-line parsing.
+
+[Windows MSI run #38222596579](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/38222596579)
+passed **both** PerUser (AppData) and PerMachine (Program Files) actual
+install, executable/version-marker verification and MSI uninstall using a
+single reusable `Test-MsiScopeLifecycle.ps1` Tool script driven by central
+`config/velopack-e2e.psd1`.
+
+[Windows MSI run #38223116584](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/38223116584)
+additionally validated the registered Windows Installer product assignment
+type using the native Windows Installer COM automation API:
+`AssignmentType=0` for PerUser and `AssignmentType=1` for PerMachine.
+Both installed product versions were then successfully uninstalled.
+This closes the LAB *packaging + basic install/uninstall + registry context*
+gate, **not** the production system-wide installer acceptance gate.
 
 This test does not yet prove a trusted production MSI install, standard-user
 interactive UAC, all-users registry/shortcut ownership, or update/repair/
