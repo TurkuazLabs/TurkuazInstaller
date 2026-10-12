@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.4.0
+# Version: 1.5.0
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -115,9 +115,15 @@ a durable orphaned `Applying` record, unchanged user data, and blocked
 update/uninstall requests. The two independent fixtures are removed only
 on the disposable GitHub-hosted Windows worker.
 
-Expected log markers:
+Verified in [hosted Windows Velopack CI #38303860363](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/38303860363):
 - `TURKUAZ_INSTALLER_REAL_PROCESS_KILL_APPLY_CHECKPOINT_HOLD_OK`
 - `TURKUAZ_INSTALLER_REAL_POST_UPDATER_KILL_DISK_STATE_DIVERGENCE_HOLD_OK`
+
+The second acceptance covers a **real V2 disk / committed V1 mismatch**,
+the original durable `Applying` operation ID, preserved user data and
+an explicit fail-closed hold on update and uninstall after process restart.
+Both synthetic fixture installations were run in separate disposable
+test directories, never against a user application.
 
 **Precise limitation:** this does not kill `Update.exe` *while* it writes
 files. The process terminated after the actual updater returned, but before
