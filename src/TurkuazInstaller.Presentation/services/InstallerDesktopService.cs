@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
 // 📌 Amac: Ana pencere startup resume, request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.7.0
+// Version: 1.8.0
 // Aciklama: Manual/resume, catalog, background update ve discovery/mutation UX akislarinda tum kullanici metinlerini typed Language katalogundan cozer
 //
 // Bagimli Oldugu Katman: Service | View | Language
@@ -9,6 +9,7 @@
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Application.Updates;
 using TurkuazInstaller.Contracts.Branding;
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Presentation.Language;
@@ -126,6 +127,46 @@ public sealed class InstallerDesktopService
         return _backgroundUpdateService
             ?.RunOnceAsync()
             ?? Task.CompletedTask;
+    }
+
+    public async Task InstallWithChoicesAsync(
+        InstallerInstallMode mode,
+        InstallerInstallScope scope)
+    {
+        try
+        {
+            InstallerInstallScopePolicy.ValidateCurrentRuntime(scope);
+
+            if (!Enum.IsDefined(mode))
+            {
+                throw new ArgumentOutOfRangeException(nameof(mode));
+            }
+
+            if (mode == InstallerInstallMode.Custom)
+            {
+                if (string.IsNullOrWhiteSpace(_viewModel.TargetPath))
+                {
+                    throw new InvalidOperationException(
+                        _ui.Resolve(InstallerUiLabelKey.CustomTargetRequired));
+                }
+
+                InstallerInstallScopePolicy.ValidatePerUserTarget(
+                    _viewModel.TargetPath);
+            }
+            else
+            {
+                // Quick install uses the signed manifest's default target.
+                _viewModel.TargetPath = string.Empty;
+            }
+        }
+        catch (Exception exception)
+        {
+            ShowFailure(exception);
+            return;
+        }
+
+        await RunAsync(InstallerOperationKind.Install)
+            .ConfigureAwait(true);
     }
 
     public async Task RunAsync(
