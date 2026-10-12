@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiStandardUser.ps1
 # 📌 Amac: Gecici GitHub Windows ortaminda admin olmayan ayri hesapla PerUser MSI testini calistirir
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.1
+# Version: 1.0.2
 # Aciklama: Tek kullanimlik standard user, erisim izinleri, smoke testi ve guvenli cleanup
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -53,7 +53,7 @@ try {
         Password = $password
         AccountNeverExpires = $true
         PasswordNeverExpires = $true
-        Description = "Temporary hosted Windows MSI verification account"
+        Description = "Temporary MSI LAB user"
     }
     $user = New-LocalUser @params
     $accountCreated = $true
