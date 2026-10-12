@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-msi-scope-probe.yml
 # 📌 Amac: Ortak installer icin iki MSI kurulum kapsamini Windows CI uzerinde paketler
 # 📌 Modul - CI YAML
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Gercek machine-wide install yapmadan per-user/per-machine MSI uretim kapisi
 # Bagimli Oldugu Katman: Config | Tool | CI
 
@@ -13,7 +13,7 @@ on:
     branches: [main]
     paths:
       - 'tools/Invoke-MsiScopeProbe.ps1'
-      - 'tools/Test-MsiPerMachineLifecycle.ps1'
+      - 'tools/Test-MsiScopeLifecycle.ps1'
       - 'config/velopack-e2e.psd1'
       - '.github/workflows/windows-msi-scope-probe.yml'
       - 'tests/TurkuazInstaller.Velopack.E2E.Fixture/**'
@@ -59,13 +59,30 @@ jobs:
             throw "MSI scope PowerShell parse failed"
           }
 
+      - name: Parse shared MSI lifecycle tool
+        shell: pwsh
+        run: |
+          $parseErrors = $null
+          $tokens = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "tools/Test-MsiScopeLifecycle.ps1").Path,
+            [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count -gt 0) {
+            foreach ($item in $parseErrors) { Write-Host $item.ToString() }
+            throw "Shared MSI scope lifecycle tool failed to parse"
+          }
+
       - name: Package both MSI installation scopes without installation
         shell: pwsh
         run: ./tools/Invoke-MsiScopeProbe.ps1
 
+      - name: Real LAB ONLY PerUser AppData install and uninstall
+        shell: pwsh
+        run: ./tools/Test-MsiScopeLifecycle.ps1 -Scope PerUser
+
       - name: Real LAB ONLY PerMachine Program Files install and uninstall
         shell: pwsh
-        run: ./tools/Test-MsiPerMachineLifecycle.ps1
+        run: ./tools/Test-MsiScopeLifecycle.ps1 -Scope PerMachine
 
       - name: Upload MSI probe report only
         uses: actions/upload-artifact@v4
