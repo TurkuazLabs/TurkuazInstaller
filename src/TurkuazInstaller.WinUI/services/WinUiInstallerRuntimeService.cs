@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/services/WinUiInstallerRuntimeService.cs
 // 📌 Amac: Presentation requestlerini signed provider, resumable workflow, repository ve Velopack runtime operasyonlarina baglar
 // 📌 Modul - Service CSharp
-// Version: 1.5.0
+// Version: 1.6.0
 // Aciklama: Signed provider uzerinden version-policy-aware discovery, manual mutation ve reboot-resume akislarini koordine eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -18,8 +18,6 @@ using TurkuazInstaller.Domain.State;
 using TurkuazInstaller.Presentation.Language;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
-using TurkuazInstaller.Contracts.Operations;
-using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.WinUI.Config;
 using TurkuazInstaller.WinUI.Tools;
 
