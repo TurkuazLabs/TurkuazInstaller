@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiStandardUser.ps1
 # 📌 Amac: Gecici GitHub Windows ortaminda admin olmayan ayri hesapla PerUser MSI testini calistirir
 # 📌 Modul - Tool PowerShell
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: Iki standard-user token ile MSI policy, Setup lifecycle ve user data izolasyonu, guvenli cleanup
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -237,12 +237,25 @@ try {
 
         Invoke-MultiUserPhase $credential $sid Uninstall "first"
         $firstInstalled = $false
+        Invoke-MultiUserPhase $credential $sid DataOnly "first"
 
-        # This is the key isolation gate: removing account A's app must
-        # not delete B's app or change B's private user-data marker.
+        # A's uninstall must not change B's installation or private data.
         Invoke-MultiUserPhase $secondCredential $secondSid Verify "second"
+
+        # A can reinstall without losing its separate user data or changing B.
+        Invoke-MultiUserPhase $credential $sid Install "first"
+        $firstInstalled = $true
+        Invoke-MultiUserPhase $credential $sid Verify "first"
+        Invoke-MultiUserPhase $secondCredential $secondSid Verify "second"
+        Invoke-MultiUserPhase $credential $sid Uninstall "first"
+        $firstInstalled = $false
+        Invoke-MultiUserPhase $credential $sid DataOnly "first"
+        Invoke-MultiUserPhase $secondCredential $secondSid Verify "second"
+
         Invoke-MultiUserPhase $secondCredential $secondSid Uninstall "second"
         $secondInstalled = $false
+        Invoke-MultiUserPhase $secondCredential $secondSid DataOnly "second"
+        Write-Host "INSTALLER_VELOPACK_TWO_USER_DATA_REINSTALL_OK"
         Write-Host "INSTALLER_VELOPACK_TWO_USER_ISOLATION_OK"
     }
     finally {
