@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-MsiScopeLifecycle.ps1
 # 📌 Amac: Gecici Windows CI hostunda her lab MSI scope icin install ve uninstall testlerini tekrar kullanir
 # 📌 Modul - Tool PowerShell
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Tek parametreli PerUser/PerMachine lifecycle, izole target, gercek install/uninstall ve dosya dogrulama
 # Bagimli Oldugu Katman: Tool | Config | CI
 
@@ -66,6 +66,58 @@ if (Test-Path -LiteralPath $installTarget) {
 $msi = $msis[0].FullName
 $installSucceeded = $false
 $uninstallSucceeded = $false
+
+function Get-LabMsiProductCode {
+    param([string]$PackagePath)
+
+    $installer = New-Object -ComObject WindowsInstaller.Installer
+    $database = $null
+    $view = $null
+    $record = $null
+    try {
+        $database = $installer.GetType().InvokeMember(
+            "OpenDatabase", "InvokeMethod", $null, $installer, @($PackagePath, 0))
+        $query = "SELECT Value FROM Property WHERE Property = 'ProductCode'"
+        $view = $database.GetType().InvokeMember(
+            "OpenView", "InvokeMethod", $null, $database, @($query))
+        $null = $view.GetType().InvokeMember(
+            "Execute", "InvokeMethod", $null, $view, $null)
+        $record = $view.GetType().InvokeMember(
+            "Fetch", "InvokeMethod", $null, $view, $null)
+        if ($null -eq $record) {
+            throw "MSI has no ProductCode property."
+        }
+        $code = [string]$record.GetType().InvokeMember(
+            "StringData", "GetProperty", $null, $record, @(1))
+        $parsed = [guid]::Empty
+        if (-not [guid]::TryParse($code, [ref]$parsed)) {
+            throw "MSI ProductCode is not a valid GUID."
+        }
+        return $code
+    }
+    finally {
+        foreach ($item in @($record, $view, $database, $installer)) {
+            if ($null -ne $item -and
+                [System.Runtime.InteropServices.Marshal]::IsComObject($item)) {
+                [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($item)
+            }
+        }
+    }
+}
+
+function Get-LabInstalledAssignmentType {
+    param([string]$ProductCode)
+
+    $installer = New-Object -ComObject WindowsInstaller.Installer
+    try {
+        return [string]$installer.GetType().InvokeMember(
+            "ProductInfo", "GetProperty", $null, $installer,
+            @($ProductCode, "AssignmentType"))
+    }
+    finally {
+        [void][System.Runtime.InteropServices.Marshal]::ReleaseComObject($installer)
+    }
+}
 
 function Write-LabMsiLogTail {
     param(
@@ -144,6 +196,8 @@ function Invoke-MsiChecked {
     }
 }
 
+$productCode = Get-LabMsiProductCode -PackagePath $msi
+
 try {
     Invoke-MsiChecked -Operation "install" -LogPath (Join-Path $logDirectory "install.log") -Arguments @(
         "/i", $msi, "/qn", "/norestart", "$installPropertyPrefix$installTarget"
@@ -164,6 +218,11 @@ try {
         [System.IO.File]::ReadAllText($marker).Trim() -cne $config.VersionOne) {
         throw "Installed MSI package content marker mismatch."
     }
+    $assignmentType = Get-LabInstalledAssignmentType -ProductCode $productCode
+    if ($assignmentType -cne [string]$scopeProfile.MsiAssignmentType) {
+        throw "Windows Installer registered $Scope as assignment type $assignmentType"
+    }
+    Write-Host "INSTALLER_MSI_SCOPE_REGISTRATION_OK $Scope assignment=$assignmentType"
     Write-Host "INSTALLER_MSI_SCOPE_INSTALLED_OK $Scope"
 }
 finally {
