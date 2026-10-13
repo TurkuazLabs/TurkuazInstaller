@@ -1,0 +1,19 @@
+<!--
+# Dosya Yolu: /tests/TurkuazInstaller.Inventory.LabProbe/TurkuazInstaller.Inventory.LabProbe.csproj
+# Amac: Signed trusted full nupkg manifestten unsigned installed inventory ureten CI-only probe
+# Modul: Test Tool Project
+# Version: 1.0.0
+# Aciklama: Production release veya CLI kurulumuna dahil degildir
+# Bagimli Oldugu Katman: Domain | Infrastructure
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
