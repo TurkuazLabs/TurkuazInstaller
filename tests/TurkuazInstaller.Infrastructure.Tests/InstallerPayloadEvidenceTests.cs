@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/InstallerPayloadEvidenceTests.cs
 // 📌 Amac: Gercek dosya hash olcumu, uyusmazlik, traversal ve salt-okunur davranisi test eder
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: Yalnizca LAB dizinlerinde hash olcer, onarim veya journal mutation yapmaz
 // Bagimli Oldugu Katman: Service | Tool | Domain
 
@@ -170,6 +170,34 @@ public sealed class InstallerPayloadEvidenceTests
             await Assert.ThrowsAsync<IOException>(
                 () => new InstalledPayloadHashTool().ComputeSha256Async(
                     root, "shortcut.txt", CancellationToken.None));
+        }
+        finally
+        {
+            DeleteLabRoot(root);
+            DeleteLabRoot(outside);
+        }
+    }
+
+    [Fact]
+    public async Task HashTool_RejectsSymlinkDirectoryOnPathToFile()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var root = CreateLabRoot();
+        var outside = CreateLabRoot();
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(outside, "external.txt"), "external");
+            Directory.CreateSymbolicLink(
+                Path.Combine(root, "redirect"), outside);
+
+            await Assert.ThrowsAsync<IOException>(
+                () => new InstalledPayloadHashTool().ComputeSha256Async(
+                    root, "redirect/external.txt", CancellationToken.None));
         }
         finally
         {
