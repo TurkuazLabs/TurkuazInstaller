@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 1.5.0
+# Version: 1.6.0
 # Aciklama: Kurulu uygulama katalogu, read-only update discovery, installer operations, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
@@ -82,9 +82,18 @@ Bagimli Oldugu Katman: View | Controller | Language
                                 Click="RefreshInstalledApps_Click" />
                         </Grid>
 
+                        <TextBlock
+                            Grid.Row="1"
+                            Text="{Binding InstalledAppsEmptyMessage}"
+                            TextWrapping="Wrap"
+                            Opacity="0.70"
+                            Margin="0,4,0,8"
+                            Visibility="{Binding IsCatalogEmpty, Converter={StaticResource PromotionVisibilityConverter}}" />
+
                         <ListView
                             Grid.Row="1"
                             ItemsSource="{Binding InstalledApps}"
+                            Visibility="{Binding HasInstalledApps, Converter={StaticResource PromotionVisibilityConverter}}"
                             SelectionMode="None"
                             MaxHeight="240">
                             <ListView.ItemTemplate>
@@ -145,6 +154,7 @@ Bagimli Oldugu Katman: View | Controller | Language
 
                     <Border
                         Grid.Column="0"
+                        VerticalAlignment="Top"
                         Padding="24"
                         CornerRadius="16"
                         Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
@@ -195,29 +205,36 @@ Bagimli Oldugu Katman: View | Controller | Language
 
                                 <Button
                                     Content="{Binding InstallLabel}"
-                                    IsEnabled="{Binding CanRun}"
+                                    IsEnabled="{Binding CanInstall}"
                                     HorizontalAlignment="Stretch"
                                     Click="Install_Click" />
                                 <Button
                                     Content="{Binding UpdateLabel}"
-                                    IsEnabled="{Binding CanRun}"
+                                    IsEnabled="{Binding CanUpdate}"
                                     HorizontalAlignment="Stretch"
                                     Click="Update_Click" />
                                 <Button
                                     Content="{Binding RepairLabel}"
-                                    IsEnabled="{Binding CanRun}"
+                                    IsEnabled="{Binding CanRepair}"
                                     HorizontalAlignment="Stretch"
                                     Click="Repair_Click" />
                                 <Button
                                     Content="{Binding RollbackLabel}"
-                                    IsEnabled="{Binding CanRun}"
+                                    IsEnabled="{Binding CanRollback}"
                                     HorizontalAlignment="Stretch"
                                     Click="Rollback_Click" />
                                 <Button
                                     Content="{Binding UninstallLabel}"
-                                    IsEnabled="{Binding CanRun}"
+                                    IsEnabled="{Binding CanUninstall}"
                                     HorizontalAlignment="Stretch"
                                     Click="Uninstall_Click" />
+
+                                <TextBlock
+                                    Text="{Binding ActionGuidanceMessage}"
+                                    TextWrapping="Wrap"
+                                    Opacity="0.70"
+                                    FontSize="12"
+                                    Margin="0,6,0,0" />
                             </StackPanel>
                         </Border>
 
