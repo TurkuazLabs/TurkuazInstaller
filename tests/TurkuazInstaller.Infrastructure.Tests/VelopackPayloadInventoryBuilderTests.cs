@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/VelopackPayloadInventoryBuilderTests.cs
 // 📌 Amac: Full nupkg payload envanterinin determinism, archive trust ve path guvenlik testlerini yapar
 // 📌 Modul - Test CSharp
-// Version: 1.0.1
+// Version: 1.0.2
 // Aciklama: Lab ZIP fixture ile unsigned inventory, CMS imza baglama, tekrarlanabilirlik ve fail-closed reddi test eder
 // Bagimli Oldugu Katman: Tool | Service | Domain
 
@@ -56,6 +56,43 @@ public sealed class VelopackPayloadInventoryBuilderTests
             Assert.Equal(Sha256(FileTwo), inventory.Files[0].Digest.Sha256);
             Assert.Equal("current/version.txt", inventory.Files[1].RelativePath);
             Assert.Equal(Sha256(FileOne), inventory.Files[1].Digest.Sha256);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task BuildUnsignedAsync_TracksVelopackRootUpdaterAndExecutionStubWithoutOmittingThem()
+    {
+        var updater = Encoding.UTF8.GetBytes("Updater bytes");
+        var stub = Encoding.UTF8.GetBytes("Launcher bytes");
+        var path = BuildFixture(new[]
+        {
+            ("lib/app/Squirrel.exe", updater),
+            ("lib/app/Sample_ExecutionStub.exe", stub),
+            ("lib/app/Sample.exe", FileOne)
+        });
+        try
+        {
+            using var cert = CreateCertificate();
+            var release = Release(path);
+            var inventoryBytes = await new VelopackPayloadInventoryBuilder()
+                .BuildUnsignedAsync(path, release, CancellationToken.None);
+            var inventory = await Reader(cert).ReadAsync(
+                inventoryBytes, Sign(inventoryBytes, cert),
+                release, CancellationToken.None);
+            Assert.Equal(3, inventory.Files.Count);
+            Assert.Contains(inventory.Files, file =>
+                file.RelativePath == "Update.exe" &&
+                file.Digest.Sha256 == Sha256(updater));
+            Assert.Contains(inventory.Files, file =>
+                file.RelativePath == "Sample.exe" &&
+                file.Digest.Sha256 == Sha256(stub));
+            Assert.Contains(inventory.Files, file =>
+                file.RelativePath == "current/Sample.exe" &&
+                file.Digest.Sha256 == Sha256(FileOne));
         }
         finally
         {
