@@ -1,7 +1,7 @@
 // Dosya Yolu: /tests/TurkuazInstaller.Inventory.LabProbe/Program.cs
 // Amac: CMS-signed release'deki full nupkg byte'larindan deterministik unsigned inventory olusturur
 // Modul - Test Tool CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: LAB-only probe; CMS signer/private key kullanmaz, mevcut trust store'u sadece okur
 // Bagimli Oldugu Katman: Domain | Infrastructure | Tool
 
@@ -9,6 +9,7 @@ using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Infrastructure.Manifests;
 using TurkuazInstaller.Infrastructure.Providers.File;
+using TurkuazInstaller.Infrastructure.Repositories;
 
 try
 {
