@@ -1,13 +1,12 @@
 // Dosya: /tests/TurkuazInstaller.Velopack.E2E.Runner/SignedWorkflowAcceptanceRunner.cs
 // Amac: Gecici CMS imzali local manifest ile gercek Velopack package engine ve kalici state lifecycle testini birlestirir
-// Version: 0.4.0
+// Version: 0.5.0
 // Guvenlik: Ephemeral CI certificate, external trust pin, unsigned fixture; production signing veya VM kabul testi degildir
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Text.Json;
 using TurkuazInstaller.Application.Operations;
 using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Domain.Products;
@@ -211,28 +210,13 @@ internal static class SignedWorkflowAcceptanceRunner
         // update/repair/rollback and a persisted JSON state repository.
         var releaseV2 = await ReadVerifiedAsync(v2Manifest);
 
-        // This LAB-only file inventory is independently CMS-signed with
-        // the pinned test certificate and bound to the verified V2 release.
-        // Its marker hash is derived from the known packaging input bytes,
-        // never from the observed installed marker.
-        var inventoryBytes = JsonSerializer.SerializeToUtf8Bytes(new
-        {
-            schema_version = 1,
-            package_id = PackageIdText,
-            version = VersionTwo,
-            channel = "stable",
-            artifact_sha256 = releaseV2.Artifact.Digest.Sha256,
-            files = new[]
-            {
-                new
-                {
-                    path = "current/" + versionMarker,
-                    sha256 = Convert.ToHexString(
-                        SHA256.HashData(Encoding.UTF8.GetBytes(VersionTwo)))
-                        .ToLowerInvariant()
-                }
-            }
-        });
+        // Enumerate the verified *actual* full nupkg lib/app payload,
+        // derive SHA-256 from every archive file, sign those exact bytes
+        // with ephemeral LAB CMS and compare against installed files.
+        // This is packaging evidence, not recovery authorization.
+        var inventoryBytes = await new VelopackPayloadInventoryBuilder()
+            .BuildUnsignedAsync(
+                fullV2, releaseV2, CancellationToken.None);
         var inventoryCms = new SignedCms(
             new ContentInfo(inventoryBytes), detached: true);
         inventoryCms.ComputeSignature(
@@ -263,15 +247,21 @@ internal static class SignedWorkflowAcceptanceRunner
                 signedInventory.Files.Select(file => new InstallerExpectedPayloadFile(
                     file.RelativePath, file.Digest)).ToArray(),
                 CancellationToken.None);
-        if (payloadEvidence.Files.Count != 1 ||
-            payloadEvidence.Files[0].Status !=
-                InstallerPayloadFileStatus.MatchesSuppliedDigest)
+        if (payloadEvidence.Files.Count != signedInventory.Files.Count ||
+            payloadEvidence.Files.Any(file =>
+                file.Status != InstallerPayloadFileStatus.MatchesSuppliedDigest))
         {
+            var failures = payloadEvidence.Files
+                .Where(file =>
+                    file.Status != InstallerPayloadFileStatus.MatchesSuppliedDigest)
+                .Select(file => file.RelativePath + "=" + file.Status)
+                .Take(8);
             throw new InvalidOperationException(
-                "Signed LAB inventory did not match the real installed Velopack marker.");
+                "Signed ZIP-derived inventory differs from installed Velopack payload: " +
+                string.Join(", ", failures));
         }
         Console.WriteLine(
-            "TURKUAZ_INSTALLER_SIGNED_INVENTORY_REAL_VELOPACK_DISK_EVIDENCE_OK");
+            "TURKUAZ_INSTALLER_SIGNED_FULL_NUPKG_INVENTORY_DISK_EVIDENCE_OK");
 
         await workflow.RepairAsync(
             releaseV2,
