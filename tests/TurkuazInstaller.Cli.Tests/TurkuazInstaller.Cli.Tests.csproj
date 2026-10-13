@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /tests/TurkuazInstaller.Cli.Tests/TurkuazInstaller.Cli.Tests.csproj
 # 📌 Amac: CLI parser, silent-mode ve process exit-code davranislarini unit test eder
 # 📌 Modul - Test Project XML
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Windows CLI kontratini framework dis sistemlerinden bagimsiz test eder
 
 Bagimli Oldugu Katman: Controller | Service | Tool
@@ -18,6 +18,7 @@ Bagimli Oldugu Katman: Controller | Service | Tool
     <ProjectReference Include="../../src/TurkuazInstaller.Cli/TurkuazInstaller.Cli.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Pkcs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio">
