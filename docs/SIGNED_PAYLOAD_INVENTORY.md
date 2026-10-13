@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/SIGNED_PAYLOAD_INVENTORY.md
 # 📌 Amac: Imzali dosya SHA-256 envanteri formati ve recovery icin trust sinirlarini tanimlar
 # 📌 Modul - Documentation Markdown
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Detached CMS dogrulamasi, tam release binding, portable path kurallari ve salt-okunur kapsam
 # Bagimli Oldugu Katman: Tool | Service | Domain
 
@@ -72,3 +72,34 @@ Windows alternate data streams, and ambiguous segments.
 Tests use ephemeral LAB certificates and real `SignedCms` signatures,
 then compare a signed V1 reference with changed on-disk test bytes without
 modifying either the installed file or any installer journal.
+
+## Unsigned inventory builder from a verified full nupkg
+
+`VelopackPayloadInventoryBuilder.BuildUnsignedAsync` now takes an existing
+**verified full** `-full.nupkg` file and an independently trusted
+`PackageRelease`. It first checks the package length and SHA-256 against
+that release and then streams the ZIP payload beneath `lib/app/`.
+Each archive file maps to `current/<relative-file>` and contributes
+a SHA-256 digest computed from uncompressed content. The result is
+deterministically sorted JSON with the existing schema and release binding.
+
+The builder rejects an unknown `lib/` layout rather than silently
+omitting app files, rejects duplicate case-insensitive ZIP paths,
+unsafe paths and symbolic link/archive entry types. It limits the
+number of ZIP entries, decompressed file size, total expanded bytes and
+resulting inventory bytes. It never extracts files to disk and never
+stores or uses a signing private key. An approved release pipeline must
+sign the exact generated JSON bytes; the pinned CMS inventory reader
+then validates these bytes before allowing any comparison.
+
+A generated list covers `lib/app/` **archive payload members**. It does
+not yet prove coverage of installer-created files, application shortcuts,
+permissions, registry entries, external state, or the complete
+post-installation ownership model. A valid CMS signature is not a
+repair authorization.
+
+The hosted-Windows signed Velopack E2E now generates a candidate
+inventory from the actual verified V2 nupkg, signs it with an ephemeral
+LAB certificate, verifies the pinned identity and compares the
+installed `current` payload files with their expected hashes. Production
+signing and recovery authorization remain disabled.
