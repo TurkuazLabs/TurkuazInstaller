@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/SIGNED_PAYLOAD_INVENTORY.md
 # 📌 Amac: Imzali dosya SHA-256 envanteri formati ve recovery icin trust sinirlarini tanimlar
 # 📌 Modul - Documentation Markdown
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Detached CMS dogrulamasi, tam release binding, portable path kurallari ve salt-okunur kapsam
 # Bagimli Oldugu Katman: Tool | Service | Domain
 
@@ -103,3 +103,21 @@ inventory from the actual verified V2 nupkg, signs it with an ephemeral
 LAB certificate, verifies the pinned identity and compares the
 installed `current` payload files with their expected hashes. Production
 signing and recovery authorization remain disabled.
+
+## Windows Velopack relocated root binaries
+
+A real hosted-Windows E2E identified two generated nupkg payloads
+that are **not** installed below `current/`: `lib/app/Squirrel.exe`
+becomes the root `Update.exe`, and
+`lib/app/<App>_ExecutionStub.exe` becomes root `<App>.exe`.
+The inventory generator now maps these exact filename shapes to
+their installed root paths **without dropping their hash entries**.
+All other `lib/app/` members remain mapped under `current/`.
+This allows the signed inventory to assess both regular payloads
+and relocated launcher/updater binaries.
+
+The mapping is a Velopack Windows packaging convention, not a
+general-purpose archive extraction path rule. Any unsupported
+or unexpected app layout must fail closed instead of being silently
+excluded. The actual installed bytes and all changed paths still
+need hosted-Windows E2E acceptance.
