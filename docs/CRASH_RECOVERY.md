@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.8.0
+# Version: 1.9.0
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -229,3 +229,18 @@ hold, mutates state, repairs a package, or authorizes any operation.
 Infrastructure tests compare raw file/user-data bytes before and after
 observation and cover matching, missing, mismatched, malformed and
 symlinked paths. This stage is inspection **only**.
+
+## Read-only current ownership uncertainties
+
+A separate `InstallerPayloadScopeAssessmentService` checks the
+installed-state identity/target against caller-provided, previously
+verified signed inventory fields. It hashes expected files and reports
+unexpected regular files beneath `current/` as *unattributed*.
+
+The scanner deliberately does not claim the entire install root:
+Velopack-managed root launchers are hashed when listed in the inventory,
+while `UserData`, caches, staging and unrelated root files are not
+scanned as installer-owned. Path identity, symlink/reparse and access
+checks fail closed. Unknown files are **never** automatically deleted.
+Even a fully matching report does not unblock a recovery journal,
+reconcile a split disk/state version or approve an unattended repair.
