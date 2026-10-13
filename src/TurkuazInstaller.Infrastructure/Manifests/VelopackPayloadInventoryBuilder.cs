@@ -1,8 +1,8 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Manifests/VelopackPayloadInventoryBuilder.cs
 // 📌 Amac: Hash ile dogrulanmis Velopack full nupkg iceriginden imzalanabilir dosya envanteri uretir
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
-// Aciklama: lib/app payload dosyalarini bounded SHA-256 ile tarar, deterministic JSON uretir; imzalama veya recovery yapmaz
+// Version: 1.1.0
+// Aciklama: lib/app payload hashlerini ve Velopack updater/launcher root tasimalarini map eder; deterministic JSON uretir
 // Bagimli Oldugu Katman: Tool | Domain
 
 using System.IO.Compression;
@@ -126,8 +126,8 @@ public sealed class VelopackPayloadInventoryBuilder
                     "Velopack inventory payload exceeds bounded limits.");
             }
 
-            var installedName = InstalledPrefix +
-                entry.FullName[PayloadPrefix.Length..];
+            var payloadName = entry.FullName[PayloadPrefix.Length..];
+            var installedName = MapInstalledPath(payloadName);
             SignedPayloadInventoryReader.ValidatePath(installedName);
             if (!seenInstalledNames.Add(installedName))
             {
@@ -193,5 +193,28 @@ public sealed class VelopackPayloadInventoryBuilder
                 "Generated Velopack inventory exceeds signed manifest size limit.");
         }
         return serialized;
+    }
+
+    // Velopack relocates these two generated binaries out of current:
+    // Squirrel.exe -> Update.exe and <App>_ExecutionStub.exe -> <App>.exe.
+    // No entries are omitted; their actual installed bytes are hashed.
+    private static string MapInstalledPath(string payloadName)
+    {
+        const string UpdaterSource = "Squirrel.exe";
+        const string UpdaterTarget = "Update.exe";
+        const string StubSuffix = "_ExecutionStub.exe";
+        const string ExeSuffix = ".exe";
+
+        if (string.Equals(payloadName, UpdaterSource, StringComparison.Ordinal))
+        {
+            return UpdaterTarget;
+        }
+        if (!payloadName.Contains('/') &&
+            payloadName.EndsWith(StubSuffix, StringComparison.Ordinal) &&
+            payloadName.Length > StubSuffix.Length)
+        {
+            return payloadName[..^StubSuffix.Length] + ExeSuffix;
+        }
+        return InstalledPrefix + payloadName;
     }
 }
