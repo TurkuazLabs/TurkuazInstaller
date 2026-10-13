@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_E2E.md
 # 📌 Amac: TurkuazInstaller gercek Velopack E2E kalite kapisinin kapsamini ve failure anlamini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.7.0
+# Version: 1.8.0
 # Aciklama: vpk ile gercek Setup/full package uretimini ve Package Engine install-update-repair-rollback-uninstall test zincirini tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -164,3 +164,18 @@ This gate must not be confused with a production-complete installation
 inventory: there can be installer-generated files and system integrations
 outside the mapped `current` archive payload. No unattended recovery
 or journal hold removal is enabled.
+
+## Root binary relocation gate
+
+When the full-nupkg inventory is compared against a real Velopack
+install, the two generated archive members `Squirrel.exe` and
+`*_ExecutionStub.exe` are *relocated* to the install root.
+The inventory generator now explicitly maps them to `Update.exe`
+and the root launcher name, respectively. They are **not** excluded
+from integrity verification. The E2E must compare these relocated
+root files along with the remaining `current/` payload.
+
+This rule was introduced after the first expanded E2E correctly
+reported the two generated files as missing under `current/`.
+A green result requires an exact hash match at their actual
+installed locations.
