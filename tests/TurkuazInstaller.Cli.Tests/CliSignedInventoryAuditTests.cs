@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Cli.Tests/CliSignedInventoryAuditTests.cs
 // 📌 Amac: Read-only CLI audit pinned CMS ile dogrulanmis baseline, state ve disk kontrolunu sinar
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
+// Version: 1.1.0
 // Aciklama: Gercek RSA CMS signature, wrong pin, wrong release, unknown current ve UserData korunmasi
 // Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -18,6 +18,7 @@ using TurkuazInstaller.Contracts.Releases;
 using TurkuazInstaller.Contracts.State;
 using TurkuazInstaller.Domain.Artifacts;
 using TurkuazInstaller.Domain.Manifests;
+using TurkuazInstaller.Domain.Operations;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Domain.State;
@@ -141,6 +142,69 @@ public sealed class CliSignedInventoryAuditTests
         Assert.Equal(0, scope.ReadCalls);
     }
 
+    [Fact]
+    public async Task AuditAsync_InterruptedApplyJournalBlocksBeforeInstalledDiskRead()
+    {
+        using var certificate = CreateCertificate();
+        var release = Release();
+        var bytes = Inventory(release);
+        var scope = new RejectAnyScopeRead();
+        var journal = new TestJournalRepository(
+            Entry(Path.GetTempPath(), InstallerOperationPhase.Applying));
+        var audit = CreateAudit(
+            release, certificate,
+            new InstalledPackageState(
+                Package, SemanticVersion.Parse("2.0.0"),
+                ReleaseChannel.Stable, Path.GetTempPath()),
+            scopeTool: scope, journalRepository: journal);
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(
+            () => audit.AssessAsync(
+                Package, ReleaseChannel.Stable,
+                bytes, Sign(bytes, certificate), CancellationToken.None));
+        Assert.Contains("journal", exception.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, scope.ReadCalls);
+        Assert.Equal(0, journal.WriteCalls);
+    }
+
+    [Fact]
+    public async Task AuditAsync_JournalAppearingDuringScanRefusesCleanResult()
+    {
+        var root = CreateLabRoot();
+        using var certificate = CreateCertificate();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "current"));
+            await File.WriteAllTextAsync(
+                Path.Combine(root, "current", "version.txt"), "2.0.0");
+            var journal = new TestJournalRepository(
+                Entry(root, InstallerOperationPhase.Applying),
+                appearOnRead: 2);
+            var release = Release();
+            var bytes = Inventory(release);
+            var audit = CreateAudit(
+                release, certificate,
+                new InstalledPackageState(
+                    Package, SemanticVersion.Parse("2.0.0"),
+                    ReleaseChannel.Stable, root),
+                journalRepository: journal);
+
+            await Assert.ThrowsAsync<InvalidDataException>(
+                () => audit.AssessAsync(
+                    Package, ReleaseChannel.Stable,
+                    bytes, Sign(bytes, certificate), CancellationToken.None));
+            Assert.True(journal.ReadCalls >= 2);
+            Assert.Equal(0, journal.WriteCalls);
+            Assert.Equal("2.0.0", await File.ReadAllTextAsync(
+                Path.Combine(root, "current", "version.txt")));
+        }
+        finally
+        {
+            DeleteLabRoot(root);
+        }
+    }
+
     [Theory]
     [InlineData("audit")]
     [InlineData("audit --package test --target C:/Apps")]
@@ -157,7 +221,8 @@ public sealed class CliSignedInventoryAuditTests
     private static CliSignedInventoryAuditService CreateAudit(
         PackageRelease release, X509Certificate2 certificate,
         InstalledPackageState state, bool wrongPin = false,
-        IInstalledPayloadScopeTool? scopeTool = null)
+        IInstalledPayloadScopeTool? scopeTool = null,
+        IInstallerOperationJournalRepository? journalRepository = null)
     {
         var expectedPin = certificate.GetCertHashString(
             HashAlgorithmName.SHA256).ToLowerInvariant();
@@ -172,6 +237,7 @@ public sealed class CliSignedInventoryAuditTests
             new TestReleaseProvider(release),
             signer,
             new TestStateRepository(state),
+            journalRepository ?? new TestJournalRepository(),
             new InstallerPayloadScopeAssessmentService(
                 scopeTool ?? new InstalledPayloadScopeTool(),
                 new InstallerPayloadEvidenceService(
@@ -280,6 +346,54 @@ public sealed class CliSignedInventoryAuditTests
         public Task DeleteAsync(
             PackageId packageId, CancellationToken cancellationToken)
             => throw new InvalidOperationException("Audit must never delete state.");
+    }
+
+    private static InstallerOperationJournalEntry Entry(
+        string path, InstallerOperationPhase phase)
+        => new(
+            Guid.NewGuid(), Package, InstallerOperationType.Update,
+            "2.0.0", path, phase, DateTimeOffset.UtcNow,
+            DateTimeOffset.UtcNow, null);
+
+    private sealed class TestJournalRepository :
+        IInstallerOperationJournalRepository
+    {
+        private readonly InstallerOperationJournalEntry? _entry;
+        private readonly int _appearOnRead;
+
+        public TestJournalRepository(
+            InstallerOperationJournalEntry? entry = null,
+            int appearOnRead = 1)
+        {
+            _entry = entry;
+            _appearOnRead = appearOnRead;
+        }
+
+        public int ReadCalls { get; private set; }
+        public int WriteCalls { get; private set; }
+
+        public Task<InstallerOperationJournalEntry?> GetAsync(
+            PackageId packageId, CancellationToken cancellationToken)
+        {
+            ReadCalls++;
+            return Task.FromResult(
+                ReadCalls >= _appearOnRead ? _entry : null);
+        }
+
+        public Task SaveAsync(
+            InstallerOperationJournalEntry entry,
+            CancellationToken cancellationToken)
+        {
+            WriteCalls++;
+            throw new InvalidOperationException("Audit must never save journal.");
+        }
+
+        public Task DeleteAsync(
+            PackageId packageId, CancellationToken cancellationToken)
+        {
+            WriteCalls++;
+            throw new InvalidOperationException("Audit must never delete journal.");
+        }
     }
 
     private sealed class RejectAnyScopeRead : IInstalledPayloadScopeTool
