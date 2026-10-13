@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Test-WindowsPilotPreflight.ps1
 # 📌 Amac: Windows combined distribution dosyalarini kurulum yapmadan once dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: Sadece metadata, PE architecture, SHA-256 ve Authenticode okur; installer calistirmaz
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -17,7 +17,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-if (-not $IsWindows) {
+if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     throw "Windows pilot preflight must run on Windows."
 }
 $minimumWindowsBuild = [version]"10.0.17763.0"
