@@ -182,3 +182,4 @@ Bir proje TurkuazInstaller'a gecmeden once signed manifest, install, update, rep
 - docs/WINDOWS_BOOTSTRAP.md
 - docs/WINUI_DESKTOP.md
 - docs/USER_GUIDE.md
+- docs/WINDOWS_PILOT_ACCEPTANCE.md
