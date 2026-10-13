@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Cli/services/CliSignedInventoryAuditCommand.cs
 // 📌 Amac: Windows CLI icin yerel imzali kurulum dosya envanteri salt-okunur denetim komutu
 // 📌 Modul - Service CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Strict audit args, bounded file reads, pinned CMS verification and JSON report; never repairs
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool
 
@@ -12,6 +12,7 @@ using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Infrastructure.Manifests;
 using TurkuazInstaller.Infrastructure.Providers.File;
+using TurkuazInstaller.Infrastructure.Operations;
 using TurkuazInstaller.Infrastructure.Repositories;
 using TurkuazInstaller.Infrastructure.Tools;
 
