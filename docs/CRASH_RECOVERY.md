@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.7.1
+# Version: 1.8.0
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -198,3 +198,34 @@ of a partial payload. A reproducible mid-file fault injection, full
 on-disk inventory, signed recovery package verification, and explicit
 privileged repair remain separate acceptance gates. The test stays
 GitHub-hosted Windows LAB only; it must not target customer installs.
+
+## Observed installed-file SHA-256 (diagnostic foundation)
+
+`InstallerPayloadEvidenceService` accepts an explicitly provided list of
+relative file paths and SHA-256 expectations, and asks
+`IInstalledPayloadHashTool` to hash the **actual installed bytes**.
+`InstalledPayloadHashTool` is a read-only filesystem adapter. It rejects
+absolute, traversal and ambiguous paths, and refuses to traverse reparse
+points. File read and permission errors propagate (fail closed); missing
+files and mismatched hashes receive distinct diagnostic statuses.
+
+The result `MatchesSuppliedDigest` means **only** that a selected on-disk
+file matched the specific caller-supplied SHA-256. It does NOT establish:
+- that the supplied expected hashes came from a signed trusted manifest;
+- that every installed file was covered (the caller selects the file list);
+- that the install tree was atomically captured, that all permissions
+  and ownership are correct, or that a check is free of concurrent writes;
+- that an observed installed version is trustworthy or an automatic
+  repair/rollback/uninstall is safe.
+
+The current signed package manifest verifies the full distribution
+artifact SHA-256, not a signed per-file installed-payload inventory.
+A future trusted inventory must bind each expected path/hash to a
+verified package identity, version, signed release source and complete
+installation scope before the diagnostics can inform a human-reviewed
+recovery decision. Even then, assessment alone never removes a journal
+hold, mutates state, repairs a package, or authorizes any operation.
+
+Infrastructure tests compare raw file/user-data bytes before and after
+observation and cover matching, missing, mismatched, malformed and
+symlinked paths. This stage is inspection **only**.
