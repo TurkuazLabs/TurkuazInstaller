@@ -152,10 +152,10 @@ public sealed class MainWindowViewModel
     public string ActionGuidanceMessage =>
         string.IsNullOrWhiteSpace(PackageIdText)
             ? _ui.Resolve(InstallerUiLabelKey.ActionGuidePackageId)
-            : string.IsNullOrWhiteSpace(ManifestSource)
-                ? _ui.Resolve(InstallerUiLabelKey.ActionGuideManifest)
-                : HasMatchingInstalledPackage
-                    ? _ui.Resolve(InstallerUiLabelKey.ActionGuideReady)
+            : HasMatchingInstalledPackage
+                ? _ui.Resolve(InstallerUiLabelKey.ActionGuideReady)
+                : string.IsNullOrWhiteSpace(ManifestSource)
+                    ? _ui.Resolve(InstallerUiLabelKey.ActionGuideManifest)
                     : _ui.Resolve(InstallerUiLabelKey.ActionGuideNotInstalled);
 
     public string UpdateDiscoveryTitle =>
