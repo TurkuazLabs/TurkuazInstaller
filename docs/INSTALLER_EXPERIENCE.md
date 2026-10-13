@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 2.1.0
+# Version: 2.2.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -232,3 +232,51 @@ TurkuazInstaller path (not raw Velopack Setup.exe) launches and installs.
 
 Track remaining wizard and machine-wide work in
 https://github.com/TurkuazLabs/TurkuazInstaller/issues/53 .
+
+## Windows 10 manual WinUI feedback — safe empty state and actions
+
+An initial human-run Windows 10 x64 smoke test successfully opened the
+`TurkuazInstaller.Bootstrapper.exe` -> WinUI application. The screenshot
+showed zero Installer-managed products, a ready status, editable manifest
+inputs and all operation buttons. This proves the window launched on that
+machine, **not** that any product install/update/repair/rollback happened.
+
+The next Draft PR UI increment improves this first-run state:
+
+- A zero-package catalog explains that a product installed by another
+  installer, such as the **raw Office Velopack Setup**, does not automatically
+  become a TurkuazInstaller-managed installation.
+- The source form is top-aligned, removing the full-height blank card.
+- The UI requires a nonblank package ID plus a manifest location before
+  enabling **Install** or the read-only **Check Updates** action.
+- **Update / Repair** require a matching Installer-managed package and a
+  manifest; **Rollback** additionally requires the older signed manifest;
+  **Uninstall** requires a matching managed package ID but no manifest.
+- Existing matching ID checks are case-insensitive. Blank input, a busy
+  operation, foreground update discovery or background update checks disable
+  unsafe actions. Refresh remains available while idle.
+- These are only **UI readiness gates**. The underlying service still
+  validates the request, independently trusted CMS signature and artifact
+  hash before any mutation. Disabled controls do **not** confer trust on an
+  input or register raw Office installations as managed.
+
+Manual retest with a **new successful Windows unsigned LAB artifact**:
+
+1. Open the new Bootstrapper in an isolated Windows x64 VM.
+2. Confirm zero managed products show the explanatory text; **Refresh**
+   remains enabled but Install/Update/Repair/Rollback/Uninstall/Check
+   Updates are disabled.
+3. Enter only a package ID; all actions remain disabled.
+4. Enter a **disposable signed LAB manifest path**: Install and Check
+   Updates become enabled. Do not click Install without the matching
+   LAB trust policy and intentionally test-owned product.
+5. Only after Installer itself records a managed package does
+   Update/Repair/Uninstall enable; Rollback requires a previous-version
+   manifest. Clear fields and ensure actions disable immediately.
+6. Never use real Office NSIS/Velopack installation paths as a target
+   for this manual test; no antivirus exceptions, UAC override or
+   production trust bypass.
+
+The code-level XAML build and Presentation ViewModel action/event tests
+must pass on the **exact new commit** before declaring these behaviors
+verified. This UI polish is not a production installer release.
