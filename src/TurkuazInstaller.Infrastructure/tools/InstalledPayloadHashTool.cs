@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/tools/InstalledPayloadHashTool.cs
 // 📌 Amac: Kurulum root altindaki normal dosyalari diske yazmadan SHA-256 ile olcer
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: Traversal ve reparse point reddeder, dosya okunamazsa fail-closed hata yayar
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -52,9 +52,9 @@ public sealed class InstalledPayloadHashTool : IInstalledPayloadHashTool
         var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
-        if (!candidate.StartsWith(
-            Path.TrimEndingDirectorySeparator(root) +
-                Path.DirectorySeparatorChar, comparison))
+        var rootPrefix = Path.EndsInDirectorySeparator(root)
+            ? root : root + Path.DirectorySeparatorChar;
+        if (!candidate.StartsWith(rootPrefix, comparison))
         {
             throw new ArgumentException(
                 "Hash target escaped the install root.", nameof(relativePath));
