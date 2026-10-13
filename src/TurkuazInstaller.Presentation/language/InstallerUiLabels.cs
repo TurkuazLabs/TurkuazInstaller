@@ -137,6 +137,17 @@ public static class InstallerUiLabels
 
     public const string InstalledAppsTitle =
         "Kurulu Uygulamalar";
+    public const string InstalledAppsEmpty =
+        "TurkuazInstaller ile yonetilen kayitli paket bulunamadi. "
+        + "Baska bir kurucu ile yuklenen uygulamalar otomatik listelenmez.";
+    public const string ActionGuidePackageId =
+        "Baslamak icin paket kimligini girin. Kurulum sadece imzali bir manifest ile yapilir.";
+    public const string ActionGuideManifest =
+        "Imzali manifestin URL veya dosya yolunu girin. Dogrulama olmadan kurulum yapilmaz.";
+    public const string ActionGuideNotInstalled =
+        "Bu paket henuz yonetilen kurulum listesinde yok. Imzali manifest ile Kur kullanilabilir.";
+    public const string ActionGuideReady =
+        "Kayitli paket bulundu. Guncelleme/onarma icin imzali manifest, geri alma icin onceki surum manifesti gerekir.";
     public const string InstalledAppsCountPrefix =
         "Kurulu paket:";
     public const string CatalogLoadFailedPrefix =
