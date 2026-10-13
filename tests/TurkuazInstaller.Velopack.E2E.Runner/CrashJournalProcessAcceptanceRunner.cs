@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Velopack.E2E.Runner/CrashJournalProcessAcceptanceRunner.cs
 // 📌 Amac: GitHub-hosted Windows'ta gercek workflow process kill ve Applying checkpoint recovery-hold E2E
 // 📌 Modul - Test CSharp
-// Version: 1.3.0
+// Version: 1.4.0
 // Aciklama: Update.exe oncesi, sonrasi ve aktif process kesintisinde journal, state ve user data korumasini denetler
 // Bagimli Oldugu Katman: Service | Repo | Tool | CI
 
@@ -19,6 +19,7 @@ using TurkuazInstaller.Infrastructure.Operations;
 using TurkuazInstaller.Infrastructure.Packages.Velopack;
 using TurkuazInstaller.Infrastructure.Processes;
 using TurkuazInstaller.Infrastructure.Repositories;
+using TurkuazInstaller.Infrastructure.Tools;
 
 namespace TurkuazInstaller.Velopack.E2E.Runner;
 
@@ -122,6 +123,10 @@ internal static class CrashJournalProcessAcceptanceRunner
             await initial.InstallAsync(
                 original, installRoot, stageRoot, null, CancellationToken.None);
             CheckVersionAndData(marker, dataFile, VersionOne, expectedData: null);
+            // LAB reference is observed V1 bytes, NOT a signed payload manifest.
+            var initialMarkerDigest = ArtifactDigest.ParseSha256(
+                Convert.ToHexString(SHA256.HashData(
+                    await File.ReadAllBytesAsync(marker))));
             Directory.CreateDirectory(Path.GetDirectoryName(dataFile)!);
             await File.WriteAllTextAsync(dataFile, userBytes);
 
@@ -253,6 +258,29 @@ internal static class CrashJournalProcessAcceptanceRunner
                 {
                     CheckVersionAndData(marker, dataFile, expectedDiskVersion, userBytes);
                 }
+                // Independent on-disk SHA-256 observation is diagnostic
+                // only; it cannot authorize unblocking an orphaned journal.
+                var observedPayload = await new InstallerPayloadEvidenceService(
+                    new InstalledPayloadHashTool()).AssessAsync(
+                    packageId, installRoot,
+                    new[]
+                    {
+                        new InstallerExpectedPayloadFile(
+                            "current/" + versionMarker, initialMarkerDigest)
+                    },
+                    CancellationToken.None);
+                var fileEvidence = observedPayload.Files.Single();
+                if (mode == CrashBoundaryMode.BeforeUpdater &&
+                    fileEvidence.Status != InstallerPayloadFileStatus.MatchesSuppliedDigest ||
+                    mode == CrashBoundaryMode.AfterUpdater &&
+                    fileEvidence.Status != InstallerPayloadFileStatus.DigestMismatch)
+                {
+                    throw new InvalidOperationException(
+                        "Crash LAB payload SHA-256 observation contradicted the known fixture boundary.");
+                }
+                Console.WriteLine(
+                    "TURKUAZ_INSTALLER_CRASH_READ_ONLY_PAYLOAD_EVIDENCE_OK");
+
                 var committed = await state.GetAsync(
                     packageId, CancellationToken.None)
                     ?? throw new InvalidOperationException(
