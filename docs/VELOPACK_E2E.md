@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_E2E.md
 # 📌 Amac: TurkuazInstaller gercek Velopack E2E kalite kapisinin kapsamini ve failure anlamini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.6.0
+# Version: 1.7.0
 # Aciklama: vpk ile gercek Setup/full package uretimini ve Package Engine install-update-repair-rollback-uninstall test zincirini tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -150,3 +150,17 @@ This demonstrates a complete trust-and-observation **LAB path for a
 selected marker**, not signed exhaustive payload inventory generation
 for a production package. It does not repair, unlock journals, or permit
 automatic file replacement.
+
+## ZIP-derived signed installed-payload inventory gate
+
+The real hosted-Windows signed workflow additionally uses the
+`VelopackPayloadInventoryBuilder` to enumerate **all** regular
+`lib/app/` file members of the verified V2 full nupkg. It signs
+the generated sorted hash inventory with the ephemeral CI certificate,
+validates the existing release identity and independent trust pin,
+and compares each declared installed `current` file's SHA-256.
+
+This gate must not be confused with a production-complete installation
+inventory: there can be installer-generated files and system integrations
+outside the mapped `current` archive payload. No unattended recovery
+or journal hold removal is enabled.
