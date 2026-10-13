@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CLI.md
 # 📌 Amac: TurkuazInstaller CLI ve silent-mode kullanim/guvenlik contractini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Komutlar, zorunlu optionlar, exit code'lar, silent output ve reboot-resume davranisini sabitler
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | Config
 
@@ -114,3 +114,52 @@ CLI ve WinUI ayni package-scoped storage alanlarini kullanir:
 Bu nedenle GUI ve CLI ayni package icin paralel mutation baslatamaz.
 
 Pending reboot operasyonu varsa normal CLI/GUI mutation reddedilir.
+
+## Salt-okunur imzali kurulum denetimi: `audit`
+
+Yerel pilot dogrulamasi icin kurulum ve onarimdan **bagimsiz** bir CLI
+komutu bulunur:
+
+```powershell
+.\TurkuazInstaller.Cli.exe audit --package example-app --manifest C:\Pilot\release.yml --inventory C:\Pilot\payload-inventory.json --channel stable
+```
+
+`release.yml.p7s` ve `payload-inventory.json.p7s` detached CMS
+imzalari ayni dosya adlarinin yaninda bulunmalidir.
+`%LOCALAPPDATA%\TurkuazInstaller\config\manifest-trust.yml`
+icerisinde paketin **bagimsiz, onceden onayli** publisher subject
+ve SHA-256 sertifika pini tanimlanmis olmalidir. CLI bu trust
+dosyasini kendisi olusturmaz veya guncellemez.
+
+Guvenlik zinciri:
+
+1. Kurulu paket icin gercek committed state zorunludur.
+2. Yerel release YAML + `.p7s`, bagimsiz CMS trust piniyle okunur.
+3. Paketin kimligi, kanali ve surumu kurulu state ile eslesmelidir.
+4. Envanter JSON + `.p7s`, ayni pinle kontrol edilir;
+   release ID / version / channel / full artifact SHA-256 eslesir.
+5. Sadece bundan sonra, gercek kurulu dosyalarin hash'leri okunur,
+   `current/` altindaki envanter disi dosyalar raporlanir.
+
+Sonuc tek satir JSON'dur. Alanlardan bazilari:
+`diagnostic_only:true`, `permits_repair:false`,
+`inspected_signed_files`, `mismatches`,
+`unattributed_current_files`, `observed_clean`.
+`observed_clean:true` olsa dahi root disindaki verilerin,
+Windows ACL'lerinin, kayit defterinin veya servislerin sahibi
+dogrulanmis **sayilmaz**. Bu komut mevcut recovery hold'u
+kaldirmaz; dosya kopyalamaz, silmez, update/repair/uninstall yapmaz.
+
+Exit code `0`, yalnizca sinirli denetlenen dosyalar eslesti ve
+`current/` icinde envanter disi dosya yok demektir.
+`4`, dosya uyusmazligi, fazlalik veya verification/runtime hatasi;
+`2` gecersiz komut; `5` iptal demektir.
+`--silent` ve `--target`, audit komutunda bilerek reddedilir.
+Komut HTTPS kaynak yerine mevcut `--manifest` parametresinde
+yerel manifest yolu ister; diska yazan bir artifact generation
+veya trust/pin provisioning islemi yapmaz.
+
+Urun uretim kabulune gecmeden once signed manifest,
+signed inventory ve trusted publisher pin ayri bir yetkili
+release surecinde hazirlanmalidir. Ephemeral LAB sertifikalari
+gercek urunleri imzalamak icin kullanilamaz.
