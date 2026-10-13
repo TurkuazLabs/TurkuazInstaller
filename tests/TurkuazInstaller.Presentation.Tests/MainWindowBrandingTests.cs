@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/MainWindowBrandingTests.cs
 // 📌 Amac: MainWindowViewModel branding/localization override ve fallback davranisini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.3.0
+// Version: 1.4.0
 // Aciklama: Branding, channel, placeholder ve runtime initial state override davranisini built-in fallback ile birlikte dogrular
 //
 // Bagimli Oldugu Katman: View | Language | Config
@@ -141,5 +141,111 @@ public sealed class MainWindowBrandingTests
         Assert.Equal(
             "Installed packages: 0",
             viewModel.InstalledAppsCountText);
+    }
+
+    [Fact]
+    public void EmptyCatalog_HasGuidance_AndDisablesOperations()
+    {
+        var model = new MainWindowViewModel(InstallerUiProfile.Empty);
+
+        Assert.True(model.IsCatalogEmpty);
+        Assert.False(model.HasInstalledApps);
+        Assert.Equal(InstallerUiLabels.InstalledAppsEmpty, model.InstalledAppsEmptyMessage);
+        Assert.Equal(InstallerUiLabels.ActionGuidePackageId, model.ActionGuidanceMessage);
+        Assert.True(model.CanRun); // Refresh remains usable with no installed packages.
+        Assert.False(model.CanInstall);
+        Assert.False(model.CanUpdate);
+        Assert.False(model.CanRepair);
+        Assert.False(model.CanRollback);
+        Assert.False(model.CanUninstall);
+        Assert.False(model.CanCheckUpdate);
+
+        model.HasCatalogError = true;
+        Assert.False(model.IsCatalogEmpty);
+        model.HasCatalogError = false;
+        Assert.True(model.IsCatalogEmpty);
+    }
+
+    [Fact]
+    public void Actions_RequireCorrectSignedSourceAndMatchingInstalledPackage()
+    {
+        var model = new MainWindowViewModel(InstallerUiProfile.Empty);
+
+        model.PackageIdText = "turkuazlabs.office";
+        Assert.Equal(InstallerUiLabels.ActionGuideManifest, model.ActionGuidanceMessage);
+        Assert.False(model.CanInstall);
+
+        model.ManifestSource = "C:\\lab\\office-manifest.yml";
+        Assert.True(model.CanInstall);
+        Assert.True(model.CanCheckUpdate);
+        Assert.Equal(InstallerUiLabels.ActionGuideNotInstalled, model.ActionGuidanceMessage);
+        Assert.False(model.CanUninstall);
+
+        model.SetInstalledApps(new[]
+        {
+            new InstalledAppListItemViewModel(
+                "turkuazlabs.OFFICE", "0.3.1", "beta", "C:\\lab\\installed")
+        });
+        Assert.True(model.HasInstalledApps);
+        Assert.False(model.IsCatalogEmpty);
+        Assert.False(model.CanInstall); // Installed package must not be installed twice.
+        Assert.True(model.CanUpdate);
+        Assert.True(model.CanRepair);
+        Assert.False(model.CanRollback);
+        Assert.True(model.CanUninstall);
+
+        model.RollbackManifestSource = "C:\\lab\\rollback.yml";
+        Assert.True(model.CanRollback);
+        Assert.Equal(InstallerUiLabels.ActionGuideReady, model.ActionGuidanceMessage);
+
+        model.ManifestSource = "  ";
+        Assert.False(model.CanUpdate);
+        Assert.False(model.CanRepair);
+        Assert.False(model.CanRollback);
+        Assert.False(model.CanCheckUpdate);
+        Assert.True(model.CanUninstall); // Uninstall requires no manifest.
+
+        model.PackageIdText = "some.other.package";
+        Assert.True(model.IsCatalogEmpty == false); // Other installed package still exists.
+        Assert.False(model.CanUninstall);
+        Assert.False(model.CanUpdate);
+    }
+
+    [Fact]
+    public void ActionAvailability_NotifiesBindings_AndHonorsBusyState()
+    {
+        var model = new MainWindowViewModel(InstallerUiProfile.Empty);
+        var changed = new List<string>();
+        model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName is not null)
+            {
+                changed.Add(e.PropertyName);
+            }
+        };
+
+        model.PackageIdText = "turkuazlabs.office";
+        model.ManifestSource = "C:\\lab\\signed-manifest.yml";
+
+        Assert.Contains(nameof(model.CanInstall), changed);
+        Assert.Contains(nameof(model.CanCheckUpdate), changed);
+        Assert.Contains(nameof(model.ActionGuidanceMessage), changed);
+
+        changed.Clear();
+        model.IsBusy = true;
+        Assert.False(model.CanRun);
+        Assert.False(model.CanInstall);
+        Assert.False(model.CanCheckUpdate);
+        Assert.Contains(nameof(model.CanInstall), changed);
+
+        model.IsBusy = false;
+        Assert.True(model.CanInstall);
+        model.IsCheckingUpdate = true;
+        Assert.False(model.CanInstall);
+        model.IsCheckingUpdate = false;
+        model.IsBackgroundUpdateCheckRunning = true;
+        Assert.False(model.CanInstall);
+        model.IsBackgroundUpdateCheckRunning = false;
+        Assert.True(model.CanInstall);
     }
 }
