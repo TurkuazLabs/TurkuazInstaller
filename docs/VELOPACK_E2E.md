@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_E2E.md
 # 📌 Amac: TurkuazInstaller gercek Velopack E2E kalite kapisinin kapsamini ve failure anlamini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.4.0
+# Version: 1.5.0
 # Aciklama: vpk ile gercek Setup/full package uretimini ve Package Engine install-update-repair-rollback-uninstall test zincirini tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -114,3 +114,19 @@ This gate is about rejecting further mutation and preserving user
 data, not guaranteeing that the kill hit a specific file write or
 recovering a partial installation. Production-safe reconciliation
 still requires independently verified on-disk evidence.
+
+## Observed payload digest after crash
+
+Each of the three hosted-Windows crash fixture cases also invokes
+`InstallerPayloadEvidenceService` against the **actual installed version
+marker**. The test saves the V1 marker's SHA-256 before update and then
+compares observed on-disk bytes with that fixture-only baseline:
+- pre-updater kill: selected marker must match V1;
+- post-updater success / pre-state-commit kill: marker must differ from V1;
+- running-updater kill: marker may match, differ, or be absent; this
+  deliberately does not assume a consistent disk after interruption.
+
+Every scenario still requires journal preservation, committed V1 state,
+unchanged UserData and a recovery hold. A successful marker comparison
+does not validate all installed payload files, prove a trusted signed
+per-file baseline, or allow unattended repair.
