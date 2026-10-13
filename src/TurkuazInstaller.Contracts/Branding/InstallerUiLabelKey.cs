@@ -83,5 +83,10 @@ public enum InstallerUiLabelKey
     PerUserInstall,
     PerMachineUnavailable,
     CustomTargetHeader,
-    CustomTargetRequired
+    CustomTargetRequired,
+    InstalledAppsEmpty,
+    ActionGuidePackageId,
+    ActionGuideManifest,
+    ActionGuideNotInstalled,
+    ActionGuideReady
 }
