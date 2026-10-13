@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/SIGNED_PAYLOAD_INVENTORY.md
 # 📌 Amac: Imzali dosya SHA-256 envanteri formati ve recovery icin trust sinirlarini tanimlar
 # 📌 Modul - Documentation Markdown
-# Version: 1.2.0
+# Version: 1.3.0
 # Aciklama: Detached CMS dogrulamasi, tam release binding, portable path kurallari ve salt-okunur kapsam
 # Bagimli Oldugu Katman: Tool | Service | Domain
 
@@ -121,3 +121,38 @@ general-purpose archive extraction path rule. Any unsupported
 or unexpected app layout must fail closed instead of being silently
 excluded. The actual installed bytes and all changed paths still
 need hosted-Windows E2E acceptance.
+
+## Read-only installed current scope assessment
+
+`InstalledPayloadScopeTool` enumerates only normal, non-reparse files
+beneath the existing `current/` directory. It checks each ancestor,
+refuses symlinks/reparse points and ambiguous names, and limits the
+maximum traversal size. Access failures propagate instead of silently
+producing an empty ownership report.
+
+`InstallerPayloadScopeAssessmentService` takes the **caller-provided**
+signed baseline identity and expected files and first checks its
+package ID, version, channel and install-root path against the committed
+`InstalledPackageState`. The invoking caller is responsible for deriving
+the baseline values from `SignedPayloadInventoryReader` after CMS
+verification. An identity or target mismatch fails before observing any
+files. The service then produces:
+- existing per-file SHA-256 evidence for every expected installed file,
+  including root `Update.exe` and the launcher;
+- a sorted, case-insensitive set difference identifying **unattributed**
+  files actually observed inside `current/`.
+
+**Unattributed does NOT mean malicious or safely removable.** It may
+contain legitimately generated application files. `UserData`,
+package caches, staging directories and other root files are out of
+scope; the scanner neither traverses nor claims ownership of them.
+An empty unattributed list does not prove full installation ownership,
+correct ACLs, completeness across the root, or an atomic disk snapshot.
+No result is an authorization to delete, repair, retry, rollback or
+clear a recovery journal.
+
+Unit tests assert read-only behavior, state/target mismatch rejection,
+symlink refusal, and separate treatment of unknown `current/` files
+and preserved root `UserData`. The hosted-Windows Velopack fixture also
+records the number of unattributed files without treating it as an
+automatic recovery decision.
