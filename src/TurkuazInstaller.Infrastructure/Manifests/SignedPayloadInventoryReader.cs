@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Manifests/SignedPayloadInventoryReader.cs
 // 📌 Amac: CMS imzali dosya SHA-256 envanterini mevcut trusted release kimligine baglar
 // 📌 Modul - Tool CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: Detached signature, paket kimligi, surum, kanal, artifact digest ve dosya yollarini fail-closed dogrular
 // Bagimli Oldugu Katman: Tool | Service | Domain
 
@@ -222,7 +222,7 @@ public sealed class SignedPayloadInventoryReader
     private static void ValidatePath(string path)
     {
         if (path.Length > MaximumRelativePathLength ||
-            path.StartsWith('/', StringComparison.Ordinal) ||
+            path.StartsWith("/", StringComparison.Ordinal) ||
             path.Contains('\\') ||
             path.Contains(':') ||
             path.Any(ch => ch < 0x20 || ch is '<' or '>' or '"' or '|' or '?' or '*'))
