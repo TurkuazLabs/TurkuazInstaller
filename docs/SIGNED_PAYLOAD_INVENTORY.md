@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/SIGNED_PAYLOAD_INVENTORY.md
 # 📌 Amac: Imzali dosya SHA-256 envanteri formati ve recovery icin trust sinirlarini tanimlar
 # 📌 Modul - Documentation Markdown
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: Detached CMS dogrulamasi, tam release binding, portable path kurallari ve salt-okunur kapsam
 # Bagimli Oldugu Katman: Tool | Service | Domain
 
@@ -156,3 +156,20 @@ symlink refusal, and separate treatment of unknown `current/` files
 and preserved root `UserData`. The hosted-Windows Velopack fixture also
 records the number of unattributed files without treating it as an
 automatic recovery decision.
+
+## Local pilot: read-only CLI command
+
+`TurkuazInstaller.Cli.exe audit` is now an explicit offline pilot
+entry point. It uses the installed application's persisted state,
+the ordinary pinned CMS-signed release-manifest reader, and the
+separately pinned CMS-signed inventory reader. It refuses
+missing/mismatched committed state and verifies the complete inventory
+identity before accessing installed application files.
+
+The command emits a bounded JSON diagnostic report. It returns nonzero
+for missing/mismatched expected files, unattributed `current/` files,
+missing signatures or other trust errors. It does not initialize the
+mutating workflow, operation journal, update engine, or reboot scheduler.
+Even a successful audit grants **no** rollback or journal unlock authority.
+
+See `docs/CLI.md` for the offline command and prerequisites.
