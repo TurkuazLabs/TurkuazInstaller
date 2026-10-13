@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/tools/InstalledPayloadHashTool.cs
 // 📌 Amac: Kurulum root altindaki normal dosyalari diske yazmadan SHA-256 ile olcer
 // 📌 Modul - Tool CSharp
-// Version: 1.0.1
+// Version: 1.0.2
 // Aciklama: Traversal ve reparse point reddeder, dosya okunamazsa fail-closed hata yayar
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -66,15 +66,12 @@ public sealed class InstalledPayloadHashTool : IInstalledPayloadHashTool
         var ancestor = new DirectoryInfo(root);
         while (ancestor is not null)
         {
-            if (!ancestor.Exists)
-            {
-                throw new DirectoryNotFoundException(
-                    "Installed payload root is missing.");
-            }
-            if ((ancestor.Attributes & FileAttributes.ReparsePoint) != 0)
+            var ancestorAttributes = File.GetAttributes(ancestor.FullName);
+            if ((ancestorAttributes & FileAttributes.ReparsePoint) != 0 ||
+                (ancestorAttributes & FileAttributes.Directory) == 0)
             {
                 throw new IOException(
-                    "Installed payload root uses a reparse point.");
+                    "Installed payload root ancestry is not a regular directory.");
             }
             ancestor = ancestor.Parent;
         }
@@ -83,22 +80,40 @@ public sealed class InstalledPayloadHashTool : IInstalledPayloadHashTool
         for (var i = 0; i < parts.Length - 1; i++)
         {
             parent = Path.Combine(parent, parts[i]);
-            if (!Directory.Exists(parent))
+            FileAttributes parentAttributes;
+            try
+            {
+                parentAttributes = File.GetAttributes(parent);
+            }
+            catch (FileNotFoundException)
             {
                 return null;
             }
-            if ((File.GetAttributes(parent) & FileAttributes.ReparsePoint) != 0)
+            catch (DirectoryNotFoundException)
+            {
+                return null;
+            }
+            if ((parentAttributes & FileAttributes.ReparsePoint) != 0 ||
+                (parentAttributes & FileAttributes.Directory) == 0)
             {
                 throw new IOException(
-                    "Installed payload subdirectory uses a reparse point.");
+                    "Installed payload path contains an unsafe directory.");
             }
         }
 
-        if (!File.Exists(candidate))
+        FileAttributes attributes;
+        try
+        {
+            attributes = File.GetAttributes(candidate);
+        }
+        catch (FileNotFoundException)
         {
             return null;
         }
-        var attributes = File.GetAttributes(candidate);
+        catch (DirectoryNotFoundException)
+        {
+            return null;
+        }
         if ((attributes & FileAttributes.ReparsePoint) != 0 ||
             (attributes & FileAttributes.Directory) != 0)
         {
