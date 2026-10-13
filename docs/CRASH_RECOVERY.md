@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CRASH_RECOVERY.md
 # 📌 Amac: Yarim kalan installer update, repair, rollback ve uninstall operasyonlarinda fail-closed guvenlik kapisi
 # 📌 Modul - Dokumantasyon
-# Version: 1.9.0
+# Version: 2.0.0
 # Aciklama: Durable checkpoint, interruption phase, manual reconcile ve acik production blokajlari
 # Bagimli Oldugu Katman: Service | Repo | Tool
 
@@ -244,3 +244,15 @@ scanned as installer-owned. Path identity, symlink/reparse and access
 checks fail closed. Unknown files are **never** automatically deleted.
 Even a fully matching report does not unblock a recovery journal,
 reconcile a split disk/state version or approve an unattended repair.
+
+## Local signed CLI audit remains blocked by persisted operations
+
+The `audit` command is independent of the mutating installer
+workflow, but it consults the same package operation journal through
+`InstallerRecoveryAssessmentService`. Unlike the runtime's pre-apply
+retry policy, diagnostics conservatively refuse a "clean" result for
+**any** persisted journal, including a non-mutation checkpoint. The
+journal is observed once before disk hashing and once after. A
+committed-state version/channel/target change during assessment also
+fails. No journal record is written or deleted; this is **not** an
+atomic lock or rollback authorization.
