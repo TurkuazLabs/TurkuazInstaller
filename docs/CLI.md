@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/CLI.md
 # 📌 Amac: TurkuazInstaller CLI ve silent-mode kullanim/guvenlik contractini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Komutlar, zorunlu optionlar, exit code'lar, silent output ve reboot-resume davranisini sabitler
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | Config
 
@@ -163,3 +163,21 @@ Urun uretim kabulune gecmeden once signed manifest,
 signed inventory ve trusted publisher pin ayri bir yetkili
 release surecinde hazirlanmalidir. Ephemeral LAB sertifikalari
 gercek urunleri imzalamak icin kullanilamaz.
+
+### Recovery journal ve yarismali state kontrolu
+
+`audit`, kurulu uygulama dosyalarini okumadan **once** ve okuduktan
+**sonra** paket bazli recovery journal durumunu salt-okunur inceler.
+Hangi asamada olursa olsun kalici bir journal varsa veya journal
+metadata'si state ile celisiyorsa komut *basarisiz* sonlanir:
+basarili hash okumasini "temiz kurulum" diye sunmaz. Islem sonunda
+committed package/version/channel/target degerlerini tekrar okur;
+bu alanlar degistiyse raporu reddeder.
+
+Bu iki asamali kontrol **atomik bir disk snapshot'i degildir**.
+Journal yoklugunun iki defa gorulmesi, kurulum lock'unun alindigi,
+ACL'lerin dogrulandigi veya unattended repair'in guvenli oldugu
+anlamina gelmez. JSON raporundaki
+`operation_journal_absent_at_checks:true`,
+`snapshot_atomic:false` ve `recovery_hold_cleared:false`
+alanlari yalnizca denetim sinirini aciklar.
