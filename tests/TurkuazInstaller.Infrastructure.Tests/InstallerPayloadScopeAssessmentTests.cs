@@ -1,7 +1,7 @@
 // Dosya: /tests/TurkuazInstaller.Infrastructure.Tests/InstallerPayloadScopeAssessmentTests.cs
 // Amac: Imzali baseline'den current kapsam fazlaligi ve state identity uyusmazligini salt-okunur sinar
 // Modul - Test CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: Extra current files, UserData ayrimi, root payload hash ve symlink detection
 // Bagimli Oldugu Katman: Service | Tool | Domain
 
@@ -61,6 +61,35 @@ public sealed class InstallerPayloadScopeAssessmentTests
             Assert.Equal(currentBefore, await File.ReadAllBytesAsync(
                 Path.Combine(current, "plugins", "unknown.dll")));
             Assert.True(File.Exists(Path.Combine(root, "other.log")));
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    [Fact]
+    public async Task AssessAsync_EqualParsedSemanticVersionsMustNotConflictAfterStateReload()
+    {
+        var root = CreateRoot();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "current"));
+            await File.WriteAllTextAsync(
+                Path.Combine(root, "current", "version.txt"), "2.0.0");
+            // Verified signed inventory and persisted state independently
+            // deserialize versions; they must be compared by value.
+            var independentVersion = SemanticVersion.Parse("2.0.0");
+            Assert.False(ReferenceEquals(independentVersion, Version));
+
+            var result = await CreateService().AssessAsync(
+                Package, independentVersion, ReleaseChannel.Stable,
+                new[] { Expected("current/version.txt", "2.0.0") },
+                State(root), root, CancellationToken.None);
+
+            Assert.Empty(result.UnattributedCurrentFiles);
+            Assert.Equal(InstallerPayloadFileStatus.MatchesSuppliedDigest,
+                Assert.Single(result.HashEvidence.Files).Status);
         }
         finally
         {
