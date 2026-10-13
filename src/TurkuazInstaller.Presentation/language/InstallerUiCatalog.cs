@@ -141,6 +141,11 @@ public sealed class InstallerUiCatalog
             InstallerUiLabelKey.PerMachineUnavailable => InstallerUiLabels.PerMachineUnavailable,
             InstallerUiLabelKey.CustomTargetHeader => InstallerUiLabels.CustomTargetHeader,
             InstallerUiLabelKey.CustomTargetRequired => InstallerUiLabels.CustomTargetRequired,
+            InstallerUiLabelKey.InstalledAppsEmpty => InstallerUiLabels.InstalledAppsEmpty,
+            InstallerUiLabelKey.ActionGuidePackageId => InstallerUiLabels.ActionGuidePackageId,
+            InstallerUiLabelKey.ActionGuideManifest => InstallerUiLabels.ActionGuideManifest,
+            InstallerUiLabelKey.ActionGuideNotInstalled => InstallerUiLabels.ActionGuideNotInstalled,
+            InstallerUiLabelKey.ActionGuideReady => InstallerUiLabels.ActionGuideReady,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(key),
                 key,
