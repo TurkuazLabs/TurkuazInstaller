@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/SIGNED_PAYLOAD_INVENTORY.md
 # 📌 Amac: Imzali dosya SHA-256 envanteri formati ve recovery icin trust sinirlarini tanimlar
 # 📌 Modul - Documentation Markdown
-# Version: 1.5.0
+# Version: 1.6.0
 # Aciklama: Detached CMS dogrulamasi, tam release binding, portable path kurallari ve salt-okunur kapsam
 # Bagimli Oldugu Katman: Tool | Service | Domain
 
@@ -185,3 +185,27 @@ read and again after the file assessment; committed version/channel/
 target must also be unchanged at the end. These are two observations,
 not an atomic filesystem snapshot, operation lock, or proof of safe
 automatic recovery. The CLI never saves or clears the journal.
+
+## CI-only real-product full-package inventory probe
+
+The `tests/TurkuazInstaller.Inventory.LabProbe` executable is an
+**unsigned-inventory derivation tool**, deliberately outside production
+installer builds. It requires package ID, channel, pinned signed
+manifest path, independent external trust policy path, full
+`-full.nupkg` file and new output path.
+
+The probe resolves the real CMS-signed release with the production
+`FileReleaseProvider` and `CmsManifestSignatureVerifier`. Only after
+trusted release identity and full archive size/SHA-256 match does it
+invoke `VelopackPayloadInventoryBuilder` to hash **all** mapped
+`lib/app` payload files. It never signs, invents or downloads trust,
+changes install state, or enables repair; it refuses to overwrite an
+existing output.
+
+TurkuazOffice's Draft Velopack pilot uses this same probe on genuine
+Office packages, then signs the raw JSON bytes using only an ephemeral
+LAB CMS key and asks the real CLI `audit` to prove matching on-disk
+files, corruption detection, repair restoration and V1 rollback
+evidence. This remains a cross-repository CI acceptance experiment,
+**not** production signing, full root ownership or an atomic file
+snapshot.
