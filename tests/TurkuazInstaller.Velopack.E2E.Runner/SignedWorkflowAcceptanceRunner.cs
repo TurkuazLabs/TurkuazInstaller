@@ -1,6 +1,6 @@
 // Dosya: /tests/TurkuazInstaller.Velopack.E2E.Runner/SignedWorkflowAcceptanceRunner.cs
 // Amac: Gecici CMS imzali local manifest ile gercek Velopack package engine ve kalici state lifecycle testini birlestirir
-// Version: 0.5.0
+// Version: 0.6.0
 // Guvenlik: Ephemeral CI certificate, external trust pin, unsigned fixture; production signing veya VM kabul testi degildir
 
 using System.Security.Cryptography;
@@ -262,6 +262,33 @@ internal static class SignedWorkflowAcceptanceRunner
         }
         Console.WriteLine(
             "TURKUAZ_INSTALLER_SIGNED_FULL_NUPKG_INVENTORY_DISK_EVIDENCE_OK");
+
+        // The signed inventory supplies the caller-side trust boundary.
+        // Scan only current/ for files absent from that baseline while
+        // keeping preserved UserData outside any ownership assertion.
+        var scoped = await new InstallerPayloadScopeAssessmentService(
+            new InstalledPayloadScopeTool(),
+            new InstallerPayloadEvidenceService(new InstalledPayloadHashTool()))
+            .AssessAsync(
+                signedInventory.PackageId,
+                signedInventory.Version,
+                signedInventory.Channel,
+                signedInventory.Files.Select(file =>
+                    new InstallerExpectedPayloadFile(
+                        file.RelativePath, file.Digest)).ToArray(),
+                await RequireStateAsync(stateRepository, packageId),
+                installRoot,
+                CancellationToken.None);
+        if (scoped.HashEvidence.Files.Any(file =>
+                file.Status != InstallerPayloadFileStatus.MatchesSuppliedDigest))
+        {
+            throw new InvalidOperationException(
+                "Signed inventory scoped disk evidence contains hash mismatches.");
+        }
+        Console.WriteLine(
+            "TURKUAZ_INSTALLER_READ_ONLY_CURRENT_SCOPE_OBSERVED_OK: " +
+            scoped.UnattributedCurrentFiles.Count +
+            " unattributed current files (no ownership or repair claim)");
 
         await workflow.RepairAsync(
             releaseV2,
