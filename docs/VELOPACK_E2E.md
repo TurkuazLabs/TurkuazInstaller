@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_E2E.md
 # 📌 Amac: TurkuazInstaller gercek Velopack E2E kalite kapisinin kapsamini ve failure anlamini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.5.0
+# Version: 1.6.0
 # Aciklama: vpk ile gercek Setup/full package uretimini ve Package Engine install-update-repair-rollback-uninstall test zincirini tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -130,3 +130,23 @@ Every scenario still requires journal preservation, committed V1 state,
 unchanged UserData and a recovery hold. A successful marker comparison
 does not validate all installed payload files, prove a trusted signed
 per-file baseline, or allow unattended repair.
+
+## Signed inventory + real installed Velopack marker
+
+The hosted-Windows signed workflow now creates an independent,
+ephemeral-CMS-signed per-file inventory for the expected V2 version
+marker. Its SHA-256 is computed from known pre-packaging V2 bytes, **not**
+from the installed target. The inventory is verified using the same
+external test-certificate pin as the release manifest and is bound to
+the already verified V2 package ID, channel, semantic version and
+distribution artifact digest.
+
+After the actual signed-release workflow updates the real Velopack
+fixture, `InstallerPayloadEvidenceService` independently hashes the
+installed marker; the selected file must match the verified inventory
+entry. The separate UserData preservation assertion remains active.
+
+This demonstrates a complete trust-and-observation **LAB path for a
+selected marker**, not signed exhaustive payload inventory generation
+for a production package. It does not repair, unlock journals, or permit
+automatic file replacement.
