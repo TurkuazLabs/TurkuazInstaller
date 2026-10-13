@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Cli/services/CliSignedInventoryAuditCommand.cs
 // 📌 Amac: Windows CLI icin yerel imzali kurulum dosya envanteri salt-okunur denetim komutu
 // 📌 Modul - Service CSharp
-// Version: 1.0.0
+// Version: 1.1.0
 // Aciklama: Strict audit args, bounded file reads, pinned CMS verification and JSON report; never repairs
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool
 
@@ -48,8 +48,10 @@ public static class CliSignedInventoryAuditCommand
                 new FileReleaseProviderOptions(manifestPath, manifestPath));
             var stateRepository = new JsonInstallStateRepository(
                 new JsonInstallStateRepositoryOptions(options.StateRoot));
+            var journalRepository = new JsonOperationJournalRepository(
+                new JsonOperationJournalRepositoryOptions(options.JournalRoot));
             var audit = new CliSignedInventoryAuditService(
-                provider, verifier, stateRepository,
+                provider, verifier, stateRepository, journalRepository,
                 new InstallerPayloadScopeAssessmentService(
                     new InstalledPayloadScopeTool(),
                     new InstallerPayloadEvidenceService(
@@ -90,6 +92,9 @@ public static class CliSignedInventoryAuditCommand
                 mismatches,
                 unattributed_current_files = result.UnattributedCurrentFiles,
                 observed_clean = clean,
+                operation_journal_absent_at_checks = true,
+                snapshot_atomic = false,
+                recovery_hold_cleared = false,
                 unscanned_root_files_and_user_data = true
             }));
             // "Clean" is an observation in this limited scope, never
