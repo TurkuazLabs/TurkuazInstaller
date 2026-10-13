@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/SIGNED_PAYLOAD_INVENTORY.md
 # 📌 Amac: Imzali dosya SHA-256 envanteri formati ve recovery icin trust sinirlarini tanimlar
 # 📌 Modul - Documentation Markdown
-# Version: 1.4.0
+# Version: 1.5.0
 # Aciklama: Detached CMS dogrulamasi, tam release binding, portable path kurallari ve salt-okunur kapsam
 # Bagimli Oldugu Katman: Tool | Service | Domain
 
@@ -173,3 +173,15 @@ mutating workflow, operation journal, update engine, or reboot scheduler.
 Even a successful audit grants **no** rollback or journal unlock authority.
 
 See `docs/CLI.md` for the offline command and prerequisites.
+
+### Recovery hold cannot look clean in CLI audit
+
+The read-only CLI now uses the existing
+`InstallerRecoveryAssessmentService` against the same installed state
+and operation-journal storage used by normal runtime. An observed
+journal of **any** phase, an unreadable journal, or a metadata conflict
+prevents a successful audit. It checks before any installed payload is
+read and again after the file assessment; committed version/channel/
+target must also be unchanged at the end. These are two observations,
+not an atomic filesystem snapshot, operation lock, or proof of safe
+automatic recovery. The CLI never saves or clears the journal.
