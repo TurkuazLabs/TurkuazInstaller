@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/VelopackPayloadInventoryBuilderTests.cs
 // 📌 Amac: Full nupkg payload envanterinin determinism, archive trust ve path guvenlik testlerini yapar
 // 📌 Modul - Test CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: Lab ZIP fixture ile unsigned inventory, CMS imza baglama, tekrarlanabilirlik ve fail-closed reddi test eder
 // Bagimli Oldugu Katman: Tool | Service | Domain
 
@@ -76,7 +76,7 @@ public sealed class VelopackPayloadInventoryBuilderTests
                 stream.Position = stream.Length - 1;
                 var old = stream.ReadByte();
                 stream.Position = stream.Length - 1;
-                stream.WriteByte(old ^ 0x01);
+                stream.WriteByte((byte)(old ^ 0x01));
             }
 
             await Assert.ThrowsAsync<InvalidDataException>(
