@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/viewmodels/MainWindowViewModel.cs
 // 📌 Amac: TurkuazInstaller ana penceresinin bind edilebilir UI state modelini tasir
 // 📌 Modul - ViewModel CSharp
-// Version: 1.7.0
+// Version: 1.8.0
 // Aciklama: Branding, channel, placeholder ve runtime state metinlerini tek typed localization katalogundan fallback-guvenli cozer
 //
 // Bagimli Oldugu Katman: View | Language
@@ -141,6 +141,22 @@ public sealed class MainWindowViewModel
                 InstallerUiLabelKey.InstalledAppsCountPrefix),
             " ",
             InstalledApps.Count);
+
+    public bool HasInstalledApps => InstalledApps.Count > 0;
+
+    public bool IsCatalogEmpty => !HasInstalledApps && !HasCatalogError;
+
+    public string InstalledAppsEmptyMessage =>
+        _ui.Resolve(InstallerUiLabelKey.InstalledAppsEmpty);
+
+    public string ActionGuidanceMessage =>
+        string.IsNullOrWhiteSpace(PackageIdText)
+            ? _ui.Resolve(InstallerUiLabelKey.ActionGuidePackageId)
+            : string.IsNullOrWhiteSpace(ManifestSource)
+                ? _ui.Resolve(InstallerUiLabelKey.ActionGuideManifest)
+                : HasMatchingInstalledPackage
+                    ? _ui.Resolve(InstallerUiLabelKey.ActionGuideReady)
+                    : _ui.Resolve(InstallerUiLabelKey.ActionGuideNotInstalled);
 
     public string UpdateDiscoveryTitle =>
         _ui.Resolve(
@@ -337,6 +353,9 @@ public sealed class MainWindowViewModel
             {
                 OnPropertyChanged(
                     nameof(InstalledAppsCountText));
+                OnPropertyChanged(nameof(HasInstalledApps));
+                OnPropertyChanged(nameof(IsCatalogEmpty));
+                NotifyActionAvailabilityChanged();
             }
         }
     }
@@ -352,9 +371,13 @@ public sealed class MainWindowViewModel
     public bool HasCatalogError
     {
         get => _hasCatalogError;
-        set => SetProperty(
-            ref _hasCatalogError,
-            value);
+        set
+        {
+            if (SetProperty(ref _hasCatalogError, value))
+            {
+                OnPropertyChanged(nameof(IsCatalogEmpty));
+            }
+        }
     }
 
     public string PackageIdText
@@ -368,6 +391,7 @@ public sealed class MainWindowViewModel
                     value))
             {
                 ResetUpdateDiscovery();
+                NotifyActionAvailabilityChanged();
             }
         }
     }
@@ -383,6 +407,7 @@ public sealed class MainWindowViewModel
                     value))
             {
                 ResetUpdateDiscovery();
+                NotifyActionAvailabilityChanged();
             }
         }
     }
@@ -390,9 +415,13 @@ public sealed class MainWindowViewModel
     public string RollbackManifestSource
     {
         get => _rollbackManifestSource;
-        set => SetProperty(
-            ref _rollbackManifestSource,
-            value);
+        set
+        {
+            if (SetProperty(ref _rollbackManifestSource, value))
+            {
+                NotifyActionAvailabilityChanged();
+            }
+        }
     }
 
     public string TargetPath
@@ -464,8 +493,7 @@ public sealed class MainWindowViewModel
                     nameof(CanRun));
                 OnPropertyChanged(
                     nameof(CanCancel));
-                OnPropertyChanged(
-                    nameof(CanCheckUpdate));
+                NotifyActionAvailabilityChanged();
             }
         }
     }
@@ -482,8 +510,7 @@ public sealed class MainWindowViewModel
             {
                 OnPropertyChanged(
                     nameof(CanRun));
-                OnPropertyChanged(
-                    nameof(CanCheckUpdate));
+                NotifyActionAvailabilityChanged();
             }
         }
     }
@@ -500,8 +527,7 @@ public sealed class MainWindowViewModel
             {
                 OnPropertyChanged(
                     nameof(CanRun));
-                OnPropertyChanged(
-                    nameof(CanCheckUpdate));
+                NotifyActionAvailabilityChanged();
             }
         }
     }
@@ -521,10 +547,37 @@ public sealed class MainWindowViewModel
 
     public bool CanCancel => IsBusy;
 
+    private bool HasPackageIdentity =>
+        !string.IsNullOrWhiteSpace(PackageIdText);
+
+    private bool HasManifestSource =>
+        !string.IsNullOrWhiteSpace(ManifestSource);
+
+    private bool HasMatchingInstalledPackage =>
+        HasPackageIdentity &&
+        InstalledApps.Any(item =>
+            string.Equals(
+                item.PackageId,
+                PackageIdText.Trim(),
+                StringComparison.OrdinalIgnoreCase));
+
+    public bool CanInstall =>
+        CanRun && HasPackageIdentity && HasManifestSource &&
+        !HasMatchingInstalledPackage;
+
+    public bool CanUpdate =>
+        CanRun && HasMatchingInstalledPackage && HasManifestSource;
+
+    public bool CanRepair => CanUpdate;
+
+    public bool CanRollback =>
+        CanUpdate && !string.IsNullOrWhiteSpace(RollbackManifestSource);
+
+    public bool CanUninstall =>
+        CanRun && HasMatchingInstalledPackage;
+
     public bool CanCheckUpdate =>
-        !IsBusy &&
-        !IsCheckingUpdate &&
-        !IsBackgroundUpdateCheckRunning;
+        CanRun && HasPackageIdentity && HasManifestSource;
 
     public string InstalledVersionText
     {
@@ -591,6 +644,17 @@ public sealed class MainWindowViewModel
         set => SetProperty(
             ref _canRetry,
             value);
+    }
+
+    private void NotifyActionAvailabilityChanged()
+    {
+        OnPropertyChanged(nameof(CanInstall));
+        OnPropertyChanged(nameof(CanUpdate));
+        OnPropertyChanged(nameof(CanRepair));
+        OnPropertyChanged(nameof(CanRollback));
+        OnPropertyChanged(nameof(CanUninstall));
+        OnPropertyChanged(nameof(CanCheckUpdate));
+        OnPropertyChanged(nameof(ActionGuidanceMessage));
     }
 
     private void ResetUpdateDiscovery()
