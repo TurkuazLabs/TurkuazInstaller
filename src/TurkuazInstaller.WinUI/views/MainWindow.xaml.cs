@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.5.1
+// Version: 1.6.0
 // Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
@@ -150,6 +150,8 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (!_viewModel.CanCheckUpdate) return;
+
         await _controller
             .CheckForUpdatesAsync()
             .ConfigureAwait(true);
@@ -181,6 +183,8 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (!_viewModel.CanUpdate) return;
+
         await _controller
             .UpdateAsync()
             .ConfigureAwait(true);
@@ -190,6 +194,8 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (!_viewModel.CanRepair) return;
+
         await _controller
             .RepairAsync()
             .ConfigureAwait(true);
@@ -199,6 +205,8 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (!_viewModel.CanRollback) return;
+
         await _controller
             .RollbackAsync()
             .ConfigureAwait(true);
@@ -208,6 +216,8 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (!_viewModel.CanUninstall) return;
+
         await _controller
             .UninstallAsync()
             .ConfigureAwait(true);
