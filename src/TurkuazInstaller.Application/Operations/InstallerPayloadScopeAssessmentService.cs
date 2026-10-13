@@ -1,7 +1,7 @@
 // Dosya: /src/TurkuazInstaller.Application/Operations/InstallerPayloadScopeAssessmentService.cs
 // Amac: Kurulu state ve signed inventory eslesmesini kontrol edip current fazlaliklarini tespit eder
 // Modul - Service CSharp
-// Version: 1.0.1
+// Version: 1.0.2
 // Aciklama: Caller-supplied signed baseline fields, committed state ve current scope read-only karsilastirilir
 // Bagimli Oldugu Katman: Service | Domain | Tool
 
@@ -43,7 +43,7 @@ public sealed class InstallerPayloadScopeAssessmentService
 
         var root = Path.GetFullPath(installRoot);
         if (baselinePackageId != committedState.PackageId ||
-            baselineVersion != committedState.Version ||
+            !baselineVersion.Equals(committedState.Version) ||
             baselineChannel != committedState.Channel ||
             !string.Equals(
                 Path.TrimEndingDirectorySeparator(root),
