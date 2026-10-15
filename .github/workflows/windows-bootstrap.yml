@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.5.8
+# Version: 1.5.9
 # Aciklama: Mevcut win-x64 kalite kapisini korur ve native win-arm64 bootstrap+WinUI+CLI combined distribution publish/layout dogrulamasini ekler
 # Bagimli Oldugu Katman: Tool
 
@@ -180,6 +180,37 @@ jobs:
               $evidence.message -notlike '*pin mismatch*' -or
               $evidence.release_acceptance -ne 'NOT_ACCEPTED') {
             throw 'Trusted signed fixture was not rejected due to a wrong SHA-256 pin.'
+          }
+
+      - name: Real Authenticode adapter wrong-publisher LAB smoke
+        shell: pwsh
+        run: |
+          $candidates = @(
+            (Join-Path $env:ProgramFiles 'PowerShell/7/pwsh.exe'),
+            (Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe')
+          )
+          $selected = $null
+          foreach ($candidate in $candidates) {
+            if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { continue }
+            $signature = Get-AuthenticodeSignature -LiteralPath $candidate
+            if ($signature.Status -eq 'Valid' -and $null -ne $signature.SignerCertificate) {
+              $selected = @{ Path = $candidate; Cert = $signature.SignerCertificate }
+              break
+            }
+          }
+          if ($null -eq $selected) { throw 'No signed LAB fixture for wrong publisher.' }
+          $root = Join-Path $env:RUNNER_TEMP 'authenticode-real-adapter-wrong-publisher'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $output = Join-Path $root 'wrong-publisher.json'
+          $pin = $selected.Cert.GetCertHashString([System.Security.Cryptography.HashAlgorithmName]::SHA256)
+          dotnet run --project tests/TurkuazInstaller.Authenticode.LabProbe/TurkuazInstaller.Authenticode.LabProbe.csproj --configuration Release --no-build -- --artifact $selected.Path --publisher 'CN=Definitely Not Expected Publisher' --cert-sha256 $pin --case REV-09 --output $output
+          if ($LASTEXITCODE -ne 0) { throw 'Wrong-publisher LAB evidence was not written.' }
+          $evidence = Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
+          if ($evidence.installer_winverifytrust_result -ne 'REJECTED' -or
+              $evidence.failure -ne 'SignatureInvalid' -or
+              $evidence.message -notlike '*publisher mismatch*' -or
+              $evidence.release_acceptance -ne 'NOT_ACCEPTED') {
+            throw 'Wrong publisher was not specifically rejected.'
           }
 
       - name: Test bootstrap orchestration
