@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/INSTALLER_EXPERIENCE.md
 # 📌 Amac: Tum projelerin ortak kurulum arayuzunu ve yerel tanitim kartini tekrar kod yazmadan kullanmasini saglar
 # 📌 Modul - Documentation Markdown
-# Version: 2.2.0
+# Version: 2.3.0
 # Aciklama: Ortak WinUI deneyimi, scope gelistirme kapisi, YAML profili ve tanitim davranisi
 # Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language | Config
 
@@ -280,3 +280,53 @@ Manual retest with a **new successful Windows unsigned LAB artifact**:
 The code-level XAML build and Presentation ViewModel action/event tests
 must pass on the **exact new commit** before declaring these behaviors
 verified. This UI polish is not a production installer release.
+
+## InstallShield-inspired WinUI dashboard and reviewed installation wizard
+
+The preceding Windows 10 GUI acceptance confirmed the safe first-run
+empty catalog, live action gating, and editable local manifest source.
+The next WinUI design iteration takes inspiration from official InstallShield
+advanced UI wizard framing and Advanced Installer's modern customizable
+theme/progress model, **without copying their copyrighted assets**.
+
+The existing shared Installer WinUI view now uses:
+- A colored, accessible-brand hero showing the **real** Installer-managed
+  installed count and current status; no fake "verified" status.
+- A four-stage informational workflow strip: package/source,
+  signature/integrity, actual install/progress, and maintenance.
+  Steps are not shown as completed before the runtime does real checks.
+- A denser two-column responsive dashboard: package source and
+  installed catalog on the left, actionable install/maintenance,
+  update discovery, active progress/recovery and local-only first-party
+  promotion on the right. Existing product-neutral branding bindings
+  and localized typed label overrides remain available.
+- Rarely changed rollback manifest/custom target fields start collapsed
+  under **advanced options**; their two-way bindings remain active.
+- The main Install button is a prominent action only when prior
+  package ID and source conditions are met. Update, Repair,
+  Rollback, Uninstall, Retry and Cancel retain their original real
+  Controller -> Service delegates and readiness guards.
+
+**Actual two-step install confirmation**:
+1. Select Quick/Custom and PerUser scope; a Custom install requires
+   a nonblank target before the **Next** button enables.
+   PerMachine remains disabled, and even a code-driven PerMachine choice
+   fails the UI's `CanContinueInstallWizard` guard.
+2. Review package identity, exact manifest location, chosen installation
+   mode and signed/default or custom target. **Back** returns to
+   preferences; **Install** invokes the unchanged controller only after
+   a separate user confirmation and another readiness check.
+
+The wizard **does not perform early CMS trust verification**, does not
+claim that a text path is valid, does not create registry integration
+and does not weaken the runtime's signed manifest and SHA-256 rules.
+No product is ever installed by navigating or dismissing these dialogs.
+User-visible wording explicitly says verification occurs during the
+real installation operation. The Windows 10/11 interactive review,
+high DPI accessibility and narrow-window screenshots remain manual
+acceptance gates. This is an experimental Draft UI, not stable release.
+
+Source references:
+- https://docs.revenera.com/installshield/helplibrary/SteUIElements.htm
+- https://www.advancedinstaller.com/user-guide/ui-themes.html
+- https://www.advancedinstaller.com/user-guide/user-interface-dialogs.html
