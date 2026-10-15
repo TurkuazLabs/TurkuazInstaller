@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.5.6
+# Version: 1.5.7
 # Aciklama: Mevcut win-x64 kalite kapisini korur ve native win-arm64 bootstrap+WinUI+CLI combined distribution publish/layout dogrulamasini ekler
 # Bagimli Oldugu Katman: Tool
 
@@ -119,6 +119,36 @@ jobs:
           # GitHub pwsh wrapper exits with LASTEXITCODE even after successful checks.
           # Only the expected failure is accepted; all assertions above must pass first.
           $global:LASTEXITCODE = 0
+
+      - name: Real Authenticode adapter positive LAB smoke
+        shell: pwsh
+        run: |
+          $candidates = @(
+            (Join-Path $env:ProgramFiles 'PowerShell/7/pwsh.exe'),
+            (Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe')
+          )
+          $selected = $null
+          foreach ($candidate in $candidates) {
+            if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { continue }
+            $signature = Get-AuthenticodeSignature -LiteralPath $candidate
+            if ($signature.Status -eq 'Valid' -and $null -ne $signature.SignerCertificate) {
+              $selected = @{ Path = $candidate; Cert = $signature.SignerCertificate }
+              break
+            }
+          }
+          if ($null -eq $selected) { throw 'No valid embedded Authenticode LAB fixture found.' }
+          $root = Join-Path $env:RUNNER_TEMP 'authenticode-real-adapter-positive'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $output = Join-Path $root 'positive.json'
+          $certPin = $selected.Cert.GetCertHashString([System.Security.Cryptography.HashAlgorithmName]::SHA256)
+          dotnet run --project tests/TurkuazInstaller.Authenticode.LabProbe/TurkuazInstaller.Authenticode.LabProbe.csproj --configuration Release --no-build -- --artifact $selected.Path --publisher $selected.Cert.Subject --cert-sha256 $certPin --case REV-01 --output $output
+          if ($LASTEXITCODE -ne 0) { throw 'Positive LAB adapter probe failed.' }
+          $evidence = Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
+          if ($evidence.installer_winverifytrust_result -ne 'ACCEPTED' -or
+              $evidence.release_acceptance -ne 'NOT_ACCEPTED' -or
+              $evidence.stage_apply -ne 'NOT_RUN') {
+            throw 'Positive LAB adapter evidence did not retain security boundaries.'
+          }
 
       - name: Test bootstrap orchestration
         run: dotnet test tests/TurkuazInstaller.Bootstrapper.Tests/TurkuazInstaller.Bootstrapper.Tests.csproj --configuration Release --no-restore
