@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.5.5
+# Version: 1.5.6
 # Aciklama: Mevcut win-x64 kalite kapisini korur ve native win-arm64 bootstrap+WinUI+CLI combined distribution publish/layout dogrulamasini ekler
 # Bagimli Oldugu Katman: Tool
 
@@ -116,6 +116,9 @@ jobs:
           if ((Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash -ne $originalHash) {
             throw 'LAB adapter changed immutable evidence.'
           }
+          # GitHub pwsh wrapper exits with LASTEXITCODE even after successful checks.
+          # Only the expected failure is accepted; all assertions above must pass first.
+          $global:LASTEXITCODE = 0
 
       - name: Test bootstrap orchestration
         run: dotnet test tests/TurkuazInstaller.Bootstrapper.Tests/TurkuazInstaller.Bootstrapper.Tests.csproj --configuration Release --no-restore
