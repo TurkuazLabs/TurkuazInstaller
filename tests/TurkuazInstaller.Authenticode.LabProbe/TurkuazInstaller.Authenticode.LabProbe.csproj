@@ -1,0 +1,19 @@
+<!--
+Dosya Yolu: REPO_ROOT/tests/TurkuazInstaller.Authenticode.LabProbe/TurkuazInstaller.Authenticode.LabProbe.csproj
+Amac: Gercek Windows Authenticode adapterini LAB ortaminda salt okunur cagirir
+Modul - Test Tool XML
+Version: 1.0.0
+Aciklama: Production kurulumu ve release paketine dahil edilmeyen CLI probe
+Bagimli Oldugu Katman: Platform.Windows | Domain
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TurkuazInstaller.Platform.Windows/TurkuazInstaller.Platform.Windows.csproj" />
+  </ItemGroup>
+</Project>
