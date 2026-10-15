@@ -333,7 +333,10 @@ public sealed class MainWindowViewModel
                 return;
             }
 
-            SetProperty(ref _selectedInstallScope, (InstallerInstallScope)value);
+            if (SetProperty(ref _selectedInstallScope, (InstallerInstallScope)value))
+            {
+                OnPropertyChanged(nameof(CanContinueInstallWizard));
+            }
         }
     }
 
