@@ -23,7 +23,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if (-not $IsWindows -and $PSVersionTable.PSEdition -eq 'Core') {
+if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'PowerShell 7 or newer is required.' }
+if (-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
     throw 'Windows-only evidence collector; no changes performed.'
 }
 $resolved = (Resolve-Path -LiteralPath $ArtifactPath -PathType Leaf).ProviderPath
