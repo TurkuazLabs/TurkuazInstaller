@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.5.7
+# Version: 1.5.8
 # Aciklama: Mevcut win-x64 kalite kapisini korur ve native win-arm64 bootstrap+WinUI+CLI combined distribution publish/layout dogrulamasini ekler
 # Bagimli Oldugu Katman: Tool
 
@@ -148,6 +148,38 @@ jobs:
               $evidence.release_acceptance -ne 'NOT_ACCEPTED' -or
               $evidence.stage_apply -ne 'NOT_RUN') {
             throw 'Positive LAB adapter evidence did not retain security boundaries.'
+          }
+
+      - name: Real Authenticode adapter wrong-pin LAB smoke
+        shell: pwsh
+        run: |
+          $candidates = @(
+            (Join-Path $env:ProgramFiles 'PowerShell/7/pwsh.exe'),
+            (Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe')
+          )
+          $selected = $null
+          foreach ($candidate in $candidates) {
+            if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { continue }
+            $signature = Get-AuthenticodeSignature -LiteralPath $candidate
+            if ($signature.Status -eq 'Valid' -and $null -ne $signature.SignerCertificate) {
+              $selected = @{ Path = $candidate; Cert = $signature.SignerCertificate }
+              break
+            }
+          }
+          if ($null -eq $selected) { throw 'No valid signed LAB fixture available for wrong-pin test.' }
+          $root = Join-Path $env:RUNNER_TEMP 'authenticode-real-adapter-wrong-pin'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $output = Join-Path $root 'wrong-pin.json'
+          $correctPin = $selected.Cert.GetCertHashString([System.Security.Cryptography.HashAlgorithmName]::SHA256)
+          $wrongPin = if ($correctPin.StartsWith('0')) { '1' + $correctPin.Substring(1) } else { '0' + $correctPin.Substring(1) }
+          dotnet run --project tests/TurkuazInstaller.Authenticode.LabProbe/TurkuazInstaller.Authenticode.LabProbe.csproj --configuration Release --no-build -- --artifact $selected.Path --publisher $selected.Cert.Subject --cert-sha256 $wrongPin --case REV-09 --output $output
+          if ($LASTEXITCODE -ne 0) { throw 'Wrong-pin LAB probe did not write evidence.' }
+          $evidence = Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
+          if ($evidence.installer_winverifytrust_result -ne 'REJECTED' -or
+              $evidence.failure -ne 'SignatureInvalid' -or
+              $evidence.message -notlike '*pin mismatch*' -or
+              $evidence.release_acceptance -ne 'NOT_ACCEPTED') {
+            throw 'Trusted signed fixture was not rejected due to a wrong SHA-256 pin.'
           }
 
       - name: Test bootstrap orchestration
