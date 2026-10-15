@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.5.3
+# Version: 1.5.4
 # Aciklama: Mevcut win-x64 kalite kapisini korur ve native win-arm64 bootstrap+WinUI+CLI combined distribution publish/layout dogrulamasini ekler
 # Bagimli Oldugu Katman: Tool
 
@@ -101,6 +101,12 @@ jobs:
               $evidence.installer_winverifytrust_result -ne 'REJECTED' -or
               $evidence.release_acceptance -ne 'NOT_ACCEPTED') {
             throw 'LAB adapter did not reject unsigned fixture with explicitly unapproved release status.'
+          }
+          $originalHash = (Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash
+          dotnet run --project tests/TurkuazInstaller.Authenticode.LabProbe/TurkuazInstaller.Authenticode.LabProbe.csproj --configuration Release --no-build -- --artifact $fixture --publisher 'CN=LAB Only' --cert-sha256 ('0' * 64) --case REV-09 --output $output
+          if ($LASTEXITCODE -eq 0) { throw 'LAB adapter must reject overwrite.' }
+          if ((Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash -ne $originalHash) {
+            throw 'LAB adapter changed immutable evidence.'
           }
 
       - name: Test bootstrap orchestration
