@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiLabels.cs
 // 📌 Amac: TurkuazInstaller masaustu arayuzundeki kullanici metinlerini merkezi Language katmaninda tanimlar
 // 📌 Modul - Language CSharp
-// Version: 1.7.0
+// Version: 1.8.0
 // Aciklama: Install/update/recovery metinlerine ek olarak katalog, discovery, background update ve version skip/pinning UX metinlerini tutar
 //
 // Bagimli Oldugu Katman: Language
@@ -164,6 +164,25 @@ public static class InstallerUiLabels
         "C:\\paketler\\onceki\\installer-manifest.yml";
     public const string TargetPathPlaceholder =
         "Bos birakilirsa manifest install.target kullanilir";
+
+    public const string DashboardEyebrow = "TURKUAZLABS  /  KURULUM MERKEZI";
+    public const string DashboardTagline = "Uygulamalarinizi guvenli ve kontrollu yonetin. Paket secin, kaynagi belirtin, kurulumu adim adim tamamlayin.";
+    public const string WorkflowSource = "Paket secimi";
+    public const string WorkflowTrust = "Imza ve butunluk";
+    public const string WorkflowInstall = "Kurulum ve ilerleme";
+    public const string WorkflowMaintain = "Bakim ve kurtarma";
+    public const string SourceAdvanced = "Gelismis secenekler (geri alma / kurulum yolu)";
+    public const string SourceSecurityDescription = "Imza ve dosya butunlugu kontrolu kurulum motorunda zorunludur. Kaynak eklemek veya Kur butonunu etkinlestirmek guven onayi anlamina gelmez.";
+    public const string ManagedCatalogDescription = "Yalnizca TurkuazInstaller ile kaydedilen kurulumlar burada gorunur.";
+    public const string OperationsDescription = "Bir paket secin. Kurulum veya bakim islemleri yalnizca gerekli bilgiler saglandiginda etkinlesir.";
+    public const string WizardReviewTitle = "Kurulumu Kontrol Et";
+    public const string WizardReviewDescription = "Secimleri gozden gecirin. Imza ve paket SHA-256 dogrulamasi gercek islem basladiginda yapilir.";
+    public const string WizardBack = "Geri";
+    public const string WizardNext = "Devam Et";
+    public const string WizardReviewTargetDefault = "Imzali manifestin varsayilan hedefi";
+    public const string WizardTrustNotice = "Bu ekran imza dogrulamasi yapmaz. Kuruluma devam edilirse guven politikasi ve SHA-256 kontrolu zorunludur.";
+    public const string SourceSectionTitle = "Yeni paket / kurulum kaynagi";
+    public const string OverviewTitle = "Kurulum asamalari";
 
     public const string Footer =
         "TurkuazLabs Community";
