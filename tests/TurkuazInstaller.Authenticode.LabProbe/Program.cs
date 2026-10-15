@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/tests/TurkuazInstaller.Authenticode.LabProbe/Program.cs
 // Amac: Gercek Windows Authenticode verification sonucunu immutable LAB JSON'a yazar
 // Modul - Test Tool CSharp
-// Version: 1.0.2
+// Version: 1.0.3
 // Aciklama: Veri/sertifika deposuna dokunmaz, install/apply veya release kabul etmez
 // Bagimli Oldugu Katman: Tool | Platform.Windows | Domain
 
@@ -57,16 +57,21 @@ try
         throw new ArgumentException("External certificate SHA-256 pin is mandatory in LAB.");
     }
 
-    // Compare pre/post verification bytes so a changed LAB fixture cannot
-    // produce evidence bound only to its post-verification contents.
-    var (initialHash, initialSize) = await HashArtifactAsync(artifact);
+    // Retain a read-only handle that denies concurrent writers/deleters on
+    // Windows for the duration of the native verification and both hashes.
+    await using var artifactStream = new FileStream(
+        artifact, FileMode.Open, FileAccess.Read, FileShare.Read);
+    var initialSize = artifactStream.Length;
+    var initialHash = await SHA256.HashDataAsync(artifactStream);
     var started = DateTimeOffset.UtcNow;
     var stopwatch = System.Diagnostics.Stopwatch.StartNew();
     var result = await new WindowsAuthenticodeArtifactSignatureVerifier()
         .VerifyAsync(artifact, descriptor, CancellationToken.None);
     stopwatch.Stop();
 
-    var (artifactHash, artifactSize) = await HashArtifactAsync(artifact);
+    artifactStream.Position = 0;
+    var artifactSize = artifactStream.Length;
+    var artifactHash = await SHA256.HashDataAsync(artifactStream);
     if (initialSize != artifactSize ||
         !CryptographicOperations.FixedTimeEquals(initialHash, artifactHash))
     {
@@ -102,12 +107,4 @@ catch (Exception error)
 {
     Console.Error.WriteLine("LAB Authenticode probe failed closed: " + error.Message);
     Environment.ExitCode = 1;
-}
-
-static async Task<(byte[] Hash, long Size)> HashArtifactAsync(string artifact)
-{
-    await using var stream = new FileStream(
-        artifact, FileMode.Open, FileAccess.Read, FileShare.Read);
-    var size = stream.Length;
-    return (await SHA256.HashDataAsync(stream), size);
 }
