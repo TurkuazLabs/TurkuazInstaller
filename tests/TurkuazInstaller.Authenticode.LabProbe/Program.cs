@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/tests/TurkuazInstaller.Authenticode.LabProbe/Program.cs
 // Amac: Gercek Windows Authenticode verification sonucunu immutable LAB JSON'a yazar
 // Modul - Test Tool CSharp
-// Version: 1.0.0
+// Version: 1.0.1
 // Aciklama: Veri/sertifika deposuna dokunmaz, install/apply veya release kabul etmez
 // Bagimli Oldugu Katman: Tool | Platform.Windows | Domain
 
@@ -63,14 +63,18 @@ try
         .VerifyAsync(artifact, descriptor, CancellationToken.None);
     stopwatch.Stop();
 
-    var bytes = await File.ReadAllBytesAsync(artifact);
+    // Stream rather than allocating the entire executable into memory.
+    await using var artifactStream = new FileStream(
+        artifact, FileMode.Open, FileAccess.Read, FileShare.Read);
+    var artifactSize = artifactStream.Length;
+    var artifactHash = await SHA256.HashDataAsync(artifactStream);
     var evidence = new
     {
         schema_version = 1,
         case_id = caseId,
         observed_utc = started,
-        artifact_sha256 = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant(),
-        artifact_size_bytes = bytes.LongLength,
+        artifact_sha256 = Convert.ToHexString(artifactHash).ToLowerInvariant(),
+        artifact_size_bytes = artifactSize,
         verifier = "WindowsAuthenticodeArtifactSignatureVerifier",
         installer_winverifytrust_result = result.IsValid ? "ACCEPTED" : "REJECTED",
         failure = result.Failure.ToString(),
