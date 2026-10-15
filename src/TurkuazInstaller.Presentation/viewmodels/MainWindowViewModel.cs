@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/viewmodels/MainWindowViewModel.cs
 // 📌 Amac: TurkuazInstaller ana penceresinin bind edilebilir UI state modelini tasir
 // 📌 Modul - ViewModel CSharp
-// Version: 1.8.0
+// Version: 1.9.0
 // Aciklama: Branding, channel, placeholder ve runtime state metinlerini tek typed localization katalogundan fallback-guvenli cozer
 //
 // Bagimli Oldugu Katman: View | Language
@@ -316,6 +316,9 @@ public sealed class MainWindowViewModel
             if (SetProperty(ref _selectedInstallMode, (InstallerInstallMode)value))
             {
                 OnPropertyChanged(nameof(IsCustomInstall));
+                OnPropertyChanged(nameof(WizardSelectedModeLabel));
+                OnPropertyChanged(nameof(WizardTargetPreview));
+                OnPropertyChanged(nameof(CanContinueInstallWizard));
             }
         }
     }
@@ -333,6 +336,74 @@ public sealed class MainWindowViewModel
             SetProperty(ref _selectedInstallScope, (InstallerInstallScope)value);
         }
     }
+
+    public string DashboardEyebrowLabel =>
+        _ui.Resolve(InstallerUiLabelKey.DashboardEyebrow);
+
+    public string DashboardTaglineLabel =>
+        _ui.Resolve(InstallerUiLabelKey.DashboardTagline);
+
+    public string WorkflowSourceLabel =>
+        _ui.Resolve(InstallerUiLabelKey.WorkflowSource);
+
+    public string WorkflowTrustLabel =>
+        _ui.Resolve(InstallerUiLabelKey.WorkflowTrust);
+
+    public string WorkflowInstallLabel =>
+        _ui.Resolve(InstallerUiLabelKey.WorkflowInstall);
+
+    public string WorkflowMaintainLabel =>
+        _ui.Resolve(InstallerUiLabelKey.WorkflowMaintain);
+
+    public string SourceAdvancedLabel =>
+        _ui.Resolve(InstallerUiLabelKey.SourceAdvanced);
+
+    public string SourceSecurityDescriptionLabel =>
+        _ui.Resolve(InstallerUiLabelKey.SourceSecurityDescription);
+
+    public string ManagedCatalogDescriptionLabel =>
+        _ui.Resolve(InstallerUiLabelKey.ManagedCatalogDescription);
+
+    public string OperationsDescriptionLabel =>
+        _ui.Resolve(InstallerUiLabelKey.OperationsDescription);
+
+    public string WizardReviewTitleLabel =>
+        _ui.Resolve(InstallerUiLabelKey.WizardReviewTitle);
+
+    public string WizardReviewDescriptionLabel =>
+        _ui.Resolve(InstallerUiLabelKey.WizardReviewDescription);
+
+    public string WizardBackLabel =>
+        _ui.Resolve(InstallerUiLabelKey.WizardBack);
+
+    public string WizardNextLabel =>
+        _ui.Resolve(InstallerUiLabelKey.WizardNext);
+
+    public string WizardReviewTargetDefaultLabel =>
+        _ui.Resolve(InstallerUiLabelKey.WizardReviewTargetDefault);
+
+    public string WizardTrustNoticeLabel =>
+        _ui.Resolve(InstallerUiLabelKey.WizardTrustNotice);
+
+    public string SourceSectionTitleLabel =>
+        _ui.Resolve(InstallerUiLabelKey.SourceSectionTitle);
+
+    public string OverviewTitleLabel =>
+        _ui.Resolve(InstallerUiLabelKey.OverviewTitle);
+
+    public string WizardSelectedModeLabel =>
+        _ui.Resolve(IsCustomInstall
+            ? InstallerUiLabelKey.CustomInstall
+            : InstallerUiLabelKey.QuickInstall);
+
+    public string WizardTargetPreview =>
+        IsCustomInstall && !string.IsNullOrWhiteSpace(TargetPath)
+            ? TargetPath.Trim()
+            : _ui.Resolve(InstallerUiLabelKey.WizardReviewTargetDefault);
+
+    public bool CanContinueInstallWizard =>
+        CanInstall && SelectedInstallScope == InstallerInstallScope.PerUser &&
+        (!IsCustomInstall || !string.IsNullOrWhiteSpace(TargetPath));
 
     public string FooterLabel =>
         _ui.Footer;
@@ -427,9 +498,14 @@ public sealed class MainWindowViewModel
     public string TargetPath
     {
         get => _targetPath;
-        set => SetProperty(
-            ref _targetPath,
-            value);
+        set
+        {
+            if (SetProperty(ref _targetPath, value))
+            {
+                OnPropertyChanged(nameof(WizardTargetPreview));
+                OnPropertyChanged(nameof(CanContinueInstallWizard));
+            }
+        }
     }
 
     public int SelectedChannelIndex
@@ -649,6 +725,7 @@ public sealed class MainWindowViewModel
     private void NotifyActionAvailabilityChanged()
     {
         OnPropertyChanged(nameof(CanInstall));
+        OnPropertyChanged(nameof(CanContinueInstallWizard));
         OnPropertyChanged(nameof(CanUpdate));
         OnPropertyChanged(nameof(CanRepair));
         OnPropertyChanged(nameof(CanRollback));
