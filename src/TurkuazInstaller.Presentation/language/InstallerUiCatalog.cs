@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiCatalog.cs
 // 📌 Amac: Varsayilan Language metinleri ile typed UI profile override degerlerini tek resolverda birlestirir
 // 📌 Modul - Language CSharp
-// Version: 1.3.0
+// Version: 1.4.0
 // Aciklama: Branding ve tum desteklenen kullanici metinlerini tek typed localization katalogundan fallback-guvenli sunar
 //
 // Bagimli Oldugu Katman: Language | View | Service | Config
@@ -146,6 +146,24 @@ public sealed class InstallerUiCatalog
             InstallerUiLabelKey.ActionGuideManifest => InstallerUiLabels.ActionGuideManifest,
             InstallerUiLabelKey.ActionGuideNotInstalled => InstallerUiLabels.ActionGuideNotInstalled,
             InstallerUiLabelKey.ActionGuideReady => InstallerUiLabels.ActionGuideReady,
+            InstallerUiLabelKey.DashboardEyebrow => InstallerUiLabels.DashboardEyebrow,
+            InstallerUiLabelKey.DashboardTagline => InstallerUiLabels.DashboardTagline,
+            InstallerUiLabelKey.WorkflowSource => InstallerUiLabels.WorkflowSource,
+            InstallerUiLabelKey.WorkflowTrust => InstallerUiLabels.WorkflowTrust,
+            InstallerUiLabelKey.WorkflowInstall => InstallerUiLabels.WorkflowInstall,
+            InstallerUiLabelKey.WorkflowMaintain => InstallerUiLabels.WorkflowMaintain,
+            InstallerUiLabelKey.SourceAdvanced => InstallerUiLabels.SourceAdvanced,
+            InstallerUiLabelKey.SourceSecurityDescription => InstallerUiLabels.SourceSecurityDescription,
+            InstallerUiLabelKey.ManagedCatalogDescription => InstallerUiLabels.ManagedCatalogDescription,
+            InstallerUiLabelKey.OperationsDescription => InstallerUiLabels.OperationsDescription,
+            InstallerUiLabelKey.WizardReviewTitle => InstallerUiLabels.WizardReviewTitle,
+            InstallerUiLabelKey.WizardReviewDescription => InstallerUiLabels.WizardReviewDescription,
+            InstallerUiLabelKey.WizardBack => InstallerUiLabels.WizardBack,
+            InstallerUiLabelKey.WizardNext => InstallerUiLabels.WizardNext,
+            InstallerUiLabelKey.WizardReviewTargetDefault => InstallerUiLabels.WizardReviewTargetDefault,
+            InstallerUiLabelKey.WizardTrustNotice => InstallerUiLabels.WizardTrustNotice,
+            InstallerUiLabelKey.SourceSectionTitle => InstallerUiLabels.SourceSectionTitle,
+            InstallerUiLabelKey.OverviewTitle => InstallerUiLabels.OverviewTitle,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(key),
                 key,
