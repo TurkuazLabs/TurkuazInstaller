@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.6.0
+// Version: 2.0.0
 // Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
@@ -166,17 +166,38 @@ public sealed partial class MainWindow : Window
             return;
         }
 
+        // Step 1: choose Quick/Custom and user scope. Step 2: review the
+        // selected package, exact manifest source and target. Only the
+        // final explicit Install confirmation invokes the Controller.
         InstallChoiceDialog.XamlRoot = MainRoot.XamlRoot;
-        var result = await InstallChoiceDialog.ShowAsync();
-        if (result != ContentDialogResult.Primary)
+        InstallReviewDialog.XamlRoot = MainRoot.XamlRoot;
+        while (_viewModel.CanInstall)
         {
-            return;
-        }
+            var choice = await InstallChoiceDialog.ShowAsync();
+            if (choice != ContentDialogResult.Primary ||
+                !_viewModel.CanContinueInstallWizard)
+            {
+                return;
+            }
 
-        await _controller.InstallWithChoicesAsync(
-                _viewModel.SelectedInstallMode,
-                _viewModel.SelectedInstallScope)
-            .ConfigureAwait(true);
+            var review = await InstallReviewDialog.ShowAsync();
+            if (review == ContentDialogResult.Primary)
+            {
+                if (!_viewModel.CanContinueInstallWizard)
+                {
+                    return;
+                }
+
+                await _controller.InstallWithChoicesAsync(
+                        _viewModel.SelectedInstallMode,
+                        _viewModel.SelectedInstallScope)
+                    .ConfigureAwait(true);
+                return;
+            }
+
+            // Back from the review returns to preferences. Cancel
+            // remains available there. Neither dialog mutates packages.
+        }
     }
 
     private async void Update_Click(
@@ -271,7 +292,7 @@ public sealed partial class MainWindow : Window
 
         appWindow.Resize(
             new SizeInt32(
-                1100,
-                920));
+                1280,
+                900));
     }
 }
