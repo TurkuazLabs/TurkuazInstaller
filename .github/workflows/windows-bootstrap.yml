@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.5.1
+# Version: 1.5.2
 # Aciklama: Mevcut win-x64 kalite kapisini korur ve native win-arm64 bootstrap+WinUI+CLI combined distribution publish/layout dogrulamasini ekler
 # Bagimli Oldugu Katman: Tool
 
@@ -47,6 +47,34 @@ jobs:
           if ($errors.Count -gt 0) {
             $errors | ForEach-Object { Write-Error $_.ToString() }
             throw 'Authenticode LAB evidence script has parse errors.'
+          }
+
+      - name: Smoke test unsigned LAB evidence and no-overwrite guard
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'authenticode-evidence-smoke'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $fixture = Join-Path $root 'unsigned-fixture.exe'
+          $evidence = Join-Path $root 'evidence.json'
+          [System.IO.File]::WriteAllText($fixture, 'LAB unsigned fixture')
+          ./tools/diagnostics/Get-AuthenticodeLabEvidence.ps1 -ArtifactPath $fixture -CaseId REV-09 -OutputPath $evidence
+          $result = Get-Content -LiteralPath $evidence -Raw | ConvertFrom-Json
+          if ($result.case_id -ne 'REV-09' -or $result.windows_authenticode_status -eq 'Valid') {
+            throw 'Unsigned LAB fixture was not recorded as rejected.'
+          }
+          if ($result.installer_winverifytrust_result -ne 'NOT_RUN' -or
+              $result.release_acceptance -ne 'NOT_ACCEPTED') {
+            throw 'Evidence wrongly implies real Installer verification or release acceptance.'
+          }
+          $before = (Get-FileHash -LiteralPath $evidence -Algorithm SHA256).Hash
+          $wasRejected = $false
+          try {
+            ./tools/diagnostics/Get-AuthenticodeLabEvidence.ps1 -ArtifactPath $fixture -CaseId REV-09 -OutputPath $evidence
+          } catch {
+            $wasRejected = $true
+          }
+          if (-not $wasRejected -or $before -ne (Get-FileHash -LiteralPath $evidence -Algorithm SHA256).Hash) {
+            throw 'Existing LAB evidence must not be overwritten.'
           }
 
       - name: Restore Windows solution
