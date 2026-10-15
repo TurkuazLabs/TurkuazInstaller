@@ -1,6 +1,6 @@
 // Dosya: /tests/TurkuazInstaller.Platform.Windows.Tests/WindowsAuthenticodeArtifactSignatureVerifierTests.cs
 // Amac: Windows'un gercek guven zinciriyle imzalanmis OS binary'sine karsi Authenticode, publisher ve pin kontrollerini calistirir
-// Version: 0.2.0
+// Version: 0.3.0
 // Guvenlik: Trust store / antivirus ayari degismez, mevcut Microsoft-imzali sistem binary'si read-only kullanilir.
 
 using System.Security.Cryptography;
@@ -132,6 +132,47 @@ public sealed class WindowsAuthenticodeArtifactSignatureVerifierTests
             var result = await new WindowsAuthenticodeArtifactSignatureVerifier()
                 .VerifyAsync(unsignedPath, fixture.ExpectedSignature, CancellationToken.None);
 
+            Assert.False(result.IsValid);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task VerifyAsync_TrustedBinaryWithAlternateSignatureAlgorithm_FailsClosed()
+    {
+        var fixture = TrustedFixture.Value;
+        var unsupportedSignature = new ArtifactSignatureDescriptor(
+            (ArtifactSignatureAlgorithm)int.MaxValue,
+            fixture.ExpectedSignature.PublisherSubject,
+            fixture.ExpectedSignature.CertificateSha256);
+
+        var result = await new WindowsAuthenticodeArtifactSignatureVerifier()
+            .VerifyAsync(fixture.FilePath, unsupportedSignature, CancellationToken.None);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public async Task VerifyAsync_UnsignedFixtureWithMatchingExpectedIdentity_FailsClosed()
+    {
+        var fixture = TrustedFixture.Value;
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "TurkuazInstallerUnsignedIdentityTests",
+            Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+
+        try
+        {
+            var unsignedPath = Path.Combine(root, "unsigned.exe");
+            await File.WriteAllTextAsync(unsignedPath, "unsigned fixture");
+
+            // Publisher names and certificate pins supplied by callers are not trust evidence.
+            var result = await new WindowsAuthenticodeArtifactSignatureVerifier()
+                .VerifyAsync(unsignedPath, fixture.ExpectedSignature, CancellationToken.None);
             Assert.False(result.IsValid);
         }
         finally
