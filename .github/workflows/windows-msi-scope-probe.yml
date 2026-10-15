@@ -1,0 +1,133 @@
+# 📄 Dosya Yolu: /.github/workflows/windows-msi-scope-probe.yml
+# 📌 Amac: Ortak installer icin iki MSI kurulum kapsamini Windows CI uzerinde paketler
+# 📌 Modul - CI YAML
+# Version: 1.8.0
+# Aciklama: Izole Windows CI icin iki MSI scope gercek install-uninstall ve kayit baglami kabul testi
+# Bagimli Oldugu Katman: Config | Tool | CI
+
+name: Windows MSI Scope Packaging Probe
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/Invoke-MsiScopeProbe.ps1'
+      - 'tools/Test-MsiScopeLifecycle.ps1'
+      - 'tools/Test-MsiStandardUser.ps1'
+      - 'tools/Test-MsiStandardUserChild.ps1'
+      - 'tools/Test-SetupStandardUserChild.ps1'
+      - 'tools/Initialize-MsiLabStandardUserProfile.ps1'
+      - 'tools/Invoke-MsiLabVelopackProcess.ps1'
+      - 'tools/Test-VelopackMultiUserChild.ps1'
+      - 'config/velopack-e2e.psd1'
+      - '.github/workflows/windows-msi-scope-probe.yml'
+      - 'tests/TurkuazInstaller.Velopack.E2E.Fixture/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'tools/Invoke-MsiScopeProbe.ps1'
+      - 'tools/Test-MsiScopeLifecycle.ps1'
+      - 'tools/Test-MsiStandardUser.ps1'
+      - 'tools/Test-MsiStandardUserChild.ps1'
+      - 'tools/Test-SetupStandardUserChild.ps1'
+      - 'tools/Initialize-MsiLabStandardUserProfile.ps1'
+      - 'tools/Invoke-MsiLabVelopackProcess.ps1'
+      - 'tools/Test-VelopackMultiUserChild.ps1'
+      - 'config/velopack-e2e.psd1'
+      - '.github/workflows/windows-msi-scope-probe.yml'
+      - 'tests/TurkuazInstaller.Velopack.E2E.Fixture/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-msi-scope-probe-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  msi-scope-probe:
+    name: Lab-only MSI PerUser and PerMachine packaging
+    runs-on: windows-2025
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Parse MSI probe script
+        shell: pwsh
+        run: |
+          $parseErrors = $null
+          $tokens = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "tools/Invoke-MsiScopeProbe.ps1").Path,
+            [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count -gt 0) {
+            foreach ($item in $parseErrors) { Write-Host $item.ToString() }
+            throw "MSI scope PowerShell parse failed"
+          }
+
+      - name: Parse shared MSI lifecycle tool
+        shell: pwsh
+        run: |
+          $parseErrors = $null
+          $tokens = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path "tools/Test-MsiScopeLifecycle.ps1").Path,
+            [ref]$tokens, [ref]$parseErrors)
+          if ($parseErrors.Count -gt 0) {
+            foreach ($item in $parseErrors) { Write-Host $item.ToString() }
+            throw "Shared MSI scope lifecycle tool failed to parse"
+          }
+
+      - name: Parse non-admin MSI and Setup lifecycle scripts
+        shell: pwsh
+        run: |
+          $files = @(
+            'tools/Test-MsiStandardUser.ps1'
+            'tools/Test-MsiStandardUserChild.ps1'
+            'tools/Test-SetupStandardUserChild.ps1'
+            'tools/Initialize-MsiLabStandardUserProfile.ps1'
+            'tools/Invoke-MsiLabVelopackProcess.ps1'
+            'tools/Test-VelopackMultiUserChild.ps1'
+          )
+          foreach ($file in $files) {
+            $parseErrors = $null
+            $tokens = $null
+            $null = [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file).Path, [ref]$tokens, [ref]$parseErrors)
+            if ($parseErrors.Count -gt 0) {
+              foreach ($item in $parseErrors) { Write-Host "$($file): $item" }
+              throw "Non-admin lifecycle PowerShell parse failed"
+            }
+          }
+
+      - name: Package both MSI installation scopes without installation
+        shell: pwsh
+        run: ./tools/Invoke-MsiScopeProbe.ps1
+
+      - name: Real LAB ONLY PerUser AppData install and uninstall
+        shell: pwsh
+        run: ./tools/Test-MsiScopeLifecycle.ps1 -Scope PerUser
+
+      - name: Real LAB ONLY PerMachine Program Files install and uninstall
+        shell: pwsh
+        run: ./tools/Test-MsiScopeLifecycle.ps1 -Scope PerMachine
+
+      - name: Non-admin MSI policy and two-user Velopack isolation lifecycle
+        shell: pwsh
+        run: ./tools/Test-MsiStandardUser.ps1
+
+      - name: Upload MSI probe report only
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurkuazInstaller-MSI-SCOPE-LAB-ONLY-REPORT
+          path: artifacts/installer-msi-scope-probe/MSI-SCOPE-LAB-ONLY.txt
+          if-no-files-found: error
+          retention-days: 3

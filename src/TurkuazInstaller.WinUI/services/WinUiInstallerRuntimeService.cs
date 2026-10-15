@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/services/WinUiInstallerRuntimeService.cs
 // 📌 Amac: Presentation requestlerini signed provider, resumable workflow, repository ve Velopack runtime operasyonlarina baglar
 // 📌 Modul - Service CSharp
-// Version: 1.5.0
+// Version: 1.6.0
 // Aciklama: Signed provider uzerinden version-policy-aware discovery, manual mutation ve reboot-resume akislarini koordine eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -247,9 +247,10 @@ internal sealed class WinUiInstallerRuntimeService
                             () =>
                                 _workflowService.InstallAsync(
                                     release,
-                                    ResolveInstallTarget(
+                                    ResolveScopedInstallTarget(
                                         request.TargetPath,
-                                        release),
+                                        release,
+                                        request.InstallScope),
                                     operationStagingRoot,
                                     progress,
                                     cancellationToken,
@@ -545,6 +546,21 @@ internal sealed class WinUiInstallerRuntimeService
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException(
                 InstalledStateNotFoundMessage);
+    }
+
+    private static string ResolveScopedInstallTarget(
+        string requestedTarget,
+        PackageRelease release,
+        InstallerInstallScope? scope)
+    {
+        var target = ResolveInstallTarget(requestedTarget, release);
+        if (scope.HasValue)
+        {
+            InstallerInstallScopePolicy.ValidateCurrentRuntime(scope.Value);
+            InstallerInstallScopePolicy.ValidatePerUserTarget(target);
+        }
+
+        return target;
     }
 
     private static string ResolveInstallTarget(

@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Branding/YamlInstallerUiProfileRepository.cs
 // 📌 Amac: Local YAML UI profilini okuyup typed branding/localization contractina donusturur
 // 📌 Modul - Repo CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Schema, culture, branding ve tum typed label anahtarlarini enumdan uretilen contract isimleriyle fail-closed dogrular
 //
 // Bagimli Oldugu Katman: Repo | Tool | Language
@@ -82,7 +82,24 @@ public sealed class YamlInstallerUiProfileRepository
                     document.Branding.HeaderSubtitle),
                 NormalizeOptional(
                     document.Branding.Footer)),
-            labels);
+            labels,
+            ParsePromotion(document.Promotion));
+    }
+
+    private static InstallerPromotionProfile ParsePromotion(
+        PromotionSection? section)
+    {
+        if (section is null)
+        {
+            return InstallerPromotionProfile.Empty;
+        }
+
+        return new InstallerPromotionProfile(
+            section.Enabled,
+            NormalizeOptional(section.Eyebrow),
+            NormalizeOptional(section.Title),
+            NormalizeOptional(section.Description),
+            NormalizeOptional(section.Provider));
     }
 
     private static string? NormalizeCulture(
@@ -213,8 +230,19 @@ public sealed class YamlInstallerUiProfileRepository
         public BrandingSection Branding { get; init; } =
             new();
 
+        public PromotionSection? Promotion { get; init; }
+
         public Dictionary<string, string> Labels { get; init; } =
             new(StringComparer.Ordinal);
+    }
+
+    private sealed class PromotionSection
+    {
+        public bool? Enabled { get; init; }
+        public string? Eyebrow { get; init; }
+        public string? Title { get; init; }
+        public string? Description { get; init; }
+        public string? Provider { get; init; }
     }
 
     private sealed class BrandingSection

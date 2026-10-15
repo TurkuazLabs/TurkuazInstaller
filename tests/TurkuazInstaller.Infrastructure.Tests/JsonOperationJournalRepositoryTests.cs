@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/JsonOperationJournalRepositoryTests.cs
 // 📌 Amac: JSON operation journal repository atomic save/read/delete davranisini unit test eder
 // 📌 Modul - Test CSharp
-// Version: 1.2.0
+// Version: 1.3.0
 // Aciklama: Crash/reboot checkpointi, pending prerequisite roundtrip ve tamamlaninca silme davranisini dogrular
 //
 // Bagimli Oldugu Katman: Repo
@@ -75,6 +75,44 @@ public sealed class JsonOperationJournalRepositoryTests
             Assert.Equal(
                 "dotnet-desktop-runtime",
                 loaded.PendingPrerequisiteId);
+        }
+        finally
+        {
+            DeleteRoot(root);
+        }
+    }
+
+    [Fact]
+    public async Task SaveAsync_FailedApplyingCheckpoint_RoundTripsInterruptedPhase()
+    {
+        var root = CreateRoot();
+        try
+        {
+            var repository = new JsonOperationJournalRepository(
+                new JsonOperationJournalRepositoryOptions(root));
+            var packageId = PackageId.Parse("example-app");
+            var now = DateTimeOffset.UtcNow;
+            await repository.SaveAsync(
+                new InstallerOperationJournalEntry(
+                    Guid.NewGuid(),
+                    packageId,
+                    InstallerOperationType.Update,
+                    "2.0.0",
+                    "C:/Apps/Example",
+                    InstallerOperationPhase.Failed,
+                    now,
+                    now,
+                    "Crash during package application",
+                    InterruptedPhase: InstallerOperationPhase.Applying),
+                CancellationToken.None);
+
+            var persisted = await repository.GetAsync(
+                packageId, CancellationToken.None);
+            Assert.NotNull(persisted);
+            Assert.Equal(InstallerOperationPhase.Failed, persisted.Phase);
+            Assert.Equal(
+                InstallerOperationPhase.Applying,
+                persisted.InterruptedPhase);
         }
         finally
         {

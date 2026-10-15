@@ -1,11 +1,12 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/controllers/MainWindowController.cs
 // 📌 Amac: WinUI View event requestlerini alir ve yalniz InstallerDesktopService cagrisina donusturur
 // 📌 Modul - Controller CSharp
-// Version: 1.4.0
+// Version: 1.5.0
 // Aciklama: Startup, catalog/manual/background update discovery, mutation, cancel ve retry requestlerini Service katmanina aktarir
 //
 // Bagimli Oldugu Katman: Controller | Service
 
+using TurkuazInstaller.Contracts.Operations;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
 
@@ -32,9 +33,10 @@ public sealed class MainWindowController
     public Task RunBackgroundUpdateCheckAsync() =>
         _service.RunBackgroundUpdateCheckAsync();
 
-    public Task InstallAsync() =>
-        _service.RunAsync(
-            InstallerOperationKind.Install);
+    public Task InstallWithChoicesAsync(
+        InstallerInstallMode mode,
+        InstallerInstallScope scope) =>
+        _service.InstallWithChoicesAsync(mode, scope);
 
     public Task UpdateAsync() =>
         _service.RunAsync(

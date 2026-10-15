@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/VELOPACK_E2E.md
 # 📌 Amac: TurkuazInstaller gercek Velopack E2E kalite kapisinin kapsamini ve failure anlamini dokumante etmek
 # 📌 Modul - Markdown
-# Version: 1.2.0
+# Version: 1.8.0
 # Aciklama: vpk ile gercek Setup/full package uretimini ve Package Engine install-update-repair-rollback-uninstall test zincirini tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -64,8 +64,24 @@ certificate pini yanlissa release okunmamalidir; gecerli imzali
 manifest yanlis payload SHA-256 tasiyorsa UpdateAsync gercek
 package mutation ve state commit oncesinde fail-closed bitmelidir.
 
+Ek olumsuz akislar:
+- CMS manifest imzasi ve artifact SHA-256 eslesse dahi `nupkg`
+  arsivi bozuksa gercek Velopack updater paketi reddetmeli; V1
+  install state, aktif surum ve UserData korunmalidir.
+- V2 basarili update/repair sonrasinda, V1 geri alma manifesti
+  imzali olmasina ragmen paket SHA-256 degeri yanlissa rollback
+  uygulanmamali; V2 state/disk marker ve UserData korunmalidir.
+  Ardindan gecerli V1 manifestiyle normal geri alma basarmalidir.
+
+Bu testler gecersiz paket/rollback girisinin fail-closed oldugunu
+kanitlar; paket kopyalanmaya basladiktan sonra beklenmedik crash,
+atik olmadan otomatik recovery ya da production Authenticode
+imzasi/Windows 10 UAC davranisini kanitlamaz.
+
 CI beklenen cikti:
 - TURKUAZ_INSTALLER_SIGNED_WORKFLOW_FAIL_CLOSED_OK
+- TURKUAZ_INSTALLER_SIGNED_BROKEN_ARTIFACT_FAIL_CLOSED_OK
+- TURKUAZ_INSTALLER_SIGNED_ROLLBACK_BAD_HASH_FAIL_CLOSED_OK
 - TURKUAZ_INSTALLER_SIGNED_REAL_VELOPACK_WORKFLOW_E2E_OK
 
 Guvenlik ve kapsam sinirlari:
@@ -78,3 +94,88 @@ Guvenlik ve kapsam sinirlari:
   yerine gecmez.
 - Uninstall sonrasi UserData'nin korunmasi urun policy'sine gore
   ayri test edilir. Test production release yayimlamaz.
+
+## Running updater kill: process-level recovery evidence
+
+The crash journal E2E includes three isolated cases: before updater
+launch, after a successful updater and before state commit, and while
+a real `Update.exe` process is observable as running.
+
+The third fixture publishes the live updater PID in an atomically
+renamed signal file. The parent verifies that process, terminates
+the workflow process tree, waits for the updater to exit, and then
+requires that committed V1 state, the original `Applying` journal
+and outside-`current` UserData are preserved. New update/uninstall
+operations must remain blocked by the recovery hold.
+
+The current on-disk version is intentionally **not** asserted in
+the running-updater case: a process kill may leave a partial tree.
+This gate is about rejecting further mutation and preserving user
+data, not guaranteeing that the kill hit a specific file write or
+recovering a partial installation. Production-safe reconciliation
+still requires independently verified on-disk evidence.
+
+## Observed payload digest after crash
+
+Each of the three hosted-Windows crash fixture cases also invokes
+`InstallerPayloadEvidenceService` against the **actual installed version
+marker**. The test saves the V1 marker's SHA-256 before update and then
+compares observed on-disk bytes with that fixture-only baseline:
+- pre-updater kill: selected marker must match V1;
+- post-updater success / pre-state-commit kill: marker must differ from V1;
+- running-updater kill: marker may match, differ, or be absent; this
+  deliberately does not assume a consistent disk after interruption.
+
+Every scenario still requires journal preservation, committed V1 state,
+unchanged UserData and a recovery hold. A successful marker comparison
+does not validate all installed payload files, prove a trusted signed
+per-file baseline, or allow unattended repair.
+
+## Signed inventory + real installed Velopack marker
+
+The hosted-Windows signed workflow now creates an independent,
+ephemeral-CMS-signed per-file inventory for the expected V2 version
+marker. Its SHA-256 is computed from known pre-packaging V2 bytes, **not**
+from the installed target. The inventory is verified using the same
+external test-certificate pin as the release manifest and is bound to
+the already verified V2 package ID, channel, semantic version and
+distribution artifact digest.
+
+After the actual signed-release workflow updates the real Velopack
+fixture, `InstallerPayloadEvidenceService` independently hashes the
+installed marker; the selected file must match the verified inventory
+entry. The separate UserData preservation assertion remains active.
+
+This demonstrates a complete trust-and-observation **LAB path for a
+selected marker**, not signed exhaustive payload inventory generation
+for a production package. It does not repair, unlock journals, or permit
+automatic file replacement.
+
+## ZIP-derived signed installed-payload inventory gate
+
+The real hosted-Windows signed workflow additionally uses the
+`VelopackPayloadInventoryBuilder` to enumerate **all** regular
+`lib/app/` file members of the verified V2 full nupkg. It signs
+the generated sorted hash inventory with the ephemeral CI certificate,
+validates the existing release identity and independent trust pin,
+and compares each declared installed `current` file's SHA-256.
+
+This gate must not be confused with a production-complete installation
+inventory: there can be installer-generated files and system integrations
+outside the mapped `current` archive payload. No unattended recovery
+or journal hold removal is enabled.
+
+## Root binary relocation gate
+
+When the full-nupkg inventory is compared against a real Velopack
+install, the two generated archive members `Squirrel.exe` and
+`*_ExecutionStub.exe` are *relocated* to the install root.
+The inventory generator now explicitly maps them to `Update.exe`
+and the root launcher name, respectively. They are **not** excluded
+from integrity verification. The E2E must compare these relocated
+root files along with the remaining `current/` payload.
+
+This rule was introduced after the first expanded E2E correctly
+reported the two generated files as missing under `current/`.
+A green result requires an exact hash match at their actual
+installed locations.

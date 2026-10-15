@@ -1,6 +1,6 @@
 // Dosya: /tests/TurkuazInstaller.Velopack.E2E.Runner/SignedWorkflowAcceptanceRunner.cs
 // Amac: Gecici CMS imzali local manifest ile gercek Velopack package engine ve kalici state lifecycle testini birlestirir
-// Version: 0.1.0
+// Version: 0.6.0
 // Guvenlik: Ephemeral CI certificate, external trust pin, unsigned fixture; production signing veya VM kabul testi degildir
 
 using System.Security.Cryptography;
@@ -8,6 +8,7 @@ using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using TurkuazInstaller.Application.Operations;
+using TurkuazInstaller.Contracts.Packages;
 using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Domain.Releases;
 using TurkuazInstaller.Domain.State;
@@ -17,6 +18,7 @@ using TurkuazInstaller.Infrastructure.Packages.Velopack;
 using TurkuazInstaller.Infrastructure.Processes;
 using TurkuazInstaller.Infrastructure.Providers.File;
 using TurkuazInstaller.Infrastructure.Repositories;
+using TurkuazInstaller.Infrastructure.Tools;
 
 namespace TurkuazInstaller.Velopack.E2E.Runner;
 
@@ -75,13 +77,32 @@ internal static class SignedWorkflowAcceptanceRunner
         var v1SetupManifest = Path.Combine(manifestRoot, "v1-install.yml");
         var v2Manifest = Path.Combine(manifestRoot, "v2-update.yml");
         var v1FullManifest = Path.Combine(manifestRoot, "v1-rollback.yml");
+        var v1BadRollbackDigestManifest =
+            Path.Combine(manifestRoot, "v1-rollback-wrong-hash.yml");
         var v2BadDigestManifest = Path.Combine(manifestRoot, "v2-wrong-hash.yml");
+        var v2BrokenArchiveManifest = Path.Combine(manifestRoot, "v2-broken-archive.yml");
+        var brokenArchiveRoot = Path.Combine(stagingRoot, "invalid-payload");
+        Directory.CreateDirectory(brokenArchiveRoot);
+        var brokenArchivePath = Path.Combine(
+            brokenArchiveRoot, Path.GetFileName(fullV2));
+        await File.WriteAllBytesAsync(
+            brokenArchivePath,
+            Encoding.ASCII.GetBytes("TURKUAZ-LAB-INVALID-NUPKG-NOT-A-ZIP"));
+
 
         await WriteSignedManifestAsync(v1SetupManifest, setupV1, VersionOne, certificate);
         await WriteSignedManifestAsync(v2Manifest, fullV2, VersionTwo, certificate);
         await WriteSignedManifestAsync(v1FullManifest, fullV1, VersionOne, certificate);
         await WriteSignedManifestAsync(
+            v1BadRollbackDigestManifest, fullV1, VersionOne, certificate,
+            wrongDigest: true);
+        await WriteSignedManifestAsync(
             v2BadDigestManifest, fullV2, VersionTwo, certificate, wrongDigest: true);
+        // This manifest is genuinely CMS-signed and the SHA-256 matches the
+        // bytes, but the artifact is deliberately not a valid Velopack ZIP.
+        // A valid digest is not the same as a valid installable package.
+        await WriteSignedManifestAsync(
+            v2BrokenArchiveManifest, brokenArchivePath, VersionTwo, certificate);
 
         var stateRepository = new JsonInstallStateRepository(
             new JsonInstallStateRepositoryOptions(stateRoot));
@@ -156,9 +177,63 @@ internal static class SignedWorkflowAcceptanceRunner
         AssertUserData(userDataPath, userData);
         Console.WriteLine("TURKUAZ_INSTALLER_SIGNED_WORKFLOW_FAIL_CLOSED_OK");
 
+        // Different failure boundary: the manifest is valid, the artifact
+        // digest is correct, but the package itself is malformed. Verify
+        // that the real Windows updater rejects it without committing V2
+        // or modifying the existing version and user data.
+        var brokenRelease = await ReadVerifiedAsync(v2BrokenArchiveManifest);
+        var brokenRejected = false;
+        try
+        {
+            await workflow.UpdateAsync(
+                brokenRelease,
+                await RequireStateAsync(stateRepository, packageId),
+                stagingRoot, null, CancellationToken.None);
+        }
+        catch (PackageEngineException)
+        {
+            brokenRejected = true;
+        }
+
+        if (!brokenRejected)
+        {
+            throw new InvalidOperationException(
+                "A validly signed manifest with an invalid nupkg unexpectedly succeeded.");
+        }
+
+        await AssertVersionAsync(
+            stateRepository, packageId, installRoot, versionMarker, VersionOne);
+        AssertUserData(userDataPath, userData);
+        Console.WriteLine("TURKUAZ_INSTALLER_SIGNED_BROKEN_ARTIFACT_FAIL_CLOSED_OK");
+
         // The same real signed-manifest pipeline now drives real Velopack
         // update/repair/rollback and a persisted JSON state repository.
         var releaseV2 = await ReadVerifiedAsync(v2Manifest);
+
+        // Enumerate the verified *actual* full nupkg lib/app payload,
+        // derive SHA-256 from every archive file, sign those exact bytes
+        // with ephemeral LAB CMS and compare against installed files.
+        // This is packaging evidence, not recovery authorization.
+        var inventoryBytes = await new VelopackPayloadInventoryBuilder()
+            .BuildUnsignedAsync(
+                fullV2, releaseV2, CancellationToken.None);
+        var inventoryCms = new SignedCms(
+            new ContentInfo(inventoryBytes), detached: true);
+        inventoryCms.ComputeSignature(
+            new CmsSigner(
+                SubjectIdentifierType.IssuerAndSerialNumber, certificate)
+            {
+                IncludeOption = X509IncludeOption.EndCertOnly
+            },
+            silent: true);
+        var inventoryVerifier = new CmsManifestSignatureVerifier(
+            new YamlManifestTrustPolicyRepository(
+                new YamlManifestTrustPolicyRepositoryOptions(trustPath)));
+        var signedInventory = await new SignedPayloadInventoryReader(
+            inventoryVerifier).ReadAsync(
+                inventoryBytes, inventoryCms.Encode(),
+                releaseV2, CancellationToken.None);
+
         await workflow.UpdateAsync(
             releaseV2,
             await RequireStateAsync(stateRepository, packageId),
@@ -166,6 +241,54 @@ internal static class SignedWorkflowAcceptanceRunner
         await AssertVersionAsync(
             stateRepository, packageId, installRoot, versionMarker, VersionTwo);
         AssertUserData(userDataPath, userData);
+        var payloadEvidence = await new InstallerPayloadEvidenceService(
+            new InstalledPayloadHashTool()).AssessAsync(
+                packageId, installRoot,
+                signedInventory.Files.Select(file => new InstallerExpectedPayloadFile(
+                    file.RelativePath, file.Digest)).ToArray(),
+                CancellationToken.None);
+        if (payloadEvidence.Files.Count != signedInventory.Files.Count ||
+            payloadEvidence.Files.Any(file =>
+                file.Status != InstallerPayloadFileStatus.MatchesSuppliedDigest))
+        {
+            var failures = payloadEvidence.Files
+                .Where(file =>
+                    file.Status != InstallerPayloadFileStatus.MatchesSuppliedDigest)
+                .Select(file => file.RelativePath + "=" + file.Status)
+                .Take(8);
+            throw new InvalidOperationException(
+                "Signed ZIP-derived inventory differs from installed Velopack payload: " +
+                string.Join(", ", failures));
+        }
+        Console.WriteLine(
+            "TURKUAZ_INSTALLER_SIGNED_FULL_NUPKG_INVENTORY_DISK_EVIDENCE_OK");
+
+        // The signed inventory supplies the caller-side trust boundary.
+        // Scan only current/ for files absent from that baseline while
+        // keeping preserved UserData outside any ownership assertion.
+        var scoped = await new InstallerPayloadScopeAssessmentService(
+            new InstalledPayloadScopeTool(),
+            new InstallerPayloadEvidenceService(new InstalledPayloadHashTool()))
+            .AssessAsync(
+                signedInventory.PackageId,
+                signedInventory.Version,
+                signedInventory.Channel,
+                signedInventory.Files.Select(file =>
+                    new InstallerExpectedPayloadFile(
+                        file.RelativePath, file.Digest)).ToArray(),
+                await RequireStateAsync(stateRepository, packageId),
+                installRoot,
+                CancellationToken.None);
+        if (scoped.HashEvidence.Files.Any(file =>
+                file.Status != InstallerPayloadFileStatus.MatchesSuppliedDigest))
+        {
+            throw new InvalidOperationException(
+                "Signed inventory scoped disk evidence contains hash mismatches.");
+        }
+        Console.WriteLine(
+            "TURKUAZ_INSTALLER_READ_ONLY_CURRENT_SCOPE_OBSERVED_OK: " +
+            scoped.UnattributedCurrentFiles.Count +
+            " unattributed current files (no ownership or repair claim)");
 
         await workflow.RepairAsync(
             releaseV2,
@@ -174,6 +297,30 @@ internal static class SignedWorkflowAcceptanceRunner
         await AssertVersionAsync(
             stateRepository, packageId, installRoot, versionMarker, VersionTwo);
         AssertUserData(userDataPath, userData);
+
+        // Rollback is a separate integrity boundary. A correctly signed
+        // previous-release manifest carrying the wrong payload digest
+        // must not replace the installed V2 binaries or commit V1 state.
+        var invalidRollback = await ReadVerifiedAsync(v1BadRollbackDigestManifest);
+        try
+        {
+            await workflow.RollbackAsync(
+                releaseV2,
+                invalidRollback,
+                await RequireStateAsync(stateRepository, packageId),
+                stagingRoot, null, CancellationToken.None);
+            throw new InvalidOperationException(
+                "A signed rollback manifest with an invalid package digest unexpectedly succeeded.");
+        }
+        catch (InvalidDataException)
+        {
+            // Expected: artifact verifier fails before rollback apply.
+        }
+
+        await AssertVersionAsync(
+            stateRepository, packageId, installRoot, versionMarker, VersionTwo);
+        AssertUserData(userDataPath, userData);
+        Console.WriteLine("TURKUAZ_INSTALLER_SIGNED_ROLLBACK_BAD_HASH_FAIL_CLOSED_OK");
 
         var rollbackRelease = await ReadVerifiedAsync(v1FullManifest);
         await workflow.RollbackAsync(

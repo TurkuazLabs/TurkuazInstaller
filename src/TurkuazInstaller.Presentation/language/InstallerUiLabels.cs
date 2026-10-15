@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiLabels.cs
 // 📌 Amac: TurkuazInstaller masaustu arayuzundeki kullanici metinlerini merkezi Language katmaninda tanimlar
 // 📌 Modul - Language CSharp
-// Version: 1.5.0
+// Version: 1.8.0
 // Aciklama: Install/update/recovery metinlerine ek olarak katalog, discovery, background update ve version skip/pinning UX metinlerini tutar
 //
 // Bagimli Oldugu Katman: Language
@@ -10,6 +10,26 @@ namespace TurkuazInstaller.Presentation.Language;
 
 public static class InstallerUiLabels
 {
+    public const string PromotionEyebrow = "TURKUAZ EKOSISTEMI";
+    public const string PromotionTitle = "Daha fazlasini birlikte uretin";
+    public const string PromotionDescription = "Turkuaz Office, UniZip ve topluluk araclarimizi kesfedin.";
+    public const string PromotionProvider = "TurkuazLabs Community";
+
+    public const string InstallOptionsTitle = "Kurulum Secenekleri";
+    public const string InstallOptionsDescription =
+        "Yuklemeden once kurulum seklini ve kimlerin kullanacagini secin.";
+    public const string InstallModeHeader = "Kurulum Modu";
+    public const string InstallScopeHeader = "Kullanim Kapsami";
+    public const string QuickInstall = "Hizli Kurulum";
+    public const string CustomInstall = "Ozellestirilmis Kurulum";
+    public const string PerUserInstall = "Yalnizca benim icin (AppData)";
+    public const string PerMachineUnavailable =
+        "Tum kullanicilar (Program Files) - yakinda";
+    public const string CustomTargetHeader =
+        "AppData altinda ozel kurulum klasoru";
+    public const string CustomTargetRequired =
+        "Ozellestirilmis kurulumda AppData icinde kurulum klasoru girilmelidir.";
+
     public const string WindowTitle = "TurkuazInstaller";
     public const string HeaderTitle = "Turkuaz Installer";
     public const string HeaderSubtitle =
@@ -117,6 +137,17 @@ public static class InstallerUiLabels
 
     public const string InstalledAppsTitle =
         "Kurulu Uygulamalar";
+    public const string InstalledAppsEmpty =
+        "TurkuazInstaller ile yonetilen kayitli paket bulunamadi. "
+        + "Baska bir kurucu ile yuklenen uygulamalar otomatik listelenmez.";
+    public const string ActionGuidePackageId =
+        "Baslamak icin paket kimligini girin. Kurulum sadece imzali bir manifest ile yapilir.";
+    public const string ActionGuideManifest =
+        "Imzali manifestin URL veya dosya yolunu girin. Dogrulama olmadan kurulum yapilmaz.";
+    public const string ActionGuideNotInstalled =
+        "Bu paket henuz yonetilen kurulum listesinde yok. Imzali manifest ile Kur kullanilabilir.";
+    public const string ActionGuideReady =
+        "Kayitli paket bulundu. Guncelleme/onarma icin imzali manifest, geri alma icin onceki surum manifesti gerekir.";
     public const string InstalledAppsCountPrefix =
         "Kurulu paket:";
     public const string CatalogLoadFailedPrefix =
@@ -133,6 +164,25 @@ public static class InstallerUiLabels
         "C:\\paketler\\onceki\\installer-manifest.yml";
     public const string TargetPathPlaceholder =
         "Bos birakilirsa manifest install.target kullanilir";
+
+    public const string DashboardEyebrow = "TURKUAZLABS  /  KURULUM MERKEZI";
+    public const string DashboardTagline = "Uygulamalarinizi guvenli ve kontrollu yonetin. Paket secin, kaynagi belirtin, kurulumu adim adim tamamlayin.";
+    public const string WorkflowSource = "Paket secimi";
+    public const string WorkflowTrust = "Imza ve butunluk";
+    public const string WorkflowInstall = "Kurulum ve ilerleme";
+    public const string WorkflowMaintain = "Bakim ve kurtarma";
+    public const string SourceAdvanced = "Gelismis secenekler (geri alma / kurulum yolu)";
+    public const string SourceSecurityDescription = "Imza ve dosya butunlugu kontrolu kurulum motorunda zorunludur. Kaynak eklemek veya Kur butonunu etkinlestirmek guven onayi anlamina gelmez.";
+    public const string ManagedCatalogDescription = "Yalnizca TurkuazInstaller ile kaydedilen kurulumlar burada gorunur.";
+    public const string OperationsDescription = "Bir paket secin. Kurulum veya bakim islemleri yalnizca gerekli bilgiler saglandiginda etkinlesir.";
+    public const string WizardReviewTitle = "Kurulumu Kontrol Et";
+    public const string WizardReviewDescription = "Secimleri gozden gecirin. Imza ve paket SHA-256 dogrulamasi gercek islem basladiginda yapilir.";
+    public const string WizardBack = "Geri";
+    public const string WizardNext = "Devam Et";
+    public const string WizardReviewTargetDefault = "Imzali manifestin varsayilan hedefi";
+    public const string WizardTrustNotice = "Bu ekran imza dogrulamasi yapmaz. Kuruluma devam edilirse guven politikasi ve SHA-256 kontrolu zorunludur.";
+    public const string SourceSectionTitle = "Yeni paket / kurulum kaynagi";
+    public const string OverviewTitle = "Kurulum asamalari";
 
     public const string Footer =
         "TurkuazLabs Community";

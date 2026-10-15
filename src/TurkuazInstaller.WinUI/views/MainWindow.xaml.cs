@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.4.2
+// Version: 2.0.0
 // Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
@@ -9,6 +9,7 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using TurkuazInstaller.Presentation.Controllers;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
@@ -20,6 +21,7 @@ namespace TurkuazInstaller.WinUI.Views;
 public sealed partial class MainWindow : Window
 {
     private readonly MainWindowController _controller;
+    private readonly MainWindowViewModel _viewModel;
     private readonly InstallerDesktopService _desktopService;
     private readonly IReadOnlyList<string> _startupArguments;
     private DispatcherQueueTimer? _backgroundUpdateTimer;
@@ -39,6 +41,7 @@ public sealed partial class MainWindow : Window
             startupArguments);
 
         _controller = controller;
+        _viewModel = viewModel;
         _desktopService = desktopService;
         _startupArguments =
             Array.AsReadOnly(
@@ -147,6 +150,8 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (!_viewModel.CanCheckUpdate) return;
+
         await _controller
             .CheckForUpdatesAsync()
             .ConfigureAwait(true);
@@ -156,15 +161,51 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
-        await _controller
-            .InstallAsync()
-            .ConfigureAwait(true);
+        if (!_viewModel.CanInstall)
+        {
+            return;
+        }
+
+        // Step 1: choose Quick/Custom and user scope. Step 2: review the
+        // selected package, exact manifest source and target. Only the
+        // final explicit Install confirmation invokes the Controller.
+        InstallChoiceDialog.XamlRoot = MainRoot.XamlRoot;
+        InstallReviewDialog.XamlRoot = MainRoot.XamlRoot;
+        while (_viewModel.CanInstall)
+        {
+            var choice = await InstallChoiceDialog.ShowAsync();
+            if (choice != ContentDialogResult.Primary ||
+                !_viewModel.CanContinueInstallWizard)
+            {
+                return;
+            }
+
+            var review = await InstallReviewDialog.ShowAsync();
+            if (review == ContentDialogResult.Primary)
+            {
+                if (!_viewModel.CanContinueInstallWizard)
+                {
+                    return;
+                }
+
+                await _controller.InstallWithChoicesAsync(
+                        _viewModel.SelectedInstallMode,
+                        _viewModel.SelectedInstallScope)
+                    .ConfigureAwait(true);
+                return;
+            }
+
+            // Back from the review returns to preferences. Cancel
+            // remains available there. Neither dialog mutates packages.
+        }
     }
 
     private async void Update_Click(
         object sender,
         RoutedEventArgs e)
     {
+        if (!_viewModel.CanUpdate) return;
+
         await _controller
             .UpdateAsync()
             .ConfigureAwait(true);
@@ -174,6 +215,8 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (!_viewModel.CanRepair) return;
+
         await _controller
             .RepairAsync()
             .ConfigureAwait(true);
@@ -183,6 +226,8 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (!_viewModel.CanRollback) return;
+
         await _controller
             .RollbackAsync()
             .ConfigureAwait(true);
@@ -192,6 +237,8 @@ public sealed partial class MainWindow : Window
         object sender,
         RoutedEventArgs e)
     {
+        if (!_viewModel.CanUninstall) return;
+
         await _controller
             .UninstallAsync()
             .ConfigureAwait(true);
@@ -245,7 +292,7 @@ public sealed partial class MainWindow : Window
 
         appWindow.Resize(
             new SizeInt32(
-                1100,
-                920));
+                1280,
+                900));
     }
 }

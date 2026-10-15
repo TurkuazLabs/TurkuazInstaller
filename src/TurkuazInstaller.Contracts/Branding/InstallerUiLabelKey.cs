@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Contracts/Branding/InstallerUiLabelKey.cs
 // 📌 Amac: UI localization override anahtarlarini magic string kullanmadan typed contract olarak tanimlar
 // 📌 Modul - Contract CSharp
-// Version: 1.1.0
+// Version: 1.3.0
 // Aciklama: Masaustu arayuzundeki statik ve runtime kullanici metinlerinin desteklenen localization anahtarlarini sabitler
 //
 // Bagimli Oldugu Katman: Service | Repo | View | Language
@@ -73,5 +73,38 @@ public enum InstallerUiLabelKey
     RecoveryTitle,
     ManifestPlaceholder,
     RollbackManifestPlaceholder,
-    TargetPathPlaceholder
+    TargetPathPlaceholder,
+    InstallOptionsTitle,
+    InstallOptionsDescription,
+    InstallModeHeader,
+    InstallScopeHeader,
+    QuickInstall,
+    CustomInstall,
+    PerUserInstall,
+    PerMachineUnavailable,
+    CustomTargetHeader,
+    CustomTargetRequired,
+    InstalledAppsEmpty,
+    ActionGuidePackageId,
+    ActionGuideManifest,
+    ActionGuideNotInstalled,
+    ActionGuideReady,
+    DashboardEyebrow,
+    DashboardTagline,
+    WorkflowSource,
+    WorkflowTrust,
+    WorkflowInstall,
+    WorkflowMaintain,
+    SourceAdvanced,
+    SourceSecurityDescription,
+    ManagedCatalogDescription,
+    OperationsDescription,
+    WizardReviewTitle,
+    WizardReviewDescription,
+    WizardBack,
+    WizardNext,
+    WizardReviewTargetDefault,
+    WizardTrustNotice,
+    SourceSectionTitle,
+    OverviewTitle
 }

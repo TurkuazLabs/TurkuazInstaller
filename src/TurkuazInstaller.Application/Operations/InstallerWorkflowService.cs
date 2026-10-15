@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Application/Operations/InstallerWorkflowService.cs
 // 📌 Amac: Download, prerequisite, verification, staging, package mutation, journal, log ve state adimlarini installer use-case'lerinde koordine eder
 // 📌 Modul - Service CSharp
-// Version: 2.5.0
+// Version: 2.8.1
 // Aciklama: Optional staged update gate'i download oncesi ve pre-apply asamasinda fail-closed kontrol eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -609,6 +609,58 @@ public sealed class InstallerWorkflowService
                     packageId,
                     cancellationToken)
                 .ConfigureAwait(false);
+
+        // An earlier process may have died after updating the files but
+        // before committing the installed version. Never overwrite the
+        // crash journal or apply another package until manual reconciliation.
+        if (resumeEntry is null && _operationJournal is not null)
+        {
+            var previous = await _operationJournal
+                .GetAsync(packageId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (previous is not null)
+            {
+                // A pre-apply checkpoint is retry-safe only when it still
+                // belongs to this package and its committed install target.
+                // Evaluate this under the same package lock used for mutation.
+                var committed = await _stateRepository
+                    .GetAsync(packageId, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (InstallerRecoveryPolicy.RequiresExplicitRecovery(previous) ||
+                    InstallerRecoveryPolicy.HasMetadataConflict(
+                        packageId, previous, committed))
+                {
+                    throw new InstallerRecoveryRequiredException(
+                        packageId,
+                        previous.Phase,
+                        previous.InterruptedPhase);
+                }
+            }
+        }
+
+        // Resume callers must not be able to replace an orphaned Applying
+        // journal by supplying a fabricated reboot-safe checkpoint. Only
+        // the *same durable* operation may continue under this package lock.
+        if (resumeEntry is not null)
+        {
+            if (_operationJournal is null)
+            {
+                throw new InvalidOperationException(
+                    "Reboot resume requires a durable operation journal.");
+            }
+
+            var persisted = await _operationJournal
+                .GetAsync(packageId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (persisted is null || !Equals(persisted, resumeEntry))
+            {
+                throw new InvalidOperationException(
+                    "Reboot resume request does not match the persisted operation journal.");
+            }
+        }
 
         var context =
             resumeEntry is null

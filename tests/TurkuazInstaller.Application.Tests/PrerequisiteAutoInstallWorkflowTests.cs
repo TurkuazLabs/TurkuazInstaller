@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Application.Tests/PrerequisiteAutoInstallWorkflowTests.cs
 // 📌 Amac: Eksik prerequisite auto-install, verification ve zorunlu post-install re-probe akisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.4.2
+// Version: 1.5.0
 // Aciklama: Guvenli prerequisite install, RunOnce scheduler cleanup/retention, reboot checkpoint ve post-reboot re-probe sinirlarini test eder
 //
 // Bagimli Oldugu Katman: Service | Repo | Tool
@@ -218,58 +218,29 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
     public async Task InstallAsync_ResumeCheckpoint_ReprobesWithoutReinstalling(
         InstallerOperationPhase resumePhase)
     {
-        var probe =
-            new SequencedPrerequisiteProbe(
-                true);
+        var probe = new SequencedPrerequisiteProbe(true);
+        var prerequisiteInstaller = new TrackingPrerequisiteInstaller();
+        var packageEngine = new TrackingPackageEngine();
+        var release = CreateRelease(includeInstallAction: true);
+        var journal = new TrackingOperationJournal();
+        var service = CreateService(
+            probe, prerequisiteInstaller, packageEngine,
+            operationJournal: journal);
 
-        var prerequisiteInstaller =
-            new TrackingPrerequisiteInstaller();
-
-        var packageEngine =
-            new TrackingPackageEngine();
-
-        var release =
-            CreateRelease(
-                includeInstallAction: true);
-
-        var service =
-            CreateService(
-                probe,
-                prerequisiteInstaller,
-                packageEngine);
-
-        var now =
-            DateTimeOffset.UtcNow;
+        var now = DateTimeOffset.UtcNow;
+        var entry = new InstallerOperationJournalEntry(
+            Guid.NewGuid(), release.PackageId, InstallerOperationType.Install,
+            release.Version.ToString(), "C:/Apps/Example",
+            resumePhase, now, now, null, PrerequisiteIds.DotNetDesktopRuntime);
+        await journal.SaveAsync(entry, CancellationToken.None);
 
         await service.InstallAsync(
-            release,
-            "C:/Apps/Example",
-            "C:/Temp/TurkuazInstaller",
-            null,
-            CancellationToken.None,
-            new InstallerOperationJournalEntry(
-                Guid.NewGuid(),
-                release.PackageId,
-                InstallerOperationType.Install,
-                release.Version.ToString(),
-                "C:/Apps/Example",
-                resumePhase,
-                now,
-                now,
-                null,
-                PrerequisiteIds.DotNetDesktopRuntime));
+            release, "C:/Apps/Example", "C:/Temp/TurkuazInstaller",
+            null, CancellationToken.None, entry);
 
-        Assert.Equal(
-            1,
-            probe.Calls);
-
-        Assert.Equal(
-            0,
-            prerequisiteInstaller.Calls);
-
-        Assert.Equal(
-            1,
-            packageEngine.ApplyCalls);
+        Assert.Equal(1, probe.Calls);
+        Assert.Equal(0, prerequisiteInstaller.Calls);
+        Assert.Equal(1, packageEngine.ApplyCalls);
     }
 
     [Theory]
@@ -278,60 +249,30 @@ public sealed class PrerequisiteAutoInstallWorkflowTests
     public async Task InstallAsync_ResumeCheckpointStillUnsatisfied_DoesNotReinstall(
         InstallerOperationPhase resumePhase)
     {
-        var probe =
-            new SequencedPrerequisiteProbe(
-                false);
+        var probe = new SequencedPrerequisiteProbe(false);
+        var prerequisiteInstaller = new TrackingPrerequisiteInstaller();
+        var packageEngine = new TrackingPackageEngine();
+        var release = CreateRelease(includeInstallAction: true);
+        var journal = new TrackingOperationJournal();
+        var service = CreateService(
+            probe, prerequisiteInstaller, packageEngine,
+            operationJournal: journal);
 
-        var prerequisiteInstaller =
-            new TrackingPrerequisiteInstaller();
-
-        var packageEngine =
-            new TrackingPackageEngine();
-
-        var release =
-            CreateRelease(
-                includeInstallAction: true);
-
-        var service =
-            CreateService(
-                probe,
-                prerequisiteInstaller,
-                packageEngine);
-
-        var now =
-            DateTimeOffset.UtcNow;
+        var now = DateTimeOffset.UtcNow;
+        var entry = new InstallerOperationJournalEntry(
+            Guid.NewGuid(), release.PackageId, InstallerOperationType.Install,
+            release.Version.ToString(), "C:/Apps/Example",
+            resumePhase, now, now, null, PrerequisiteIds.DotNetDesktopRuntime);
+        await journal.SaveAsync(entry, CancellationToken.None);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () =>
-                service.InstallAsync(
-                    release,
-                    "C:/Apps/Example",
-                    "C:/Temp/TurkuazInstaller",
-                    null,
-                    CancellationToken.None,
-                    new InstallerOperationJournalEntry(
-                        Guid.NewGuid(),
-                        release.PackageId,
-                        InstallerOperationType.Install,
-                        release.Version.ToString(),
-                        "C:/Apps/Example",
-                        resumePhase,
-                        now,
-                        now,
-                        null,
-                        PrerequisiteIds.DotNetDesktopRuntime)));
+            () => service.InstallAsync(
+                release, "C:/Apps/Example", "C:/Temp/TurkuazInstaller",
+                null, CancellationToken.None, entry));
 
-        Assert.Equal(
-            1,
-            probe.Calls);
-
-        Assert.Equal(
-            0,
-            prerequisiteInstaller.Calls);
-
-        Assert.Equal(
-            0,
-            packageEngine.ApplyCalls);
+        Assert.Equal(1, probe.Calls);
+        Assert.Equal(0, prerequisiteInstaller.Calls);
+        Assert.Equal(0, packageEngine.ApplyCalls);
     }
 
     [Fact]

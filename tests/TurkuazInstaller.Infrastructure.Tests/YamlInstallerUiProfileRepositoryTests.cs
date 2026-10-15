@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/YamlInstallerUiProfileRepositoryTests.cs
 // 📌 Amac: YAML branding/localization profil parserinin typed ve fail-closed davranisini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Missing file fallback, branding/label mapping, culture normalizasyonu, invalid culture ve unknown key reddini dogrular
 //
 // Bagimli Oldugu Katman: Repo | Tool | Language
@@ -82,6 +82,53 @@ public sealed class YamlInstallerUiProfileRepositoryTests
             Assert.Equal(
                 "Yenile",
                 profile.Labels[InstallerUiLabelKey.Update]);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Read_MapsReusableOfflinePromotion()
+    {
+        var path = CreateProfile(
+            """
+            schema_version: 1
+            promotion:
+              enabled: true
+              eyebrow: TURKUAZ SOFT
+              title: Turkuaz Office
+              description: Tum urunlerimiz tek kurulum altyapisinda.
+              provider: TurkuazSoft
+            """);
+
+        try
+        {
+            var profile = new YamlInstallerUiProfileRepository(path).Read();
+            Assert.True(profile.Promotion!.Enabled);
+            Assert.Equal("Turkuaz Office", profile.Promotion.Title);
+            Assert.Equal("TurkuazSoft", profile.Promotion.Provider);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Read_CanDisablePromotion()
+    {
+        var path = CreateProfile(
+            """
+            schema_version: 1
+            promotion:
+              enabled: false
+            """);
+        try
+        {
+            var profile = new YamlInstallerUiProfileRepository(path).Read();
+            Assert.False(profile.Promotion!.Enabled);
         }
         finally
         {
