@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/MainWindowBrandingTests.cs
 // 📌 Amac: MainWindowViewModel branding/localization override ve fallback davranisini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.4.0
+// Version: 1.5.0
 // Aciklama: Branding, channel, placeholder ve runtime initial state override davranisini built-in fallback ile birlikte dogrular
 //
 // Bagimli Oldugu Katman: View | Language | Config
@@ -247,5 +247,84 @@ public sealed class MainWindowBrandingTests
         Assert.False(model.CanInstall);
         model.IsBackgroundUpdateCheckRunning = false;
         Assert.True(model.CanInstall);
+    }
+
+    [Fact]
+    public void Dashboard_ResolvesSharedLabels_AndAllowsProductBrandingOverride()
+    {
+        var model = new MainWindowViewModel(InstallerUiProfile.Empty);
+        Assert.Equal(InstallerUiLabels.DashboardEyebrow, model.DashboardEyebrowLabel);
+        Assert.Equal(InstallerUiLabels.WorkflowTrust, model.WorkflowTrustLabel);
+        Assert.Equal(InstallerUiLabels.SourceAdvanced, model.SourceAdvancedLabel);
+        Assert.Equal(InstallerUiLabels.WizardTrustNotice, model.WizardTrustNoticeLabel);
+
+        var branded = new MainWindowViewModel(
+            new InstallerUiProfile(
+                null,
+                InstallerBrandingProfile.Empty,
+                new Dictionary<InstallerUiLabelKey, string>
+                {
+                    [InstallerUiLabelKey.DashboardEyebrow] = "NOVA / SETUP",
+                    [InstallerUiLabelKey.WizardReviewTitle] = "Review installation"
+                },
+                null));
+        Assert.Equal("NOVA / SETUP", branded.DashboardEyebrowLabel);
+        Assert.Equal("Review installation", branded.WizardReviewTitleLabel);
+        Assert.Equal(InstallerUiLabels.WorkflowSource, branded.WorkflowSourceLabel);
+    }
+
+    [Fact]
+    public void Wizard_RequiresReview_AndValidatesCustomTargetBeforeContinue()
+    {
+        var model = new MainWindowViewModel(InstallerUiProfile.Empty);
+        Assert.False(model.CanContinueInstallWizard);
+        model.PackageIdText = "turkuazlabs.lab";
+        model.ManifestSource = "C:\\lab\\signed.yml";
+        Assert.True(model.CanContinueInstallWizard);
+        Assert.Equal(InstallerUiLabels.QuickInstall, model.WizardSelectedModeLabel);
+        Assert.Equal(InstallerUiLabels.WizardReviewTargetDefault, model.WizardTargetPreview);
+
+        model.SelectedInstallModeIndex = (int)InstallerInstallMode.Custom;
+        Assert.False(model.CanContinueInstallWizard);
+        Assert.Equal(InstallerUiLabels.CustomInstall, model.WizardSelectedModeLabel);
+        model.TargetPath = "C:\\Users\\Lab\\AppData\\Local\\Programs\\Lab";
+        Assert.True(model.CanContinueInstallWizard);
+        Assert.Equal(model.TargetPath, model.WizardTargetPreview);
+        model.SelectedInstallScopeIndex = (int)InstallerInstallScope.PerMachine;
+        Assert.False(model.CanContinueInstallWizard);
+        model.SelectedInstallScopeIndex = (int)InstallerInstallScope.PerUser;
+        Assert.True(model.CanContinueInstallWizard);
+        model.IsBusy = true;
+        Assert.False(model.CanContinueInstallWizard);
+        model.IsBusy = false;
+        Assert.True(model.CanContinueInstallWizard);
+        model.ManifestSource = string.Empty;
+        Assert.False(model.CanContinueInstallWizard);
+    }
+
+    [Fact]
+    public void Wizard_ReviewAvailability_RaisesPropertyChanged_OnEveryRelevantChoice()
+    {
+        var model = new MainWindowViewModel(InstallerUiProfile.Empty);
+        var changed = new List<string>();
+        model.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is not null) changed.Add(args.PropertyName);
+        };
+        model.PackageIdText = "turkuazlabs.lab";
+        model.ManifestSource = "C:\\lab\\signed.yml";
+        Assert.Contains(nameof(model.CanContinueInstallWizard), changed);
+        changed.Clear();
+        model.SelectedInstallModeIndex = (int)InstallerInstallMode.Custom;
+        Assert.Contains(nameof(model.CanContinueInstallWizard), changed);
+        Assert.Contains(nameof(model.WizardTargetPreview), changed);
+        Assert.Contains(nameof(model.WizardSelectedModeLabel), changed);
+        changed.Clear();
+        model.TargetPath = "C:\\Users\\Lab\\AppData\\Local\\Programs\\Lab";
+        Assert.Contains(nameof(model.CanContinueInstallWizard), changed);
+        Assert.Contains(nameof(model.WizardTargetPreview), changed);
+        changed.Clear();
+        model.SelectedInstallScopeIndex = (int)InstallerInstallScope.PerMachine;
+        Assert.Contains(nameof(model.CanContinueInstallWizard), changed);
     }
 }
