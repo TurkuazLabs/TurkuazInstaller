@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/docs/AUTHENTICODE_REVOCATION_ACCEPTANCE.md
 Amac: Production oncesi Windows Authenticode revocation kanit ve kabul matrisi
 Modul - Markdown
-Version: 1.0.0
+Version: 1.1.0
 Aciklama: Gercek Windows VM senaryolari, guvenli kanit toplama ve release blokajlari
 Bagimli Oldugu Katman: Tool | Testing | Security
 -->
@@ -52,3 +52,35 @@ Record OS build, Windows trust policy, clock/timezone, fixture SHA-256, certific
 ## Release gate
 
 **BLOCK** production signing/promotion, NSIS removal and live Office/Start3POS migration until all required real-VM cases have recorded evidence and the security policy owner resolves any contradictory revocation outcomes. A passing hosted CI or unsigned LAB ZIP is insufficient. Keep PR #54 draft. No production certificate/private key is needed for this acceptance-plan document.
+
+## Executing the real verifier LAB probe
+
+The probe project at `tests/TurkuazInstaller.Authenticode.LabProbe/` calls the actual
+`WindowsAuthenticodeArtifactSignatureVerifier`, unlike the separate
+PowerShell `Get-AuthenticodeSignature` diagnostics collector. Run it only in
+a disposable Windows VM with a pre-existing test artifact and a certificate
+subject and SHA-256 pin obtained **independently** from the test PKI policy:
+
+```powershell
+dotnet run --project tests/TurkuazInstaller.Authenticode.LabProbe/TurkuazInstaller.Authenticode.LabProbe.csproj --configuration Release -- --artifact 'C:\\Lab\\fixture.exe' --publisher 'CN=LAB Signing Publisher' --cert-sha256 '<64-hex-public-certificate-sha256>' --case REV-02 --output 'C:\\Lab\\results\\REV-02.json'
+```
+
+Create the output directory beforehand. The result file must not exist:
+`FileMode.CreateNew` refuses overwrites. A verification rejection is recorded
+as `REJECTED` in JSON; a successful process exit only means the report was
+written, **not** that a signature passed. Inspect `installer_winverifytrust_result`,
+`failure` and `message` together. The JSON always reports
+`stage_apply=NOT_RUN` and `release_acceptance=NOT_ACCEPTED`.
+
+The probe does **not** independently record CRL or OCSP cache state, identify
+revocation URLs, attest that a signer was revoked, or exercise install and
+bootstrap mutation. Collect the VM network/cache and PKI issuer records
+separately and correlate by fixture SHA-256, case ID, OS version and run time.
+Its accepted/rejected field is the overall adapter result (Windows trust plus
+publisher/pin), **not** a raw numeric WinVerifyTrust return code. Native status
+may be included in the `message` on verification failure.
+
+GitHub-hosted Windows negative smoke covers REV-09 only in a narrow
+unsigned-file scenario. It is not proof for REV-02 through REV-08 or REV-10/11,
+which require explicit isolated VM acceptance evidence. Do not copy lab signing
+keys into CI and do not mutate production trust stores.
