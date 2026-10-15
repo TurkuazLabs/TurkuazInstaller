@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/tools/diagnostics/Get-AuthenticodeLabEvidence.ps1
 # Amac: Disposable Windows VM Authenticode LAB kanitlarini salt okunur toplar
 # Modul - PowerShell Tool
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: Dosya ozeti, Windows native Authenticode sonucu ve guvenlik ortamini JSON olarak raporlar
 # Bagimli Oldugu Katman: Tool | Security | Testing
 
@@ -27,7 +27,10 @@ if ($PSVersionTable.PSVersion.Major -lt 7) { throw 'PowerShell 7 or newer is req
 if (-not [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
     throw 'Windows-only evidence collector; no changes performed.'
 }
-$resolved = (Resolve-Path -LiteralPath $ArtifactPath -PathType Leaf).ProviderPath
+if (-not (Test-Path -LiteralPath $ArtifactPath -PathType Leaf)) {
+    throw 'ArtifactPath must identify an existing file.'
+}
+$resolved = (Resolve-Path -LiteralPath $ArtifactPath).ProviderPath
 if (-not [System.IO.Path]::IsPathFullyQualified($OutputPath)) {
     throw 'OutputPath must be absolute.'
 }
