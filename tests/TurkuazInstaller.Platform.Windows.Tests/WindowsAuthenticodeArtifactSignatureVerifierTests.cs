@@ -1,6 +1,6 @@
 // Dosya: /tests/TurkuazInstaller.Platform.Windows.Tests/WindowsAuthenticodeArtifactSignatureVerifierTests.cs
 // Amac: Windows'un gercek guven zinciriyle imzalanmis OS binary'sine karsi Authenticode, publisher ve pin kontrollerini calistirir
-// Version: 0.1.0
+// Version: 0.2.0
 // Guvenlik: Trust store / antivirus ayari degismez, mevcut Microsoft-imzali sistem binary'si read-only kullanilir.
 
 using System.Security.Cryptography;
@@ -94,6 +94,62 @@ public sealed class WindowsAuthenticodeArtifactSignatureVerifierTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task VerifyAsync_NonexistentArtifact_FailsClosed()
+    {
+        var fixture = TrustedFixture.Value;
+        var missingPath = Path.Combine(
+            Path.GetTempPath(),
+            "TurkuazInstallerMissingAuthenticode",
+            Guid.NewGuid().ToString("N"),
+            "missing.exe");
+
+        var result = await new WindowsAuthenticodeArtifactSignatureVerifier()
+            .VerifyAsync(missingPath, fixture.ExpectedSignature, CancellationToken.None);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
+    public async Task VerifyAsync_UnsignedLocalExecutable_FailsClosedWithoutTrustChanges()
+    {
+        var fixture = TrustedFixture.Value;
+        var root = Path.Combine(
+            Path.GetTempPath(),
+            "TurkuazInstallerUnsignedAuthenticodeTests",
+            Guid.NewGuid().ToString("N"));
+
+        Directory.CreateDirectory(root);
+        var unsignedPath = Path.Combine(root, "unsigned.exe");
+
+        try
+        {
+            // Deliberately unsigned, non-executable test data: never launch it.
+            await File.WriteAllTextAsync(unsignedPath, "LAB unsigned file");
+
+            var result = await new WindowsAuthenticodeArtifactSignatureVerifier()
+                .VerifyAsync(unsignedPath, fixture.ExpectedSignature, CancellationToken.None);
+
+            Assert.False(result.IsValid);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void VerifyAsync_PreCancelledRequest_DoesNotBeginTrustVerification()
+    {
+        var fixture = TrustedFixture.Value;
+        using var source = new CancellationTokenSource();
+        source.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            new WindowsAuthenticodeArtifactSignatureVerifier()
+                .VerifyAsync(fixture.FilePath, fixture.ExpectedSignature, source.Token));
     }
 
     private static SignedFixture FindTrustedSignedFixture()
