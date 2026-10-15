@@ -141,14 +141,14 @@ public sealed class WindowsAuthenticodeArtifactSignatureVerifierTests
     }
 
     [Fact]
-    public void VerifyAsync_PreCancelledRequest_DoesNotBeginTrustVerification()
+    public async Task VerifyAsync_PreCancelledRequest_DoesNotBeginTrustVerification()
     {
         var fixture = TrustedFixture.Value;
         using var source = new CancellationTokenSource();
         source.Cancel();
 
-        Assert.Throws<OperationCanceledException>(() =>
-            new WindowsAuthenticodeArtifactSignatureVerifier()
+        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await new WindowsAuthenticodeArtifactSignatureVerifier()
                 .VerifyAsync(fixture.FilePath, fixture.ExpectedSignature, source.Token));
     }
 
