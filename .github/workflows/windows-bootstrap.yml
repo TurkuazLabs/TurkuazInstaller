@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.5.2
+# Version: 1.5.3
 # Aciklama: Mevcut win-x64 kalite kapisini korur ve native win-arm64 bootstrap+WinUI+CLI combined distribution publish/layout dogrulamasini ekler
 # Bagimli Oldugu Katman: Tool
 
@@ -82,6 +82,26 @@ jobs:
 
       - name: Build Windows solution
         run: dotnet build TurkuazInstaller.Windows.slnx --configuration Release --no-restore
+
+      - name: Compile real Authenticode LAB adapter probe
+        run: dotnet build tests/TurkuazInstaller.Authenticode.LabProbe/TurkuazInstaller.Authenticode.LabProbe.csproj --configuration Release
+
+      - name: Real Authenticode adapter negative LAB smoke
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'authenticode-real-adapter-smoke'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $fixture = Join-Path $root 'unsigned.exe'
+          $output = Join-Path $root 'real-adapter.json'
+          [System.IO.File]::WriteAllText($fixture, 'unsigned LAB data')
+          dotnet run --project tests/TurkuazInstaller.Authenticode.LabProbe/TurkuazInstaller.Authenticode.LabProbe.csproj --configuration Release --no-build -- --artifact $fixture --publisher 'CN=LAB Only' --cert-sha256 ('0' * 64) --case REV-09 --output $output
+          if ($LASTEXITCODE -ne 0) { throw 'Real LAB adapter probe exited with error.' }
+          $evidence = Get-Content -LiteralPath $output -Raw | ConvertFrom-Json
+          if ($evidence.verifier -ne 'WindowsAuthenticodeArtifactSignatureVerifier' -or
+              $evidence.installer_winverifytrust_result -ne 'REJECTED' -or
+              $evidence.release_acceptance -ne 'NOT_ACCEPTED') {
+            throw 'LAB adapter did not reject unsigned fixture with explicitly unapproved release status.'
+          }
 
       - name: Test bootstrap orchestration
         run: dotnet test tests/TurkuazInstaller.Bootstrapper.Tests/TurkuazInstaller.Bootstrapper.Tests.csproj --configuration Release --no-restore
