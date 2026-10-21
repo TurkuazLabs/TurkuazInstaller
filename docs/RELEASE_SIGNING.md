@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/RELEASE_SIGNING.md
 # 📌 Amac: TurkuazInstaller production release signing, deterministic packaging, attestation ve GitHub configuration adimlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.2
+# Version: 1.0.3
 # Aciklama: Azure Artifact Signing, immutable GitHub OIDC production environment, signed tag ve provenance akislarini dokumante eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -46,6 +46,7 @@ production environment variable olarak:
 - ARTIFACT_SIGNING_ACCOUNT_NAME
 - ARTIFACT_SIGNING_CERT_PROFILE_NAME
 - ARTIFACT_SIGNING_TIMESTAMP_URL
+- ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT (yasal yayinci sertifikasinin onaylanmis, tam X.500 Subject degeri)
 
 tanimlanir.
 
@@ -108,6 +109,13 @@ Bu sayede su katmanlar tag olusturmadan test edilir:
 15. Signing sonrasinda SHA256SUMS.txt uretilir.
 16. Release ZIP dosyalari GitHub artifact attestation ile provenance kaydi alir.
 17. GitHub Release yayinlanir.
+
+Release/preflight imzalanmis TurkuazInstaller EXE/DLL dosyalarinda sadece
+gecerli Authenticode zincirini degil, **onceden onaylanmis yayinici
+sertifika Subject** degerini de zorunlu tutar. Bu deger gercek sertifika
+onayindan sonra GitHub production environment variable olarak manuel
+tanimlanir. Bos/yanlis degerde release olusturulmaz. Kanitlanmamis
+legal yayinci kimligi kodda veya config'te varsayilmaz.
 
 Unsigned production fallback yoktur.
 
