@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/AZURE_SIGNING_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller production code-signing altyapisinin Azure ve GitHub tarafinda nasil kurulacagini aciklamak
 # 📌 Modul - Markdown
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Otomatik bootstrap, zorunlu manuel identity validation, immutable OIDC ve preflight akislarini adim adim tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -130,6 +130,30 @@ Preflight:
 7. SignTool ile Authenticode verification yapar
 
 Bu workflow yesil olmadan v1.0.0 tag'i olusturulmaz.
+
+## Zorunlu signed combined layout kabul kapisi
+
+Signed Release workflow, hem `win-x64` hem de `win-arm64` combined
+dagitiminda asagidaki **uc dosyanin tumunu** zorunlu tutar:
+
+- `TurkuazInstaller.Bootstrapper.exe`
+- `app/TurkuazInstaller.WinUI.exe`
+- `cli/TurkuazInstaller.Cli.exe`
+
+`tools/Assert-AuthenticodeRelease.ps1 -RequireCombinedLayout` eksik,
+bos veya reparse-point EXE'yi **SignTool calismadan once reddeder**;
+ardindan buldugu TurkuazInstaller EXE/DLL dosyalarina mevcut SignTool
+Authenticode denetimini uygular. Imza probe workflow'u bu parametreyi
+kullanmaz, cunku probe gercek combined dagitim degildir.
+
+`tests/scripts/Test-AuthenticodeReleaseGuard.ps1` ve Signing Tooling
+Validation Windows isi eksik/bos gecersiz EXE senaryolarini inceler.
+Basarili regresyon testi **public-trust imzasi**, dogru legal yayinci
+kimligi, Windows SmartScreen itibari veya antivirus temiz raporu **degildir**.
+Gercek production sertifikasi/publisher bilgisi bagimsiz onaylanmadan
+ve Azure signing preflight gercekten gecmeden release cikarma.
+Kullaniciya ait antivirus olaylari ayrica [Issue #58](https://github.com/TurkuazLabs/TurkuazInstaller/issues/58)
+ve `docs/ANTIVIRUS_EVIDENCE_LAB.md` uzerinden takip edilir.
 
 ## Release
 
