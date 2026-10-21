@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
 # 📌 Amac: Stable tag'lerde x64 ve ARM64 combined Windows dagitimlarini build, production sign, attest ve GitHub Release olarak yayinlar
 # 📌 Modul - CI YAML
-# Version: 1.8.0
+# Version: 1.9.0
 # Aciklama: Native win-x64 ve win-arm64 combined dagitimlarini sign eder; iki deterministic ZIP ve architecture-safe standalone bootstrap assetlerini checksum/provenance ile yayinlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -62,6 +62,7 @@ jobs:
           ARTIFACT_SIGNING_CERT_PROFILE_NAME: ${{ vars.ARTIFACT_SIGNING_CERT_PROFILE_NAME }}
           ARTIFACT_SIGNING_TIMESTAMP_URL: ${{ vars.ARTIFACT_SIGNING_TIMESTAMP_URL }}
           ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT }}
+          ARTIFACT_SIGNING_EXPECTED_CERT_SHA256: ${{ vars.ARTIFACT_SIGNING_EXPECTED_CERT_SHA256 }}
         run: |
           $required = @(
             "AZURE_CLIENT_ID",
@@ -71,7 +72,8 @@ jobs:
             "ARTIFACT_SIGNING_ACCOUNT_NAME",
             "ARTIFACT_SIGNING_CERT_PROFILE_NAME",
             "ARTIFACT_SIGNING_TIMESTAMP_URL",
-            "ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT"
+            "ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT",
+            "ARTIFACT_SIGNING_EXPECTED_CERT_SHA256"
           )
 
           foreach ($name in $required) {
@@ -126,9 +128,10 @@ jobs:
         shell: pwsh
         env:
           ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT }}
+          ARTIFACT_SIGNING_EXPECTED_CERT_SHA256: ${{ vars.ARTIFACT_SIGNING_EXPECTED_CERT_SHA256 }}
         run: |
-          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-x64/distribution -RequireCombinedLayout -ExpectedArchitecture x64 -ExpectedPublisherSubject $env:ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT
-          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-arm64/distribution -RequireCombinedLayout -ExpectedArchitecture arm64 -ExpectedPublisherSubject $env:ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT
+          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-x64/distribution -RequireCombinedLayout -ExpectedArchitecture x64 -ExpectedPublisherSubject $env:ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT -ExpectedSignerCertificateSha256 $env:ARTIFACT_SIGNING_EXPECTED_CERT_SHA256
+          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-arm64/distribution -RequireCombinedLayout -ExpectedArchitecture arm64 -ExpectedPublisherSubject $env:ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT -ExpectedSignerCertificateSha256 $env:ARTIFACT_SIGNING_EXPECTED_CERT_SHA256
 
       - name: Stage signed bootstrap self-update assets
         shell: pwsh
