@@ -207,7 +207,10 @@ alanini alir. Deger onceden onaylanmis
 `ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT` ile ayni degilse veya
 imzaci sertifikasi yoksa fail-closed olarak release'i reddeder.
 Karsilastirma buyuk/kucuk harfe duyarsizdir, ancak Subject'in tam
-metnini gerektirir. Tum ilgili TurkuazInstaller EXE/DLL dosyalari x64 ve
+metnini gerektirir.
+Ayrica `ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU` benzersiz profiline ait
+X.509 Extended Key Usage degeri de sertifikada bulunmalidir. Gunluk leaf
+sertifika yenilenmesi bu onayli profile EKU dogrulamasini bozmaz. Tum ilgili TurkuazInstaller EXE/DLL dosyalari x64 ve
 ARM64 dagitimlarinda kontrol edilir. Signing probe da ayni kontrolu
 uygular; boylece bilinmeyen ya da yanlis yayinci on testte tespit edilir.
 
@@ -217,8 +220,7 @@ basina kanitlamaz. Onayin ayri yetkili tarafindan yapilmasi gerekir.
 Zaman damgasi, zincir, iptal ve SmartScreen/Defender/Kaspersky kararlarinin
 ayri kabul adimlari oldugu degismez.
 
-Regresyon: `tests/scripts/Test-SignerPublisherSubject.ps1` sadece
-sentetik sertifika nesneleri kullanir. Gercek Azure preflight veya
+Regresyon: `tests/scripts/Test-SignerPublisherSubject.ps1` bellekte olusturulan gecici test sertifikalari kullanir. Gercek Azure preflight veya
 signed Windows paket kabulunun yerine gecmez.
 
 ## Stable tag commit kaynagi (main ancestry gate)
