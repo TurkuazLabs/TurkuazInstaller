@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/AZURE_SIGNING_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller production code-signing altyapisinin Azure ve GitHub tarafinda nasil kurulacagini aciklamak
 # 📌 Modul - Markdown
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Otomatik bootstrap, zorunlu manuel identity validation, immutable OIDC ve preflight akislarini adim adim tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -52,6 +52,32 @@ Microsoft Public Trust identity/certificate kullanimini belirli ulke ve bolgeler
 Yasal kurulus Public Trust desteklenen bolgelerden birinde degilse PrivateTrust, public Windows dagitimi icin ayni guven modelini saglamaz.
 
 Bu durumda production release imzasi icin desteklenen bir public code-signing saglayicisi veya uygun bir yasal entity gerekir.
+
+**2026-10-21 guncel kaynak kontrolu:** Microsoft Public Trust listesinde
+ABD, Kanada, AB, Birlesik Krallik, Avustralya, Yeni Zelanda, Japonya,
+Guney Kore, Singapur, Isvicre, Norvec ve Israil'deki kuruluslar yer
+alir; bireysel gelistiriciler ABD/Kanada ile sinirlidir. Turkiye
+bu listede degildir. Kayitli **yasal kurulusun** gercek ikamet/kayit ulkesi
+dogrulanmadan bolge uygunlugu varsayilmaz. Bir Azure kaynak bolgesi secmek
+bu yasal kisitlamayi asmaz.
+
+Resmi kaynaklar:
+- https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart
+- https://learn.microsoft.com/en-us/azure/artifact-signing/concept-trust-models
+- https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options
+
+**Alternatif yol:** Azure Public Trust uygun degilse, genel Windows dagitimi
+icin guvenilir CA'den organization-validated (OV) code-signing sertifikasi,
+private key/HSM yonetimi ve RFC3161 timestamp politikasi ayri tasarlanmalidir.
+Mevcut `.github/workflows/release.yml` Azure Artifact Signing action
+kullaniyor; OV icin **yeni, ayri gozden gecirilmis bir signing adapter/workflow**
+gerekir. Yalnizca sertifika satin almak mevcut Azure-only workflow'u
+otomatik uyumlu hale getirmez. Private key/PFX sifresi Git, log veya
+artifact icine konmaz; release ancak exact-head imza, yayinci, time stamp
+ve Win10/11 kabul testlerinden sonra onaylanir.
+
+Public Trust ve OV imzalari da SmartScreen download reputation veya antivirus
+temiz sonucunu kendiliginden garanti etmez.
 
 ## Bootstrap
 
