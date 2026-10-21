@@ -80,7 +80,7 @@ try {
     [IO.File]::WriteAllBytes($cli, [byte[]](0x4d,0x5a))
     $brokenPeRejected = $false
     try { & $verifier -ReleaseRoot $root -RequireCombinedLayout -ExpectedArchitecture x64 | Out-Null }
-    catch { $brokenPeRejected = $_.Exception.Message.Contains('Invalid PE header offset') }
+    catch { $brokenPeRejected = $_.Exception.Message.Contains('Invalid PE MZ header') }
     if (-not $brokenPeRejected) { throw 'Truncated PE header was not rejected.' }
     Write-TestPe -Path $cli -Architecture x64
 
