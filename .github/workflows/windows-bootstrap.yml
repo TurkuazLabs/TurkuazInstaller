@@ -167,7 +167,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      - name: Upload UNSIGNED test-only ARM64 distribution
+      - name: Upload UNSIGNED test-only arm64 distribution
         uses: actions/upload-artifact@v4
         with:
           name: TurkuazInstaller-TEST-ONLY-UNSIGNED-DISTRIBUTION-win-arm64
