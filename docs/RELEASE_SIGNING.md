@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/RELEASE_SIGNING.md
 # 📌 Amac: TurkuazInstaller production release signing, deterministic packaging, attestation ve GitHub configuration adimlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.6
+# Version: 1.0.7
 # Aciklama: Azure Artifact Signing, immutable GitHub OIDC production environment, signed tag ve provenance akislarini dokumante eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -152,3 +152,8 @@ generic Public Trust `1.3.6.1.4.1.311.97.1.0`, and Code Signing
 `1.3.6.1.5.5.7.3.3`. Profile EKU by itself is **not** sufficient to
 distinguish a Private Trust certificate from public distribution trust.
 See https://learn.microsoft.com/en-us/azure/artifact-signing/concept-certificate-management
+
+Public Trust Test leaf sertifikalarindaki lifetime EKU
+(`1.3.6.1.4.1.311.10.3.13`) Signed Release icin reddedilir.
+Test profili, gercek Public Trust'in production alternatifi degildir.
+Bkz. https://learn.microsoft.com/en-us/azure/artifact-signing/concept-resources-roles
