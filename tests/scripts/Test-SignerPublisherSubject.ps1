@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/tests/scripts/Test-SignerPublisherSubject.ps1
 # Amac: Imzali artefactlarin yayinici X.500 subject sinirini test eder
 # Modul - PowerShell Test
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: Dogru subject, farkli firma, bos/eksik imzaci ve eksik policy vakalari
 # Bagimli Oldugu Katman: Tool | Testing
 
@@ -14,7 +14,8 @@ $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).ProviderPa
 $expected = 'CN=Turkuaz Testing, O=Example Ltd, C=TR'
 $ok = [pscustomobject]@{ SignerCertificate = [pscustomobject]@{ Subject = $expected } }
 Assert-SignerPublisherSubject -Signature $ok -ExpectedPublisherSubject $expected
-Assert-SignerPublisherSubject -Signature $ok -ExpectedPublisherSubject $expected.ToLowerInvariant()
+$expectedLower = $expected.ToLowerInvariant()
+Assert-SignerPublisherSubject -Signature $ok -ExpectedPublisherSubject $expectedLower
 
 $other = [pscustomobject]@{ SignerCertificate = [pscustomobject]@{ Subject = 'CN=Other Software, O=Unknown, C=TR' } }
 $negativeCases = @(
@@ -38,7 +39,7 @@ $release = Get-Content -LiteralPath (Join-Path $root '.github/workflows/release.
 $preflight = Get-Content -LiteralPath (Join-Path $root '.github/workflows/release-preflight.yml') -Raw
 $policyKey = 'ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT'
 foreach ($yaml in @($release,$preflight)) {
-    if (-not $yaml.Contains("$policyKey: `${{ vars.$policyKey }}")) {
+    if (-not $yaml.Contains($policyKey + ': ${{ vars.' + $policyKey + ' }}')) {
         throw 'Production workflow is missing the approved publisher environment policy.'
     }
     if (-not $yaml.Contains('-ExpectedPublisherSubject $env:ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT')) {
