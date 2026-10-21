@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/tests/scripts/Test-AuthenticodeLabEvidence.ps1
 # Amac: Windows imza kanit toplayicisinin guvenli salt okunur davranisini test eder
 # Modul - PowerShell Test
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: Imzali sistem dosyasi, rapor semasi ve olumsuz girdileri dogrular
 # Bagimli Oldugu Katman: Tool | Testing
 
@@ -43,6 +43,15 @@ try {
     if (-not $rejectedMismatch -or (Test-Path -LiteralPath $invalidOutput)) {
         throw 'Incorrect SHA-256 was not rejected without writing evidence.'
     }
+    $malformedOutput = Join-Path $work 'malformed-digest.json'
+    $rejectedMalformed = $false
+    try {
+        & $collector -ArtifactPath $fixture -CaseId 'REV-01' -OutputPath $malformedOutput -ExpectedSha256 'not-a-sha256' | Out-Null
+    }
+    catch { $rejectedMalformed = $true }
+    if (-not $rejectedMalformed -or (Test-Path -LiteralPath $malformedOutput)) {
+        throw 'Malformed expected SHA-256 was not rejected without writing evidence.'
+    }
     if ($report.release_acceptance -ne 'NOT_ACCEPTED' -or $report.installer_winverifytrust_result -ne 'NOT_RUN') {
         throw 'Diagnostic was incorrectly marked as production-verification evidence.'
     }
@@ -65,6 +74,6 @@ try {
     if (-not $rejectedMissing) { throw 'Missing artifact was not rejected.' }
     if (Test-Path -LiteralPath (Join-Path $work 'missing.json')) { throw 'Missing artifact created evidence.' }
 
-    Write-Output 'PASS: diagnostic schema, expected SHA256 match/mismatch, immutable fixture, overwrite guard, missing-file guard.'
+    Write-Output 'PASS: diagnostic schema, SHA256 match/mismatch/malformed, immutable fixture, overwrite guard, missing-file guard.'
 }
 finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
