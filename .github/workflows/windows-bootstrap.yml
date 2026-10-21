@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.4.0
+# Version: 1.5.0
 # Aciklama: Mevcut win-x64 kalite kapisini korur ve native win-arm64 bootstrap+WinUI+CLI combined distribution publish/layout dogrulamasini ekler
 # Bagimli Oldugu Katman: Tool
 
@@ -96,12 +96,13 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      - name: Upload combined distribution
+      - name: Upload UNSIGNED test-only x64 distribution
         uses: actions/upload-artifact@v4
         with:
-          name: TurkuazInstaller-win-x64
+          name: TurkuazInstaller-TEST-ONLY-UNSIGNED-DISTRIBUTION-win-x64
           path: artifacts/distribution/win-x64/
           if-no-files-found: error
+          retention-days: 3
 
 
   arm64-distribution:
@@ -166,9 +167,10 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      - name: Upload ARM64 combined distribution
+      - name: Upload UNSIGNED test-only ARM64 distribution
         uses: actions/upload-artifact@v4
         with:
-          name: TurkuazInstaller-win-arm64
+          name: TurkuazInstaller-TEST-ONLY-UNSIGNED-DISTRIBUTION-win-arm64
           path: artifacts/distribution/win-arm64/
           if-no-files-found: error
+          retention-days: 3
