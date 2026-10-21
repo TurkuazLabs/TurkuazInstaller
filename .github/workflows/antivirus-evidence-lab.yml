@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/antivirus-evidence-lab.yml
 # Amac: Windows salt okunur antivirus kanit toplayicisi regresyonu
 # Modul - CI YAML
-# Version: 1.0.0
+# Version: 1.1.0
 # Aciklama: Guvenlik korumalarini degistirmeden imza/hash kaniti semasini test eder
 # Bagimli Oldugu Katman: Tool | Testing
 
@@ -14,14 +14,18 @@ on:
     paths:
       - '.github/workflows/antivirus-evidence-lab.yml'
       - 'tools/diagnostics/Get-AuthenticodeLabEvidence.ps1'
+      - 'tools/diagnostics/New-InstallerExecutableInventory.ps1'
       - 'tests/scripts/Test-AuthenticodeLabEvidence.ps1'
+      - 'tests/scripts/Test-InstallerExecutableInventory.ps1'
   push:
     branches:
       - main
     paths:
       - '.github/workflows/antivirus-evidence-lab.yml'
       - 'tools/diagnostics/Get-AuthenticodeLabEvidence.ps1'
+      - 'tools/diagnostics/New-InstallerExecutableInventory.ps1'
       - 'tests/scripts/Test-AuthenticodeLabEvidence.ps1'
+      - 'tests/scripts/Test-InstallerExecutableInventory.ps1'
 
 permissions:
   contents: read
@@ -36,3 +40,6 @@ jobs:
       - name: Verify collector and failure modes without running installer
         shell: pwsh
         run: ./tests/scripts/Test-AuthenticodeLabEvidence.ps1
+      - name: Verify three-file executable identity manifest
+        shell: pwsh
+        run: ./tests/scripts/Test-InstallerExecutableInventory.ps1
