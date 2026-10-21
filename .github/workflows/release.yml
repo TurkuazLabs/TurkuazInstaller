@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
 # 📌 Amac: Stable tag'lerde x64 ve ARM64 combined Windows dagitimlarini build, production sign, attest ve GitHub Release olarak yayinlar
 # 📌 Modul - CI YAML
-# Version: 1.5.0
+# Version: 1.6.0
 # Aciklama: Native win-x64 ve win-arm64 combined dagitimlarini sign eder; iki deterministic ZIP ve architecture-safe standalone bootstrap assetlerini checksum/provenance ile yayinlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
@@ -44,6 +46,10 @@ jobs:
       - name: Validate tag version
         shell: pwsh
         run: ./tools/Assert-ReleaseVersion.ps1 -Tag "${{ github.ref_name }}" -PropsPath Directory.Build.props
+
+      - name: Verify release commit is in main history before signing
+        shell: pwsh
+        run: ./tools/Assert-ReleaseCommitOnMain.ps1 -ReleaseCommit "${{ github.sha }}"
 
       - name: Validate signing configuration
         shell: pwsh
