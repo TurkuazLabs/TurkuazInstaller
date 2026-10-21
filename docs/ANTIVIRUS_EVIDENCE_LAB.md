@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/docs/ANTIVIRUS_EVIDENCE_LAB.md
 Amac: Antivirüs vakalarinda salt okunur dosya/imza kaniti toplama proseduru
 Modul - Markdown
-Version: 1.0.0
+Version: 1.1.0
 Aciklama: LAB kaniti ile malware karari ve production kabulunu ayirir
 Bagimli Oldugu Katman: Tool | Security | Testing
 -->
@@ -25,10 +25,12 @@ PowerShell 7 on Windows; create a private output directory before running:
 $Repo = 'C:\Lab\TurkuazInstaller'
 $Artifact = 'C:\Lab\Payload\TurkuazInstaller.Bootstrapper.exe'
 $Output = 'C:\Lab\Evidence\REV-01.json'
-& (Join-Path $Repo 'tools\diagnostics\Get-AuthenticodeLabEvidence.ps1') -ArtifactPath $Artifact -CaseId REV-01 -OutputPath $Output
+# Compare the actual file against an independently validated CI artifact checksum.
+$ExpectedSha256 = '<actual-64-character-SHA256-from-verified-artifact>'
+& (Join-Path $Repo 'tools\diagnostics\Get-AuthenticodeLabEvidence.ps1') -ArtifactPath $Artifact -CaseId REV-01 -OutputPath $Output -ExpectedSha256 $ExpectedSha256
 ```
 
-These are illustrative VM paths; use **actual** existing paths on your VM. The collector refuses existing output files, does not modify installation state and reports `release_acceptance=NOT_ACCEPTED`. A successful execution only confirms the evidence JSON was written.
+These are illustrative VM paths; use **actual** existing paths on your VM. The collector refuses existing output files, verifies any supplied 64-character expected SHA-256 before signature inspection, rechecks that the file hash did not change, and does not modify installation state. A mismatch fails without writing JSON. The `-ExpectedSha256` option is optional for existing LAB workflows; when omitted, `matches_expected_sha256` is `null`, not `true`. The expected checksum **must** come from separately validated CI provenance, not the same suspect file. `release_acceptance=NOT_ACCEPTED` always remains. A successful execution only confirms diagnostic evidence was written.
 
 ## Human-recorded alert evidence
 
