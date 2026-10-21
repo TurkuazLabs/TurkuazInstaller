@@ -1,14 +1,14 @@
 # Dosya Yolu: REPO_ROOT/tools/release/Assert-SignerPublisherSubject.ps1
 # Amac: Authenticode signer subject ve Artifact Signing profile EKU kimligini dogrular
 # Modul - PowerShell Tool
-# Version: 1.2.0
+# Version: 1.3.0
 # Aciklama: Gunluk sertifika rotasyonunu engellemeden onayli profile EKU zorunlulugu
 # Bagimli Oldugu Katman: Tool | Security
 
 # @dev-id TINS-SIGN-012
 # @purpose Enforce the approved publisher and immutable Artifact Signing certificate-profile identity.
 # @reason Azure rotates short-lived leaf certificates daily; leaf thumbprints cannot be durably pinned.
-# @contract SignTool validates trust separately. This checks exact subject and profile-specific EKU.
+# @contract SignTool validates trust separately. Require exact subject, approved profile EKU and Public Trust EKU.
 # @tests tests/scripts/Test-SignerPublisherSubject.ps1
 function Assert-SignerPublisherSubject {
     [CmdletBinding()]
@@ -49,6 +49,8 @@ function Assert-SignerPublisherSubject {
     }
 
     $foundProfile = $false
+    $foundPublicTrust = $false
+    $foundCodeSigning = $false
     foreach ($extension in $certificate.Extensions) {
         if ($extension.Oid.Value -ne '2.5.29.37') { continue }
         $enhanced = if ($extension -is [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]) {
@@ -58,9 +60,17 @@ function Assert-SignerPublisherSubject {
         }
         foreach ($oid in $enhanced.EnhancedKeyUsages) {
             if ($oid.Value -ceq $ExpectedProfileEkuOid) { $foundProfile = $true }
+            if ($oid.Value -ceq '1.3.6.1.4.1.311.97.1.0') { $foundPublicTrust = $true }
+            if ($oid.Value -ceq '1.3.6.1.5.5.7.3.3') { $foundCodeSigning = $true }
         }
     }
     if (-not $foundProfile) {
         throw 'Signing certificate is missing the approved Artifact Signing profile EKU.'
+    }
+    if (-not $foundPublicTrust) {
+        throw 'Signing certificate is missing the Azure Artifact Signing Public Trust EKU.'
+    }
+    if (-not $foundCodeSigning) {
+        throw 'Signing certificate is missing the code-signing EKU.'
     }
 }
