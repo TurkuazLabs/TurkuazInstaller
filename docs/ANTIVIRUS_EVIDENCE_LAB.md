@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/docs/ANTIVIRUS_EVIDENCE_LAB.md
 Amac: Antivirüs vakalarinda salt okunur dosya/imza kaniti toplama proseduru
 Modul - Markdown
-Version: 1.1.0
+Version: 1.2.0
 Aciklama: LAB kaniti ile malware karari ve production kabulunu ayirir
 Bagimli Oldugu Katman: Tool | Security | Testing
 -->
@@ -38,8 +38,26 @@ Record antivirus vendor, engine and signature-db version, exact alert/threat nam
 
 `Get-AuthenticodeSignature` is separate from the Installer's `WinVerifyTrust` verifier. Neither this collector nor unsigned LAB packaging validates real installation lifecycle. Signer identity, full certificate chain, revocation/offline handling, publisher trust, signed CMS manifest, installation/update/repair/rollback and Windows 10/11 VM acceptance remain separate requirements.
 
+## Distinguish actual detection from reputation or policy restriction
+
+**Microsoft Defender:** In a disposable Windows 10/11 VM with protection enabled, open Event Viewer (`eventvwr.msc`) and navigate to **Applications and Services Logs > Microsoft > Windows > Windows Defender > Operational**. Review the event timestamps matching the test artifact.
+
+| Event ID | Interpretation |
+| --- | --- |
+| 1116 | Defender detected malware or potentially unwanted software |
+| 1117 | Defender recorded a protection/remediation action |
+| 1118 / 1119 | Remediation failure/critical failure; requires review |
+| 1015 | Behavioral suspicion, not itself evidence of a particular EXE malware verdict |
+
+Microsoft documentation: [Defender Antivirus events and error codes](https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus). Events can contain sensitive user names and absolute file paths. **Do not export/upload unredacted event XML or entire logs.** Copy only the event ID, time, threat name, action and engine/signature versions after manual redaction. If Defender is passive because a third-party antivirus is active, absence of events is **NOT** a clean detection result.
+
+**Kaspersky:** Capture the exact event type and action from its protection/report UI, engine/database version, detected file identity and threat label. A low/restricted application trust group alone is **not** a malware detection. Do not treat SmartScreen reputation or "unknown publisher" messages as Defender malware IDs. Do not alter antivirus exclusion lists, trust groups, quarantines, security policy or scanning settings to achieve a passing test.
+
+Correlate manually by exact file SHA-256, trusted artifact provenance, time, binary identity and AV verdict. If the file has been quarantined, **do not restore or run it** to obtain a hash. Use only the already-validated CI artifact hash and the AV's reported details. A mismatched hash is **not** eligible for false-positive acceptance. Manufacturer/vendor false-positive review requires independently checked hash/provenance and vendor-specific evidence; no automatic vendor submission is performed.
+
 ## Status
 
-- Collector source imported onto a main-based security branch; native Windows runtime test **NOT RUN**.
-- Antivirus vendor/detection/result **NOT RECORDED**.
-- Code signing and release approval **NOT ACCEPTED**.
+- Read-only collector behavior passed hosted Windows 2025 regression at commit `8fafe037c7e2b7ce01fdc16360fb1b17a4a9b880`; this **does not** exercise an end-user Windows VM or any Defender/Kaspersky real scan.
+- Exact-current-head CI must be checked separately after every new commit. A successful PowerShell regression is **NOT** an antivirus clean verdict.
+- Real Windows 10/11 VM antivirus verdict and vendor/detection evidence: **NOT RECORDED**.
+- Production code signing, native WinVerifyTrust/revocation acceptance and release approval: **NOT ACCEPTED**.
