@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/AZURE_SIGNING_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller production code-signing altyapisinin Azure ve GitHub tarafinda nasil kurulacagini aciklamak
 # 📌 Modul - Markdown
-# Version: 1.2.0
+# Version: 1.3.0
 # Aciklama: Otomatik bootstrap, zorunlu manuel identity validation, immutable OIDC ve preflight akislarini adim adim tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -156,6 +156,27 @@ Preflight:
 7. SignTool ile Authenticode verification yapar
 
 Bu workflow yesil olmadan v1.0.0 tag'i olusturulmaz.
+
+## Stable tag commit kaynagi (main ancestry gate)
+
+`.github/workflows/release.yml` tag checkout'unda `fetch-depth: 0`
+ile git gecmisini alir. Imzalamadan ve Azure girisinden once
+`tools/Assert-ReleaseCommitOnMain.ps1`, `github.sha` kimligini
+gercek checkout `HEAD` ile birebir karsilastirir; daha sonra bu
+commitin `refs/remotes/origin/main` tarihcesinde bulundugunu dogrular.
+Ref yoksa, tarihce eksikse, commit ayrismissa veya HEAD farkliysa
+**fail-closed** davranir.
+
+Ayrismis branch'te yanlislikla `v*.*.*` etiketi olusturulmasina
+karsi ek bir guvenlik siniridir. Bu kontrol, **kotu niyetli birinin
+etkin release workflow dosyasini veya tag'i degistirebildigi durumda
+tek basina bir guven siniri degildir**: protected tags, production
+environment approval ve yayin yetkileri ayrica korunmalidir.
+
+`tests/scripts/Test-ReleaseCommitOnMain.ps1` bagimsiz gecici
+git deposunda main, ayrismis branch, yanlis HEAD ve eksik remote
+ref senaryolarini test eder. Basarili test gercek Azure signing
+veya production rollout kabulune denk degildir.
 
 ## Zorunlu signed combined layout kabul kapisi
 
