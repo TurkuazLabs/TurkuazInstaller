@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/tests/scripts/Test-SignerPublisherSubject.ps1
 # Amac: Azure Artifact Signing EKU profil kimligini imzaci kimliginden dogrular
 # Modul - PowerShell Test
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: Gunluk rotasyon kabul, farkli profile/yayinci ve bos policy ret testleri
 # Bagimli Oldugu Katman: Tool | Testing
 
@@ -23,7 +23,8 @@ try {
         @{ Profile=$approvedProfile; PublicTrust=$true; CodeSigning=$true },
         @{ Profile=$unapprovedProfile; PublicTrust=$true; CodeSigning=$true },
         @{ Profile=$approvedProfile; PublicTrust=$false; CodeSigning=$true },
-        @{ Profile=$approvedProfile; PublicTrust=$true; CodeSigning=$false }
+        @{ Profile=$approvedProfile; PublicTrust=$true; CodeSigning=$false },
+        @{ Profile=$approvedProfile; PublicTrust=$true; CodeSigning=$true; TestLifetime=$true }
     )
     foreach ($profile in $profiles) {
         $rsa = [System.Security.Cryptography.RSA]::Create(2048)
@@ -39,6 +40,9 @@ try {
         if ($profile.CodeSigning) {
             [void]$oids.Add([System.Security.Cryptography.Oid]::new('1.3.6.1.5.5.7.3.3'))
         }
+        if ($profile.TestLifetime) {
+            [void]$oids.Add([System.Security.Cryptography.Oid]::new('1.3.6.1.4.1.311.10.3.13'))
+        }
         $request.CertificateExtensions.Add(
             [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]::new($oids, $false))
         $certificates += $request.CreateSelfSigned([DateTimeOffset]::UtcNow.AddMinutes(-5), [DateTimeOffset]::UtcNow.AddDays(1))
@@ -48,6 +52,7 @@ try {
     $otherProfile = [pscustomobject]@{SignerCertificate=$certificates[2]}
     $privateTrust = [pscustomobject]@{SignerCertificate=$certificates[3]}
     $notCodeSigning = [pscustomobject]@{SignerCertificate=$certificates[4]}
+    $publicTrustTest = [pscustomobject]@{SignerCertificate=$certificates[5]}
 
     $approvedSubject = $certificates[0].Subject
     if ($certificates[0].Thumbprint -eq $certificates[1].Thumbprint) {
@@ -60,6 +65,7 @@ try {
         @{ Name='same subject, wrong profile'; Signature=$otherProfile; Subject=$approvedSubject; Oid=$approvedProfile; Message='missing the approved' },
         @{ Name='profile correct but no Public Trust'; Signature=$privateTrust; Subject=$approvedSubject; Oid=$approvedProfile; Message='missing the Azure Artifact Signing Public Trust' },
         @{ Name='profile correct but not code signing'; Signature=$notCodeSigning; Subject=$approvedSubject; Oid=$approvedProfile; Message='missing the code-signing EKU' },
+        @{ Name='Public Trust Test lifetime EKU'; Signature=$publicTrustTest; Subject=$approvedSubject; Oid=$approvedProfile; Message='test-only lifetime EKU' },
         @{ Name='wrong publisher'; Signature=$first; Subject='CN=Someone Else'; Oid=$approvedProfile; Message='differs from the approved value' },
         @{ Name='missing signer'; Signature=$null; Subject=$approvedSubject; Oid=$approvedProfile; Message='subject is unavailable' },
         @{ Name='missing certificate'; Signature=[pscustomobject]@{SignerCertificate=$null}; Subject=$approvedSubject; Oid=$approvedProfile; Message='subject is unavailable' },
@@ -90,7 +96,7 @@ try {
             throw 'Production verifier is not bound to approved publisher and profile EKU.'
         }
     }
-    Write-Output 'PASS: daily rotation; profile identity, Public Trust, code signing and policy fail-closed.'
+    Write-Output 'PASS: daily rotation; profile, Public Trust, code signing, test-only lifetime and policy fail-closed.'
 }
 finally {
     foreach ($cert in $certificates) { $cert.Dispose() }
