@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/AZURE_SIGNING_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller production code-signing altyapisinin Azure ve GitHub tarafinda nasil kurulacagini aciklamak
 # 📌 Modul - Markdown
-# Version: 1.8.0
+# Version: 1.9.0
 # Aciklama: Otomatik bootstrap, zorunlu manuel identity validation, immutable OIDC ve preflight akislarini adim adim tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -154,7 +154,14 @@ Ancak gercek Public Trust signed release icin sertifikada **hem**
 onaylanmis benzersiz profil EKU'su bulunmak zorundadir. Ayrica
 `1.3.6.1.5.5.7.3.3` Code Signing EKU'su gereklidir. Profil-ozel
 OID mevcut olsa bile bu EKU'lar yoksa release fail-closed reddedilir;
-ozellikle Private Trust / WDAC CI policy sertifikasi musteriye dagitilmaz. Uretim icin gercek sertifika profil OID'si
+ozellikle Private Trust / WDAC CI policy sertifikasi musteriye dagitilmaz.
+
+**Public Trust Test de release icin uygun degildir.** Microsoft, test
+profile sertifikalarini default public trusted kabul etmez. Bu profil
+sertifikalarinda bulunan `1.3.6.1.4.1.311.10.3.13` lifetime EKU'su
+release verifikasyonunda fail-closed olarak reddedilir. Signed release
+icin tum zorunlu EKU kontrolleri **birlikte** gecmelidir.
+ Uretim icin gercek sertifika profil OID'si
 dogrulanmadan ornek deger yazilmaz.
 
 Bir kez gercek Azure imzali probe elde edildiginde PowerShell'de
