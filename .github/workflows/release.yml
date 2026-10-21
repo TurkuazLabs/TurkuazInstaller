@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
 # 📌 Amac: Stable tag'lerde x64 ve ARM64 combined Windows dagitimlarini build, production sign, attest ve GitHub Release olarak yayinlar
 # 📌 Modul - CI YAML
-# Version: 1.6.0
+# Version: 1.7.0
 # Aciklama: Native win-x64 ve win-arm64 combined dagitimlarini sign eder; iki deterministic ZIP ve architecture-safe standalone bootstrap assetlerini checksum/provenance ile yayinlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -123,8 +123,8 @@ jobs:
       - name: Verify Authenticode signatures
         shell: pwsh
         run: |
-          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-x64/distribution -RequireCombinedLayout
-          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-arm64/distribution -RequireCombinedLayout
+          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-x64/distribution -RequireCombinedLayout -ExpectedArchitecture x64
+          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-arm64/distribution -RequireCombinedLayout -ExpectedArchitecture arm64
 
       - name: Stage signed bootstrap self-update assets
         shell: pwsh
