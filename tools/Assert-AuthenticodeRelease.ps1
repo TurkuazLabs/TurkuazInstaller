@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Assert-AuthenticodeRelease.ps1
 # 📌 Amac: Release dizinindeki TurkuazInstaller executable ve assembly dosyalarinin Authenticode imzalarini SignTool ile dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.2.0
+# Version: 1.3.0
 # Aciklama: Default Authentication Policy ve timestamp warning kontrolu ile imzasiz veya gecersiz release binary'sini reddeder
 # Bagimli Oldugu Katman: Tool
 
@@ -11,7 +11,8 @@ param(
     [string]$ReleaseRoot,
     [switch]$RequireCombinedLayout,
     [ValidateSet('x64', 'arm64')]
-    [string]$ExpectedArchitecture
+    [string]$ExpectedArchitecture,
+    [string]$ExpectedPublisherSubject
 )
 
 Set-StrictMode -Version Latest
@@ -27,6 +28,10 @@ if ($RequireCombinedLayout -and -not $ExpectedArchitecture) {
 if ($ExpectedArchitecture -and -not $RequireCombinedLayout) {
     throw 'ExpectedArchitecture is only available with RequireCombinedLayout.'
 }
+if ([string]::IsNullOrWhiteSpace($ExpectedPublisherSubject)) {
+    throw 'ExpectedPublisherSubject is required for signing acceptance.'
+}
+. (Join-Path $PSScriptRoot 'release/Assert-SignerPublisherSubject.ps1')
 
 # @dev-id TINS-SIGN-011
 # @purpose Verify PE machine type before release signature acceptance.
@@ -119,6 +124,8 @@ foreach ($file in $files) {
     if ($LASTEXITCODE -ne 0) {
         throw ("Authenticode verification failed: {0}" -f $file.FullName)
     }
+    $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName -ErrorAction Stop
+    Assert-SignerPublisherSubject -Signature $signature -ExpectedPublisherSubject $ExpectedPublisherSubject
 }
 
 Write-Host ("Authenticode verification succeeded for {0} files." -f $files.Count)
