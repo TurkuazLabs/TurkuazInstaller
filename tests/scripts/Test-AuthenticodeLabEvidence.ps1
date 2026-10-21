@@ -37,7 +37,7 @@ try {
     try { & $collector -ArtifactPath $fixture -CaseId 'REV-01' -OutputPath $resultPath | Out-Null }
     catch { $rejectedOverwrite = $true }
     if (-not $rejectedOverwrite) { throw 'Existing report overwrite was not rejected.' }
-    if (-not [Linq.Enumerable]::SequenceEqual([byte[]]$originalReport, [byte[]][IO.File]::ReadAllBytes($resultPath))) {
+    if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($originalReport)) -ne [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([IO.File]::ReadAllBytes($resultPath)))) {
         throw 'Existing report bytes changed.'
     }
 
