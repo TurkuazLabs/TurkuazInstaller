@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/tests/scripts/Test-SignerPublisherSubject.ps1
 # Amac: Azure Artifact Signing EKU profil kimligini imzaci kimliginden dogrular
 # Modul - PowerShell Test
-# Version: 1.2.0
+# Version: 1.3.0
 # Aciklama: Gunluk rotasyon kabul, farkli profile/yayinci ve bos policy ret testleri
 # Bagimli Oldugu Katman: Tool | Testing
 
@@ -18,14 +18,27 @@ $unapprovedProfile = '1.3.6.1.4.1.311.97.999999.333333.444444'
 $keys = @()
 $certificates = @()
 try {
-    foreach ($oid in @($approvedProfile,$approvedProfile,$unapprovedProfile)) {
+    $profiles = @(
+        @{ Profile=$approvedProfile; PublicTrust=$true; CodeSigning=$true },
+        @{ Profile=$approvedProfile; PublicTrust=$true; CodeSigning=$true },
+        @{ Profile=$unapprovedProfile; PublicTrust=$true; CodeSigning=$true },
+        @{ Profile=$approvedProfile; PublicTrust=$false; CodeSigning=$true },
+        @{ Profile=$approvedProfile; PublicTrust=$true; CodeSigning=$false }
+    )
+    foreach ($profile in $profiles) {
         $rsa = [System.Security.Cryptography.RSA]::Create(2048)
         $keys += $rsa
         $request = [System.Security.Cryptography.X509Certificates.CertificateRequest]::new(
             $subject, $rsa, [System.Security.Cryptography.HashAlgorithmName]::SHA256,
             [System.Security.Cryptography.RSASignaturePadding]::Pkcs1)
         $oids = [System.Security.Cryptography.OidCollection]::new()
-        [void]$oids.Add([System.Security.Cryptography.Oid]::new($oid))
+        [void]$oids.Add([System.Security.Cryptography.Oid]::new($profile.Profile))
+        if ($profile.PublicTrust) {
+            [void]$oids.Add([System.Security.Cryptography.Oid]::new('1.3.6.1.4.1.311.97.1.0'))
+        }
+        if ($profile.CodeSigning) {
+            [void]$oids.Add([System.Security.Cryptography.Oid]::new('1.3.6.1.5.5.7.3.3'))
+        }
         $request.CertificateExtensions.Add(
             [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]::new($oids, $false))
         $certificates += $request.CreateSelfSigned([DateTimeOffset]::UtcNow.AddMinutes(-5), [DateTimeOffset]::UtcNow.AddDays(1))
@@ -33,6 +46,8 @@ try {
     $first = [pscustomobject]@{SignerCertificate=$certificates[0]}
     $rotated = [pscustomobject]@{SignerCertificate=$certificates[1]}
     $otherProfile = [pscustomobject]@{SignerCertificate=$certificates[2]}
+    $privateTrust = [pscustomobject]@{SignerCertificate=$certificates[3]}
+    $notCodeSigning = [pscustomobject]@{SignerCertificate=$certificates[4]}
 
     $approvedSubject = $certificates[0].Subject
     if ($certificates[0].Thumbprint -eq $certificates[1].Thumbprint) {
@@ -43,6 +58,8 @@ try {
 
     $negative = @(
         @{ Name='same subject, wrong profile'; Signature=$otherProfile; Subject=$approvedSubject; Oid=$approvedProfile; Message='missing the approved' },
+        @{ Name='profile correct but no Public Trust'; Signature=$privateTrust; Subject=$approvedSubject; Oid=$approvedProfile; Message='missing the Azure Artifact Signing Public Trust' },
+        @{ Name='profile correct but not code signing'; Signature=$notCodeSigning; Subject=$approvedSubject; Oid=$approvedProfile; Message='missing the code-signing EKU' },
         @{ Name='wrong publisher'; Signature=$first; Subject='CN=Someone Else'; Oid=$approvedProfile; Message='differs from the approved value' },
         @{ Name='missing signer'; Signature=$null; Subject=$approvedSubject; Oid=$approvedProfile; Message='subject is unavailable' },
         @{ Name='missing certificate'; Signature=[pscustomobject]@{SignerCertificate=$null}; Subject=$approvedSubject; Oid=$approvedProfile; Message='subject is unavailable' },
@@ -73,7 +90,7 @@ try {
             throw 'Production verifier is not bound to approved publisher and profile EKU.'
         }
     }
-    Write-Output 'PASS: legitimate daily cert rotation and failure of wrong profile, publisher, or missing policy.'
+    Write-Output 'PASS: daily rotation; profile identity, Public Trust, code signing and policy fail-closed.'
 }
 finally {
     foreach ($cert in $certificates) { $cert.Dispose() }
