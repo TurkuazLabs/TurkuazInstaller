@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/AZURE_SIGNING_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller production code-signing altyapisinin Azure ve GitHub tarafinda nasil kurulacagini aciklamak
 # 📌 Modul - Markdown
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: Otomatik bootstrap, zorunlu manuel identity validation, immutable OIDC ve preflight akislarini adim adim tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -187,10 +187,14 @@ dagitiminda asagidaki **uc dosyanin tumunu** zorunlu tutar:
 - `app/TurkuazInstaller.WinUI.exe`
 - `cli/TurkuazInstaller.Cli.exe`
 
-`tools/Assert-AuthenticodeRelease.ps1 -RequireCombinedLayout` eksik,
-bos veya reparse-point EXE'yi **SignTool calismadan once reddeder**;
-ardindan buldugu TurkuazInstaller EXE/DLL dosyalarina mevcut SignTool
-Authenticode denetimini uygular. Imza probe workflow'u bu parametreyi
+`tools/Assert-AuthenticodeRelease.ps1 -RequireCombinedLayout -ExpectedArchitecture x64|arm64`
+eksik, bos, reparse-point ya da hedef mimariye uymayan PE EXE'yi
+**SignTool verification calismadan once reddeder**. Mimari, PE basligindaki
+makine koduyla dogrulanir: x64=0x8664, ARM64=0xAA64. Bu denetim
+Azure signing sonrasinda fakat **release assetleri olusturulmadan once**
+yapilir; yanlis mimarideki bir EXE'nin imzali olmasi yayin icin yeterli degildir.
+Sonrasinda bulunan TurkuazInstaller EXE/DLL dosyalari mevcut SignTool
+Authenticode denetiminden gecirilir. Imza probe workflow'u bu parametreyi
 kullanmaz, cunku probe gercek combined dagitim degildir.
 
 `tests/scripts/Test-AuthenticodeReleaseGuard.ps1` ve Signing Tooling
