@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /tools/Assert-AuthenticodeRelease.ps1
 # 📌 Amac: Release dizinindeki TurkuazInstaller executable ve assembly dosyalarinin Authenticode imzalarini SignTool ile dogrular
 # 📌 Modul - Tool PowerShell
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: Default Authentication Policy ve timestamp warning kontrolu ile imzasiz veya gecersiz release binary'sini reddeder
 # Bagimli Oldugu Katman: Tool
 
@@ -12,7 +12,8 @@ param(
     [switch]$RequireCombinedLayout,
     [ValidateSet('x64', 'arm64')]
     [string]$ExpectedArchitecture,
-    [string]$ExpectedPublisherSubject
+    [string]$ExpectedPublisherSubject,
+    [string]$ExpectedSignerCertificateSha256
 )
 
 Set-StrictMode -Version Latest
@@ -30,6 +31,9 @@ if ($ExpectedArchitecture -and -not $RequireCombinedLayout) {
 }
 if ([string]::IsNullOrWhiteSpace($ExpectedPublisherSubject)) {
     throw 'ExpectedPublisherSubject is required for signing acceptance.'
+}
+if ($ExpectedSignerCertificateSha256 -cnotmatch '^[0-9A-Fa-f]{64}$') {
+    throw 'ExpectedSignerCertificateSha256 must be an approved 64-character SHA256 value.'
 }
 . (Join-Path $PSScriptRoot 'release/Assert-SignerPublisherSubject.ps1')
 
@@ -125,7 +129,7 @@ foreach ($file in $files) {
         throw ("Authenticode verification failed: {0}" -f $file.FullName)
     }
     $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName -ErrorAction Stop
-    Assert-SignerPublisherSubject -Signature $signature -ExpectedPublisherSubject $ExpectedPublisherSubject
+    Assert-SignerPublisherSubject -Signature $signature -ExpectedPublisherSubject $ExpectedPublisherSubject -ExpectedSignerCertificateSha256 $ExpectedSignerCertificateSha256
 }
 
 Write-Host ("Authenticode verification succeeded for {0} files." -f $files.Count)
