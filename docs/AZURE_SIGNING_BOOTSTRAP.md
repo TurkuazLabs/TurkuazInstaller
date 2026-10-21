@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/AZURE_SIGNING_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller production code-signing altyapisinin Azure ve GitHub tarafinda nasil kurulacagini aciklamak
 # 📌 Modul - Markdown
-# Version: 1.6.0
+# Version: 1.7.0
 # Aciklama: Otomatik bootstrap, zorunlu manuel identity validation, immutable OIDC ve preflight akislarini adim adim tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -137,25 +137,36 @@ Bootstrap ConfigureGitHub ile:
 - ARTIFACT_SIGNING_CERT_PROFILE_NAME environment variable olarak yazilir
 - ARTIFACT_SIGNING_TIMESTAMP_URL environment variable olarak yazilir
 
-**Ek sertifika parmak izi zorunlulugu:** GitHub `production` environment'a
-`ARTIFACT_SIGNING_EXPECTED_CERT_SHA256` de eklenir. Bu, onayli signer
-sertifikasinin **DER-encoded X.509 sertifika SHA-256 hash'idir**; EXE
-hash'i ya da varsayilan SHA-1 `Thumbprint` alani degildir. Guvenilir
-sertifika kopyasi bagimsiz olarak kontrol edildikten sonra PowerShell 7
-ile hesaplanabilir:
+**Kalici Azure sertifika profili EKU kimligi:** GitHub `production`
+environment variables icine `ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU`
+eklenir. Deger, gercekten yetkilendirilmis Azure Artifact Signing
+certificate profile'in benzersiz EKU OID'si olmalidir. Sertifika sahibi,
+profil ve yasal kimlik bagimsiz olarak onaylanir.
+
+Microsoft Artifact Signing yapisi sertifikalari **her gun yeniler** ve
+72 saat gecerli tutar; bu nedenle leaf sertifika SHA-256 thumbprint'ine
+sabitlenmek hatalidir ve legitime release'i bozabilir. Ayni certificate
+profile icindeki sertifikalarda degismeyen tanimlayici profil EKU'sudur.
+Genel `1.3.6.1.4.1.311.97.1.0` Public Trust EKU'su **profil-ozel
+degildir**; kabul edilmez. Uretim icin gercek sertifika profil OID'si
+dogrulanmadan ornek deger yazilmaz.
+
+Bir kez gercek Azure imzali probe elde edildiginde PowerShell'de
+(sertifika yuklemesi veya imzalama yapmadan) sertifika EKU'lari
+incelenebilir:
 
 ```powershell
-$cert = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new('<approved-public-certificate.cer>')
-try { $cert.GetCertHashString([System.Security.Cryptography.HashAlgorithmName]::SHA256) }
-finally { $cert.Dispose() }
+$signature = Get-AuthenticodeSignature -LiteralPath '<reviewed-signed-probe.exe>'
+$signature.SignerCertificate.Extensions |
+  Where-Object { $_.Oid.Value -eq '2.5.29.37' } |
+  ForEach-Object { ([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]::new($_, $_.Critical)).EnhancedKeyUsages }
 ```
 
-Bu deger asla ornek/sentetik bir hash ile production'da doldurulmaz.
-Sertifika yenileme/rotasyonunda onayli Subject **ve** SHA-256 birlikte
-yeniden incelenir. Dogru isim tasiyan fakat farkli anahtarli/sertifikali
-bir signer yanlislikla kabul edilmez. Subject + sertifika hash'i de
-bagimsiz CA chain, zaman damgasi, yetkili yayinici ve antivirus kabul
-islemlerinin yerine gecmez.
+Degeri Azure sertifika profili ve yetkili hesap kaydi ile karsilastirin.
+Profil silinip yeniden olusturulursa kalici EKU da degisir; ancak
+rutin 72 saatlik sertifika yenilenmesinde sabit kalir. Konu Microsoft'un
+resmi belgesinde aciklanir:
+https://learn.microsoft.com/en-us/azure/artifact-signing/concept-certificate-management
 
 **Manuel, onay zorunlu yayinci kimligi:** GitHub `production` environment
 variables bolumune `ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT` eklenir.
