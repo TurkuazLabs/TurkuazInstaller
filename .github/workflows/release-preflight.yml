@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/release-preflight.yml
 # 📌 Amac: Stable tag olusturmadan once production OIDC, Azure Artifact Signing, timestamp ve Authenticode zincirini gercek bir probe binary ile dogrular
 # 📌 Modul - CI YAML
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: GitHub production environment uzerinden kucuk bir Windows PE/DLL uretir, Azure'da imzalar ve SignTool ile dogrular
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -44,6 +44,7 @@ jobs:
           ARTIFACT_SIGNING_CERT_PROFILE_NAME: ${{ vars.ARTIFACT_SIGNING_CERT_PROFILE_NAME }}
           ARTIFACT_SIGNING_TIMESTAMP_URL: ${{ vars.ARTIFACT_SIGNING_TIMESTAMP_URL }}
           ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT }}
+          ARTIFACT_SIGNING_EXPECTED_CERT_SHA256: ${{ vars.ARTIFACT_SIGNING_EXPECTED_CERT_SHA256 }}
         run: |
           $required = @(
             "AZURE_CLIENT_ID",
@@ -53,7 +54,8 @@ jobs:
             "ARTIFACT_SIGNING_ACCOUNT_NAME",
             "ARTIFACT_SIGNING_CERT_PROFILE_NAME",
             "ARTIFACT_SIGNING_TIMESTAMP_URL",
-            "ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT"
+            "ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT",
+            "ARTIFACT_SIGNING_EXPECTED_CERT_SHA256"
           )
 
           foreach ($name in $required) {
@@ -92,4 +94,5 @@ jobs:
         shell: pwsh
         env:
           ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT }}
-        run: ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/signing-probe/out -ExpectedPublisherSubject $env:ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT
+          ARTIFACT_SIGNING_EXPECTED_CERT_SHA256: ${{ vars.ARTIFACT_SIGNING_EXPECTED_CERT_SHA256 }}
+        run: ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/signing-probe/out -ExpectedPublisherSubject $env:ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT -ExpectedSignerCertificateSha256 $env:ARTIFACT_SIGNING_EXPECTED_CERT_SHA256
