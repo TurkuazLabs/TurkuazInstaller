@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/windows-bootstrap.yml
 # 📌 Amac: Windows bootstrap ve WinUI projelerini build/publish edip tek combined distribution olarak dogrular
 # 📌 Modul - CI YAML
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: Mevcut win-x64 kalite kapisini korur ve native win-arm64 bootstrap+WinUI+CLI combined distribution publish/layout dogrulamasini ekler
 # Bagimli Oldugu Katman: Tool
 
@@ -81,6 +81,21 @@ jobs:
             throw "Combined distribution CLI executable was not produced."
           }
 
+      - name: Create x64 executable identity evidence (no installer execution)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/evidence -Force | Out-Null
+          $output = Join-Path (Resolve-Path -LiteralPath artifacts/evidence).ProviderPath 'installer-exe-x64.json'
+          ./tools/diagnostics/New-InstallerExecutableInventory.ps1 -DistributionRoot artifacts/distribution/win-x64 -OutputPath $output -SourceCommit $env:GITHUB_SHA
+
+      - name: Upload x64 executable evidence (diagnostic only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurkuazInstaller-TEST-EXE-EVIDENCE-win-x64
+          path: artifacts/evidence/installer-exe-x64.json
+          if-no-files-found: error
+          retention-days: 3
+
       - name: Upload combined distribution
         uses: actions/upload-artifact@v4
         with:
@@ -135,6 +150,21 @@ jobs:
           if (-not (Test-Path -LiteralPath $cli)) {
             throw "ARM64 combined distribution CLI executable was not produced."
           }
+
+      - name: Create ARM64 executable identity evidence (no installer execution)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path artifacts/evidence -Force | Out-Null
+          $output = Join-Path (Resolve-Path -LiteralPath artifacts/evidence).ProviderPath 'installer-exe-arm64.json'
+          ./tools/diagnostics/New-InstallerExecutableInventory.ps1 -DistributionRoot artifacts/distribution/win-arm64 -OutputPath $output -SourceCommit $env:GITHUB_SHA
+
+      - name: Upload ARM64 executable evidence (diagnostic only)
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurkuazInstaller-TEST-EXE-EVIDENCE-win-arm64
+          path: artifacts/evidence/installer-exe-arm64.json
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Upload ARM64 combined distribution
         uses: actions/upload-artifact@v4
