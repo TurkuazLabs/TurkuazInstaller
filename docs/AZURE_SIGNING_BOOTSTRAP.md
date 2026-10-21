@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/AZURE_SIGNING_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller production code-signing altyapisinin Azure ve GitHub tarafinda nasil kurulacagini aciklamak
 # 📌 Modul - Markdown
-# Version: 1.4.0
+# Version: 1.5.0
 # Aciklama: Otomatik bootstrap, zorunlu manuel identity validation, immutable OIDC ve preflight akislarini adim adim tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -137,6 +137,17 @@ Bootstrap ConfigureGitHub ile:
 - ARTIFACT_SIGNING_CERT_PROFILE_NAME environment variable olarak yazilir
 - ARTIFACT_SIGNING_TIMESTAMP_URL environment variable olarak yazilir
 
+**Manuel, onay zorunlu yayinci kimligi:** GitHub `production` environment
+variables bolumune `ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT` eklenir.
+Degeri, gercekten uygun gorulen yasal yayinciya ait Authenticode sertifikasinin
+**tam X.500 Subject alani** olmalidir (`Get-AuthenticodeSignature`
+sonucundaki `SignerCertificate.Subject`). Deger kamuya acik bir sertifika
+kimligi olabilir, ancak kaniti olmadan isim uydurulmaz, baska bir kurulusun
+adi kullanilmaz. Yasal kurulus onayi ile karsilastirilir ve daha sonra
+sertifika profili yenilendiginde tekrar gozden gecirilir. Otomatik
+bootstrap'in bu degeri tahmin etmesine izin verilmez. Bos deger release ve
+signing preflight islerini imzalama oncesinde reddeder.
+
 ## Preflight
 
 Stable tag olusturmadan once GitHub Actions icinden:
@@ -156,6 +167,28 @@ Preflight:
 7. SignTool ile Authenticode verification yapar
 
 Bu workflow yesil olmadan v1.0.0 tag'i olusturulmaz.
+
+## Imzali sertifikanin yasal yayinciya baglanmasi
+
+`tools/Assert-AuthenticodeRelease.ps1`, SignTool /pa /tw dogrulamasindan
+sonra `Get-AuthenticodeSignature` ile imzalayan sertifikanin tam Subject
+alanini alir. Deger onceden onaylanmis
+`ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT` ile ayni degilse veya
+imzaci sertifikasi yoksa fail-closed olarak release'i reddeder.
+Karsilastirma buyuk/kucuk harfe duyarsizdir, ancak Subject'in tam
+metnini gerektirir. Tum ilgili TurkuazInstaller EXE/DLL dosyalari x64 ve
+ARM64 dagitimlarinda kontrol edilir. Signing probe da ayni kontrolu
+uygular; boylece bilinmeyen ya da yanlis yayinci on testte tespit edilir.
+
+Bu kontrol yalnizca konfigurasyona yazilmis subject'i dogrular; gercek
+tuzel kisiligi, hak sahipligini veya sertifika yetkilendirmesini tek
+basina kanitlamaz. Onayin ayri yetkili tarafindan yapilmasi gerekir.
+Zaman damgasi, zincir, iptal ve SmartScreen/Defender/Kaspersky kararlarinin
+ayri kabul adimlari oldugu degismez.
+
+Regresyon: `tests/scripts/Test-SignerPublisherSubject.ps1` sadece
+sentetik sertifika nesneleri kullanir. Gercek Azure preflight veya
+signed Windows paket kabulunun yerine gecmez.
 
 ## Stable tag commit kaynagi (main ancestry gate)
 
