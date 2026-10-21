@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/tests/scripts/Test-SignerPublisherSubject.ps1
 # Amac: Azure Artifact Signing EKU profil kimligini imzaci kimliginden dogrular
 # Modul - PowerShell Test
-# Version: 1.4.0
+# Version: 1.4.1
 # Aciklama: Gunluk rotasyon kabul, farkli profile/yayinci ve bos policy ret testleri
 # Bagimli Oldugu Katman: Tool | Testing
 
@@ -40,7 +40,7 @@ try {
         if ($profile.CodeSigning) {
             [void]$oids.Add([System.Security.Cryptography.Oid]::new('1.3.6.1.5.5.7.3.3'))
         }
-        if ($profile.TestLifetime) {
+        if ($profile.ContainsKey('TestLifetime') -and $profile['TestLifetime']) {
             [void]$oids.Add([System.Security.Cryptography.Oid]::new('1.3.6.1.4.1.311.10.3.13'))
         }
         $request.CertificateExtensions.Add(
