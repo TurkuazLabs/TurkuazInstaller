@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/docs/ANTIVIRUS_EVIDENCE_LAB.md
 Amac: Antivirüs vakalarinda salt okunur dosya/imza kaniti toplama proseduru
 Modul - Markdown
-Version: 1.2.0
+Version: 1.3.0
 Aciklama: LAB kaniti ile malware karari ve production kabulunu ayirir
 Bagimli Oldugu Katman: Tool | Security | Testing
 -->
@@ -31,6 +31,42 @@ $ExpectedSha256 = '<actual-64-character-SHA256-from-verified-artifact>'
 ```
 
 These are illustrative VM paths; use **actual** existing paths on your VM. The collector refuses existing output files, verifies any supplied 64-character expected SHA-256 before signature inspection, rechecks that the file hash did not change, and does not modify installation state. A mismatch fails without writing JSON. The `-ExpectedSha256` option is optional for existing LAB workflows; when omitted, `matches_expected_sha256` is `null`, not `true`. The expected checksum **must** come from separately validated CI provenance, not the same suspect file. `release_acceptance=NOT_ACCEPTED` always remains. A successful execution only confirms diagnostic evidence was written.
+
+## Link each real EXE to the hosted Windows build
+
+Windows Desktop CI now includes a **separate, short-retention LAB diagnostic artifact**
+for the three real output binaries. It is never placed into the combined
+distribution or a production release:
+
+- `TurkuazInstaller-TEST-EXE-EVIDENCE-win-x64`: `installer-exe-x64.json`
+- `TurkuazInstaller-TEST-EXE-EVIDENCE-win-arm64`: `installer-exe-arm64.json`
+
+The generator (`tools/diagnostics/New-InstallerExecutableInventory.ps1`)
+reads only these fixed distribution paths:
+`TurkuazInstaller.Bootstrapper.exe`,
+`app/TurkuazInstaller.WinUI.exe`, and
+`cli/TurkuazInstaller.Cli.exe`.
+It records individual file sizes, SHA-256 digests, Windows Authenticode
+statuses and a **caller-supplied, unverified** source commit marker. The
+generator fails on missing/empty files, reparse points, file hash changes,
+existing outputs or outputs inside the distribution. It **does not run or
+scan any EXE**.
+
+Download the exact distribution and evidence artifacts from the **same
+successful Windows Desktop workflow run** and check the GitHub workflow's
+branch/commit/actor first. Validate the downloaded archive against trusted
+release/CI checksums or attestation if available. Do **not** treat the
+JSON and EXE from the same untrusted location as independent proof of
+authenticity; the JSON is diagnostic identity metadata, **not signed
+provenance**. If either artifact is unavailable, record `NOT_RECORDED`
+rather than fabricating a hash.
+
+For manual AV investigation, select the appropriate `relative_path`
+from the trusted run's JSON and supply that entry's `sha256` to the
+single-file collector's `-ExpectedSha256` option. Confirm each exact EXE
+identity independently, not merely the enclosing ZIP checksum. A valid
+identity comparison is **not** an antivirus-clean, SmartScreen-reputation
+or production-signing verdict.
 
 ## Human-recorded alert evidence
 
