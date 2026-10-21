@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/AZURE_SIGNING_BOOTSTRAP.md
 # 📌 Amac: TurkuazInstaller production code-signing altyapisinin Azure ve GitHub tarafinda nasil kurulacagini aciklamak
 # 📌 Modul - Markdown
-# Version: 1.7.0
+# Version: 1.8.0
 # Aciklama: Otomatik bootstrap, zorunlu manuel identity validation, immutable OIDC ve preflight akislarini adim adim tanimlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -147,8 +147,14 @@ Microsoft Artifact Signing yapisi sertifikalari **her gun yeniler** ve
 72 saat gecerli tutar; bu nedenle leaf sertifika SHA-256 thumbprint'ine
 sabitlenmek hatalidir ve legitime release'i bozabilir. Ayni certificate
 profile icindeki sertifikalarda degismeyen tanimlayici profil EKU'sudur.
-Genel `1.3.6.1.4.1.311.97.1.0` Public Trust EKU'su **profil-ozel
-degildir**; kabul edilmez. Uretim icin gercek sertifika profil OID'si
+Genel `1.3.6.1.4.1.311.97.1.0` Public Trust EKU'su **tek
+basina profil-ozel degildir** ve profile pin olarak kullanilmaz.
+Ancak gercek Public Trust signed release icin sertifikada **hem**
+`1.3.6.1.4.1.311.97.1.0` genel Public Trust EKU'su **hem de**
+onaylanmis benzersiz profil EKU'su bulunmak zorundadir. Ayrica
+`1.3.6.1.5.5.7.3.3` Code Signing EKU'su gereklidir. Profil-ozel
+OID mevcut olsa bile bu EKU'lar yoksa release fail-closed reddedilir;
+ozellikle Private Trust / WDAC CI policy sertifikasi musteriye dagitilmaz. Uretim icin gercek sertifika profil OID'si
 dogrulanmadan ornek deger yazilmaz.
 
 Bir kez gercek Azure imzali probe elde edildiginde PowerShell'de
