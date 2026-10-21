@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/tools/release/Assert-SignerPublisherSubject.ps1
 # Amac: Authenticode signer subject ve Artifact Signing profile EKU kimligini dogrular
 # Modul - PowerShell Tool
-# Version: 1.3.0
+# Version: 1.4.0
 # Aciklama: Gunluk sertifika rotasyonunu engellemeden onayli profile EKU zorunlulugu
 # Bagimli Oldugu Katman: Tool | Security
 
@@ -51,6 +51,7 @@ function Assert-SignerPublisherSubject {
     $foundProfile = $false
     $foundPublicTrust = $false
     $foundCodeSigning = $false
+    $foundTestLifetime = $false
     foreach ($extension in $certificate.Extensions) {
         if ($extension.Oid.Value -ne '2.5.29.37') { continue }
         $enhanced = if ($extension -is [System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]) {
@@ -62,6 +63,7 @@ function Assert-SignerPublisherSubject {
             if ($oid.Value -ceq $ExpectedProfileEkuOid) { $foundProfile = $true }
             if ($oid.Value -ceq '1.3.6.1.4.1.311.97.1.0') { $foundPublicTrust = $true }
             if ($oid.Value -ceq '1.3.6.1.5.5.7.3.3') { $foundCodeSigning = $true }
+            if ($oid.Value -ceq '1.3.6.1.4.1.311.10.3.13') { $foundTestLifetime = $true }
         }
     }
     if (-not $foundProfile) {
@@ -72,5 +74,8 @@ function Assert-SignerPublisherSubject {
     }
     if (-not $foundCodeSigning) {
         throw 'Signing certificate is missing the code-signing EKU.'
+    }
+    if ($foundTestLifetime) {
+        throw 'Signing certificate carries test-only lifetime EKU and is not approved for public release.'
     }
 }
