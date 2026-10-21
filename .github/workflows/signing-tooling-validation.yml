@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/signing-tooling-validation.yml
 # 📌 Amac: Production signing bootstrap script ve config dosyalarinin secretsiz statik kalite kontrolunu yapar
 # 📌 Modul - CI YAML
-# Version: 1.1.0
+# Version: 1.2.0
 # Aciklama: PowerShell parser, immutable signing config ve x64/ARM64 release asset invariants degerlerini PR/main seviyesinde dogrular
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -33,7 +33,9 @@ jobs:
         shell: pwsh
         run: |
           $scripts = @(
-            "tools/release/Initialize-ProductionSigning.ps1"
+            "tools/release/Initialize-ProductionSigning.ps1",
+            "tools/Assert-AuthenticodeRelease.ps1",
+            "tests/scripts/Test-AuthenticodeReleaseGuard.ps1"
           )
 
           foreach ($script in $scripts) {
@@ -96,3 +98,14 @@ jobs:
               throw "Release workflow architecture invariant is missing: $value"
             }
           }
+
+  release-signature-layout:
+    runs-on: windows-2025
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check mandatory release executables and invalid signatures
+        shell: pwsh
+        run: ./tests/scripts/Test-AuthenticodeReleaseGuard.ps1
