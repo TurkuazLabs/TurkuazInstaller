@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/tests/scripts/Test-AuthenticodeReleaseGuard.ps1
 # Amac: Signed release icin zorunlu combined EXE kontrolunun fail-closed davranisini dogrular
 # Modul - PowerShell Test
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: Eksik/bos dosya, gecersiz imza ve release workflow guard kontrati
 # Bagimli Oldugu Katman: Tool | Security | Testing
 
@@ -66,6 +66,10 @@ try {
     try { & $verifier -ReleaseRoot $root -RequireCombinedLayout | Out-Null }
     catch { $invalidRejected = $true }
     if (-not $invalidRejected) { throw 'Invalid unsigned/test fixture passed production signature verification.' }
+    # SignTool deliberately returns nonzero for this negative case. GitHub's pwsh
+    # wrapper inspects LASTEXITCODE even when the PowerShell exception was caught.
+    # Clear test-only native status AFTER verifying rejection; production code is unchanged.
+    $global:LASTEXITCODE = 0
 
     $currentHashes = @(@($bootstrap, $app, $cli) | ForEach-Object {
         (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash
