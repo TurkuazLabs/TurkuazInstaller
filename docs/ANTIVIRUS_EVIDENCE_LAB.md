@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/docs/ANTIVIRUS_EVIDENCE_LAB.md
 Amac: Antivirüs vakalarinda salt okunur dosya/imza kaniti toplama proseduru
 Modul - Markdown
-Version: 1.3.0
+Version: 1.4.0
 Aciklama: LAB kaniti ile malware karari ve production kabulunu ayirir
 Bagimli Oldugu Katman: Tool | Security | Testing
 -->
@@ -40,6 +40,14 @@ distribution or a production release:
 
 - `TurkuazInstaller-TEST-EXE-EVIDENCE-win-x64`: `installer-exe-x64.json`
 - `TurkuazInstaller-TEST-EXE-EVIDENCE-win-arm64`: `installer-exe-arm64.json`
+
+The actual **unsigned CI distribution** artifacts now have explicit names
+`TurkuazInstaller-TEST-ONLY-UNSIGNED-DISTRIBUTION-win-x64`
+and `TurkuazInstaller-TEST-ONLY-UNSIGNED-DISTRIBUTION-win-arm64`.
+Both are short-lived (3 days). These are **CI test outputs** and are
+distinct from production-signed GitHub Release ZIP assets. Historical
+CI run artifacts created before the rename may retain ambiguous legacy
+names and longer retention; they must never be treated as signed releases.
 
 The generator (`tools/diagnostics/New-InstallerExecutableInventory.ps1`)
 reads only these fixed distribution paths:
