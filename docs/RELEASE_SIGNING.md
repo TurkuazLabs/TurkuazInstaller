@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/RELEASE_SIGNING.md
 # 📌 Amac: TurkuazInstaller production release signing, deterministic packaging, attestation ve GitHub configuration adimlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.5
+# Version: 1.0.6
 # Aciklama: Azure Artifact Signing, immutable GitHub OIDC production environment, signed tag ve provenance akislarini dokumante eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -145,3 +145,10 @@ Leaf X.509 SHA-256 thumbprint pinleme bu hizmetle uyumsuzdur; onun yerine
 profil-ozel, sertifika yenilendiginde sabit kalan EKU OID zorunludur.
 Genel Public Trust EKU (1.3.6.1.4.1.311.97.1.0) profil kimligi degildir.
 Bkz. https://learn.microsoft.com/en-us/azure/artifact-signing/concept-certificate-management
+
+Public release signer validation requires all three X.509 EKU identities:
+the independently reviewed profile-specific `1.3.6.1.4.1.311.97.*` OID,
+generic Public Trust `1.3.6.1.4.1.311.97.1.0`, and Code Signing
+`1.3.6.1.5.5.7.3.3`. Profile EKU by itself is **not** sufficient to
+distinguish a Private Trust certificate from public distribution trust.
+See https://learn.microsoft.com/en-us/azure/artifact-signing/concept-certificate-management
