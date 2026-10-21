@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/LOCAL_TEST_PACKAGE.md
 # 📌 Amac: Community'nin production signing tamamlanmadan sinirli Windows x64 manuel test paketini tarif etmek
 # 📌 Modul - Markdown
-# Version: 2.6.1
+# Version: 2.7.0
 # Aciklama: Kisa sureli unsigned GitHub Actions artifacti ile gercek imzali release'i guvenlik acisindan ayirir
 # Bagimli Oldugu Katman: Tool | Repo | Config
 
@@ -37,6 +37,24 @@ identity/secrets konfiguru gerekmez.
 
 Paket yalnizca **3 gun** GitHub Actions artifact olarak saklanir.
 Tag, GitHub Release, production sertifikasi veya update feed uretilmez.
+
+## Windows Desktop CI artifact ayrimi
+
+Normal `Windows Desktop CI` x64 ve ARM64 combined distribution
+artifactlari **imzasiz** oldugu icin yeni adlar
+`TurkuazInstaller-TEST-ONLY-UNSIGNED-DISTRIBUTION-win-x64` ve
+`TurkuazInstaller-TEST-ONLY-UNSIGNED-DISTRIBUTION-win-arm64`
+olarak belirlenmistir. Uc gun sonra sona ererler. Bunlar onayli
+`Signed Release` workflow'unun yayinladigi
+`TurkuazInstaller-win-x64.zip` ve `TurkuazInstaller-win-arm64.zip`
+assetleriyle ayni sey degildir. Eski Actions calistirmalarinda genel
+isimli (`TurkuazInstaller-win-x64` gibi) artefaktlar bulunabilir;
+bunlar da **imzasiz test ciktilari** olarak kabul edilir.
+
+Test cihazlari icin README, checksum ve acik unsigned uyarisi iceren
+`Community Unsigned Local Test Package` paketi tercih edilir. Kullanicilara
+production imzasi olmadan diger Windows Desktop CI artifactlari
+dagitilmaz; antiviruse istisna eklenmez.
 
 ## Guvenlik / limitler
 
