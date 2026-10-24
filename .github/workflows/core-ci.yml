@@ -1,8 +1,8 @@
 # 📄 Dosya Yolu: /.github/workflows/core-ci.yml
 # 📌 Amac: TurkuazInstaller Core projelerini restore, build ve unit test ile dogrular
 # 📌 Modul - CI YAML
-# Version: 0.3.0
-# Aciklama: Domain, Application ve Port katmanlari icin Linux tabanli kalite kapisidir
+# Version: 0.4.0
+# Aciklama: Core .NET ve imzali tema paketleme icin Linux tabanli kalite kapisidir
 # Bagimli Oldugu Katman: Tool
 
 name: Core CI
@@ -31,6 +31,8 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+      - name: Test signed theme pack builder with ephemeral local certificate
+        run: python3 -m unittest discover -s tools/theme-pack -p 'test_*.py' -v
       - name: Restore
         run: dotnet restore TurkuazInstaller.slnx
       - name: Build
