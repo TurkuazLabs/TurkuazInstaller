@@ -1,7 +1,7 @@
 // Dosya Yolu: src/TurkuazInstaller.Infrastructure/Branding/EncryptedSignedThemePackReader.cs
 // Amac: AES-256-GCM ile muhurlu tema zarfini, dis yetkili anahtarla bellekte acmak
 // Modul - CSharp Security Tool
-// Version: 0.1.0-qa
+// Version: 0.2.0-qa
 // Aciklama: Anahtar dis yetkili provider'dan gelir; cozulmus TPK ayrica CMS pin ile dogrulanir
 // Bagimli Oldugu Katman: Infrastructure | Trust Policy | Cryptography
 
@@ -155,5 +155,56 @@ public sealed class EncryptedSignedThemePackReader
                 CryptographicOperations.ZeroMemory(plaintext);
             }
         }
+    }
+}
+
+
+/// <summary>
+/// Writes the optional .tpe envelope from an ALREADY signed theme.tpk.
+/// Caller-owned key remains with trusted signing/packaging tooling; never
+/// distribute it inside the .tpe, EXE or configuration beside the installer.
+/// Use a unique cryptographically random nonce for each encryption operation.
+/// </summary>
+public static class EncryptedSignedThemePackWriter
+{
+    public static byte[] Encrypt(
+        ReadOnlySpan<byte> signedThemePack, ReadOnlySpan<byte> key, string keyId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(keyId);
+        if (key.Length != 32)
+        {
+            throw new ArgumentException("AES-256-GCM requires exactly 32 key bytes.", nameof(key));
+        }
+        if (signedThemePack.Length is < 1 or > SignedThemePackReader.MaxArchiveBytes)
+        {
+            throw new ArgumentException("Theme archive is outside allowed size.", nameof(signedThemePack));
+        }
+        if (keyId.Length is < 1 or > 64 ||
+            keyId.Any(character =>
+                !(character is >= 'a' and <= 'z' or >= '0' and <= '9' or '-' or '_')))
+        {
+            throw new ArgumentException("Invalid external key identifier.", nameof(keyId));
+        }
+
+        var keyBytes = Encoding.ASCII.GetBytes(keyId);
+        var nonce = RandomNumberGenerator.GetBytes(12);
+        var header = new byte[8 + 1 + keyBytes.Length + 12 + 4];
+        "TURQTPK1"u8.CopyTo(header);
+        header[8] = checked((byte)keyBytes.Length);
+        keyBytes.CopyTo(header, 9);
+        nonce.CopyTo(header, 9 + keyBytes.Length);
+        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(header.Length - 4, 4),
+            checked((uint)signedThemePack.Length));
+
+        var envelope = new byte[header.Length + signedThemePack.Length + 16];
+        header.CopyTo(envelope, 0);
+        using (var cipher = new AesGcm(key, 16))
+        {
+            cipher.Encrypt(nonce, signedThemePack,
+                envelope.AsSpan(header.Length, signedThemePack.Length),
+                envelope.AsSpan(header.Length + signedThemePack.Length, 16),
+                header);
+        }
+        return envelope;
     }
 }
