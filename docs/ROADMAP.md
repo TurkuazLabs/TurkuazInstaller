@@ -98,3 +98,23 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [x] branding/localization extensions
 - [x] optional delta optimization behind Package Engine
 - [x] native ARM64 distribution
+
+
+## v1.3 Candidate — Signed External Theme Packs (QA only)
+
+- [x] Reuse existing detached CMS/PKCS#7 verifier and package-scoped publisher/certificate pin.
+- [x] Strict `theme.tpk` format: signed manifest + signed inventory + bounded PNG assets.
+- [x] Implement fail-closed runtime reader; reject extra ZIP files, traversal, symlinks, wrong product and modified images.
+- [x] Build-time OpenSSL signing utility without private keys in the repository.
+- [x] Add ephemeral-CMS signature and ZIP-policy regression tests to Core CI.
+- [ ] Prove a complete CI run of the latest theme-pack branch and an end-to-end real Windows GUI smoke.
+- [ ] Register production publisher certificate/pin through release trust tooling.
+- [ ] Wire verified assets into real WinUI/installer views without any unsigned image fallback.
+- [ ] Package and verify Ragnar's three approved originals; confirm setup stages on 100/125/150% DPI.
+- [ ] Add the separately installed Beam launcher theme assets to the Velopack payload.
+- [ ] Evaluate optional AES-GCM encryption **only with an external key-provisioning design**; v1 `.tpk` assets remain ZIP-readable.
+- [ ] Define downgrade/rollback, revocation, signing rotation and malformed-image decoding acceptance tests.
+
+`SignedThemePackReader` is infrastructure only in this phase. Existing
+installer and launcher UI do not automatically use it. Details:
+[Signed Theme Pack v1](SIGNED_THEME_PACK.md).
