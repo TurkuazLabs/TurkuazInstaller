@@ -1,7 +1,7 @@
 // Dosya Yolu: src/TurkuazInstaller.Infrastructure/Branding/SignedThemePackReader.cs
 // Amac: Dis tema paketini CMS signature ve SHA-256 ile fail-closed dogrulamak
 // Modul - CSharp Tool | Theme Pack
-// Version: 0.1.0-qa
+// Version: 0.2.0-qa
 // Aciklama: ZIP tabanli .tpk formatinda sadece PNG; gizlilik/sifreleme iddiasi yok
 // Bagimli Oldugu Katman: Infrastructure | Manifest Trust | Domain
 
@@ -55,7 +55,7 @@ public sealed class VerifiedThemePack
 /// Exact raw manifest bytes are detached CMS-signed; trust policy comes from the
 /// installer, NEVER from a certificate/key provided by the theme package.
 /// </summary>
-public sealed class SignedThemePackReader
+public sealed class SignedThemePackReader : IVerifiedThemePackReader
 {
     public const int MaxArchiveBytes = 80 * 1024 * 1024;
     public const int MaxAssetBytes = 16 * 1024 * 1024;
