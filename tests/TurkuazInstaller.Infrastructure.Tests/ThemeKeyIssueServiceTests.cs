@@ -1,7 +1,7 @@
 // Dosya Yolu: tests/TurkuazInstaller.Infrastructure.Tests/ThemeKeyIssueServiceTests.cs
 // Amac: Server-side dogrulanmis principal ve entitlement temelli key issuance red kurallari
 // Modul - CSharp xUnit Tests
-// Version: 0.1.0-qa
+// Version: 0.2.0-qa
 // Aciklama: Anonim, scope yanlisi, duplicate subject, iptal edilen hak, vault kusurlari
 // Bagimli Oldugu Katman: Identity Middleware Contract | Entitlement | Vault
 
@@ -37,7 +37,9 @@ public sealed class ThemeKeyIssueServiceTests
         Assert.Equal(1, entitlements.Calls);
         Assert.Equal(1, vault.Calls);
         Assert.Equal(Subject, entitlements.LastSubject);
-        CryptographicOperations.ZeroMemory(result.Key);
+        var ownedKey = result.Key;
+        result.Dispose();
+        Assert.All(ownedKey, v => Assert.Equal((byte)0, v));
     }
 
     [Theory]
@@ -56,6 +58,23 @@ public sealed class ThemeKeyIssueServiceTests
         var result = await service.IssueAsync(
             Identity(authenticated, scope), PackageId.Parse(Product), keyId);
         Assert.Null(result);
+        Assert.Equal(0, entitlements.Calls);
+        Assert.Equal(0, vault.Calls);
+    }
+
+    [Fact]
+    public async Task MergedDifferentPrincipalIdentitiesCannotCombineSubjectAndScope()
+    {
+        var subject = new ClaimsIdentity(
+            new[] { new Claim("sub", Subject) }, "jwt-fixture");
+        var unrelatedIdentity = new ClaimsIdentity(
+            new[] { new Claim("scope", "turkuaz.theme.read") }, "other-fixture");
+        var principal = new ClaimsPrincipal(new[] { subject, unrelatedIdentity });
+        var entitlements = new CountingEntitlements(true);
+        var vault = new CountingVault(RandomNumberGenerator.GetBytes(32));
+        var issued = await new ThemeKeyIssueService(entitlements, vault).IssueAsync(
+            principal, PackageId.Parse(Product), KeyId);
+        Assert.Null(issued);
         Assert.Equal(0, entitlements.Calls);
         Assert.Equal(0, vault.Calls);
     }
