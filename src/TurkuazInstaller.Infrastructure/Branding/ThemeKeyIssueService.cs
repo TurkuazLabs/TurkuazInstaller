@@ -1,7 +1,7 @@
 // Dosya Yolu: src/TurkuazInstaller.Infrastructure/Branding/ThemeKeyIssueService.cs
 // Amac: Server tarafinda tema anahtari vermeden once oturum kapsam ve hak kontrolu
 // Modul - CSharp Service
-// Version: 0.1.0-qa
+// Version: 0.2.0-qa
 // Aciklama: Yalniz trusted JWT middleware tarafindan dogrulanmis principal kabul edilmelidir
 // Bagimli Oldugu Katman: Identity Middleware | Entitlement Store | Key Vault
 
@@ -34,11 +34,25 @@ public interface IThemeKeySecretStore
 }
 
 /// <summary>
-/// Do not persist or log this result. HTTP host must serialize to the
-/// documented JSON and clear Key before releasing the response buffer.
+/// Do not persist or log this result. The HTTP host should use a
+/// using statement; disposing always zeroes the owned key bytes.
+/// The serialized HTTP response is still secret and must not be logged.
 /// </summary>
-public sealed record IssuedThemeKey(
-    string PackageId, string KeyId, byte[] Key);
+public sealed class IssuedThemeKey : IDisposable
+{
+    public IssuedThemeKey(string packageId, string keyId, byte[] ownedKey)
+    {
+        PackageId = packageId;
+        KeyId = keyId;
+        Key = ownedKey;
+    }
+
+    public string PackageId { get; }
+    public string KeyId { get; }
+    public byte[] Key { get; }
+
+    public void Dispose() => CryptographicOperations.ZeroMemory(Key);
+}
 
 /// <summary>
 /// SERVER-ONLY authorization logic. The surrounding HTTPS host MUST validate
@@ -72,16 +86,20 @@ public sealed class ThemeKeyIssueService
         ArgumentNullException.ThrowIfNull(expectedProduct);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (validatedPrincipal.Identity?.IsAuthenticated != true ||
+        // Never combine a subject from one identity with scope from another.
+        // The API host MUST supply exactly one middleware-validated bearer
+        // identity; joining unrelated authentication schemes is forbidden.
+        var identities = validatedPrincipal.Identities.ToArray();
+        if (identities.Length != 1 ||
+            identities[0].IsAuthenticated != true ||
             !IsSafeKeyId(keyId))
         {
             return null;
         }
 
-        // No ambiguity across merged identities, duplicate JWT claims or
-        // attacker-controlled names. The caller has already verified JWT
-        // issuer/audience/signature/lifetime via authentication middleware.
-        var subjects = validatedPrincipal.FindAll("sub")
+        // No ambiguity across duplicate JWT claims or caller-submitted names.
+        // The host already verified issuer/audience/signature/lifetime.
+        var subjects = identities[0].FindAll("sub")
             .Select(c => c.Value).ToArray();
         if (subjects.Length != 1 || string.IsNullOrWhiteSpace(subjects[0]) ||
             subjects[0].Length > 256)
@@ -91,7 +109,7 @@ public sealed class ThemeKeyIssueService
 
         // Standard OAuth scope can contain a whitespace-separated list.
         // Never use substring matching (e.g. turkuaz.theme.read.extra).
-        var scopes = validatedPrincipal.FindAll("scope").SelectMany(
+        var scopes = identities[0].FindAll("scope").SelectMany(
             c => c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries));
         if (!scopes.Contains(RequiredScope, StringComparer.Ordinal))
         {
