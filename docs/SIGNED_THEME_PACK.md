@@ -109,6 +109,49 @@ permitted **solely** for isolated CI tests, never for an official installer
 or real publisher pin. Private keys must not be logged, committed or
 included in the `.tpk`. The tool refuses to overwrite a previous package.
 
+## Optional encrypted transport — `.tpe` (feature branch, NOT RELEASED)
+
+The source now also includes `EncryptedSignedThemePackReader` and
+`EncryptedSignedThemePackWriter`, using **AES-256-GCM authenticated
+encryption**. A `.tpe` is an outer encrypted envelope containing the complete
+**separately CMS-signed** `.tpk`. Decrypting an envelope does NOT bypass
+publisher signature, product ID, image hash or ZIP safety checks.
+
+Version 1 binary layout:
+
+```text
+"TURQTPK1" (8 bytes)
+key_id_length (1 byte, range 1..64)
+key_id (lowercase ASCII a-z, 0-9, hyphen or underscore)
+nonce (12 random bytes, NEW for every encryption)
+ciphertext_length (4-byte big-endian integer, maximum 80 MiB)
+ciphertext (AES-256-GCM encrypted complete signed .tpk)
+tag (16-byte GCM tag)
+```
+
+The entire header (through length) is bound to encryption as authenticated
+associated data (AAD). The reader checks header grammar, file length and
+GCM authenticity before exposing bytes. The decrypted archive is kept in
+memory and cleared on completion; the authorized key bytes returned by the
+provider are also cleared. Rendering verified images still exposes their
+pixels to the user's graphics stack.
+
+**Crucial operational boundary:** `IThemeDecryptionKeyProvider` is a
+contract, **not** an implemented online authorization system. It must receive
+an independently authenticated per-product key from a trusted service or
+similarly protected mechanism. It must return an owned disposable 32-byte
+buffer, authorize product/key ID, and account for rotation/revocation and
+secrets in process memory. The repository deliberately supplies **no
+built-in bypass, hardcoded master key, passphrase, user-file key or
+server endpoint**. Without this external key provider an encrypted theme
+**cannot open**, including in offline use; the existing WinUI integration
+still uses signed-only `theme.tpk`. Do not market that path as confidential.
+
+A user controlling a local machine can still capture decrypted content or
+screenshots; AES encryption protects the *distributed package at rest* and
+against casual archive inspection, not against privileged runtime extraction.
+No DRM or uncopyable client data is promised.
+
 ## WinUI desktop integration (feature branch)
 
 The WinUI desktop now supports an **explicit opt-in** binding in the usual
