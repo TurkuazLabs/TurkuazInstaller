@@ -1,7 +1,7 @@
 // Dosya Yolu: src/TurkuazInstaller.Infrastructure/Branding/EncryptedSignedThemePackReader.cs
 // Amac: AES-256-GCM ile muhurlu tema zarfini, dis yetkili anahtarla bellekte acmak
 // Modul - CSharp Security Tool
-// Version: 0.2.0-qa
+// Version: 0.3.0-qa
 // Aciklama: Anahtar dis yetkili provider'dan gelir; cozulmus TPK ayrica CMS pin ile dogrulanir
 // Bagimli Oldugu Katman: Infrastructure | Trust Policy | Cryptography
 
@@ -31,7 +31,7 @@ public interface IThemeDecryptionKeyProvider
 /// All header bytes up through ciphertext length are authenticated AAD.
 /// The decrypted plaintext MUST be a separately CMS-signed .tpk.
 /// </summary>
-public sealed class EncryptedSignedThemePackReader
+public sealed class EncryptedSignedThemePackReader : IVerifiedThemePackReader
 {
     private static readonly byte[] Magic = "TURQTPK1"u8.ToArray();
     private const int NonceLength = 12;
