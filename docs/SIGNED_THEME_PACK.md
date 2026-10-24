@@ -109,14 +109,59 @@ permitted **solely** for isolated CI tests, never for an official installer
 or real publisher pin. Private keys must not be logged, committed or
 included in the `.tpk`. The tool refuses to overwrite a previous package.
 
+## WinUI desktop integration (feature branch)
+
+The WinUI desktop now supports an **explicit opt-in** binding in the usual
+`ui-profile.yml` branding section:
+
+```yaml
+schema_version: 1
+culture: tr-TR
+branding:
+  window_title: Turkuaz Ragnarok Online
+  header_title: Turkuaz Ragnarok Online
+  theme_package_id: levelupgt.ragnar-classic-preview
+```
+
+When `theme_package_id` is configured, the WinUI desktop reads
+`theme.tpk` from **the same directory as `TurkuazInstaller.WinUI.exe`**,
+not from the current working directory. The package must exist, carry the
+configured exact product identity, pass the existing *external* pinned-CMS
+policy, have matching PNG hashes, and successfully decode **all** images.
+No image is extracted to the filesystem. The background picks the
+`welcome/options/installing/complete/failed` screen mapping from the
+verified package. If any verification/decode step fails, the UI displays
+an error notice, prevents all installation actions, and does not execute
+its startup controller. When `theme_package_id` is absent, the standard
+WinUI UI remains unchanged.
+
+**Not a trust boundary by itself:** `theme_package_id` is a display/product
+selector, NOT proof of who can approve themes. The existing development
+`manifest-trust.yml` policy in per-user LocalAppData is user-writable.
+An attacker with the same user's file privileges might replace both
+the local trust policy and theme. **Before promising resistance to local
+users, production builds must pin an authorized publisher key in a signed,
+protected application/distribution (or another authenticated trusted root)
+rather than relying on a mutable per-user trust file.** This branch must
+not be promoted to production without that security decision and an
+integrated threat-model test.
+
+This integration targets the **TurkuazInstaller WinUI desktop**. It does
+not automatically skin the separate Beam Tauri launcher or the existing
+small native Ragnar setup EXE. For a real Ragnarok themed installer test,
+build the WinUI distribution with approved original PNGs and a product
+signing/trust identity, then run Windows 10/11 100/125/150% DPI image
+acceptance. No screenshot validation is claimed by passing source tests.
+
 ## Integration and acceptance status
 
 - **Implemented on this feature branch:** signed pack reader with
   existing policy verifier, offline `.tpk` builder, real-CMS test fixtures
   for valid, tampered and wrong-signer scenarios.
-- **Not wired into production:** Win32 Ragnar wizard and installed Tauri
-  launcher currently do **not** consume `SignedThemePackReader`. Their
-  current PNG resource/Velopack behavior remains unchanged.
+- **Opt-in WinUI wired in feature branch:** only after a product-bound,
+  externally pinned theme verifies and every image decodes; invalid required
+  packs disable install actions. Win32 Ragnar wizard and installed Tauri
+  launcher remain separate and do not yet consume `SignedThemePackReader`.
 - **Not yet established:** production publisher key/pin, signed release,
   Windows 10/11 screenshot smoke, confidential asset protection.
 
