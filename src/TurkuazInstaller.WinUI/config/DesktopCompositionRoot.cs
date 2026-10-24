@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.14.0
+// Version: 1.15.0
 // Aciklama: Theme trust bilgisini user YAML yerine compile-time allowlist'ten getirir
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
@@ -31,7 +31,8 @@ namespace TurkuazInstaller.WinUI.Config;
 internal static class DesktopCompositionRoot
 {
     public static MainWindow CreateMainWindow(
-        IReadOnlyList<string> startupArguments)
+        IReadOnlyList<string> startupArguments,
+        IThemeDecryptionKeyProvider? authorizedThemeKeys = null)
     {
         ArgumentNullException.ThrowIfNull(
             startupArguments);
@@ -214,14 +215,25 @@ internal static class DesktopCompositionRoot
             ? TurkuazInstaller.Domain.Products.PackageId.Parse(id)
             : null;
 
+        // Both transport types verify the same CMS-signed inner manifest
+        // with the same code-pinned publisher. Transport policy comes from
+        // reviewed application source, never from user YAML or theme.tpe.
+        var themeSource = themePackageId is null
+            ? null
+            : VerifiedThemePackSourceFactory.Create(
+                CompiledThemePublisherPins.TransportMode,
+                new SignedThemePackReader(
+                    new CmsManifestSignatureVerifier(CompiledThemePublisherPins.Create())),
+                authorizedThemeKeys);
+
         return new MainWindow(
             viewModel,
             controller,
             desktopService,
             startupArguments,
-            themePackageId is null ? null : new SignedThemePackReader(
-                new CmsManifestSignatureVerifier(CompiledThemePublisherPins.Create())),
+            themeSource?.Reader,
             themePackageId,
-            themePackageId is null ? null : Path.Combine(AppContext.BaseDirectory, "theme.tpk"));
+            themeSource is null ? null
+                : Path.Combine(AppContext.BaseDirectory, themeSource.FileName));
     }
 }
