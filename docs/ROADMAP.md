@@ -114,8 +114,10 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [ ] Package and verify Ragnar's three approved originals; confirm setup stages on 100/125/150% DPI.
 - [ ] Add the separately installed Beam launcher theme assets to the Velopack payload.
 - [x] Implement optional AES-256-GCM `.tpe` envelope writer/reader; require a separately signed inner `.tpk`, verify GCM AAD/tag, clear key/plaintext after use and test tampering.
-- [ ] Implement independently authenticated, authorized external `IThemeDecryptionKeyProvider` (key never embedded in EXE or user config); design revocation/rotation, replay and availability policy.
-- [ ] Enable `.tpe` in WinUI only after real provider and production pin are provisioned; fail closed with an explicit offline UX.
+- [x] Implement bounded HTTPS client `HttpsThemeDecryptionKeyProvider` with externally acquired short-lived session token, no redirect/no-store response, exact product/key identity and independent GCM+CMS acceptance tests.
+- [ ] Implement the real authenticated server and `IThemeAccessTokenSource` identity flow (the client alone does not authorize access); finalize token scopes, key rotation/revocation and availability policy.
+- [ ] Compile trusted key-issuer HTTPS endpoint into a signed, protected branded build; do not accept it from user configuration.
+- [ ] Enable `.tpe` in WinUI only after real provider, authenticated identity and production publisher pin are provisioned; fail closed with an explicit offline UX. Details: [Theme Key Issuer](THEME_KEY_ISSUER.md).
 - [ ] Verify user-visible confidentiality limitations under a realistic Windows local-attacker threat model; local memory/screenshots cannot be made uncopyable.
 - [ ] Define downgrade/rollback, revocation, signing rotation and malformed-image decoding acceptance tests.
 
