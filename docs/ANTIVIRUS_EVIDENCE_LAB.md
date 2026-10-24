@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/docs/ANTIVIRUS_EVIDENCE_LAB.md
 Amac: Antivirüs vakalarinda salt okunur dosya/imza kaniti toplama proseduru
 Modul - Markdown
-Version: 1.4.0
+Version: 1.5.0
 Aciklama: LAB kaniti ile malware karari ve production kabulunu ayirir
 Bagimli Oldugu Katman: Tool | Security | Testing
 -->
@@ -75,6 +75,72 @@ single-file collector's `-ExpectedSha256` option. Confirm each exact EXE
 identity independently, not merely the enclosing ZIP checksum. A valid
 identity comparison is **not** an antivirus-clean, SmartScreen-reputation
 or production-signing verdict.
+
+
+## Firefox blocked a GitHub Actions ZIP: archive and EXE are different identities
+
+On 2026-10-24, Firefox displayed `Bu dosya virüs veya zararlı yazılım içeriyor`
+for the **Ragnar QA GitHub Actions ZIP**. That is a browser download
+block, **not** an independently established malware diagnosis or false-positive
+finding. A second Firefox entry said the file was moved/deleted: this is
+not a second clean/malicious scan verdict. The Kaspersky application showing
+no warning does not override Firefox, or establish AV clearance.
+
+Keep ZIP and EXE digests separate. Confirmed metadata for the affected
+**pull-request run** [40086998803](https://github.com/b1glord/ragnarokclientpatch/actions/runs/40086998803)
+(artifact ID `12557547786`) is:
+
+| Object | Digest source | SHA-256 |
+| --- | --- | --- |
+| GitHub Actions outer ZIP | GitHub artifact API metadata | `dbbc58fb68b29f0509213a62469509b530ec07c82aa0b471d56dfddeba6b9f14` |
+| `RagnarClassic-Turkuaz-Setup.exe` ZIP member | Same-run Windows build log | `93534602ad93009f33728a6e68e43cfeb28f4e4c1199bd19c5f9b9bbb406960f` |
+
+The separate **push run** `40086995530` produced a different archive
+digest and EXE digest. Never compare or submit a ZIP hash as an EXE hash.
+These digests are historical identifiers from the referenced QA run;
+they are **not** signatures or assurances of safety, and no blocked
+download was bypassed to obtain them.
+
+The standalone, offline `tools/diagnostics/verify_archive_provenance.py`
+checks the outer ZIP **and explicitly selected members** against
+independently obtained expected hashes, without extracting or executing
+anything. It reads selected entries with a decompression size limit, rejects
+unsafe names/symlink or duplicate ZIP records, and atomically creates a
+diagnostic report. It never calls an AV engine and always records
+`browser_verdict=NOT_RECORDED` and
+`production_acceptance=NOT_ACCEPTED`.
+
+**Only if a copy is already safely available in an isolated investigation
+environment**, use Python 3 and replace the example paths with actual
+local paths. Do not override Firefox, restore a quarantined file, or run it
+merely to collect evidence:
+
+```powershell
+# Illustrative local paths: create C:\Lab\Evidence beforehand.
+python tools/diagnostics/verify_archive_provenance.py `
+  --archive "C:\Lab\Downloads\RagnarClassic-Turkuaz-Single-EXE-TEST-ONLY.zip" `
+  --expected-archive-sha256 "dbbc58fb68b29f0509213a62469509b530ec07c82aa0b471d56dfddeba6b9f14" `
+  --expected-member "RagnarClassic-Turkuaz-Setup.exe=93534602ad93009f33728a6e68e43cfeb28f4e4c1199bd19c5f9b9bbb406960f" `
+  --output "C:\Lab\Evidence\ragnar-zip-member-identity.json"
+```
+
+If Firefox blocked the archive and no safe copy exists, record
+`DOWNLOAD_BLOCKED` and the reported warning; **do not** claim local
+ZIP/member verification. Record Firefox version, the warning text, the
+exact artifact run ID, timestamp, whether the download was blocked or
+quarantined, vendor/engine findings, and any browser-specific diagnostic
+classification available without reducing protection. Distinguish
+download reputation, malware/phishing classification, and endpoint AV
+results; do not infer the underlying Safe Browsing vendor verdict from
+a screenshot alone.
+
+If a scan engine positively identifies the file, investigate the
+**exact ZIP/EXE hash** and the internal Velopack payload before any
+false-positive submission. If the hashes match and the code/build chain
+has been independently reviewed, a provider-specific false-positive
+review may be opened. Do not apply browser exceptions, disable
+endpoint protection, obscure/pack binaries to avoid detection, or
+substitute an unsigned test package for an approved signed release.
 
 ## Human-recorded alert evidence
 
