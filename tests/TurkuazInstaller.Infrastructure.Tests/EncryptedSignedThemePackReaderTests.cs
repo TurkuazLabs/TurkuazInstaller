@@ -1,12 +1,14 @@
 // Dosya Yolu: tests/TurkuazInstaller.Infrastructure.Tests/EncryptedSignedThemePackReaderTests.cs
 // Amac: Dis anahtarli AES-GCM zarfini ve zorunlu ic CMS imzasini dogrulamak
 // Modul - CSharp xUnit Tests
-// Version: 0.2.0-qa
+// Version: 0.3.0-qa
 // Aciklama: Gercek GCM, CMS ve ephemeral fixture; hatali anahtar, tamper ve baska urun red testleri
 // Bagimli Oldugu Katman: Security | Infrastructure | Trust
 
 using System.Buffers.Binary;
 using System.IO.Compression;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Security.Cryptography.Pkcs;
 using System.Security.Cryptography.X509Certificates;
@@ -72,6 +74,63 @@ public sealed class EncryptedSignedThemePackReaderTests
             EncryptedSignedThemePackWriter.Encrypt(data, key, "SPACE KEY"));
         Assert.Throws<ArgumentException>(() =>
             EncryptedSignedThemePackWriter.Encrypt(data, new byte[16], "key-v1"));
+    }
+
+    [Fact]
+    public async Task FullAuthorizedHttpsDeliveryUnlocksOnlyProperlySignedEncryptedTheme()
+    {
+        using var publisher = Certificate();
+        var signedPack = BuildSignedTheme(publisher);
+        var secret = RandomNumberGenerator.GetBytes(32);
+        var encrypted = EncryptedSignedThemePackWriter.Encrypt(
+            signedPack, secret, "key-v1");
+
+        using var issuer = new HttpsThemeDecryptionKeyProvider(
+            new Uri("https://issuer.example.invalid/api/v1/theme-key"),
+            new TestThemeSession(),
+            new FakeKeyTransport(secret));
+        using var file = new MemoryStream(encrypted);
+
+        var verified = await Reader(publisher, issuer).ReadAsync(
+            file, PackageId.Parse(Product));
+        Assert.Equal("qa-landscape", verified.ThemeId);
+        Assert.Equal(Png, verified.ForScreen("welcome").ToArray());
+    }
+
+    private sealed class TestThemeSession : IThemeAccessTokenSource
+    {
+        public ValueTask<string?> AcquireTokenAsync(
+            PackageId product, CancellationToken cancellationToken) =>
+            ValueTask.FromResult<string?>(
+                product.Value == Product ? "ci-test-ephemeral" : null);
+    }
+
+    private sealed class FakeKeyTransport(byte[] secret) : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Assert.Equal("Bearer", request.Headers.Authorization?.Scheme);
+            Assert.Equal("ci-test-ephemeral", request.Headers.Authorization?.Parameter);
+            using var body = JsonDocument.Parse(
+                await request.Content!.ReadAsStringAsync(cancellationToken));
+            Assert.Equal(Product, body.RootElement.GetProperty("package_id").GetString());
+            Assert.Equal("key-v1", body.RootElement.GetProperty("key_id").GetString());
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(new
+                    {
+                        package_id = Product,
+                        key_id = "key-v1",
+                        key_base64 = Convert.ToBase64String(secret)
+                    }),
+                    Encoding.UTF8, "application/json")
+            };
+            response.Headers.CacheControl = new CacheControlHeaderValue { NoStore = true };
+            return response;
+        }
     }
 
     [Fact]
