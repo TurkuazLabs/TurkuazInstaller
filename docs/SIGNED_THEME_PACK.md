@@ -144,7 +144,15 @@ The latter snapshots reviewed pins in memory and never reads
 The compile-time list is currently **empty**: when a user opts into a
 theme, it is intentionally rejected until a real publisher identity and
 certificate fingerprint have been reviewed and compiled into a trusted
-distribution. Unit tests cover valid CMS with no pin, wrong signer,
+distribution.
+Product-specific signed builds can additionally set
+`CompiledThemePublisherPins.RequiredThemePackageId` so that the approved
+theme remains mandatory even if an attacker removes
+`branding.theme_package_id` from a mutable `ui-profile.yml`. A conflict
+between that compiled identity and user-configured identity fails before
+the window is created. The generic Community distribution keeps the
+compiled required ID `null` so products without a custom theme are
+not affected; opt-in unpinned themes still fail closed. Unit tests cover valid CMS with no pin, wrong signer,
 wrong product, and attempted caller mutation after snapshot.
 
 The existing user-writable `manifest-trust.yml` for app/update manifests
