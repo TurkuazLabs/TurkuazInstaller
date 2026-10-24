@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/signing-tooling-validation.yml
 # 📌 Amac: Production signing bootstrap script ve config dosyalarinin secretsiz statik kalite kontrolunu yapar
 # 📌 Modul - CI YAML
-# Version: 1.1.0
+# Version: 1.5.0
 # Aciklama: PowerShell parser, immutable signing config ve x64/ARM64 release asset invariants degerlerini PR/main seviyesinde dogrular
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -33,7 +33,14 @@ jobs:
         shell: pwsh
         run: |
           $scripts = @(
-            "tools/release/Initialize-ProductionSigning.ps1"
+            "tools/release/Initialize-ProductionSigning.ps1",
+            "tools/Assert-AuthenticodeRelease.ps1",
+            "tests/scripts/Test-AuthenticodeReleaseGuard.ps1",
+            "tools/Assert-ReleaseCommitOnMain.ps1",
+            "tests/scripts/Test-ReleaseCommitOnMain.ps1",
+            "tests/scripts/Test-UnsignedCiArtifactBoundaries.ps1",
+            "tools/release/Assert-SignerPublisherSubject.ps1",
+            "tests/scripts/Test-SignerPublisherSubject.ps1"
           )
 
           foreach ($script in $scripts) {
@@ -46,6 +53,14 @@ jobs:
               throw "PowerShell syntax validation failed: $script"
             }
           }
+
+      - name: Validate unsigned CI artifact names and retention
+        shell: pwsh
+        run: ./tests/scripts/Test-UnsignedCiArtifactBoundaries.ps1
+
+      - name: Reject missing or unapproved signing publisher
+        shell: pwsh
+        run: ./tests/scripts/Test-SignerPublisherSubject.ps1
 
       - name: Validate signing config invariants
         shell: pwsh
@@ -96,3 +111,17 @@ jobs:
               throw "Release workflow architecture invariant is missing: $value"
             }
           }
+
+  release-signature-layout:
+    runs-on: windows-2025
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check mandatory release executables and invalid signatures
+        shell: pwsh
+        run: ./tests/scripts/Test-AuthenticodeReleaseGuard.ps1
+      - name: Reject release tags from divergent or unknown main commits
+        shell: pwsh
+        run: ./tests/scripts/Test-ReleaseCommitOnMain.ps1

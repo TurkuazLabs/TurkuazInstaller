@@ -1,0 +1,60 @@
+# Dosya Yolu: REPO_ROOT/.github/workflows/antivirus-evidence-lab.yml
+# Amac: Windows salt okunur antivirus kanit toplayicisi regresyonu
+# Modul - CI YAML
+# Version: 1.1.0
+# Aciklama: Guvenlik korumalarini degistirmeden imza/hash kaniti semasini test eder
+# Bagimli Oldugu Katman: Tool | Testing
+
+name: Antivirus Evidence LAB CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/antivirus-evidence-lab.yml'
+      - 'tools/diagnostics/Get-AuthenticodeLabEvidence.ps1'
+      - 'tools/diagnostics/New-InstallerExecutableInventory.ps1'
+      - 'tests/scripts/Test-AuthenticodeLabEvidence.ps1'
+      - 'tests/scripts/Test-InstallerExecutableInventory.ps1'
+      - 'tools/diagnostics/verify_archive_provenance.py'
+      - 'tests/test_archive_provenance.py'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/antivirus-evidence-lab.yml'
+      - 'tools/diagnostics/Get-AuthenticodeLabEvidence.ps1'
+      - 'tools/diagnostics/New-InstallerExecutableInventory.ps1'
+      - 'tests/scripts/Test-AuthenticodeLabEvidence.ps1'
+      - 'tests/scripts/Test-InstallerExecutableInventory.ps1'
+      - 'tools/diagnostics/verify_archive_provenance.py'
+      - 'tests/test_archive_provenance.py'
+
+permissions:
+  contents: read
+
+jobs:
+  read-only-evidence:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Verify collector and failure modes without running installer
+        shell: pwsh
+        run: ./tests/scripts/Test-AuthenticodeLabEvidence.ps1
+      - name: Verify three-file executable identity manifest
+        shell: pwsh
+        run: ./tests/scripts/Test-InstallerExecutableInventory.ps1
+
+  archive-identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify ZIP/member identity failures without executing any file
+        run: python3 -B -m unittest discover -s tests -p 'test_archive_provenance.py' -v

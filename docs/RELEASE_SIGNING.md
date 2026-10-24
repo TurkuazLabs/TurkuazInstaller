@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/RELEASE_SIGNING.md
 # 📌 Amac: TurkuazInstaller production release signing, deterministic packaging, attestation ve GitHub configuration adimlarini tanimlamak
 # 📌 Modul - Markdown
-# Version: 1.0.2
+# Version: 1.0.7
 # Aciklama: Azure Artifact Signing, immutable GitHub OIDC production environment, signed tag ve provenance akislarini dokumante eder
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -46,6 +46,8 @@ production environment variable olarak:
 - ARTIFACT_SIGNING_ACCOUNT_NAME
 - ARTIFACT_SIGNING_CERT_PROFILE_NAME
 - ARTIFACT_SIGNING_TIMESTAMP_URL
+- ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU (onayli Azure Artifact Signing sertifika profiline ozgu kalici EKU OID degeri)
+- ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT (yasal yayinci sertifikasinin onaylanmis, tam X.500 Subject degeri)
 
 tanimlanir.
 
@@ -109,6 +111,13 @@ Bu sayede su katmanlar tag olusturmadan test edilir:
 16. Release ZIP dosyalari GitHub artifact attestation ile provenance kaydi alir.
 17. GitHub Release yayinlanir.
 
+Release/preflight imzalanmis TurkuazInstaller EXE/DLL dosyalarinda sadece
+gecerli Authenticode zincirini degil, **onceden onaylanmis yayinici
+sertifika Subject** degerini de zorunlu tutar. Bu deger ve certificate profile EKU degeri gercek sertifika profili
+onayindan sonra GitHub production environment variable olarak manuel
+tanimlanir. Bos/yanlis degerde release olusturulmaz. Kanitlanmamis
+legal yayinci kimligi kodda veya config'te varsayilmaz.
+
 Unsigned production fallback yoktur.
 
 ## Reproducibility Siniri
@@ -130,3 +139,21 @@ Release ZIP hash dogrulamasi icin GitHub Release icindeki SHA256SUMS.txt kullani
 GitHub provenance dogrulamasi icin:
 
 gh attestation verify <artifact> -R TurkuazLabs/TurkuazInstaller
+
+Azure Artifact Signing, leaf sertifikalarini her gun yeniler (72 saat omur).
+Leaf X.509 SHA-256 thumbprint pinleme bu hizmetle uyumsuzdur; onun yerine
+profil-ozel, sertifika yenilendiginde sabit kalan EKU OID zorunludur.
+Genel Public Trust EKU (1.3.6.1.4.1.311.97.1.0) profil kimligi degildir.
+Bkz. https://learn.microsoft.com/en-us/azure/artifact-signing/concept-certificate-management
+
+Public release signer validation requires all three X.509 EKU identities:
+the independently reviewed profile-specific `1.3.6.1.4.1.311.97.*` OID,
+generic Public Trust `1.3.6.1.4.1.311.97.1.0`, and Code Signing
+`1.3.6.1.5.5.7.3.3`. Profile EKU by itself is **not** sufficient to
+distinguish a Private Trust certificate from public distribution trust.
+See https://learn.microsoft.com/en-us/azure/artifact-signing/concept-certificate-management
+
+Public Trust Test leaf sertifikalarindaki lifetime EKU
+(`1.3.6.1.4.1.311.10.3.13`) Signed Release icin reddedilir.
+Test profili, gercek Public Trust'in production alternatifi degildir.
+Bkz. https://learn.microsoft.com/en-us/azure/artifact-signing/concept-resources-roles

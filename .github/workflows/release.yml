@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/release.yml
 # 📌 Amac: Stable tag'lerde x64 ve ARM64 combined Windows dagitimlarini build, production sign, attest ve GitHub Release olarak yayinlar
 # 📌 Modul - CI YAML
-# Version: 1.4.0
+# Version: 1.10.0
 # Aciklama: Native win-x64 ve win-arm64 combined dagitimlarini sign eder; iki deterministic ZIP ve architecture-safe standalone bootstrap assetlerini checksum/provenance ile yayinlar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
@@ -45,6 +47,10 @@ jobs:
         shell: pwsh
         run: ./tools/Assert-ReleaseVersion.ps1 -Tag "${{ github.ref_name }}" -PropsPath Directory.Build.props
 
+      - name: Verify release commit is in main history before signing
+        shell: pwsh
+        run: ./tools/Assert-ReleaseCommitOnMain.ps1 -ReleaseCommit "${{ github.sha }}"
+
       - name: Validate signing configuration
         shell: pwsh
         env:
@@ -55,6 +61,8 @@ jobs:
           ARTIFACT_SIGNING_ACCOUNT_NAME: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
           ARTIFACT_SIGNING_CERT_PROFILE_NAME: ${{ vars.ARTIFACT_SIGNING_CERT_PROFILE_NAME }}
           ARTIFACT_SIGNING_TIMESTAMP_URL: ${{ vars.ARTIFACT_SIGNING_TIMESTAMP_URL }}
+          ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT }}
+          ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU }}
         run: |
           $required = @(
             "AZURE_CLIENT_ID",
@@ -63,7 +71,9 @@ jobs:
             "ARTIFACT_SIGNING_ENDPOINT",
             "ARTIFACT_SIGNING_ACCOUNT_NAME",
             "ARTIFACT_SIGNING_CERT_PROFILE_NAME",
-            "ARTIFACT_SIGNING_TIMESTAMP_URL"
+            "ARTIFACT_SIGNING_TIMESTAMP_URL",
+            "ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT",
+            "ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU"
           )
 
           foreach ($name in $required) {
@@ -114,11 +124,14 @@ jobs:
           timestamp-rfc3161: ${{ vars.ARTIFACT_SIGNING_TIMESTAMP_URL }}
           timestamp-digest: SHA256
 
-      - name: Verify Authenticode signatures
+      - name: Verify Authenticode signatures and approved publisher
         shell: pwsh
+        env:
+          ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT }}
+          ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU }}
         run: |
-          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-x64/distribution
-          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-arm64/distribution
+          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-x64/distribution -RequireCombinedLayout -ExpectedArchitecture x64 -ExpectedPublisherSubject $env:ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT -ExpectedProfileEkuOid $env:ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU
+          ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/release/win-arm64/distribution -RequireCombinedLayout -ExpectedArchitecture arm64 -ExpectedPublisherSubject $env:ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT -ExpectedProfileEkuOid $env:ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU
 
       - name: Stage signed bootstrap self-update assets
         shell: pwsh

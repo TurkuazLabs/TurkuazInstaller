@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/release-preflight.yml
 # 📌 Amac: Stable tag olusturmadan once production OIDC, Azure Artifact Signing, timestamp ve Authenticode zincirini gercek bir probe binary ile dogrular
 # 📌 Modul - CI YAML
-# Version: 1.0.0
+# Version: 1.3.0
 # Aciklama: GitHub production environment uzerinden kucuk bir Windows PE/DLL uretir, Azure'da imzalar ve SignTool ile dogrular
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -43,6 +43,8 @@ jobs:
           ARTIFACT_SIGNING_ACCOUNT_NAME: ${{ vars.ARTIFACT_SIGNING_ACCOUNT_NAME }}
           ARTIFACT_SIGNING_CERT_PROFILE_NAME: ${{ vars.ARTIFACT_SIGNING_CERT_PROFILE_NAME }}
           ARTIFACT_SIGNING_TIMESTAMP_URL: ${{ vars.ARTIFACT_SIGNING_TIMESTAMP_URL }}
+          ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT }}
+          ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU }}
         run: |
           $required = @(
             "AZURE_CLIENT_ID",
@@ -51,7 +53,9 @@ jobs:
             "ARTIFACT_SIGNING_ENDPOINT",
             "ARTIFACT_SIGNING_ACCOUNT_NAME",
             "ARTIFACT_SIGNING_CERT_PROFILE_NAME",
-            "ARTIFACT_SIGNING_TIMESTAMP_URL"
+            "ARTIFACT_SIGNING_TIMESTAMP_URL",
+            "ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT",
+            "ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU"
           )
 
           foreach ($name in $required) {
@@ -86,6 +90,9 @@ jobs:
           timestamp-rfc3161: ${{ vars.ARTIFACT_SIGNING_TIMESTAMP_URL }}
           timestamp-digest: SHA256
 
-      - name: Verify probe Authenticode signatures
+      - name: Verify probe Authenticode signatures and approved publisher
         shell: pwsh
-        run: ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/signing-probe/out
+        env:
+          ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT }}
+          ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU: ${{ vars.ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU }}
+        run: ./tools/Assert-AuthenticodeRelease.ps1 -ReleaseRoot artifacts/signing-probe/out -ExpectedPublisherSubject $env:ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT -ExpectedProfileEkuOid $env:ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU

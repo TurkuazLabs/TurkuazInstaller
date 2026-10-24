@@ -46,4 +46,8 @@ Bu bolum hesap/kayit islemleridir ve kod gelistirmesinden ayri tutulur.
 - [ ] release notes olustu
 - [ ] release assetleri indirilebilir
 
+- [ ] Gercek yasal yayinici sertifikasi kimligi bagimsiz dogrulandi
+- [ ] GitHub production environment icinde `ARTIFACT_SIGNING_EXPECTED_PUBLISHER_SUBJECT` ve `ARTIFACT_SIGNING_EXPECTED_PROFILE_EKU` gercek onayli Azure certificate profile bilgisinden ayarlandi
+- [ ] Signing preflight gercek sertifikayi profile-ozel EKU + X.500 Subject ile dogruladi
+
 Production signing bolumu tamamlanmadan signed v1.0.0 GitHub Release yayinlanmis kabul edilmez.
