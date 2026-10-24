@@ -52,6 +52,6 @@ public sealed class PinnedThemeTrustPolicyRepository : IManifestTrustPolicyRepos
         cancellationToken.ThrowIfCancellationRequested();
 
         _trusted.TryGetValue(packageId.Value, out var policy);
-        return Task.FromResult(policy);
+        return Task.FromResult<ManifestTrustPolicy?>(policy);
     }
 }
