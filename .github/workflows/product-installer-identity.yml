@@ -1,0 +1,33 @@
+# Dosya Yolu: REPO_ROOT/.github/workflows/product-installer-identity.yml
+# Amac: Urun kimligi ve istemci profil surumleme kontratini statik dogrular
+# Modul - GitHub Actions YAML
+# Version: 1.0.0
+# Aciklama: Salt okunur test, artifact, release veya baska repo cekmez
+# Bagimli Oldugu Katman: Tests | Documentation
+
+name: Product Installer Identity Contract
+on:
+  pull_request:
+    paths:
+      - 'docs/PRODUCT_INSTALLER_IDENTITY.md'
+      - 'tools/tests/test_product_installer_identity_contract.py'
+      - '.github/workflows/product-installer-identity.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/PRODUCT_INSTALLER_IDENTITY.md'
+      - 'tools/tests/test_product_installer_identity_contract.py'
+      - '.github/workflows/product-installer-identity.yml'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify product/client/setup identity separation
+        run: python3 -B -m unittest discover -s tools/tests -p 'test_product_installer_identity_contract.py' -v
