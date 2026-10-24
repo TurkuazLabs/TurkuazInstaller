@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 1.4.0
+# Version: 1.5.0
 # Aciklama: Kurulu uygulama katalogu, read-only update discovery, installer operations, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
@@ -14,7 +14,7 @@ Bagimli Oldugu Katman: View | Controller | Language
     <Grid
         x:Name="MainRoot"
         Background="{ThemeResource TurkuazInstallerBackgroundBrush}"
-        RequestedTheme="Dark">
+>
         <ScrollViewer>
             <Grid
                 Padding="32"
@@ -26,8 +26,12 @@ Bagimli Oldugu Katman: View | Controller | Language
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <Border
-                    Grid.Row="0"
+                <Grid Grid.Row="0" ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                <Border Grid.Column="0"
                     Padding="28"
                     CornerRadius="16"
                     Background="{ThemeResource TurkuazInstallerHeroBrush}">
@@ -48,6 +52,16 @@ Bagimli Oldugu Katman: View | Controller | Language
                             Foreground="{ThemeResource TurkuazInstallerMutedTextBrush}" />
                     </StackPanel>
                 </Border>
+                <StackPanel Grid.Column="1" Spacing="6" VerticalAlignment="Center">
+                    <TextBlock Text="Tema" FontSize="12"/>
+                    <ComboBox x:Name="ThemeSelector" Width="154"
+                              AutomationProperties.Name="Kurulum görünümü teması">
+                        <ComboBoxItem Content="Sistem" Tag="system" />
+                        <ComboBoxItem Content="Koyu" Tag="dark" />
+                        <ComboBoxItem Content="Açık" Tag="light" />
+                    </ComboBox>
+                </StackPanel>
+                </Grid>
 
                 <Border
                     Grid.Row="1"

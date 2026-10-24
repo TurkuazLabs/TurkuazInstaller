@@ -59,3 +59,22 @@ present. Windows Desktop CI must still compile WinUI; manual visual
 Windows 10/11 testing remains required for DPI, contrast, buttons, install,
 cancel, uninstall and upgrade. This is a **draft QA integration**,
 not a signed production installer or release.
+
+## Theme selection and extension (2026-10-24)
+
+- Bundled palettes: `themes/StandardDark.xaml`, `themes/StandardLight.xaml`, and
+  `themes/StandardHighContrast.xaml`. They expose the same prefixed semantic
+  brush keys and are merged by `themes/StandardInstallerTheme.xaml` via
+  `ResourceDictionary.ThemeDictionaries`.
+- Main-window selector: `Sistem`, `Koyu`, `Açik`; it applies
+  `MainRoot.RequestedTheme` at runtime without restarting an installation.
+- The selected ID is an allowlisted per-user preference stored separately
+  under `%LOCALAPPDATA%/TurkuazInstaller/config/theme-selection.txt`.
+  It never overwrites the existing `ui-profile.yml` or the manifest trust root.
+- Future presets can be added via reviewed, **built-in** resources implementing
+  the same token contract and a registered selector ID. Arbitrary downloaded
+  XAML/theme files are not executed, and theme configuration never alters
+  package URLs, signatures, cancellation, rollback or install policy.
+- HighContrast uses Windows system colors, not fixed branding backgrounds.
+- Windows x64/ARM64 build + manual screen checks must verify runtime switching;
+  source XML tests alone are insufficient evidence of rendered appearance.

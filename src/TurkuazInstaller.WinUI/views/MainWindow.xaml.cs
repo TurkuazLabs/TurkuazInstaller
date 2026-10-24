@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.4.2
+// Version: 1.5.0
 // Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
@@ -9,6 +9,8 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using TurkuazInstaller.WinUI.Services;
 using TurkuazInstaller.Presentation.Controllers;
 using TurkuazInstaller.Presentation.Services;
 using TurkuazInstaller.Presentation.ViewModels;
@@ -46,6 +48,13 @@ public sealed partial class MainWindow : Window
 
         MainRoot.DataContext = viewModel;
         Title = viewModel.WindowTitle;
+        ThemeSelector.SelectionChanged += OnThemeSelectionChanged;
+        ThemeSelector.SelectedIndex = ThemeSelectionStore.Read() switch
+        {
+            "dark" => 1,
+            "light" => 2,
+            _ => 0
+        };
 
         WinUiStartupDiagnostics.Record("MainWindowResizeStarting");
         ResizeWindow();
@@ -85,6 +94,29 @@ public sealed partial class MainWindow : Window
             WinUiStartupDiagnostics.Record("ActivatedHandlerFailed", error);
             throw;
         }
+    }
+
+    private void OnThemeSelectionChanged(object sender, SelectionChangedEventArgs args)
+    {
+        if (ThemeSelector.SelectedItem is not ComboBoxItem selected)
+        {
+            return;
+        }
+
+        var preset = selected.Tag?.ToString() ?? "system";
+        if (!ThemeSelectionStore.IsValid(preset))
+        {
+            return;
+        }
+
+        MainRoot.RequestedTheme = preset switch
+        {
+            "light" => ElementTheme.Light,
+            "dark" => ElementTheme.Dark,
+            _ => ElementTheme.Default
+        };
+
+        ThemeSelectionStore.TryWrite(preset);
     }
 
     private void ConfigureBackgroundUpdateTimer()
@@ -225,6 +257,7 @@ public sealed partial class MainWindow : Window
             _backgroundUpdateTimer = null;
         }
 
+        ThemeSelector.SelectionChanged -= OnThemeSelectionChanged;
         _desktopService.Dispose();
     }
 

@@ -1,0 +1,17 @@
+<!--
+Dosya Yolu: src/TurkuazInstaller.WinUI/themes/StandardLight.xaml
+Amac: WinUI icin kullanici tarafindan secilebilen light temel renk paleti
+Modul - ResourceDictionary XAML
+Version: 1.0.0
+Aciklama: Yalniz gorunum tokenlari; install ve manifest guvenlik politikalari degismez
+Bagimli Oldugu Katman: View | Theme
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="TurkuazInstallerBackgroundBrush" Color="#FFF4F8FA" />
+    <SolidColorBrush x:Key="TurkuazInstallerHeroBrush" Color="#FFD8F3F0" />
+    <SolidColorBrush x:Key="TurkuazInstallerPanelBrush" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="TurkuazInstallerAccentBrush" Color="#FF087B78" />
+    <SolidColorBrush x:Key="TurkuazInstallerHeadingBrush" Color="#FF123040" />
+    <SolidColorBrush x:Key="TurkuazInstallerMutedTextBrush" Color="#FF3A5968" />
+</ResourceDictionary>
