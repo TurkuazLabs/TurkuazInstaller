@@ -1,0 +1,25 @@
+<!--
+Dosya Yolu: src/TurkuazInstaller.WinUI/themes/StandardInstallerTheme.xaml
+Amac: Turkuaz Installer icin tekil ve yeniden kullanilabilir varsayilan koyu/turkuaz stil
+Modul - WinUI ResourceDictionary XAML
+Version: 1.0.0
+Aciklama: Ragnar QA onerisi uzerinden genellestirildi; oyun markasi, token veya indirme URL icermez
+Bagimli Oldugu Katman: View | Theme
+-->
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="TurkuazInstallerBackgroundBrush" Color="#FF0C182A" />
+    <SolidColorBrush x:Key="TurkuazInstallerHeroBrush" Color="#FF0C5864" />
+    <SolidColorBrush x:Key="TurkuazInstallerPanelBrush" Color="#FF172536" />
+    <SolidColorBrush x:Key="TurkuazInstallerAccentBrush" Color="#FF2BDDC1" />
+    <SolidColorBrush x:Key="TurkuazInstallerHeadingBrush" Color="#FFF7FBFF" />
+    <SolidColorBrush x:Key="TurkuazInstallerMutedTextBrush" Color="#FFD0EAF0" />
+    <Style x:Key="TurkuazInstallerPrimaryButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource TurkuazInstallerAccentBrush}" />
+        <Setter Property="Foreground" Value="#FF092333" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="18,10" />
+    </Style>
+</ResourceDictionary>
