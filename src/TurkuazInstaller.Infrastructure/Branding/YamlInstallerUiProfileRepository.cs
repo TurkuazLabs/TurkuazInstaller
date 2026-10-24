@@ -1,12 +1,13 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Infrastructure/Branding/YamlInstallerUiProfileRepository.cs
 // 📌 Amac: Local YAML UI profilini okuyup typed branding/localization contractina donusturur
 // 📌 Modul - Repo CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Schema, culture, branding ve tum typed label anahtarlarini enumdan uretilen contract isimleriyle fail-closed dogrular
 //
 // Bagimli Oldugu Katman: Repo | Tool | Language
 
 using System.Globalization;
+using TurkuazInstaller.Domain.Products;
 using TurkuazInstaller.Contracts.Branding;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -81,8 +82,17 @@ public sealed class YamlInstallerUiProfileRepository
                 NormalizeOptional(
                     document.Branding.HeaderSubtitle),
                 NormalizeOptional(
-                    document.Branding.Footer)),
+                    document.Branding.Footer))
+            {
+                ThemePackageId = ParseThemePackageId(document.Branding.ThemePackageId)
+            },
             labels);
+    }
+
+    private static string? ParseThemePackageId(string? value)
+    {
+        var normalized = NormalizeOptional(value);
+        return normalized is null ? null : PackageId.Parse(normalized).Value;
     }
 
     private static string? NormalizeCulture(
@@ -226,5 +236,7 @@ public sealed class YamlInstallerUiProfileRepository
         public string? HeaderSubtitle { get; init; }
 
         public string? Footer { get; init; }
+
+        public string? ThemePackageId { get; init; }
     }
 }
