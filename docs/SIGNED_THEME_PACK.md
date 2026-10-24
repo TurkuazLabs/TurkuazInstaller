@@ -135,16 +135,29 @@ an error notice, prevents all installation actions, and does not execute
 its startup controller. When `theme_package_id` is absent, the standard
 WinUI UI remains unchanged.
 
-**Not a trust boundary by itself:** `theme_package_id` is a display/product
-selector, NOT proof of who can approve themes. The existing development
-`manifest-trust.yml` policy in per-user LocalAppData is user-writable.
-An attacker with the same user's file privileges might replace both
-the local trust policy and theme. **Before promising resistance to local
-users, production builds must pin an authorized publisher key in a signed,
-protected application/distribution (or another authenticated trusted root)
-rather than relying on a mutable per-user trust file.** This branch must
-not be promoted to production without that security decision and an
-integrated threat-model test.
+**Theme trust is now separate from mutable update-manifest trust:**
+`theme_package_id` is a display/product selector, NOT an authorization
+source. WinUI creates a `CmsManifestSignatureVerifier` backed by
+`CompiledThemePublisherPins` and `PinnedThemeTrustPolicyRepository`.
+The latter snapshots reviewed pins in memory and never reads
+`manifest-trust.yml` or the external `.tpk` for new trusted publishers.
+The compile-time list is currently **empty**: when a user opts into a
+theme, it is intentionally rejected until a real publisher identity and
+certificate fingerprint have been reviewed and compiled into a trusted
+distribution. Unit tests cover valid CMS with no pin, wrong signer,
+wrong product, and attempted caller mutation after snapshot.
+
+The existing user-writable `manifest-trust.yml` for app/update manifests
+remains unchanged; it does **not** authorize theme files. An attacker who
+can patch the unsigned application binary or manipulate its runtime
+cannot be defeated by a client-only check. Production requires
+publisher-managed code signing, protected distribution/updates and
+appropriate operating-system trust; no local-only DRM is claimed.
+
+WinUI disables its content/action controls **from construction until**
+the configured theme has passed complete CMS + PNG validation and image
+decode. On failure no startup controller is invoked and the error notice
+is left visible.
 
 This integration targets the **TurkuazInstaller WinUI desktop**. It does
 not automatically skin the separate Beam Tauri launcher or the existing
@@ -165,7 +178,7 @@ acceptance. No screenshot validation is claimed by passing source tests.
 - **Not yet established:** production publisher key/pin, signed release,
   Windows 10/11 screenshot smoke, confidential asset protection.
 
-A future installer integration must load the adjacent `theme.tpk` from
+The other (native Ragnar) installer integration must load the adjacent `theme.tpk` from
 the **trusted executable directory**, verify **before rendering**, and
 show a clear error on invalid packages. Copy required launcher assets
 into the installed application bundle, rather than relying on the
