@@ -89,7 +89,7 @@ public sealed class EncryptedSignedThemePackReader
         {
             if (!((value >= 'a' && value <= 'z') ||
                   (value >= '0' && value <= '9') ||
-                  value is '-' or '_'))
+                  value == (byte)'-' || value == (byte)'_'))
             {
                 throw new InvalidDataException("Encrypted theme key identifier is invalid.");
             }
