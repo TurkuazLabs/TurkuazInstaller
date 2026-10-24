@@ -113,7 +113,10 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [x] Separate theme signer allowlist from mutable per-user update-manifest trust; empty by default until reviewed publisher pin is supplied.
 - [ ] Package and verify Ragnar's three approved originals; confirm setup stages on 100/125/150% DPI.
 - [ ] Add the separately installed Beam launcher theme assets to the Velopack payload.
-- [ ] Evaluate optional AES-GCM encryption **only with an external key-provisioning design**; v1 `.tpk` assets remain ZIP-readable.
+- [x] Implement optional AES-256-GCM `.tpe` envelope writer/reader; require a separately signed inner `.tpk`, verify GCM AAD/tag, clear key/plaintext after use and test tampering.
+- [ ] Implement independently authenticated, authorized external `IThemeDecryptionKeyProvider` (key never embedded in EXE or user config); design revocation/rotation, replay and availability policy.
+- [ ] Enable `.tpe` in WinUI only after real provider and production pin are provisioned; fail closed with an explicit offline UX.
+- [ ] Verify user-visible confidentiality limitations under a realistic Windows local-attacker threat model; local memory/screenshots cannot be made uncopyable.
 - [ ] Define downgrade/rollback, revocation, signing rotation and malformed-image decoding acceptance tests.
 
 `SignedThemePackReader` is now consumed by opt-in TurkuazInstaller WinUI,
