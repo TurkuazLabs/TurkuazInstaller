@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.15.0
+// Version: 1.16.0
 // Aciklama: Theme trust bilgisini user YAML yerine compile-time allowlist'ten getirir
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
@@ -215,6 +215,16 @@ internal static class DesktopCompositionRoot
             ? TurkuazInstaller.Domain.Products.PackageId.Parse(id)
             : null;
 
+        // A branded build must pin its exact signed theme ID and version.
+        // A user-writable YAML file cannot approve another signed release.
+        var exactRelease = compiledProduct is null
+            ? null
+            : PinnedThemeRelease.Create(
+                CompiledThemePublisherPins.RequiredThemeId ??
+                    throw new InvalidOperationException("Compiled theme identity is missing."),
+                CompiledThemePublisherPins.RequiredThemeVersion ??
+                    throw new InvalidOperationException("Compiled theme version is missing."));
+
         // Both transport types verify the same CMS-signed inner manifest
         // with the same code-pinned publisher. Transport policy comes from
         // reviewed application source, never from user YAML or theme.tpe.
@@ -224,7 +234,8 @@ internal static class DesktopCompositionRoot
                 CompiledThemePublisherPins.TransportMode,
                 new SignedThemePackReader(
                     new CmsManifestSignatureVerifier(CompiledThemePublisherPins.Create())),
-                authorizedThemeKeys);
+                authorizedThemeKeys,
+                exactRelease);
 
         return new MainWindow(
             viewModel,
