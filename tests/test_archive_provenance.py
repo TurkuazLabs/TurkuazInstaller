@@ -25,7 +25,7 @@ class ArchiveProvenanceTests(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.archive = self.root / "qa.zip"
         self.output = self.root / "evidence.json"
-        self.payload = b"offline-QA-exe\\x00" * 1024
+        self.payload = b"offline-QA-exe\x00" * 1024
         self.member = "RagnarClassic-Turkuaz-Setup.exe"
         self.expected = hashlib.sha256(self.payload).hexdigest()
         self._write_zip([(self.member, self.payload)])
@@ -92,7 +92,7 @@ class ArchiveProvenanceTests(unittest.TestCase):
         with zipfile.ZipFile(self.archive, "w") as z:
             z.writestr(self.member, b"tiny")
         raw = self.archive.read_bytes()
-        central = raw.index(b"PK\\x01\\x02")
+        central = raw.index(b"PK\x01\x02")
         modified = bytearray(raw)
         modified[central + 24:central + 28] = (0xFFFFFFFF).to_bytes(4, "little")
         self.archive.write_bytes(modified)
