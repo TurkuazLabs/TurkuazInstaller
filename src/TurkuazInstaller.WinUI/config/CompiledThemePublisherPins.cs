@@ -1,7 +1,7 @@
 // Dosya Yolu: src/TurkuazInstaller.WinUI/config/CompiledThemePublisherPins.cs
 // Amac: Gorunur tema icin salt-okunur, uygulama tarafindan belirlenmis trust anchor
 // Modul - CSharp Config
-// Version: 0.3.0-qa
+// Version: 0.4.0-qa
 // Aciklama: Uretim imzacisi onaylanmadan hicbir harici tema kendine guven veremez
 // Bagimli Oldugu Katman: Infrastructure | Signing Policy
 
@@ -29,6 +29,11 @@ internal static class CompiledThemePublisherPins
     // This general-purpose Community QA build does not require a theme.
     // Use a reviewed compile-time value for a product-specific release.
     public const string? RequiredThemePackageId = null;
+
+    // A branded release pins the exact approved ID/version alongside
+    // RequiredThemePackageId. Leave null only for generic Community QA.
+    public static string? RequiredThemeId => null;
+    public static string? RequiredThemeVersion => null;
 
     // Choose transport in the reviewed, signed product build, not in a
     // mutable user YAML or in the theme's own manifest. When set to
