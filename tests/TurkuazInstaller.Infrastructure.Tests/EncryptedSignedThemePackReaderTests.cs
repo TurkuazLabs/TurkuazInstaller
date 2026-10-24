@@ -1,7 +1,7 @@
 // Dosya Yolu: tests/TurkuazInstaller.Infrastructure.Tests/EncryptedSignedThemePackReaderTests.cs
 // Amac: Dis anahtarli AES-GCM zarfini ve zorunlu ic CMS imzasini dogrulamak
 // Modul - CSharp xUnit Tests
-// Version: 0.3.0-qa
+// Version: 0.4.0-qa
 // Aciklama: Gercek GCM, CMS ve ephemeral fixture; hatali anahtar, tamper ve baska urun red testleri
 // Bagimli Oldugu Katman: Security | Infrastructure | Trust
 
@@ -27,6 +27,66 @@ public sealed class EncryptedSignedThemePackReaderTests
     private const string Product = "levelupgt.ragnar-classic-preview";
     private static readonly byte[] Png = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XGmYAAAAASUVORK5CYII=");
+
+    [Fact]
+    public void SourceFactoryDoesNotGuessTransportOrPathFromAnUntrustedFile()
+    {
+        using var cert = Certificate();
+        var signed = TrustedSignedReader(cert);
+        var normal = VerifiedThemePackSourceFactory.Create(
+            ThemePackTransportMode.SignedTpk, signed);
+        Assert.Equal("theme.tpk", normal.FileName);
+        Assert.Same(signed, normal.Reader);
+
+        var encrypted = VerifiedThemePackSourceFactory.Create(
+            ThemePackTransportMode.EncryptedTpe, signed);
+        Assert.Equal("theme.tpe", encrypted.FileName);
+        Assert.IsType<EncryptedSignedThemePackReader>(encrypted.Reader);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            VerifiedThemePackSourceFactory.Create(
+                (ThemePackTransportMode)999, signed));
+    }
+
+    [Fact]
+    public async Task EncryptedModeWithoutKeyProviderNeverFallsBackToSignedZip()
+    {
+        using var cert = Certificate();
+        var signedPack = BuildSignedTheme(cert);
+        var secret = RandomNumberGenerator.GetBytes(32);
+        var protectedPack = EncryptedSignedThemePackWriter.Encrypt(
+            signedPack, secret, "key-v1");
+        var source = VerifiedThemePackSourceFactory.Create(
+            ThemePackTransportMode.EncryptedTpe, TrustedSignedReader(cert));
+
+        // An encrypted distribution must refuse even if a properly signed
+        // plaintext .tpk happens to sit next to the executable.
+        using var encrypted = new MemoryStream(protectedPack);
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            source.Reader.ReadAsync(encrypted, PackageId.Parse(Product)));
+
+        using var plain = new MemoryStream(signedPack);
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            source.Reader.ReadAsync(plain, PackageId.Parse(Product)));
+    }
+
+    [Fact]
+    public async Task SelectedEncryptedSourceAcceptsAuthorizedKeyAndCms()
+    {
+        using var cert = Certificate();
+        var key = RandomNumberGenerator.GetBytes(32);
+        var tpe = EncryptedSignedThemePackWriter.Encrypt(
+            BuildSignedTheme(cert), key, "key-v1");
+
+        var source = VerifiedThemePackSourceFactory.Create(
+            ThemePackTransportMode.EncryptedTpe,
+            TrustedSignedReader(cert), new EphemeralProvider((byte[])key.Clone()));
+        Assert.Equal("theme.tpe", source.FileName);
+
+        using var stream = new MemoryStream(tpe);
+        var verified = await source.Reader.ReadAsync(
+            stream, PackageId.Parse(Product));
+        Assert.Equal(Png, verified.ForScreen("welcome").ToArray());
+    }
 
     [Fact]
     public async Task DecryptsAndChecksSeparatelySignedThemeWithoutWritingPlaintext()
@@ -233,16 +293,22 @@ public sealed class EncryptedSignedThemePackReaderTests
         }
     }
 
-    private static EncryptedSignedThemePackReader Reader(
-        X509Certificate2 allowedSigner, IThemeDecryptionKeyProvider provider)
+    private static SignedThemePackReader TrustedSignedReader(
+        X509Certificate2 allowedSigner)
     {
         var pin = new ManifestTrustPolicy(
             allowedSigner.Subject,
             allowedSigner.GetCertHashString(HashAlgorithmName.SHA256).ToLowerInvariant());
         var verifier = new CmsManifestSignatureVerifier(
             new FakeManifestTrustPolicyRepository(pin));
+        return new SignedThemePackReader(verifier);
+    }
+
+    private static EncryptedSignedThemePackReader Reader(
+        X509Certificate2 allowedSigner, IThemeDecryptionKeyProvider provider)
+    {
         return new EncryptedSignedThemePackReader(
-            new SignedThemePackReader(verifier), provider);
+            TrustedSignedReader(allowedSigner), provider);
     }
 
     private static byte[] Encrypt(byte[] plaintext, byte[] key)
