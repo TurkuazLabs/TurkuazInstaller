@@ -36,7 +36,7 @@ class IdentityContractTests(unittest.TestCase):
     def test_no_release_on_branding_only(self):
         text = DOC.read_text("utf-8")
         self.assertIn("No arbitrary remote XAML", text)
-        self.assertIn("no automatic", text.lower())
+        self.assertIn("automatic\n  release on a branding-only commit", text.lower())
 
 
 if __name__ == "__main__":
