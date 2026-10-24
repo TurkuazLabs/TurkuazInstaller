@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.11.0
+// Version: 1.12.0
 // Aciklama: Signed trust/proxy/catalog/background/version policy zincirine Windows integration, shared UI catalog ve culture service baglar
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
@@ -197,10 +197,19 @@ internal static class DesktopCompositionRoot
             new MainWindowController(
                 desktopService);
 
+        // An explicitly product-bound theme is mandatory when configured.
+        // A theme.tpk may not supply its own trust anchor.
+        var themePackageId = uiProfile.Branding.ThemePackageId is { } id
+            ? TurkuazInstaller.Domain.Products.PackageId.Parse(id)
+            : null;
+
         return new MainWindow(
             viewModel,
             controller,
             desktopService,
-            startupArguments);
+            startupArguments,
+            themePackageId is null ? null : new SignedThemePackReader(manifestSignatureVerifier),
+            themePackageId,
+            themePackageId is null ? null : Path.Combine(AppContext.BaseDirectory, "theme.tpk"));
     }
 }
