@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.13.0
+// Version: 1.14.0
 // Aciklama: Theme trust bilgisini user YAML yerine compile-time allowlist'ten getirir
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
@@ -199,7 +199,18 @@ internal static class DesktopCompositionRoot
 
         // An explicitly product-bound theme is mandatory when configured.
         // A theme.tpk may not supply its own trust anchor.
-        var themePackageId = uiProfile.Branding.ThemePackageId is { } id
+        var compiledProduct = CompiledThemePublisherPins.RequiredThemePackageId;
+        var requestedProduct = uiProfile.Branding.ThemePackageId;
+        if (compiledProduct is not null && requestedProduct is not null &&
+            !string.Equals(compiledProduct, requestedProduct, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(
+                "UI profile may not override the compiled required theme identity.");
+        }
+
+        // A required branded theme must remain required even when a local
+        // user deletes or rewrites the optional UI profile.
+        var themePackageId = (compiledProduct ?? requestedProduct) is { } id
             ? TurkuazInstaller.Domain.Products.PackageId.Parse(id)
             : null;
 
