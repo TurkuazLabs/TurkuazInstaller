@@ -1,0 +1,18 @@
+<!--
+Dosya Yolu: src/TurkuazInstaller.WinUI/themes/StandardDark.xaml
+Amac: WinUI icin kullanici tarafindan secilebilen dark temel renk paleti
+Modul - ResourceDictionary XAML
+Version: 1.0.0
+Aciklama: Yalniz gorunum tokenlari; install ve manifest guvenlik politikalari degismez
+Bagimli Oldugu Katman: View | Theme
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="TurkuazInstallerBackgroundBrush" Color="#FF0C182A" />
+    <SolidColorBrush x:Key="TurkuazInstallerHeroBrush" Color="#FF0C5864" />
+    <SolidColorBrush x:Key="TurkuazInstallerPanelBrush" Color="#FF172536" />
+    <SolidColorBrush x:Key="TurkuazInstallerAccentBrush" Color="#FF2BDDC1" />
+    <SolidColorBrush x:Key="TurkuazInstallerHeadingBrush" Color="#FFF7FBFF" />
+    <SolidColorBrush x:Key="TurkuazInstallerMutedTextBrush" Color="#FFD0EAF0" />
+    <SolidColorBrush x:Key="TurkuazInstallerButtonTextBrush" Color="#FF092333" />
+</ResourceDictionary>

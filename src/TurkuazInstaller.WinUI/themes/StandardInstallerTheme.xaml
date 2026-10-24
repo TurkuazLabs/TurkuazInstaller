@@ -1,0 +1,23 @@
+<!--
+Dosya Yolu: src/TurkuazInstaller.WinUI/themes/StandardInstallerTheme.xaml
+Amac: Secilebilir acik/koyu TurkuazInstaller temalarinin sabit UI sozlesmesi
+Modul - WinUI ResourceDictionary XAML
+Version: 1.1.0
+Aciklama: Dark Light HighContrast paletlerini birlestirir; yeni temalarda token kontratini korur
+Bagimli Oldugu Katman: View | Theme
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark" Source="ms-appx:///themes/StandardDark.xaml" />
+        <ResourceDictionary x:Key="Light" Source="ms-appx:///themes/StandardLight.xaml" />
+        <ResourceDictionary x:Key="HighContrast" Source="ms-appx:///themes/StandardHighContrast.xaml" />
+    </ResourceDictionary.ThemeDictionaries>
+    <Style x:Key="TurkuazInstallerPrimaryButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="{ThemeResource TurkuazInstallerAccentBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource TurkuazInstallerButtonTextBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="18,10" />
+    </Style>
+</ResourceDictionary>

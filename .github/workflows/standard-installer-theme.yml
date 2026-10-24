@@ -1,0 +1,40 @@
+# Dosya Yolu: .github/workflows/standard-installer-theme.yml
+# Amac: Varsayilan Turkuaz temanin kaynak kontratini CI ile denetlemek
+# Modul - GitHub Actions YAML
+# Version: 1.0.0
+# Aciklama: Pure XAML contract test, UI smoke oldugunu iddia etmez
+# Bagimli Oldugu Katman: Test | View
+name: Standard Installer Theme Contract
+
+on:
+  pull_request:
+    paths:
+      - "src/TurkuazInstaller.WinUI/App.xaml"
+      - "src/TurkuazInstaller.WinUI/views/MainWindow.xaml"
+      - "src/TurkuazInstaller.WinUI/themes/**"
+      - "docs/STANDARD_INSTALLER_THEME.md"
+      - "tools/tests/test_standard_installer_theme.py"
+      - ".github/workflows/standard-installer-theme.yml"
+  push:
+    branches: [main, "feat/**", "fix/**"]
+    paths:
+      - "src/TurkuazInstaller.WinUI/App.xaml"
+      - "src/TurkuazInstaller.WinUI/views/MainWindow.xaml"
+      - "src/TurkuazInstaller.WinUI/themes/**"
+      - "docs/STANDARD_INSTALLER_THEME.md"
+      - "tools/tests/test_standard_installer_theme.py"
+      - ".github/workflows/standard-installer-theme.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate standard theme contract
+        run: python3 -B -m unittest discover -s tools/tests -p test_standard_installer_theme.py -v
