@@ -1,7 +1,7 @@
 // Dosya Yolu: src/TurkuazInstaller.Infrastructure/Branding/VerifiedThemePackSourceFactory.cs
 // Amac: Derlemede secilen TPK/TPE paket turunu fail-closed dogrulama okuyucusuna baglamak
 // Modul - CSharp Tool/Adapter
-// Version: 0.1.0-qa
+// Version: 0.2.0-qa
 // Aciklama: Sifreli modda anahtar yetkisi yoksa imzasiz TPK'ye dusmez
 // Bagimli Oldugu Katman: Infrastructure | Cryptography | View
 
@@ -24,20 +24,27 @@ public static class VerifiedThemePackSourceFactory
     public static VerifiedThemePackSource Create(
         ThemePackTransportMode transport,
         SignedThemePackReader trustedSignedReader,
-        IThemeDecryptionKeyProvider? authorizedKeys = null)
+        IThemeDecryptionKeyProvider? authorizedKeys = null,
+        PinnedThemeRelease? releasePin = null)
     {
         ArgumentNullException.ThrowIfNull(trustedSignedReader);
+
+        // Verify CMS/GCM first, and THEN match the exact reviewed theme
+        // identity/version. Signed old releases must not be substituted.
+        IVerifiedThemePackReader CheckRelease(IVerifiedThemePackReader reader) =>
+            releasePin is null ? reader : new PinnedThemeReleaseReader(reader, releasePin);
 
         return transport switch
         {
             ThemePackTransportMode.SignedTpk =>
-                new VerifiedThemePackSource("theme.tpk", trustedSignedReader),
+                new VerifiedThemePackSource(
+                    "theme.tpk", CheckRelease(trustedSignedReader)),
 
             ThemePackTransportMode.EncryptedTpe =>
-                new VerifiedThemePackSource("theme.tpe",
-                    new EncryptedSignedThemePackReader(
+                new VerifiedThemePackSource(
+                    "theme.tpe", CheckRelease(new EncryptedSignedThemePackReader(
                         trustedSignedReader,
-                        authorizedKeys ?? new UnavailableThemeKeyProvider())),
+                        authorizedKeys ?? new UnavailableThemeKeyProvider()))),
 
             _ => throw new ArgumentOutOfRangeException(nameof(transport),
                 "Only recognized signed or authenticated-encrypted theme modes are permitted.")
