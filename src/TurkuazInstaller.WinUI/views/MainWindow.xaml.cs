@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.5.1
+// Version: 1.6.0
 // Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
@@ -30,7 +30,7 @@ public sealed partial class MainWindow : Window
     private DispatcherQueueTimer? _backgroundUpdateTimer;
     private bool _startupHandled;
     private readonly MainWindowViewModel _viewModel;
-    private readonly SignedThemePackReader? _themeReader;
+    private readonly IVerifiedThemePackReader? _themeReader;
     private readonly PackageId? _themePackageId;
     private readonly string? _themePath;
     private VerifiedThemePack? _verifiedTheme;
@@ -43,7 +43,7 @@ public sealed partial class MainWindow : Window
         MainWindowController controller,
         InstallerDesktopService desktopService,
         IReadOnlyList<string> startupArguments,
-        SignedThemePackReader? themeReader = null,
+        IVerifiedThemePackReader? themeReader = null,
         PackageId? themePackageId = null,
         string? themePath = null)
     {
