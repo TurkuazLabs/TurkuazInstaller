@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.5.0
+// Version: 1.5.1
 // Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
@@ -67,6 +67,9 @@ public sealed partial class MainWindow : Window
                 startupArguments.ToArray());
 
         MainRoot.DataContext = viewModel;
+        // A required theme may take time to verify. Prevent any user action
+        // before the signature check and full PNG decode have completed.
+        MainContent.IsEnabled = _themePackageId is null;
         Title = viewModel.WindowTitle;
 
         WinUiStartupDiagnostics.Record("MainWindowResizeStarting");
@@ -155,6 +158,7 @@ public sealed partial class MainWindow : Window
 
             _verifiedTheme = theme;
             ApplyVerifiedThemeForStage();
+            MainContent.IsEnabled = true;
             WinUiStartupDiagnostics.Record("SignedThemePackVerifiedAndDecoded");
             return true;
         }
