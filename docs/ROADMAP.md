@@ -98,3 +98,33 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [x] branding/localization extensions
 - [x] optional delta optimization behind Package Engine
 - [x] native ARM64 distribution
+
+
+## v1.3 Candidate — Signed External Theme Packs (QA only)
+
+- [x] Reuse existing detached CMS/PKCS#7 verifier and package-scoped publisher/certificate pin.
+- [x] Strict `theme.tpk` format: signed manifest + signed inventory + bounded PNG assets.
+- [x] Implement fail-closed runtime reader; reject extra ZIP files, traversal, symlinks, wrong product and modified images.
+- [x] Build-time OpenSSL signing utility without private keys in the repository.
+- [x] Add ephemeral-CMS signature and ZIP-policy regression tests to Core CI.
+- [ ] Prove a complete CI run of the latest theme-pack branch and an end-to-end real Windows GUI smoke.
+- [ ] Register production publisher certificate/pin through release trust tooling.
+- [x] Wire verified assets into opt-in WinUI views, disable controls before verification and fail closed on errors (source + CI; visual QA outstanding).
+- [x] Separate theme signer allowlist from mutable per-user update-manifest trust; empty by default until reviewed publisher pin is supplied.
+- [ ] Package and verify Ragnar's three approved originals; confirm setup stages on 100/125/150% DPI.
+- [ ] Add the separately installed Beam launcher theme assets to the Velopack payload.
+- [x] Implement optional AES-256-GCM `.tpe` envelope writer/reader; require a separately signed inner `.tpk`, verify GCM AAD/tag, clear key/plaintext after use and test tampering.
+- [x] Implement bounded HTTPS client `HttpsThemeDecryptionKeyProvider` with externally acquired short-lived session token, no redirect/no-store response, exact product/key identity and independent GCM+CMS acceptance tests.
+- [x] Implement testable server-side `ThemeKeyIssueService` permission gate: authenticated principal, exact OAuth scope, unique subject, server-managed product/key entitlement and vault access denial tests.
+- [ ] Integrate a validated-JWT HTTPS API host with real issuer/audience/expiry enforcement, entitlement store, KMS and rate limiting; no live service exists.
+- [ ] Implement trusted client `IThemeAccessTokenSource` login flow; finalize token scopes, key rotation/revocation and downtime policy.
+- [ ] Compile trusted key-issuer HTTPS endpoint into a signed, protected branded build; do not accept it from user configuration.
+- [ ] Enable `.tpe` in WinUI only after real provider, authenticated identity and production publisher pin are provisioned; fail closed with an explicit offline UX. Details: [Theme Key Issuer](THEME_KEY_ISSUER.md).
+- [ ] Verify user-visible confidentiality limitations under a realistic Windows local-attacker threat model; local memory/screenshots cannot be made uncopyable.
+- [ ] Define downgrade/rollback, revocation, signing rotation and malformed-image decoding acceptance tests.
+
+`SignedThemePackReader` is now consumed by opt-in TurkuazInstaller WinUI,
+but the separate native Ragnar setup wizard and Beam launcher do not consume it.
+The compiled theme trust allowlist is intentionally empty until production
+publisher approval. No real WinUI themed screenshot acceptance is claimed. Details:
+[Signed Theme Pack v1](SIGNED_THEME_PACK.md).

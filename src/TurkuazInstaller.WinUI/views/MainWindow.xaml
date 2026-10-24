@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 1.3.1
+# Version: 1.4.0
 # Aciklama: Kurulu uygulama katalogu, read-only update discovery, installer operations, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
@@ -14,7 +14,19 @@ Bagimli Oldugu Katman: View | Controller | Language
     <Grid
         x:Name="MainRoot"
         Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <ScrollViewer>
+        <!-- Render only cryptographically verified in-memory image resources. -->
+        <Image
+            x:Name="VerifiedThemeBackdrop"
+            Visibility="Collapsed"
+            IsHitTestVisible="False"
+            Opacity="0.45"
+            Stretch="UniformToFill" />
+        <Border
+            x:Name="VerifiedThemeContrastShade"
+            Visibility="Collapsed"
+            IsHitTestVisible="False"
+            Background="#AC0C162A" />
+        <ScrollViewer x:Name="MainContent">
             <Grid
                 Padding="32"
                 RowSpacing="24">
@@ -360,5 +372,14 @@ Bagimli Oldugu Katman: View | Controller | Language
                     Opacity="0.55" />
             </Grid>
         </ScrollViewer>
+        <InfoBar
+            x:Name="ThemeVerificationFailure"
+            IsOpen="False"
+            IsClosable="False"
+            Severity="Error"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top"
+            Title="Tema dosyası doğrulanamadı"
+            Message="Gerekli imzalı tema geçersiz ya da eksik. Kurulum işlemleri durduruldu." />
     </Grid>
 </Window>

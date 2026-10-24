@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Infrastructure.Tests/YamlInstallerUiProfileRepositoryTests.cs
 // 📌 Amac: YAML branding/localization profil parserinin typed ve fail-closed davranisini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.2.0
 // Aciklama: Missing file fallback, branding/label mapping, culture normalizasyonu, invalid culture ve unknown key reddini dogrular
 //
 // Bagimli Oldugu Katman: Repo | Tool | Language
@@ -138,6 +138,42 @@ public sealed class YamlInstallerUiProfileRepositoryTests
         {
             File.Delete(path);
         }
+    }
+
+    [Fact]
+    public void Read_AcceptsExplicitProductScopedThemeBinding()
+    {
+        var path = CreateProfile(
+            """
+            schema_version: 1
+            branding:
+              header_title: Turkuaz Ragnarok Online
+              theme_package_id: levelupgt.ragnar-classic-preview
+            """);
+
+        try
+        {
+            var profile = new YamlInstallerUiProfileRepository(path).Read();
+            Assert.Equal("levelupgt.ragnar-classic-preview",
+                profile.Branding.ThemePackageId);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [Theory]
+    [InlineData("../bad")]
+    [InlineData("bad product id")]
+    [InlineData("x")]
+    public void Read_RejectsMalformedThemeProductIdentity(string productId)
+    {
+        var path = CreateProfile(
+            "schema_version: 1\nbranding:\n  theme_package_id: " + productId + "\n");
+        try
+        {
+            Assert.ThrowsAny<Exception>(() =>
+                new YamlInstallerUiProfileRepository(path).Read());
+        }
+        finally { File.Delete(path); }
     }
 
     private static string CreateProfile(
