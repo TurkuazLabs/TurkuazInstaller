@@ -152,6 +152,38 @@ screenshots; AES encryption protects the *distributed package at rest* and
 against casual archive inspection, not against privileged runtime extraction.
 No DRM or uncopyable client data is promised.
 
+## Signed/encrypted source selection in WinUI (feature branch)
+
+Both `SignedThemePackReader` and `EncryptedSignedThemePackReader`
+implement the same `IVerifiedThemePackReader` contract. A reviewed,
+compile-time `CompiledThemePublisherPins.TransportMode` chooses one
+transport via `VerifiedThemePackSourceFactory`:
+
+| Compiled mode | Adjacent file opened | Required checks |
+| --- | --- | --- |
+| `SignedTpk` (Community QA default) | `theme.tpk` | Pinned CMS signature, product identity, all PNG hashes |
+| `EncryptedTpe` (not enabled) | `theme.tpe` | External authorized key, AES-GCM, THEN pinned CMS/product/PNG hashes |
+
+The source file is located relative to `AppContext.BaseDirectory`, not the
+working directory; neither `ui-profile.yml` nor package metadata is permitted
+to select transport. The application composition accepts an optional injected
+`IThemeDecryptionKeyProvider` for an externally authorized identity flow.
+When compiled encrypted mode is enabled **without** this provider,
+a deny-only implementation is selected. The encrypted reader rejects the
+request; the WinUI error notice appears and its installation controls remain
+disabled. It NEVER falls back to `theme.tpk`.
+
+The generic application still compiles as `SignedTpk` and the trusted theme
+signer allowlist remains empty. **Do not flip to EncryptedTpe for users**
+before a real authorization service, identity token source and reviewed
+publisher certificate pin have been wired into a signed product build.
+Changing the transport policy requires building and reviewing a new
+application binary.
+
+This is source-level WinUI integration and is **not evidence of working
+Ragnar Win32 installer artwork, Beam Tauri launcher theming, or final
+Windows GUI screenshot acceptance**.
+
 ## WinUI desktop integration (feature branch)
 
 The WinUI desktop now supports an **explicit opt-in** binding in the usual
