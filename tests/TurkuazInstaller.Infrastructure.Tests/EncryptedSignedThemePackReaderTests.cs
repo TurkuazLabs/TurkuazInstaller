@@ -1,7 +1,7 @@
 // Dosya Yolu: tests/TurkuazInstaller.Infrastructure.Tests/EncryptedSignedThemePackReaderTests.cs
 // Amac: Dis anahtarli AES-GCM zarfini ve zorunlu ic CMS imzasini dogrulamak
 // Modul - CSharp xUnit Tests
-// Version: 0.4.0-qa
+// Version: 0.5.0-qa
 // Aciklama: Gercek GCM, CMS ve ephemeral fixture; hatali anahtar, tamper ve baska urun red testleri
 // Bagimli Oldugu Katman: Security | Infrastructure | Trust
 
@@ -86,6 +86,62 @@ public sealed class EncryptedSignedThemePackReaderTests
         var verified = await source.Reader.ReadAsync(
             stream, PackageId.Parse(Product));
         Assert.Equal(Png, verified.ForScreen("welcome").ToArray());
+    }
+
+    [Fact]
+    public async Task CompiledExactReleasePinAcceptsOnlyApprovedSignedTheme()
+    {
+        using var cert = Certificate();
+        var pack = BuildSignedTheme(cert);
+        var trusted = TrustedSignedReader(cert);
+        var allowed = VerifiedThemePackSourceFactory.Create(
+            ThemePackTransportMode.SignedTpk, trusted,
+            releasePin: PinnedThemeRelease.Create("qa-landscape", "0.1.0"));
+
+        using var valid = new MemoryStream(pack);
+        var verified = await allowed.Reader.ReadAsync(
+            valid, PackageId.Parse(Product));
+        Assert.Equal("0.1.0", verified.Version);
+
+        var oldRelease = VerifiedThemePackSourceFactory.Create(
+            ThemePackTransportMode.SignedTpk, trusted,
+            releasePin: PinnedThemeRelease.Create("qa-landscape", "0.2.0"));
+        using var outdated = new MemoryStream(pack);
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            oldRelease.Reader.ReadAsync(outdated, PackageId.Parse(Product)));
+
+        var replacedTheme = VerifiedThemePackSourceFactory.Create(
+            ThemePackTransportMode.SignedTpk, trusted,
+            releasePin: PinnedThemeRelease.Create("other-theme", "0.1.0"));
+        using var changed = new MemoryStream(pack);
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            replacedTheme.Reader.ReadAsync(changed, PackageId.Parse(Product)));
+    }
+
+    [Fact]
+    public async Task ExactReleasePinAlsoGuardsEncryptedThemeAfterValidGcmAndCms()
+    {
+        using var cert = Certificate();
+        var key = RandomNumberGenerator.GetBytes(32);
+        var encrypted = EncryptedSignedThemePackWriter.Encrypt(
+            BuildSignedTheme(cert), key, "key-v1");
+        var source = VerifiedThemePackSourceFactory.Create(
+            ThemePackTransportMode.EncryptedTpe,
+            TrustedSignedReader(cert), new EphemeralProvider((byte[])key.Clone()),
+            PinnedThemeRelease.Create("qa-landscape", "0.2.0"));
+
+        using var input = new MemoryStream(encrypted);
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            source.Reader.ReadAsync(input, PackageId.Parse(Product)));
+    }
+
+    [Theory]
+    [InlineData("../bad-theme", "0.1.0")]
+    [InlineData("invalid theme", "0.1.0")]
+    [InlineData("approved", "v0.1.0")]
+    public void InvalidReleasePinCannotBeCreated(string id, string version)
+    {
+        Assert.ThrowsAny<Exception>(() => PinnedThemeRelease.Create(id, version));
     }
 
     [Fact]
