@@ -1,7 +1,7 @@
 // Dosya Yolu: tests/TurkuazInstaller.Infrastructure.Tests/EncryptedSignedThemePackReaderTests.cs
 // Amac: Dis anahtarli AES-GCM zarfini ve zorunlu ic CMS imzasini dogrulamak
 // Modul - CSharp xUnit Tests
-// Version: 0.1.0-qa
+// Version: 0.2.0-qa
 // Aciklama: Gercek GCM, CMS ve ephemeral fixture; hatali anahtar, tamper ve baska urun red testleri
 // Bagimli Oldugu Katman: Security | Infrastructure | Trust
 
@@ -43,6 +43,35 @@ public sealed class EncryptedSignedThemePackReaderTests
         Assert.Equal(Png, result.ForScreen("welcome").ToArray());
         Assert.DoesNotContain("manifest.json", Encoding.Latin1.GetString(envelope));
         Assert.True(provider.Key!.All(value => value == 0));
+    }
+
+    [Fact]
+    public async Task TrustedOfflineWriterRoundTripsWithRuntimeReader()
+    {
+        using var cert = Certificate();
+        var key = RandomNumberGenerator.GetBytes(32);
+        var signedPack = BuildSignedTheme(cert);
+
+        var a = EncryptedSignedThemePackWriter.Encrypt(signedPack, key, "key-v1");
+        var b = EncryptedSignedThemePackWriter.Encrypt(signedPack, key, "key-v1");
+        Assert.NotEqual(a, b); // Randomized nonce per encryption.
+        using var stream = new MemoryStream(a);
+        var verified = await Reader(cert, new EphemeralProvider((byte[])key.Clone()))
+            .ReadAsync(stream, PackageId.Parse(Product));
+        Assert.Equal(Png, verified.ForScreen("welcome").ToArray());
+    }
+
+    [Fact]
+    public void OfflineWriterRejectsUnsafeKeyIdentifiersAndShortKeys()
+    {
+        var data = new byte[] { 1, 2, 3 };
+        var key = RandomNumberGenerator.GetBytes(32);
+        Assert.Throws<ArgumentException>(() =>
+            EncryptedSignedThemePackWriter.Encrypt(data, key, "../attack"));
+        Assert.Throws<ArgumentException>(() =>
+            EncryptedSignedThemePackWriter.Encrypt(data, key, "SPACE KEY"));
+        Assert.Throws<ArgumentException>(() =>
+            EncryptedSignedThemePackWriter.Encrypt(data, new byte[16], "key-v1"));
     }
 
     [Fact]
