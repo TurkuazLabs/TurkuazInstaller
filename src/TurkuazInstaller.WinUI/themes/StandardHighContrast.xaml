@@ -14,4 +14,5 @@ Bagimli Oldugu Katman: View | Theme
     <SolidColorBrush x:Key="TurkuazInstallerAccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
     <SolidColorBrush x:Key="TurkuazInstallerHeadingBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
     <SolidColorBrush x:Key="TurkuazInstallerMutedTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+    <SolidColorBrush x:Key="TurkuazInstallerButtonTextBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
 </ResourceDictionary>

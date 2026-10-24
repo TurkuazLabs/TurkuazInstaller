@@ -15,7 +15,7 @@ Bagimli Oldugu Katman: View | Theme
     </ResourceDictionary.ThemeDictionaries>
     <Style x:Key="TurkuazInstallerPrimaryButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="{ThemeResource TurkuazInstallerAccentBrush}" />
-        <Setter Property="Foreground" Value="{ThemeResource TurkuazInstallerHeadingBrush}" />
+        <Setter Property="Foreground" Value="{ThemeResource TurkuazInstallerButtonTextBrush}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="CornerRadius" Value="8" />
         <Setter Property="Padding" Value="18,10" />
