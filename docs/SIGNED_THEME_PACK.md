@@ -173,6 +173,15 @@ a deny-only implementation is selected. The encrypted reader rejects the
 request; the WinUI error notice appears and its installation controls remain
 disabled. It NEVER falls back to `theme.tpk`.
 
+A product-specific signed build must also compile
+`CompiledThemePublisherPins.RequiredThemePackageId`,
+`RequiredThemeId` and `RequiredThemeVersion`. The resulting
+`PinnedThemeReleaseReader` rejects any otherwise valid signed pack
+whose signed theme ID or exact SemVer differs from the reviewed release.
+This blocks substituting old-but-still-signed artwork into a new
+installer; no user-writable file can lower the accepted version. The
+unit suite tests the lock with both `.tpk` and `.tpe`.
+
 The generic application still compiles as `SignedTpk` and the trusted theme
 signer allowlist remains empty. **Do not flip to EncryptedTpe for users**
 before a real authorization service, identity token source and reviewed
