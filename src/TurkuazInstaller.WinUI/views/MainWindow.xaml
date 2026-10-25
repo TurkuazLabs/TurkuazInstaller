@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 1.6.0
+# Version: 1.7.0
 # Aciklama: Kurulu uygulama katalogu, read-only update discovery, installer operations, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
@@ -14,46 +14,95 @@ Bagimli Oldugu Katman: View | Controller | Language
     <Grid
         x:Name="MainRoot"
         Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
         <!-- Render only cryptographically verified in-memory image resources. -->
         <Image
+            Grid.RowSpan="2"
             x:Name="VerifiedThemeBackdrop"
             Visibility="Collapsed"
             IsHitTestVisible="False"
             Opacity="0.96"
             Stretch="UniformToFill" />
         <Border
+            Grid.RowSpan="2"
             x:Name="VerifiedThemeContrastShade"
             Visibility="Collapsed"
             IsHitTestVisible="False"
             Background="#6B0C162A" />
-        <ScrollViewer x:Name="MainContent">
+        <!-- Appearance settings remain usable even while a required
+             signed theme is being verified. UI-only settings do not
+             affect publisher trust or installer operations. -->
+        <Border
+            Grid.Row="0"
+            Margin="24,18,24,6"
+            Padding="22,16"
+            CornerRadius="20"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1">
+            <Grid ColumnSpacing="18">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="5" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border
+                    Grid.Column="0"
+                    CornerRadius="4"
+                    Background="#0A9D96" />
+                <StackPanel Grid.Column="1" Spacing="5" VerticalAlignment="Center">
+                    <TextBlock
+                        Text="{Binding HeaderTitle}"
+                        FontSize="29"
+                        FontWeight="SemiBold"
+                        TextTrimming="CharacterEllipsis" />
+                    <TextBlock
+                        Text="{Binding HeaderSubtitle}"
+                        FontSize="14"
+                        TextWrapping="Wrap"
+                        Opacity="0.78" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="3" VerticalAlignment="Center">
+                    <ComboBox
+                        x:Name="AppearanceModeSelector"
+                        Header="Görünüm"
+                        MinWidth="154"
+                        SelectionChanged="AppearanceModeSelector_SelectionChanged"
+                        AutomationProperties.Name="Görünüm modu">
+                        <ComboBoxItem Content="Sistem" />
+                        <ComboBoxItem Content="Açık" />
+                        <ComboBoxItem Content="Koyu" />
+                    </ComboBox>
+                    <TextBlock
+                        x:Name="AppearanceSaveWarning"
+                        Text="Görünüm tercihi kaydedilemedi."
+                        Foreground="#E88B32"
+                        FontSize="11"
+                        TextWrapping="Wrap"
+                        MaxWidth="175"
+                        Visibility="Collapsed" />
+                </StackPanel>
+            </Grid>
+        </Border>
+        <ScrollViewer Grid.Row="1" x:Name="MainContent">
             <Grid
-                Padding="32"
-                RowSpacing="24">
+                Padding="24,18,24,30"
+                RowSpacing="20">
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <StackPanel
-                    Grid.Row="0"
-                    Spacing="6">
-                    <TextBlock
-                        Text="{Binding HeaderTitle}"
-                        FontSize="32"
-                        FontWeight="SemiBold" />
-                    <TextBlock
-                        Text="{Binding HeaderSubtitle}"
-                        FontSize="15"
-                        Opacity="0.72" />
-                </StackPanel>
-
                 <Border
-                    Grid.Row="1"
+                    Grid.Row="0"
                     Padding="24"
-                    CornerRadius="16"
+                    CornerRadius="18"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                     <Grid RowSpacing="12">
                         <Grid.RowDefinitions>
@@ -143,8 +192,8 @@ Bagimli Oldugu Katman: View | Controller | Language
                 </Border>
 
                 <Grid
-                    Grid.Row="2"
-                    Margin="0,8,0,0"
+                    Grid.Row="1"
+                    Margin="0,4,0,0"
                     ColumnSpacing="20">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="2*" />
@@ -154,7 +203,9 @@ Bagimli Oldugu Katman: View | Controller | Language
                     <Border
                         Grid.Column="0"
                         Padding="24"
-                        CornerRadius="16"
+                        CornerRadius="18"
+                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
                         Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                         <StackPanel Spacing="14">
                             <TextBlock
@@ -195,7 +246,9 @@ Bagimli Oldugu Katman: View | Controller | Language
                         Spacing="20">
                         <Border
                             Padding="24"
-                            CornerRadius="16"
+                            CornerRadius="18"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                             <StackPanel Spacing="12">
                                 <TextBlock
@@ -204,6 +257,7 @@ Bagimli Oldugu Katman: View | Controller | Language
                                     FontWeight="SemiBold" />
 
                                 <Button
+                                    Style="{StaticResource AccentButtonStyle}"
                                     Content="{Binding InstallLabel}"
                                     IsEnabled="{Binding CanRun}"
                                     HorizontalAlignment="Stretch"
@@ -233,7 +287,9 @@ Bagimli Oldugu Katman: View | Controller | Language
 
                         <Border
                             Padding="24"
-                            CornerRadius="16"
+                            CornerRadius="18"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                             <StackPanel Spacing="12">
                                 <TextBlock
@@ -314,7 +370,9 @@ Bagimli Oldugu Katman: View | Controller | Language
 
                         <Border
                             Padding="24"
-                            CornerRadius="16"
+                            CornerRadius="18"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                             <StackPanel Spacing="12">
                                 <TextBlock
@@ -337,7 +395,9 @@ Bagimli Oldugu Katman: View | Controller | Language
 
                         <Border
                             Padding="24"
-                            CornerRadius="16"
+                            CornerRadius="18"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                             <StackPanel Spacing="10">
                                 <TextBlock
@@ -368,13 +428,14 @@ Bagimli Oldugu Katman: View | Controller | Language
                 </Grid>
 
                 <TextBlock
-                    Grid.Row="3"
+                    Grid.Row="2"
                     Text="{Binding FooterLabel}"
                     HorizontalAlignment="Right"
                     Opacity="0.55" />
             </Grid>
         </ScrollViewer>
         <InfoBar
+            Grid.Row="1"
             x:Name="ThemeVerificationFailure"
             IsOpen="False"
             IsClosable="False"
