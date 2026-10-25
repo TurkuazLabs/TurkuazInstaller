@@ -1,7 +1,7 @@
 // Dosya Yolu: tests/TurkuazInstaller.ThemeKeyServer.Tests/ThemeKeyApiIntegrationTests.cs
 // Amac: Dogrulanmis JWT, HTTPS ve entitlement/vault kontrollu HTTP testi
 // Modul - CSharp xUnit WebApplicationFactory Tests
-// Version: 0.1.0-qa
+// Version: 0.1.1-qa
 // Aciklama: Gecici RSA JWT testleridir; token/public issuer/anahtar gercek degildir
 // Bagimli Oldugu Katman: ThemeKeyServer | Authentication | Authorization
 
@@ -203,7 +203,7 @@ public sealed class ThemeKeyApiIntegrationTests
                         var provider = new OpenIdConnectConfiguration { Issuer = Issuer };
                         provider.SigningKeys.Add(rsaKey);
                         options.Authority = null; // isolated in-memory test, no OIDC discovery HTTP
-                        options.MetadataAddress = null;
+                        options.MetadataAddress = string.Empty;
                         options.Configuration = provider;
                         options.ConfigurationManager =
                             new StaticConfigurationManager<OpenIdConnectConfiguration>(provider);
