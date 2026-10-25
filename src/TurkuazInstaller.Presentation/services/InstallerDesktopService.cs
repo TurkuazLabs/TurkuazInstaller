@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
 // 📌 Amac: Ana pencere startup resume, request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.8.0
+// Version: 1.8.1
 // Aciklama: Manual/resume, catalog, background update ve discovery/mutation UX akislarinda tum kullanici metinlerini typed Language katalogundan cozer
 //
 // Bagimli Oldugu Katman: Service | View | Language
@@ -313,6 +313,10 @@ public sealed class InstallerDesktopService
                 _ui.Resolve(InstallerUiLabelKey.PackageIdRequired));
         }
 
+        // Product policy is checked BEFORE operation-specific form fields,
+        // so even incomplete rollback/uninstall requests fail on wrong ID.
+        VerifyRequiredPackage(PackageId.Parse(_viewModel.PackageIdText));
+
         if (
             operation != InstallerOperationKind.Uninstall &&
             string.IsNullOrWhiteSpace(
@@ -335,8 +339,6 @@ public sealed class InstallerDesktopService
             _viewModel.SelectedChannelIndex == 1
                 ? ReleaseChannel.Beta
                 : ReleaseChannel.Stable;
-
-        VerifyRequiredPackage(PackageId.Parse(_viewModel.PackageIdText));
 
         return new InstallerDesktopRequest(
             operation,
