@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 1.4.0
+# Version: 1.5.0
 # Aciklama: Kurulu uygulama katalogu, read-only update discovery, installer operations, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
@@ -19,13 +19,13 @@ Bagimli Oldugu Katman: View | Controller | Language
             x:Name="VerifiedThemeBackdrop"
             Visibility="Collapsed"
             IsHitTestVisible="False"
-            Opacity="0.45"
+            Opacity="0.96"
             Stretch="UniformToFill" />
         <Border
             x:Name="VerifiedThemeContrastShade"
             Visibility="Collapsed"
             IsHitTestVisible="False"
-            Background="#AC0C162A" />
+            Background="#6B0C162A" />
         <ScrollViewer x:Name="MainContent">
             <Grid
                 Padding="32"
@@ -163,6 +163,7 @@ Bagimli Oldugu Katman: View | Controller | Language
                                 FontWeight="SemiBold" />
 
                             <TextBox
+                                x:Name="PackageIdEntry"
                                 Header="{Binding PackageIdLabel}"
                                 Text="{Binding PackageIdText, Mode=TwoWay}" />
 

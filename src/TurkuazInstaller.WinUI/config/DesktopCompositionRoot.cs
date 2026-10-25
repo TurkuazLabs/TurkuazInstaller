@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.16.0
+// Version: 1.17.0
 // Aciklama: Theme trust bilgisini user YAML yerine compile-time allowlist'ten getirir
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
@@ -183,6 +183,17 @@ internal static class DesktopCompositionRoot
                 backgroundUpdatePolicy,
                 uiCatalog);
 
+        // Product identity is compiled into signed branded releases; user
+        // YAML can neither disable nor switch the mutation target.
+        var compiledProduct = CompiledThemePublisherPins.RequiredThemePackageId;
+        var requiredProductId = compiledProduct is null
+            ? null
+            : TurkuazInstaller.Domain.Products.PackageId.Parse(compiledProduct);
+        if (requiredProductId is not null)
+        {
+            viewModel.PackageIdText = requiredProductId.Value;
+        }
+
         var desktopService =
             new InstallerDesktopService(
                 viewModel,
@@ -192,7 +203,8 @@ internal static class DesktopCompositionRoot
                     stateRepository,
                     uiCatalog),
                 backgroundUpdateService,
-                uiCatalog);
+                uiCatalog,
+                requiredProductId);
 
         var controller =
             new MainWindowController(
@@ -200,7 +212,6 @@ internal static class DesktopCompositionRoot
 
         // An explicitly product-bound theme is mandatory when configured.
         // A theme.tpk may not supply its own trust anchor.
-        var compiledProduct = CompiledThemePublisherPins.RequiredThemePackageId;
         var requestedProduct = uiProfile.Branding.ThemePackageId;
         if (compiledProduct is not null && requestedProduct is not null &&
             !string.Equals(compiledProduct, requestedProduct, StringComparison.Ordinal))
@@ -245,6 +256,7 @@ internal static class DesktopCompositionRoot
             themeSource?.Reader,
             themePackageId,
             themeSource is null ? null
-                : Path.Combine(AppContext.BaseDirectory, themeSource.FileName));
+                : Path.Combine(AppContext.BaseDirectory, themeSource.FileName),
+            requiredProductId is not null);
     }
 }

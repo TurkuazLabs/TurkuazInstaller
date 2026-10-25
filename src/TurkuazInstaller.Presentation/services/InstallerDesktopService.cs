@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
 // 📌 Amac: Ana pencere startup resume, request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.7.0
+// Version: 1.8.0
 // Aciklama: Manual/resume, catalog, background update ve discovery/mutation UX akislarinda tum kullanici metinlerini typed Language katalogundan cozer
 //
 // Bagimli Oldugu Katman: Service | View | Language
@@ -25,6 +25,7 @@ public sealed class InstallerDesktopService
     private readonly InstalledAppCatalogService? _catalogService;
     private readonly BackgroundUpdateService? _backgroundUpdateService;
     private readonly InstallerUiCatalog _ui;
+    private readonly PackageId? _requiredPackageId;
     private CancellationTokenSource? _operationCancellation;
     private InstallerDesktopRequest? _lastRequest;
 
@@ -61,13 +62,15 @@ public sealed class InstallerDesktopService
         InstallerResumeLaunchParser resumeLaunchParser,
         InstalledAppCatalogService? catalogService,
         BackgroundUpdateService? backgroundUpdateService,
-        InstallerUiCatalog? uiCatalog = null)
+        InstallerUiCatalog? uiCatalog = null,
+        PackageId? requiredPackageId = null)
     {
         _viewModel = viewModel;
         _runtimeService = runtimeService;
         _resumeLaunchParser = resumeLaunchParser;
         _catalogService = catalogService;
         _backgroundUpdateService = backgroundUpdateService;
+        _requiredPackageId = requiredPackageId;
 
         _ui =
             uiCatalog
@@ -90,6 +93,10 @@ public sealed class InstallerDesktopService
             resumePackageId =
                 _resumeLaunchParser.Parse(
                     launchArguments);
+            if (resumePackageId is not null)
+            {
+                VerifyRequiredPackage(resumePackageId);
+            }
         }
         catch (Exception exception)
         {
@@ -255,6 +262,15 @@ public sealed class InstallerDesktopService
         _backgroundUpdateService?.Dispose();
     }
 
+    private void VerifyRequiredPackage(PackageId package)
+    {
+        if (_requiredPackageId is not null && package != _requiredPackageId)
+        {
+            throw new InvalidOperationException(
+                "This branded installer is restricted to its compiled product identity.");
+        }
+    }
+
     private InstallerUpdateCheckRequest CreateUpdateCheckRequest()
     {
         if (
@@ -277,6 +293,8 @@ public sealed class InstallerDesktopService
             _viewModel.SelectedChannelIndex == 1
                 ? ReleaseChannel.Beta
                 : ReleaseChannel.Stable;
+
+        VerifyRequiredPackage(PackageId.Parse(_viewModel.PackageIdText));
 
         return new InstallerUpdateCheckRequest(
             _viewModel.PackageIdText.Trim(),
@@ -317,6 +335,8 @@ public sealed class InstallerDesktopService
             _viewModel.SelectedChannelIndex == 1
                 ? ReleaseChannel.Beta
                 : ReleaseChannel.Stable;
+
+        VerifyRequiredPackage(PackageId.Parse(_viewModel.PackageIdText));
 
         return new InstallerDesktopRequest(
             operation,
