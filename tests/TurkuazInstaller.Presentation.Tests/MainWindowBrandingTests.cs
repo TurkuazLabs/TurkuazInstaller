@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/MainWindowBrandingTests.cs
 // 📌 Amac: MainWindowViewModel branding/localization override ve fallback davranisini test eder
 // 📌 Modul - Test CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Branding, channel, placeholder ve runtime initial state override davranisini built-in fallback ile birlikte dogrular
 //
 // Bagimli Oldugu Katman: View | Language | Config
@@ -41,7 +41,9 @@ public sealed class MainWindowBrandingTests
                     [InstallerUiLabelKey.ManifestPlaceholder] =
                         "https://example.test/manifest.yml",
                     [InstallerUiLabelKey.InstalledAppsCountPrefix] =
-                        "Installed packages:"
+                        "Installed packages:",
+                    [InstallerUiLabelKey.AppearanceTitle] = "Appearance",
+                    [InstallerUiLabelKey.AppearanceDark] = "Dark"
                 });
 
         var viewModel =
@@ -89,5 +91,8 @@ public sealed class MainWindowBrandingTests
         Assert.Equal(
             "Installed packages: 0",
             viewModel.InstalledAppsCountText);
+        Assert.Equal("Appearance", viewModel.AppearanceTitle);
+        Assert.Equal("Dark", viewModel.AppearanceDarkLabel);
+        Assert.Equal(InstallerUiLabels.AppearanceSystem, viewModel.AppearanceSystemLabel);
     }
 }

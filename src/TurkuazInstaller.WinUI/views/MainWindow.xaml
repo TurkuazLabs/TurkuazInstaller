@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 1.7.0
+# Version: 1.7.1
 # Aciklama: Kurulu uygulama katalogu, read-only update discovery, installer operations, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
@@ -68,17 +68,17 @@ Bagimli Oldugu Katman: View | Controller | Language
                 <StackPanel Grid.Column="2" Spacing="3" VerticalAlignment="Center">
                     <ComboBox
                         x:Name="AppearanceModeSelector"
-                        Header="Görünüm"
+                        Header="{Binding AppearanceTitle}"
                         MinWidth="154"
                         SelectionChanged="AppearanceModeSelector_SelectionChanged"
-                        AutomationProperties.Name="Görünüm modu">
-                        <ComboBoxItem Content="Sistem" />
-                        <ComboBoxItem Content="Açık" />
-                        <ComboBoxItem Content="Koyu" />
+                        AutomationProperties.Name="{Binding AppearanceTitle}">
+                        <ComboBoxItem Content="{Binding AppearanceSystemLabel}" />
+                        <ComboBoxItem Content="{Binding AppearanceLightLabel}" />
+                        <ComboBoxItem Content="{Binding AppearanceDarkLabel}" />
                     </ComboBox>
                     <TextBlock
                         x:Name="AppearanceSaveWarning"
-                        Text="Görünüm tercihi kaydedilemedi."
+                        Text="{Binding AppearanceSaveFailedLabel}"
                         Foreground="#E88B32"
                         FontSize="11"
                         TextWrapping="Wrap"
