@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.18.0
+// Version: 1.19.0
 // Aciklama: Theme trust bilgisini user YAML yerine compile-time allowlist'ten getirir
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
@@ -278,6 +278,8 @@ internal static class DesktopCompositionRoot
             themePackageId,
             themeSource is null ? null
                 : Path.Combine(AppContext.BaseDirectory, themeSource.FileName),
-            requiredProductId is not null);
+            requiredProductId is not null,
+            new InstallerAppearancePreferenceStore(
+                DesktopPathDefaults.CreateAppearancePreferencePath()));
     }
 }
