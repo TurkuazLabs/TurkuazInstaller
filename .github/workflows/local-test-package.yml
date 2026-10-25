@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /.github/workflows/local-test-package.yml
 # 📌 Amac: Production signing sirlarini atlamadan Windows x64 lokal test ZIP artifacti uretmek
 # 📌 Modul - CI YAML
-# Version: 2.8.1
+# Version: 2.9.0
 # Aciklama: Test-only unsigned bootstrap/WinUI/CLI paketini dogrular, kisa sureli CI artifacti olarak yukler; GitHub Release/tag olusturmaz
 # Bagimli Oldugu Katman: Tool | Repo | Config
 
@@ -89,6 +89,10 @@ jobs:
       - name: Real Windows GUI startup smoke before distributing unsigned ZIP
         shell: pwsh
         run: ./tools/diagnostics/Test-LocalGuiStartup.ps1 -DistributionRoot artifacts/local-test/distribution
+
+      - name: Real Windows GUI rejects invalid theme before installer startup
+        shell: pwsh
+        run: ./tools/diagnostics/Test-LocalGuiThemeRejection.ps1 -DistributionRoot artifacts/local-test/distribution
 
       - name: Produce reproducible test ZIP
         shell: pwsh
