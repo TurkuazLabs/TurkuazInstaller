@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /TurkuazInstaller.slnx
 # 📌 Amac: TurkuazInstaller Core ve framework bagimsiz Presentation kaynak/test projelerini tek solution altinda toplar
 # 📌 Modul - XML
-# Version: 0.7.0
+# Version: 0.8.0
 # Aciklama: Linux Core CI kapsaminda Domain, Contracts, Application, Infrastructure, Presentation ve unit testleri derler
 
 Bagimli Oldugu Katman: Tool
@@ -14,11 +14,13 @@ Bagimli Oldugu Katman: Tool
     <Project Path="src/TurkuazInstaller.Application/TurkuazInstaller.Application.csproj" />
     <Project Path="src/TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj" />
     <Project Path="src/TurkuazInstaller.Presentation/TurkuazInstaller.Presentation.csproj" />
+    <Project Path="src/TurkuazInstaller.ThemeKeyServer/TurkuazInstaller.ThemeKeyServer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TurkuazInstaller.Domain.Tests/TurkuazInstaller.Domain.Tests.csproj" />
     <Project Path="tests/TurkuazInstaller.Application.Tests/TurkuazInstaller.Application.Tests.csproj" />
     <Project Path="tests/TurkuazInstaller.Infrastructure.Tests/TurkuazInstaller.Infrastructure.Tests.csproj" />
     <Project Path="tests/TurkuazInstaller.Presentation.Tests/TurkuazInstaller.Presentation.Tests.csproj" />
+    <Project Path="tests/TurkuazInstaller.ThemeKeyServer.Tests/TurkuazInstaller.ThemeKeyServer.Tests.csproj" />
   </Folder>
 </Solution>
