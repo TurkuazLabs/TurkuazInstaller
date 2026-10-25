@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml
 # 📌 Amac: TurkuazInstaller ana WinUI 3 masaustu arayuzunu render eder
 # 📌 Modul - View XAML
-# Version: 1.5.0
+# Version: 1.6.0
 # Aciklama: Kurulu uygulama katalogu, read-only update discovery, installer operations, progress ve recovery UX'ini tek pencerede sunar
 
 Bagimli Oldugu Katman: View | Controller | Language
@@ -173,6 +173,7 @@ Bagimli Oldugu Katman: View | Controller | Language
                                 SelectedIndex="{Binding SelectedChannelIndex, Mode=TwoWay}" />
 
                             <TextBox
+                                x:Name="ManifestSourceEntry"
                                 Header="{Binding ManifestSourceLabel}"
                                 Text="{Binding ManifestSource, Mode=TwoWay}"
                                 PlaceholderText="{Binding ManifestPlaceholder}" />

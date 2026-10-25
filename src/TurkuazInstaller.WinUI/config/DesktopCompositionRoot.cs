@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/config/DesktopCompositionRoot.cs
 // 📌 Amac: WinUI desktop uygulamasinin Controller, Service, Repo, Tool, View ve Language bagimliliklarini tek composition rootta kurar
 // 📌 Modul - Config CSharp
-// Version: 1.17.0
+// Version: 1.18.0
 // Aciklama: Theme trust bilgisini user YAML yerine compile-time allowlist'ten getirir
 //
 // Bagimli Oldugu Katman: Controller | Service | Repo | Tool | View | Language
@@ -39,6 +39,14 @@ internal static class DesktopCompositionRoot
         var runtimeOptions =
             DesktopPathDefaults.CreateRuntimeOptions();
 
+        var compiledProduct = CompiledThemePublisherPins.RequiredThemePackageId;
+        var requiredProductId = compiledProduct is null
+            ? null
+            : TurkuazInstaller.Domain.Products.PackageId.Parse(compiledProduct);
+        string? approvedManifestUrl = null;
+
+
+
         var networkProxyOptions =
             new WindowsNetworkProxyOptionsReader(
                 WindowsNetworkProxyDefaults
@@ -63,10 +71,25 @@ internal static class DesktopCompositionRoot
         var manifestReader =
             new InstallerManifestReader();
 
-        var manifestTrustRepository =
-            new YamlManifestTrustPolicyRepository(
+        // Generic community mode retains mutable update-manifest trust.
+        // Branded builds MUST compile both manifest source and release signer.
+        // Missing pins deliberately stop startup instead of opening an
+        // unauthorized manifest via writable user configuration.
+        TurkuazInstaller.Contracts.Manifests.IManifestTrustPolicyRepository
+            manifestTrustRepository;
+        if (requiredProductId is null)
+        {
+            manifestTrustRepository = new YamlManifestTrustPolicyRepository(
                 new YamlManifestTrustPolicyRepositoryOptions(
                     runtimeOptions.ManifestTrustStorePath));
+        }
+        else
+        {
+            var approvedRelease =
+                CompiledBrandedReleasePolicy.Create(requiredProductId);
+            manifestTrustRepository = approvedRelease.Trust;
+            approvedManifestUrl = approvedRelease.ManifestUrl;
+        }
 
         var manifestSignatureVerifier =
             new CmsManifestSignatureVerifier(
@@ -185,13 +208,10 @@ internal static class DesktopCompositionRoot
 
         // Product identity is compiled into signed branded releases; user
         // YAML can neither disable nor switch the mutation target.
-        var compiledProduct = CompiledThemePublisherPins.RequiredThemePackageId;
-        var requiredProductId = compiledProduct is null
-            ? null
-            : TurkuazInstaller.Domain.Products.PackageId.Parse(compiledProduct);
         if (requiredProductId is not null)
         {
             viewModel.PackageIdText = requiredProductId.Value;
+            viewModel.ManifestSource = approvedManifestUrl!;
         }
 
         var desktopService =
@@ -204,7 +224,8 @@ internal static class DesktopCompositionRoot
                     uiCatalog),
                 backgroundUpdateService,
                 uiCatalog,
-                requiredProductId);
+                requiredProductId,
+                approvedManifestUrl);
 
         var controller =
             new MainWindowController(

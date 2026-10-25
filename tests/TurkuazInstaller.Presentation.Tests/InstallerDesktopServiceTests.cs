@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /tests/TurkuazInstaller.Presentation.Tests/InstallerDesktopServiceTests.cs
 // 📌 Amac: InstallerDesktopService progress, success ve recovery state davranisini unit test ile dogrular
 // 📌 Modul - Test CSharp
-// Version: 1.5.0
+// Version: 1.6.0
 // Aciklama: Progress/reboot resume/catalog davranisina ek olarak read-only update discovery state ve hata ayrimini test eder
 //
 // Bagimli Oldugu Katman: Service | View
@@ -547,6 +547,42 @@ public sealed class InstallerDesktopServiceTests
 
         Assert.Null(runtime.LastUpdateCheckRequest);
         Assert.True(viewModel.HasUpdateDiscoveryError);
+    }
+
+    [Fact]
+    public async Task BrandedReleaseCannotRunDifferentManifestForSamePackage()
+    {
+        var viewModel = CreateViewModel();
+        var runtime = new StubRuntimeService();
+        using var service = new InstallerDesktopService(
+            viewModel, runtime, new InstallerResumeLaunchParser(),
+            null, null, null, PackageId.Parse("example-app"),
+            "https://trusted.publisher.invalid/official.yml");
+
+        await service.RunAsync(InstallerOperationKind.Install);
+        Assert.True(viewModel.HasError);
+        Assert.Contains("compiled manifest source", viewModel.ErrorMessage);
+        Assert.Null(runtime.LastRequest);
+
+        await service.CheckForUpdatesAsync();
+        Assert.True(viewModel.HasUpdateDiscoveryError);
+        Assert.Null(runtime.LastUpdateCheckRequest);
+    }
+
+    [Fact]
+    public async Task BrandedReleaseAcceptsItsCompiledProductAndManifestSource()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.ManifestSource = "https://trusted.publisher.invalid/official.yml";
+        var runtime = new StubRuntimeService();
+        using var service = new InstallerDesktopService(
+            viewModel, runtime, new InstallerResumeLaunchParser(),
+            null, null, null, PackageId.Parse("example-app"),
+            "https://trusted.publisher.invalid/official.yml");
+
+        await service.RunAsync(InstallerOperationKind.Install);
+        Assert.False(viewModel.HasError);
+        Assert.NotNull(runtime.LastRequest);
     }
 
     [Fact]

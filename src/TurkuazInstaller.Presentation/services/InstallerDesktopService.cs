@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/services/InstallerDesktopService.cs
 // 📌 Amac: Ana pencere startup resume, request validation, progress, cancel, retry ve error recovery is kurallarini yonetir
 // 📌 Modul - Service CSharp
-// Version: 1.8.1
+// Version: 1.9.0
 // Aciklama: Manual/resume, catalog, background update ve discovery/mutation UX akislarinda tum kullanici metinlerini typed Language katalogundan cozer
 //
 // Bagimli Oldugu Katman: Service | View | Language
@@ -26,6 +26,7 @@ public sealed class InstallerDesktopService
     private readonly BackgroundUpdateService? _backgroundUpdateService;
     private readonly InstallerUiCatalog _ui;
     private readonly PackageId? _requiredPackageId;
+    private readonly string? _requiredManifestSource;
     private CancellationTokenSource? _operationCancellation;
     private InstallerDesktopRequest? _lastRequest;
 
@@ -63,7 +64,8 @@ public sealed class InstallerDesktopService
         InstalledAppCatalogService? catalogService,
         BackgroundUpdateService? backgroundUpdateService,
         InstallerUiCatalog? uiCatalog = null,
-        PackageId? requiredPackageId = null)
+        PackageId? requiredPackageId = null,
+        string? requiredManifestSource = null)
     {
         _viewModel = viewModel;
         _runtimeService = runtimeService;
@@ -71,6 +73,7 @@ public sealed class InstallerDesktopService
         _catalogService = catalogService;
         _backgroundUpdateService = backgroundUpdateService;
         _requiredPackageId = requiredPackageId;
+        _requiredManifestSource = requiredManifestSource;
 
         _ui =
             uiCatalog
@@ -271,6 +274,17 @@ public sealed class InstallerDesktopService
         }
     }
 
+    private void VerifyRequiredManifestSource(string source)
+    {
+        if (_requiredManifestSource is not null &&
+            !string.Equals(source.Trim(), _requiredManifestSource,
+                StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "This branded installer is restricted to its compiled manifest source.");
+        }
+    }
+
     private InstallerUpdateCheckRequest CreateUpdateCheckRequest()
     {
         if (
@@ -295,6 +309,8 @@ public sealed class InstallerDesktopService
                 : ReleaseChannel.Stable;
 
         VerifyRequiredPackage(PackageId.Parse(_viewModel.PackageIdText));
+
+        VerifyRequiredManifestSource(_viewModel.ManifestSource);
 
         return new InstallerUpdateCheckRequest(
             _viewModel.PackageIdText.Trim(),
@@ -339,6 +355,11 @@ public sealed class InstallerDesktopService
             _viewModel.SelectedChannelIndex == 1
                 ? ReleaseChannel.Beta
                 : ReleaseChannel.Stable;
+
+        if (operation != InstallerOperationKind.Uninstall)
+        {
+            VerifyRequiredManifestSource(_viewModel.ManifestSource);
+        }
 
         return new InstallerDesktopRequest(
             operation,
