@@ -1,7 +1,7 @@
 // Dosya Yolu: src/TurkuazInstaller.ThemeKeyServer/Program.cs
 // Amac: OIDC JWT middleware ile sifreli tema anahtar API'si olusturmak
 // Modul - CSharp Web Host
-// Version: 0.1.0-qa
+// Version: 0.2.0-qa
 // Aciklama: Gecersiz IdP/yetki ve HTTP deny; server-side entitlement/KMS olmadan key cikmaz
 // Bagimli Oldugu Katman: ASP.NET Core | Infrastructure | Identity
 
@@ -16,20 +16,11 @@ var builder = WebApplication.CreateBuilder(args);
 // This service is not deployable by default. Its authority/audience are
 // trusted deployment configuration, NEVER supplied by a .tpe or end user.
 // A missing identity configuration is a startup error, not anonymous mode.
-var authorityText = builder.Configuration["ThemeKeyIssuer:Authority"];
-var audience = builder.Configuration["ThemeKeyIssuer:Audience"];
-if (!Uri.TryCreate(authorityText, UriKind.Absolute, out var authority) ||
-    authority.Scheme != Uri.UriSchemeHttps ||
-    string.IsNullOrWhiteSpace(authority.Host) ||
-    !string.IsNullOrEmpty(authority.UserInfo) ||
-    !string.IsNullOrEmpty(authority.Query) ||
-    !string.IsNullOrEmpty(authority.Fragment) ||
-    string.IsNullOrWhiteSpace(audience) ||
-    audience.Length > 256)
-{
-    throw new InvalidOperationException(
-        "Trusted ThemeKeyIssuer Authority (HTTPS) and Audience must be configured.");
-}
+builder.Services.AddOptions<ThemeKeyIssuerOptions>()
+    .BindConfiguration("ThemeKeyIssuer")
+    .Validate(settings => settings.IsValid(),
+        "A trusted HTTPS ThemeKeyIssuer Authority and Audience are required.")
+    .ValidateOnStart();
 
 builder.WebHost.ConfigureKestrel(options =>
     options.Limits.MaxRequestBodySize = 1024);
@@ -38,16 +29,21 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.Authority = authority.ToString().TrimEnd('/');
-        options.Audience = audience;
+        var settings = builder.Configuration.GetSection("ThemeKeyIssuer")
+            .Get<ThemeKeyIssuerOptions>() ??
+                throw new InvalidOperationException("ThemeKeyIssuer settings are required.");
+        var trustedIssuer = settings.GetTrustedIssuer();
+
+        options.Authority = trustedIssuer;
+        options.Audience = settings.Audience;
         options.RequireHttpsMetadata = true;
         options.MapInboundClaims = false;
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
-            ValidIssuer = authority.ToString().TrimEnd('/'),
+            ValidIssuer = trustedIssuer,
             ValidateAudience = true,
-            ValidAudience = audience,
+            ValidAudience = settings.Audience,
             ValidateLifetime = true,
             RequireExpirationTime = true,
             RequireSignedTokens = true,
