@@ -1,12 +1,14 @@
 // Dosya Yolu: src/TurkuazInstaller.ThemeKeyServer/Program.cs
 // Amac: OIDC JWT middleware ile sifreli tema anahtar API'si olusturmak
 // Modul - CSharp Web Host
-// Version: 0.2.0-qa
+// Version: 0.3.0-qa
 // Aciklama: Gecersiz IdP/yetki ve HTTP deny; server-side entitlement/KMS olmadan key cikmaz
 // Bagimli Oldugu Katman: ASP.NET Core | Infrastructure | Identity
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using TurkuazInstaller.Infrastructure.Branding;
 using TurkuazInstaller.ThemeKeyServer;
@@ -60,6 +62,32 @@ builder.Services.AddAuthorization(options =>
         JwtBearerDefaults.AuthenticationScheme).RequireAuthenticatedUser().Build();
 });
 
+// Rate-limit authenticated subjects on every key-issuing API instance.
+// Production deployments also require shared edge/WAF limits across replicas.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("theme-key", context =>
+    {
+        // Use the cryptographically validated bearer subject, not any
+        // client-supplied product, query string, claim header or JSON body.
+        var subject = context.User.FindFirst("sub")?.Value;
+        var partition = context.User.Identity?.IsAuthenticated == true &&
+            !string.IsNullOrEmpty(subject)
+                ? "subject:" + subject
+                : "ip:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown");
+
+        return RateLimitPartition.GetFixedWindowLimiter(partition,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
+});
+
 // DENY-BY-DEFAULT PLACEHOLDERS: a real, reviewed KMS + entitlement adapter
 // must explicitly replace these via publisher-managed service registration.
 // Merely starting the API never enables a valid key response.
@@ -80,11 +108,14 @@ app.Use(async (context, next) =>
     }
     await next();
 });
+app.UseRouting();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapPost("/v1/theme-key", ThemeKeyApiEndpoint.HandleAsync)
-    .RequireAuthorization();
+    .RequireAuthorization()
+    .RequireRateLimiting("theme-key");
 
 app.Run();
 

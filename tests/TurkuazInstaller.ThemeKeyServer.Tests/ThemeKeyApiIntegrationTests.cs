@@ -1,7 +1,7 @@
 // Dosya Yolu: tests/TurkuazInstaller.ThemeKeyServer.Tests/ThemeKeyApiIntegrationTests.cs
 // Amac: Dogrulanmis JWT, HTTPS ve entitlement/vault kontrollu HTTP testi
 // Modul - CSharp xUnit WebApplicationFactory Tests
-// Version: 0.2.0-qa
+// Version: 0.3.0-qa
 // Aciklama: Gecici RSA JWT testleridir; token/public issuer/anahtar gercek degildir
 // Bagimli Oldugu Katman: ThemeKeyServer | Authentication | Authorization
 
@@ -93,6 +93,29 @@ public sealed class ThemeKeyApiIntegrationTests
         Assert.True(response.Headers.CacheControl?.NoStore);
         Assert.Equal(0, app.Entitlements.Calls);
         Assert.Equal(0, app.Vault.Calls);
+    }
+
+    [Fact]
+    public async Task AuthenticatedKeyRequestsAreRateLimitedWithoutVaultAccessAfterLimit()
+    {
+        using var app = new AppFixture(entitled: true);
+        using var client = app.CreateHttpsClient();
+        var token = app.Token();
+
+        for (var i = 0; i < 10; i++)
+        {
+            using var allowed = ValidRequest(token);
+            using var response = await client.SendAsync(allowed);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.True(response.Headers.CacheControl?.NoStore);
+        }
+
+        using var denied = ValidRequest(token);
+        using var rejected = await client.SendAsync(denied);
+        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        Assert.True(rejected.Headers.CacheControl?.NoStore);
+        Assert.Equal(10, app.Entitlements.Calls);
+        Assert.Equal(10, app.Vault.Calls);
     }
 
     [Fact]

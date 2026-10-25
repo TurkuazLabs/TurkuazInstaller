@@ -2,7 +2,7 @@
 Dosya Yolu: docs/THEME_KEY_ISSUER.md
 Amac: TPE dis anahtar tedariki icin sunucu/istemci guvenlik kontratini tanimlamak
 Modul - Markdown
-Version: 0.3.0-qa
+Version: 0.4.0-qa
 Aciklama: OAuth benzeri guvenilir session, scope, TLS ve anahtar sunucu sorumluluklari
 Bagimli Oldugu Katman: Security | Infrastructure | API
 -->
@@ -107,6 +107,11 @@ A separate .NET 10 project now implements a deny-by-default HTTPS endpoint:
 - Standard Microsoft JwtBearer verifies signed `at+jwt` tokens, known OIDC issuer,
   audience, signing key and lifetime with 30-second clock skew.
 - Direct HTTPS is mandatory. Untrusted forwarded headers cannot bypass it.
+- Per-validated-subject in-process fixed-window limit of 10 key requests
+  per minute, no queue; the 11th gets HTTP 429 before entitlement or vault
+  access. This is defense-in-depth, NOT a distributed/edge abuse-control
+  solution. Real hosting requires independently managed IP and distributed
+  rate limits across server instances.
 - Strict JSON has exactly `package_id` and `key_id`, no duplicate/unknown grants,
   at most 1024 bytes; output and denials always set `Cache-Control: no-store`.
 - 401 for missing/invalid bearer; 403 for missing entitlement; 400 for malformed
