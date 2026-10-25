@@ -1,0 +1,22 @@
+<!--
+Dosya Yolu: tests/TurkuazInstaller.ThemeKeyServer.Tests/TurkuazInstaller.ThemeKeyServer.Tests.csproj
+Amac: JWT middleware ve HTTPS anahtar POST API entegrasyonu
+Modul - Test Project XML
+Version: 0.1.0-qa
+Aciklama: Ephemeral RSA JWT ve deny-by-default service fakes; network yok
+Bagimli Oldugu Katman: ThemeKeyServer | Identity | Security
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TurkuazInstaller.ThemeKeyServer/TurkuazInstaller.ThemeKeyServer.csproj" />
+    <ProjectReference Include="../../src/TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio"><PrivateAssets>all</PrivateAssets></PackageReference>
+  </ItemGroup>
+</Project>
