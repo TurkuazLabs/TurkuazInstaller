@@ -2,7 +2,7 @@
 # 📄 Dosya Yolu: /Directory.Packages.props
 # 📌 Amac: NuGet paket surumlerini merkezi olarak yonetir
 # 📌 Modul - XML
-# Version: 1.1.1
+# Version: 1.1.2
 # Aciklama: WinUI, YAML, CMS/PKCS#7 ve test paketlerini merkezi surum politikasinda tutar
 
 Bagimli Oldugu Katman: Tool
@@ -13,6 +13,8 @@ Bagimli Oldugu Katman: Tool
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.13" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
