@@ -8,7 +8,9 @@
 #![forbid(unsafe_code)]
 
 pub mod artifact_digest;
+pub mod operation;
 pub mod package_id;
+pub mod package_policy;
 pub mod release_channel;
 pub mod semantic_version;
 
