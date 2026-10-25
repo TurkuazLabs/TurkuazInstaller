@@ -116,7 +116,8 @@ Rakip installer analizi sonrasi NSIS'i tum projelerde kaldirmadan once tamamlana
 - [x] Implement optional AES-256-GCM `.tpe` envelope writer/reader; require a separately signed inner `.tpk`, verify GCM AAD/tag, clear key/plaintext after use and test tampering.
 - [x] Implement bounded HTTPS client `HttpsThemeDecryptionKeyProvider` with externally acquired short-lived session token, no redirect/no-store response, exact product/key identity and independent GCM+CMS acceptance tests.
 - [x] Implement testable server-side `ThemeKeyIssueService` permission gate: authenticated principal, exact OAuth scope, unique subject, server-managed product/key entitlement and vault access denial tests.
-- [ ] Integrate a validated-JWT HTTPS API host with real issuer/audience/expiry enforcement, entitlement store, KMS and rate limiting; no live service exists.
+- [x] Add .NET 10 JWT HTTPS key issuer host with issuer/audience/expiry/at+jwt validation, strict 1-KiB JSON, no-store, deny-by-default adapters and RSA JWT TestServer integration cases.
+- [ ] Integrate real OIDC accounts, trusted entitlement store, KMS/HSM, rate limits and secure TLS deployment; no production issuer currently exists.
 - [ ] Implement trusted client `IThemeAccessTokenSource` login flow; finalize token scopes, key rotation/revocation and downtime policy.
 - [ ] Compile trusted key-issuer HTTPS endpoint into a signed, protected branded build; do not accept it from user configuration.
 - [ ] Enable `.tpe` in WinUI only after real provider, authenticated identity and production publisher pin are provisioned; fail closed with an explicit offline UX. Details: [Theme Key Issuer](THEME_KEY_ISSUER.md).
