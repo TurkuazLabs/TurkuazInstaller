@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /docs/LOCAL_TEST_PACKAGE.md
 # 📌 Amac: Community'nin production signing tamamlanmadan sinirli Windows x64 manuel test paketini tarif etmek
 # 📌 Modul - Markdown
-# Version: 2.6.1
+# Version: 2.7.0
 # Aciklama: Kisa sureli unsigned GitHub Actions artifacti ile gercek imzali release'i guvenlik acisindan ayirir
 # Bagimli Oldugu Katman: Tool | Repo | Config
 
@@ -37,6 +37,30 @@ identity/secrets konfiguru gerekmez.
 
 Paket yalnizca **3 gun** GitHub Actions artifact olarak saklanir.
 Tag, GitHub Release, production sertifikasi veya update feed uretilmez.
+
+## Acik / koyu gorunum secimi
+
+Ana WinUI penceresinde, ust sag kosede **Gorunum** secicisi bulunur:
+
+- **Sistem**: Windows'un acik/koyu uygulama gorunumunu izler (varsayilan).
+- **Acik**: Windows ayarindan bagimsiz acik arayuz.
+- **Koyu**: Windows ayarindan bagimsiz koyu arayuz.
+
+Degisiklik yeniden baslatma gerektirmez. Secim kullanicinin
+`%LOCALAPPDATA%/TurkuazInstaller/config/appearance.json` dosyasina
+kaydedilir ve sonraki acilista otomatik uygulanir. Hasarli veya okunamayan
+tercih dosyasi varsayilan **Sistem** moduna doner; kurulum engellenmez.
+Yazma izni yoksa gorunum degisir ancak secimin kaydedilemedigi
+uygulama uzerinde gosterilir.
+
+Bu kullaniciya ait yalnizca *kozmetik* ayardir; imza dogrulama,
+zorunlu imzali tema, uretim sertifika pini, paket kimligi,
+manifest URL'si veya TPE anahtar yetkisini degistirmez.
+Gorunum modu secicisi, `theme.tpk`/`theme.tpe` icindeki
+Ragnarok peyzaj arka planlarindan bagimsizdir.
+
+QA onayi icin Windows 10/11'de uc mod, yeniden acilis ve yuklu
+Ragnarok gorselleriyle metin kontrasti ayrica kontrol edilmelidir.
 
 ## Guvenlik / limitler
 
