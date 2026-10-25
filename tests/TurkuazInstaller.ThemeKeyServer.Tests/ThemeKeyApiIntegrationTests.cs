@@ -1,7 +1,7 @@
 // Dosya Yolu: tests/TurkuazInstaller.ThemeKeyServer.Tests/ThemeKeyApiIntegrationTests.cs
 // Amac: Dogrulanmis JWT, HTTPS ve entitlement/vault kontrollu HTTP testi
 // Modul - CSharp xUnit WebApplicationFactory Tests
-// Version: 0.1.1-qa
+// Version: 0.2.0-qa
 // Aciklama: Gecici RSA JWT testleridir; token/public issuer/anahtar gercek degildir
 // Bagimli Oldugu Katman: ThemeKeyServer | Authentication | Authorization
 
@@ -53,11 +53,79 @@ public sealed class ThemeKeyApiIntegrationTests
         Assert.Equal(3, root.EnumerateObject().Count());
         Assert.Equal(Product, root.GetProperty("package_id").GetString());
         Assert.Equal(KeyId, root.GetProperty("key_id").GetString());
-        Assert.Equal(32, Convert.FromBase64String(
-            root.GetProperty("key_base64").GetString()!).Length);
+        var deliveredKey = Convert.FromBase64String(
+            root.GetProperty("key_base64").GetString()!);
+        Assert.Equal(32, deliveredKey.Length);
+        Assert.Equal(app.Vault.ExpectedKey, deliveredKey);
+        Assert.Contains(deliveredKey, value => value != 0);
+        CryptographicOperations.ZeroMemory(deliveredKey);
         Assert.Equal(1, app.Entitlements.Calls);
         Assert.Equal(1, app.Vault.Calls);
         Assert.All(app.Vault.LastIssuedKey!, b => Assert.Equal((byte)0, b));
+    }
+
+    [Fact]
+    public async Task RealClientAdapterConsumesTheExactKeyFromJwtProtectedTestServer()
+    {
+        using var app = new AppFixture(entitled: true);
+        using var start = app.CreateHttpsClient(); // Start the isolated TestServer.
+        using var client = new HttpsThemeDecryptionKeyProvider(
+            new Uri("https://localhost/v1/theme-key"),
+            new FixedTestTokenSource(app.Token()),
+            app.Server.CreateHandler());
+
+        var key = await client.ResolveKeyAsync(
+            PackageId.Parse(Product), KeyId, CancellationToken.None);
+        Assert.NotNull(key);
+        Assert.Equal(app.Vault.ExpectedKey, key);
+        Assert.All(app.Vault.LastIssuedKey!, value => Assert.Equal((byte)0, value));
+        CryptographicOperations.ZeroMemory(key!);
+    }
+
+    [Fact]
+    public async Task DefaultProductionAdaptersDenyEvenAnAuthenticScopedToken()
+    {
+        using var app = new AppFixture(entitled: true, defaultDeny: true);
+        using var client = app.CreateHttpsClient();
+        using var request = ValidRequest(app.Token());
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal(0, app.Entitlements.Calls);
+        Assert.Equal(0, app.Vault.Calls);
+    }
+
+    [Fact]
+    public async Task CorrectJwtCannotClaimAccessToDifferentProductOrKey()
+    {
+        using var app = new AppFixture(entitled: true);
+        using var client = app.CreateHttpsClient();
+        foreach (var (package, key) in new[]
+        {
+            ("another.product", KeyId),
+            (Product, "key-v2")
+        })
+        {
+            using var request = ValidRequest(app.Token());
+            request.Content = JsonContent.Create(new
+            {
+                package_id = package,
+                key_id = key
+            });
+            using var response = await client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+        Assert.Equal(0, app.Vault.Calls);
+    }
+
+    private sealed class FixedTestTokenSource(string token) : IThemeAccessTokenSource
+    {
+        public ValueTask<string?> AcquireTokenAsync(
+            PackageId expectedProduct, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return ValueTask.FromResult<string?>(token);
+        }
     }
 
     [Fact]
@@ -168,13 +236,13 @@ public sealed class ThemeKeyApiIntegrationTests
     private sealed class AppFixture : WebApplicationFactory<Program>
     {
         private readonly RSA _rsa = RSA.Create(2048);
-        private readonly bool _entitled;
+        private readonly bool _defaultDeny;
         public SpyEntitlementStore Entitlements { get; }
         public SpyKeyVault Vault { get; }
 
-        public AppFixture(bool entitled)
+        public AppFixture(bool entitled, bool defaultDeny = false)
         {
-            _entitled = entitled;
+            _defaultDeny = defaultDeny;
             Entitlements = new SpyEntitlementStore(entitled);
             Vault = new SpyKeyVault();
         }
@@ -191,10 +259,13 @@ public sealed class ThemeKeyApiIntegrationTests
             });
             builder.ConfigureTestServices(services =>
             {
-                services.RemoveAll<IThemeKeyEntitlementStore>();
-                services.RemoveAll<IThemeKeySecretStore>();
-                services.AddSingleton<IThemeKeyEntitlementStore>(Entitlements);
-                services.AddSingleton<IThemeKeySecretStore>(Vault);
+                if (!_defaultDeny)
+                {
+                    services.RemoveAll<IThemeKeyEntitlementStore>();
+                    services.RemoveAll<IThemeKeySecretStore>();
+                    services.AddSingleton<IThemeKeyEntitlementStore>(Entitlements);
+                    services.AddSingleton<IThemeKeySecretStore>(Vault);
+                }
 
                 services.PostConfigure<JwtBearerOptions>(
                     JwtBearerDefaults.AuthenticationScheme, options =>
@@ -278,12 +349,14 @@ public sealed class ThemeKeyApiIntegrationTests
     {
         public int Calls { get; private set; }
         public byte[]? LastIssuedKey { get; private set; }
+        public byte[]? ExpectedKey { get; private set; }
 
         public ValueTask<byte[]?> RetrieveOwnedKeyAsync(
             PackageId packageId, string keyId, CancellationToken cancellationToken)
         {
             Calls++;
             LastIssuedKey = RandomNumberGenerator.GetBytes(32);
+            ExpectedKey = (byte[])LastIssuedKey.Clone();
             return ValueTask.FromResult<byte[]?>(LastIssuedKey);
         }
     }
