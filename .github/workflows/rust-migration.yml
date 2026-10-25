@@ -1,0 +1,42 @@
+# Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
+# Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
+# Modul - GitHub Actions YAML
+# Version: 0.1.0
+# Aciklama: Yalniz Rust workspace degisikliklerinde format ve compile kontrolu calistirir
+# Bagimli Oldugu Katman: Tool | Repo
+
+name: Rust Migration CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "rust/**"
+      - ".github/workflows/rust-migration.yml"
+  push:
+    branches:
+      - rewrite/rust-community
+    paths:
+      - "rust/**"
+      - ".github/workflows/rust-migration.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  rust-workspace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Report Rust toolchain
+        run: rustc --version && cargo --version
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+
+      - name: Compile workspace
+        run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets
