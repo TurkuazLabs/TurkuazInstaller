@@ -80,7 +80,9 @@ impl SemanticVersion {
             .cmp(&other.major)
             .then_with(|| self.minor.cmp(&other.minor))
             .then_with(|| self.patch.cmp(&other.patch))
-            .then_with(|| compare_pre_release(self.pre_release.as_deref(), other.pre_release.as_deref()))
+            .then_with(|| {
+                compare_pre_release(self.pre_release.as_deref(), other.pre_release.as_deref())
+            })
     }
 }
 
