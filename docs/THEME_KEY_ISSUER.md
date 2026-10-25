@@ -2,14 +2,14 @@
 Dosya Yolu: docs/THEME_KEY_ISSUER.md
 Amac: TPE dis anahtar tedariki icin sunucu/istemci guvenlik kontratini tanimlamak
 Modul - Markdown
-Version: 0.2.0-qa
+Version: 0.3.0-qa
 Aciklama: OAuth benzeri guvenilir session, scope, TLS ve anahtar sunucu sorumluluklari
 Bagimli Oldugu Katman: Security | Infrastructure | API
 -->
 
 # Theme Key Issuer v1 — private service contract (not deployed)
 
-**Status: client adapter and isolated tests only. NO production key issuer
+**Status: JWT HTTP host source and isolated tests only. NO production key issuer
 has been deployed and NO identity-provider session token is configured.**
 The general TurkuazInstaller WinUI currently consumes signed ZIP-readable
 `theme.tpk` only; `theme.tpe` must not be advertised as available in the UI.
@@ -96,6 +96,32 @@ has been supplied. CI creates temporary in-memory test doubles to verify
 denial of anonymous and unscoped principals, duplicate subject claims,
 revoked entitlements, unrelated products and unauthorized keys.
 
+### ASP.NET Core JWT HTTP host (source added, NOT deployed)
+
+A separate .NET 10 project now implements a deny-by-default HTTPS endpoint:
+
+- Project: `src/TurkuazInstaller.ThemeKeyServer`.
+- Route: `POST /v1/theme-key`.
+- Startup requires a trusted HTTPS `ThemeKeyIssuer:Authority` and matching
+  `ThemeKeyIssuer:Audience`; missing configuration refuses startup.
+- Standard Microsoft JwtBearer verifies signed `at+jwt` tokens, known OIDC issuer,
+  audience, signing key and lifetime with 30-second clock skew.
+- Direct HTTPS is mandatory. Untrusted forwarded headers cannot bypass it.
+- Strict JSON has exactly `package_id` and `key_id`, no duplicate/unknown grants,
+  at most 1024 bytes; output and denials always set `Cache-Control: no-store`.
+- 401 for missing/invalid bearer; 403 for missing entitlement; 400 for malformed
+  JSON; 413 for oversized payload; no body, bearer or key logging.
+- Default DI providers deny all access and return no key. No embedded master key,
+  default account or production credentials exist.
+
+`ThemeKeyApiIntegrationTests` exercises real cryptographically signed ephemeral
+RSA JWTs with ASP.NET Core's in-memory TestServer: correct HTTP authorization,
+wrong audience/type/signature, expiry, missing scope, revoked entitlements,
+bad JSON, oversized bodies and plaintext HTTP denial. Tests use no public network.
+
+Still required before deployment: authentic OIDC configuration and user login,
+server-controlled entitlements, real KMS/HSM, TLS hosting, rate limiting,
+revocation/rotation and independent security review. This is NOT a live service.
 ### The server MUST enforce all of the following
 
 1. Valid access token signature, issuer, audience, expiry and
@@ -131,7 +157,8 @@ untrusted devices in the first place.
 - [x] End-to-end local `.tpe` -> fake authorized HTTPS -> AES-GCM ->
       pinned CMS -> PNG success.
 - [x] Server-side authorization service interface and isolated scope/entitlement/vault-denial tests.
-- [ ] Cryptographically validated JWT API host, real entitlement database, real KMS vault and deployed server.
+- [x] JWT-validating deny-by-default API host and isolated real RSA JWT/HTTP tests.
+- [ ] Real entitlement database, KMS vault, hardened hosting and deployed server.
 - [ ] Real authenticated identity-provider session flow in the Windows client.
 - [ ] Real certificate-pinned, publisher-managed native distribution.
 - [ ] Real Windows 10/11 GUI screenshot/screen transitions at multiple DPI.
