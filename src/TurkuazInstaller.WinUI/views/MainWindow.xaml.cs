@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.WinUI/views/MainWindow.xaml.cs
 // 📌 Amac: MainWindow View eventlerini Controller katmanina aktarir ve startup resume requestini bir kez baslatir
 // 📌 Modul - View CSharp
-// Version: 1.8.0
+// Version: 1.9.0
 // Aciklama: View code-behind is kurali tutmadan startup, DispatcherQueueTimer background check ve kullanici eventlerini Controller'a delege eder
 //
 // Bagimli Oldugu Katman: View | Controller
@@ -9,6 +9,8 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Storage.Streams;
 using TurkuazInstaller.Infrastructure.Branding;
@@ -36,6 +38,8 @@ public sealed partial class MainWindow : Window
     private VerifiedThemePack? _verifiedTheme;
     private readonly Dictionary<string, BitmapImage> _themeImages = new(StringComparer.Ordinal);
     private bool _themeBlocked;
+    private readonly InstallerAppearancePreferenceStore? _appearanceStore;
+    private bool _appearanceReady;
 
 
     public MainWindow(
@@ -46,7 +50,8 @@ public sealed partial class MainWindow : Window
         IVerifiedThemePackReader? themeReader = null,
         PackageId? themePackageId = null,
         string? themePath = null,
-        bool lockedProductId = false)
+        bool lockedProductId = false,
+        InstallerAppearancePreferenceStore? appearanceStore = null)
     {
         WinUiStartupDiagnostics.Record("MainWindowConstructorEntered");
         InitializeComponent();
@@ -59,6 +64,7 @@ public sealed partial class MainWindow : Window
         _themeReader = themeReader;
         _themePackageId = themePackageId;
         _themePath = themePath;
+        _appearanceStore = appearanceStore;
         _viewModel.PropertyChanged += OnThemeViewModelPropertyChanged;
 
         _controller = controller;
@@ -68,6 +74,14 @@ public sealed partial class MainWindow : Window
                 startupArguments.ToArray());
 
         MainRoot.DataContext = viewModel;
+        // Pick the saved cosmetic preference before first activation. The
+        // selection event is suppressed during constructor initialization.
+        var savedMode = _appearanceStore?.Read() ?? InstallerAppearanceMode.System;
+        AppearanceModeSelector.SelectedIndex = (int)savedMode;
+        ApplyAppearance(savedMode);
+        _appearanceReady = true;
+        MainRoot.ActualThemeChanged += (_, _) => UpdateVerifiedBackdropContrast();
+
         PackageIdEntry.IsReadOnly = lockedProductId;
         ManifestSourceEntry.IsReadOnly = lockedProductId;
         // A required theme may take time to verify. Prevent any user action
@@ -80,6 +94,51 @@ public sealed partial class MainWindow : Window
         WinUiStartupDiagnostics.Record("MainWindowResizeComplete");
         Activated += OnActivated;
         Closed += OnClosed;
+    }
+
+    private void AppearanceModeSelector_SelectionChanged(
+        object sender, SelectionChangedEventArgs args)
+    {
+        if (!_appearanceReady) return;
+
+        var index = AppearanceModeSelector.SelectedIndex;
+        if (index is < 0 or > 2) return;
+
+        var mode = (InstallerAppearanceMode)index;
+        ApplyAppearance(mode);
+        try
+        {
+            _appearanceStore?.Save(mode);
+            AppearanceSaveWarning.Visibility = Visibility.Collapsed;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            // Applying a cosmetic preference must never stall installation.
+            // Keep the UI responsive and say clearly if persistence failed.
+            AppearanceSaveWarning.Visibility = Visibility.Visible;
+            WinUiStartupDiagnostics.Record("AppearancePreferenceSaveFailed");
+        }
+    }
+
+    private void ApplyAppearance(InstallerAppearanceMode mode)
+    {
+        MainRoot.RequestedTheme = mode switch
+        {
+            InstallerAppearanceMode.Light => ElementTheme.Light,
+            InstallerAppearanceMode.Dark => ElementTheme.Dark,
+            _ => ElementTheme.Default
+        };
+        UpdateVerifiedBackdropContrast();
+    }
+
+    private void UpdateVerifiedBackdropContrast()
+    {
+        // Light mode uses a pale veil so the Fluent foreground remains
+        // legible over verified landscape art. Dark mode uses a navy veil.
+        var color = MainRoot.ActualTheme == ElementTheme.Light
+            ? Windows.UI.Color.FromArgb(102, 255, 255, 255)
+            : Windows.UI.Color.FromArgb(132, 10, 20, 36);
+        VerifiedThemeContrastShade.Background = new SolidColorBrush(color);
     }
 
     private async void OnActivated(
