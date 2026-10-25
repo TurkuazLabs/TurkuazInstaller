@@ -1,0 +1,18 @@
+<!--
+Dosya Yolu: src/TurkuazInstaller.ThemeKeyServer/TurkuazInstaller.ThemeKeyServer.csproj
+Amac: JWT dogrulayan ve deny-by-default tema anahtar API'si
+Modul - .NET Web Project
+Version: 0.1.0-qa
+Aciklama: No production key issuer, deployment or credentials
+Bagimli Oldugu Katman: Infrastructure | ASP.NET Core
+-->
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>TurkuazInstaller.ThemeKeyServer</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TurkuazInstaller.Infrastructure/TurkuazInstaller.Infrastructure.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+  </ItemGroup>
+</Project>

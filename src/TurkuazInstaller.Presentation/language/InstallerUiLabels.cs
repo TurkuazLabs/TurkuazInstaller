@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiLabels.cs
 // 📌 Amac: TurkuazInstaller masaustu arayuzundeki kullanici metinlerini merkezi Language katmaninda tanimlar
 // 📌 Modul - Language CSharp
-// Version: 1.5.0
+// Version: 1.5.1
 // Aciklama: Install/update/recovery metinlerine ek olarak katalog, discovery, background update ve version skip/pinning UX metinlerini tutar
 //
 // Bagimli Oldugu Katman: Language
@@ -133,6 +133,12 @@ public static class InstallerUiLabels
         "C:\\paketler\\onceki\\installer-manifest.yml";
     public const string TargetPathPlaceholder =
         "Bos birakilirsa manifest install.target kullanilir";
+
+    public const string AppearanceTitle = "Görünüm";
+    public const string AppearanceSystem = "Sistem";
+    public const string AppearanceLight = "Açık";
+    public const string AppearanceDark = "Koyu";
+    public const string AppearanceSaveFailed = "Görünüm tercihi kaydedilemedi.";
 
     public const string Footer =
         "TurkuazLabs Community";

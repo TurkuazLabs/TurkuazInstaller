@@ -1,7 +1,7 @@
 // 📄 Dosya Yolu: /src/TurkuazInstaller.Presentation/language/InstallerUiCatalog.cs
 // 📌 Amac: Varsayilan Language metinleri ile typed UI profile override degerlerini tek resolverda birlestirir
 // 📌 Modul - Language CSharp
-// Version: 1.1.0
+// Version: 1.1.1
 // Aciklama: Branding ve tum desteklenen kullanici metinlerini tek typed localization katalogundan fallback-guvenli sunar
 //
 // Bagimli Oldugu Katman: Language | View | Service | Config
@@ -123,6 +123,11 @@ public sealed class InstallerUiCatalog
             InstallerUiLabelKey.ManifestPlaceholder => InstallerUiLabels.ManifestPlaceholder,
             InstallerUiLabelKey.RollbackManifestPlaceholder => InstallerUiLabels.RollbackManifestPlaceholder,
             InstallerUiLabelKey.TargetPathPlaceholder => InstallerUiLabels.TargetPathPlaceholder,
+            InstallerUiLabelKey.AppearanceTitle => InstallerUiLabels.AppearanceTitle,
+            InstallerUiLabelKey.AppearanceSystem => InstallerUiLabels.AppearanceSystem,
+            InstallerUiLabelKey.AppearanceLight => InstallerUiLabels.AppearanceLight,
+            InstallerUiLabelKey.AppearanceDark => InstallerUiLabels.AppearanceDark,
+            InstallerUiLabelKey.AppearanceSaveFailed => InstallerUiLabels.AppearanceSaveFailed,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(key),
                 key,
