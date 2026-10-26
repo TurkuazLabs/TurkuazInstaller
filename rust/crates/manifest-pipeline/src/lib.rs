@@ -9,8 +9,8 @@ use std::{error::Error, fmt};
 
 use tokio::io::AsyncRead;
 use turkuaz_installer_domain::{package_id::PackageId, release::PackageRelease};
-use turkuaz_installer_manifest_trust_store::{TrustStoreError, YamlManifestTrustPolicyRepository};
 use turkuaz_installer_manifest_parser::{ManifestParseError, parse_manifest};
+use turkuaz_installer_manifest_trust_store::{TrustStoreError, YamlManifestTrustPolicyRepository};
 use turkuaz_installer_manifest_verification::{
     ManifestVerificationError, verify_and_decode_manifest,
 };
