@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 0.2.0
+Version: 0.3.0
 Aciklama: Mevcut .NET davranisini koruyarak asamali Rust portu icin mimari sinir ve gercek kapsam durumunu belirtir
 Bagimli Oldugu Katman: Documentation
 -->
@@ -23,9 +23,12 @@ Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .N
 
 - `domain`: package id, SemVer, SHA-256 digest, release channel, artifact/signature, prerequisite, Windows integration, release policy ve install/update/repair/rollback/uninstall plan modelleri.
 - `metadata`: manifest/signature icin 1 MiB / 256 KiB limitler, Content-Length kontrolu ve stream sirasinda bounded read.
+- `artifact-verification`: staged artifact stream'i icin imzali descriptor'daki tam byte boyutu ve SHA-256 kontrolu; asiri uzun stream'de erken kesme.
 - Community Rust CI format ve workspace compile kapisidir. .NET CI mevcut Community davranis referansini dogrulamaya devam eder.
 
-Bu parcalar tek basina install/update runtime'i veya imza guveni saglamaz. CMS dogrulamasi, external trust store, strict UTF-8/YAML parse, artifact transfer/hash/Authenticode, providerlar, state/journal, Windows adapterlari, workflow use-case'leri, CLI, WinUI ve paketleme henuz tasinmadi.
+Artifact verifier yalniz stream dogrulamasidir. Cagiran katman artifact'i staging alaninda tutmali ve bu fonksiyon basarili olmadan apply etmemelidir. Ag provider'i, staging/path guvenligi, indirmenin tam yasam dongusu ve Windows Authenticode henuz tasinmadi. Bu parcalar tek basina install/update runtime'i veya manifest imza guveni saglamaz.
+
+CMS dogrulamasi, external trust store, strict UTF-8/YAML parse, release providerlari, state/journal, Windows adapterlari, workflow use-case'leri, CLI, WinUI ve paketleme henuz tasinmadi.
 
 ## Migration order
 
