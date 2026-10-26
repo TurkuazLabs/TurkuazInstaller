@@ -16,6 +16,7 @@ publish = false
 tokio = { workspace = true }
 turkuaz-installer-domain = { path = "../domain" }
 turkuaz-installer-manifest-trust-store = { path = "../manifest-trust-store" }
+turkuaz-installer-manifest-parser = { path = "../manifest-parser" }
 turkuaz-installer-manifest-verification = { path = "../manifest-verification" }
 turkuaz-installer-metadata = { path = "../metadata" }
 
