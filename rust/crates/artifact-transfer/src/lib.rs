@@ -286,11 +286,7 @@ fn resolve_file_name(artifact: &ArtifactDescriptor) -> String {
         .unwrap_or_default();
     let decoded = percent_decode_str(last_segment).decode_utf8_lossy();
     let normalized = decoded.replace('\\', "/");
-    let sanitized = normalized
-        .rsplit('/')
-        .next()
-        .unwrap_or_default()
-        .trim();
+    let sanitized = normalized.rsplit('/').next().unwrap_or_default().trim();
 
     if sanitized.is_empty() || matches!(sanitized, "." | "..") || sanitized.contains('\0') {
         FALLBACK_FILE_NAME.to_owned()
