@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 0.7.0
+Version: 0.8.0
 Aciklama: Mevcut .NET davranisini koruyarak asamali Rust portu icin mimari sinir ve gercek kapsam durumunu belirtir
 Bagimli Oldugu Katman: Documentation
 -->
@@ -26,7 +26,8 @@ Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .N
 - `artifact-verification`: staged artifact stream'i icin imzali descriptor'daki tam byte boyutu ve SHA-256 kontrolu; asiri uzun stream'de erken kesme.
 - `manifest-verification`: Windows CryptoAPI ile detached CMS/PKCS#7 imzasini dogrulama; tek signer, sertifika gecerlilik zamani, trust policy subject eslesmesi ve sertifika SHA-256 pini kontrolu. Sertifika zinciri dogrulamasi yapilmaz; mevcut .NET sozlesmesiyle ayni signature-only guven modelini izler.
 - `manifest-trust-store`: dis YAML trust store'da schema version 1, package id, tekrar eden kayit ve package signer policy denetimi; olmayan dosyada policy bulunamadi sonucu.
-- `manifest-pipeline`: manifest ve imza stream'lerini 1 MiB / 256 KiB sinirinda okur, requested package trust policy'sini bulur ve signature verification basarili olduktan sonra strict UTF-8 manifest metnini dondurur.
+- `manifest-pipeline`: manifest ve imza stream'lerini 1 MiB / 256 KiB sinirinda okur, requested package trust policy'sini bulur, CMS imzasini dogrular ve yalnizca strict UTF-8 decode sonrasinda YAML parserini calistirir; sonuc typed `PackageRelease` domain modelidir.
+- `manifest-parser`: schema v1 YAML alanlarini domain invariant'lariyla eslestirir; bilinmeyen alanlari yok sayar ve taninmayan channel, install mode, shortcut location veya signature algorithm degerlerini reddeder.
 - Community Rust CI Linux format/workspace compile ve Windows workspace compile kapilarini calistirir. .NET CI mevcut Community davranis referansini dogrulamaya devam eder.
 
 Artifact verifier yalniz stream dogrulamasidir. Cagiran katman artifact'i staging alaninda tutmali ve bu fonksiyon basarili olmadan apply etmemelidir. Ag provider'i, staging/path guvenligi, indirmenin tam yasam dongusu ve Windows Authenticode henuz tasinmadi. Manifest trust policy domain modeli, dis YAML trust-store repository'si ve Windows CMS verifier mevcuttur. Strict UTF-8 decode verified pipeline icine alindi. Typed YAML manifest parser ve pipeline sonrasindaki domain model donusumu henuz tasinmadi. Bu parcalar tek basina install/update runtime'i saglamaz.
