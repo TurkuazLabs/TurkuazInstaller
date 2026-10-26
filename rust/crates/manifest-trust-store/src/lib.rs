@@ -8,16 +8,12 @@
 use std::{
     collections::HashSet,
     error::Error,
-    fmt,
-    fs,
-    io,
+    fmt, fs, io,
     path::{Path, PathBuf},
 };
 
 use serde::Deserialize;
-use turkuaz_installer_domain::{
-    manifest_trust_policy::ManifestTrustPolicy, package_id::PackageId,
-};
+use turkuaz_installer_domain::{manifest_trust_policy::ManifestTrustPolicy, package_id::PackageId};
 
 const SUPPORTED_SCHEMA_VERSION: u32 = 1;
 
@@ -36,7 +32,9 @@ impl fmt::Display for TrustStoreError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(error) => write!(formatter, "Could not read manifest trust store: {error}"),
-            Self::InvalidYaml(error) => write!(formatter, "Manifest trust store YAML is invalid: {error}"),
+            Self::InvalidYaml(error) => {
+                write!(formatter, "Manifest trust store YAML is invalid: {error}")
+            }
             Self::EmptyDocument => formatter.write_str("Manifest trust store is empty."),
             Self::UnsupportedSchemaVersion => {
                 formatter.write_str("Manifest trust store schema version is not supported.")
@@ -45,11 +43,12 @@ impl fmt::Display for TrustStoreError {
                 formatter.write_str("Manifest trust store contains an invalid package id.")
             }
             Self::DuplicatePackageId(package_id) => {
-                write!(formatter, "Manifest trust store contains duplicate package id: {package_id}")
+                write!(
+                    formatter,
+                    "Manifest trust store contains duplicate package id: {package_id}"
+                )
             }
-            Self::InvalidTrustPolicy => {
-                formatter.write_str("Manifest trust policy is invalid.")
-            }
+            Self::InvalidTrustPolicy => formatter.write_str("Manifest trust policy is invalid."),
         }
     }
 }
@@ -91,7 +90,10 @@ impl YamlManifestTrustPolicyRepository {
     }
 
     /// Returns no policy when the out-of-band trust store does not exist.
-    pub fn get(&self, package_id: &PackageId) -> Result<Option<ManifestTrustPolicy>, TrustStoreError> {
+    pub fn get(
+        &self,
+        package_id: &PackageId,
+    ) -> Result<Option<ManifestTrustPolicy>, TrustStoreError> {
         let yaml = match fs::read_to_string(&self.file_path) {
             Ok(yaml) => yaml,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -110,8 +112,8 @@ impl YamlManifestTrustPolicyRepository {
         let mut matching_policy = None;
 
         for entry in document.packages {
-            let configured_package_id = PackageId::parse(&entry.id)
-                .map_err(|_| TrustStoreError::InvalidPackageId)?;
+            let configured_package_id =
+                PackageId::parse(&entry.id).map_err(|_| TrustStoreError::InvalidPackageId)?;
 
             if !seen_package_ids.insert(configured_package_id.clone()) {
                 return Err(TrustStoreError::DuplicatePackageId(
