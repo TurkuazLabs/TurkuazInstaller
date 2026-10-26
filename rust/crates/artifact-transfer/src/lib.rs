@@ -7,13 +7,12 @@
 
 use std::{
     error::Error,
-    fmt,
-    io,
+    fmt, io,
     path::{Path, PathBuf},
 };
 
 use percent_encoding::percent_decode_str;
-use reqwest::{redirect::Policy, Client, Response};
+use reqwest::{Client, Response, redirect::Policy};
 use tokio::{
     fs::{self, File, OpenOptions},
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
@@ -50,15 +49,13 @@ impl fmt::Display for ArtifactTransferError {
             Self::InvalidFileUri => formatter.write_str("Local artifact file URI is invalid."),
             Self::Http(error) => write!(formatter, "Artifact download failed: {error}"),
             Self::Io(error) => write!(formatter, "Artifact staging failed: {error}"),
-            Self::ContentLengthMismatch => {
-                formatter.write_str("Artifact Content-Length does not match signed release metadata.")
-            }
+            Self::ContentLengthMismatch => formatter
+                .write_str("Artifact Content-Length does not match signed release metadata."),
             Self::SourceSizeMismatch => {
                 formatter.write_str("Local artifact size does not match signed release metadata.")
             }
-            Self::ExceededDeclaredSize => {
-                formatter.write_str("Artifact exceeded the size declared by signed release metadata.")
-            }
+            Self::ExceededDeclaredSize => formatter
+                .write_str("Artifact exceeded the size declared by signed release metadata."),
             Self::FinalSizeMismatch => {
                 formatter.write_str("Artifact size does not match signed release metadata.")
             }
