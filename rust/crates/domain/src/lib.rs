@@ -8,9 +8,13 @@
 #![forbid(unsafe_code)]
 
 pub mod artifact_digest;
+pub mod artifacts;
+pub mod integrations;
 pub mod operation;
 pub mod package_id;
 pub mod package_policy;
+pub mod prerequisites;
+pub mod release;
 pub mod release_channel;
 pub mod semantic_version;
 
@@ -20,6 +24,12 @@ pub enum DomainError {
     InvalidPackageId,
     InvalidSemanticVersion,
     InvalidSha256Digest,
+    InvalidArtifactDescriptor,
+    InvalidSignatureDescriptor,
+    InvalidPrerequisite,
+    InvalidWindowsIntegration,
+    InvalidRelease,
+    InvalidPlan,
 }
 
 impl std::fmt::Display for DomainError {
@@ -27,6 +37,12 @@ impl std::fmt::Display for DomainError {
         let message = match self {
             Self::InvalidPackageId => "Package id does not match the installer contract.",
             Self::InvalidSemanticVersion => "Version is not valid SemVer 2.0.",
+            Self::InvalidArtifactDescriptor => "Artifact descriptor is invalid.",
+            Self::InvalidSignatureDescriptor => "Artifact signature policy is invalid.",
+            Self::InvalidPrerequisite => "Prerequisite policy is invalid.",
+            Self::InvalidWindowsIntegration => "Windows integration policy is invalid.",
+            Self::InvalidRelease => "Package release metadata is inconsistent.",
+            Self::InvalidPlan => "Package operation plan is invalid.",
             Self::InvalidSha256Digest => {
                 "SHA-256 digest must contain exactly 64 hexadecimal characters."
             }
