@@ -6,6 +6,7 @@
 // Bagimli Oldugu Katman: Model | Service
 
 use crate::{
+    DomainError,
     artifacts::ArtifactDescriptor,
     integrations::WindowsIntegrationPolicy,
     package_id::PackageId,
@@ -13,7 +14,6 @@ use crate::{
     prerequisites::Prerequisite,
     release_channel::ReleaseChannel,
     semantic_version::SemanticVersion,
-    DomainError,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,11 +49,21 @@ impl PackageInstallPolicy {
         Self::new(PackageInstallMode::Full, None, Vec::new(), Vec::new(), None)
     }
 
-    pub const fn mode(&self) -> PackageInstallMode { self.mode }
-    pub fn default_target_path(&self) -> Option<&str> { self.default_target_path.as_deref() }
-    pub fn prerequisites(&self) -> &[Prerequisite] { &self.prerequisites }
-    pub fn preserve_paths(&self) -> &[String] { &self.preserve_paths }
-    pub fn windows_integration(&self) -> &WindowsIntegrationPolicy { &self.windows_integration }
+    pub const fn mode(&self) -> PackageInstallMode {
+        self.mode
+    }
+    pub fn default_target_path(&self) -> Option<&str> {
+        self.default_target_path.as_deref()
+    }
+    pub fn prerequisites(&self) -> &[Prerequisite] {
+        &self.prerequisites
+    }
+    pub fn preserve_paths(&self) -> &[String] {
+        &self.preserve_paths
+    }
+    pub fn windows_integration(&self) -> &WindowsIntegrationPolicy {
+        &self.windows_integration
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,10 +74,17 @@ pub struct PackageDeltaArtifact {
 
 impl PackageDeltaArtifact {
     pub fn new(from_version: SemanticVersion, artifact: ArtifactDescriptor) -> Self {
-        Self { from_version, artifact }
+        Self {
+            from_version,
+            artifact,
+        }
     }
-    pub fn from_version(&self) -> &SemanticVersion { &self.from_version }
-    pub fn artifact(&self) -> &ArtifactDescriptor { &self.artifact }
+    pub fn from_version(&self) -> &SemanticVersion {
+        &self.from_version
+    }
+    pub fn artifact(&self) -> &ArtifactDescriptor {
+        &self.artifact
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,21 +108,44 @@ impl PackageRelease {
         rollback: PackageRollbackPolicy,
         delta_artifact: Option<PackageDeltaArtifact>,
     ) -> Result<Self, DomainError> {
-        if delta_artifact.as_ref().is_some_and(|delta| {
-            delta.from_version.compare_precedence(&version).is_ge()
-        }) {
+        if delta_artifact
+            .as_ref()
+            .is_some_and(|delta| delta.from_version.compare_precedence(&version).is_ge())
+        {
             return Err(DomainError::InvalidRelease);
         }
-        Ok(Self { package_id, version, channel, artifact, install, rollback, delta_artifact })
+        Ok(Self {
+            package_id,
+            version,
+            channel,
+            artifact,
+            install,
+            rollback,
+            delta_artifact,
+        })
     }
 
-    pub fn package_id(&self) -> &PackageId { &self.package_id }
-    pub fn version(&self) -> &SemanticVersion { &self.version }
-    pub const fn channel(&self) -> ReleaseChannel { self.channel }
-    pub fn artifact(&self) -> &ArtifactDescriptor { &self.artifact }
-    pub fn install(&self) -> &PackageInstallPolicy { &self.install }
-    pub const fn rollback(&self) -> PackageRollbackPolicy { self.rollback }
-    pub fn delta_artifact(&self) -> Option<&PackageDeltaArtifact> { self.delta_artifact.as_ref() }
+    pub fn package_id(&self) -> &PackageId {
+        &self.package_id
+    }
+    pub fn version(&self) -> &SemanticVersion {
+        &self.version
+    }
+    pub const fn channel(&self) -> ReleaseChannel {
+        self.channel
+    }
+    pub fn artifact(&self) -> &ArtifactDescriptor {
+        &self.artifact
+    }
+    pub fn install(&self) -> &PackageInstallPolicy {
+        &self.install
+    }
+    pub const fn rollback(&self) -> PackageRollbackPolicy {
+        self.rollback
+    }
+    pub fn delta_artifact(&self) -> Option<&PackageDeltaArtifact> {
+        self.delta_artifact.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,10 +174,18 @@ impl InstallPlan {
             preserve_paths,
         })
     }
-    pub fn release(&self) -> &PackageRelease { &self.release }
-    pub fn target_path(&self) -> &str { &self.target_path }
-    pub fn prerequisites(&self) -> &[Prerequisite] { &self.prerequisites }
-    pub fn preserve_paths(&self) -> &[String] { &self.preserve_paths }
+    pub fn release(&self) -> &PackageRelease {
+        &self.release
+    }
+    pub fn target_path(&self) -> &str {
+        &self.target_path
+    }
+    pub fn prerequisites(&self) -> &[Prerequisite] {
+        &self.prerequisites
+    }
+    pub fn preserve_paths(&self) -> &[String] {
+        &self.preserve_paths
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -148,13 +196,25 @@ pub struct UpdatePlan {
 
 impl UpdatePlan {
     pub fn new(current_version: SemanticVersion, target: InstallPlan) -> Result<Self, DomainError> {
-        if target.release.version.compare_precedence(&current_version).is_le() {
+        if target
+            .release
+            .version
+            .compare_precedence(&current_version)
+            .is_le()
+        {
             return Err(DomainError::InvalidPlan);
         }
-        Ok(Self { current_version, target })
+        Ok(Self {
+            current_version,
+            target,
+        })
     }
-    pub fn current_version(&self) -> &SemanticVersion { &self.current_version }
-    pub fn target(&self) -> &InstallPlan { &self.target }
+    pub fn current_version(&self) -> &SemanticVersion {
+        &self.current_version
+    }
+    pub fn target(&self) -> &InstallPlan {
+        &self.target
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,11 +226,20 @@ pub struct RepairPlan {
 impl RepairPlan {
     pub fn new(release: PackageRelease, target_path: &str) -> Result<Self, DomainError> {
         let target_path = target_path.trim();
-        if target_path.is_empty() { return Err(DomainError::InvalidPlan); }
-        Ok(Self { release, target_path: target_path.to_owned() })
+        if target_path.is_empty() {
+            return Err(DomainError::InvalidPlan);
+        }
+        Ok(Self {
+            release,
+            target_path: target_path.to_owned(),
+        })
     }
-    pub fn release(&self) -> &PackageRelease { &self.release }
-    pub fn target_path(&self) -> &str { &self.target_path }
+    pub fn release(&self) -> &PackageRelease {
+        &self.release
+    }
+    pub fn target_path(&self) -> &str {
+        &self.target_path
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -186,16 +255,32 @@ impl RollbackPlan {
         previous_release: PackageRelease,
         target_path: &str,
     ) -> Result<Self, DomainError> {
-        if previous_release.version.compare_precedence(&current_release.version).is_ge() {
+        if previous_release
+            .version
+            .compare_precedence(&current_release.version)
+            .is_ge()
+        {
             return Err(DomainError::InvalidPlan);
         }
         let target_path = target_path.trim();
-        if target_path.is_empty() { return Err(DomainError::InvalidPlan); }
-        Ok(Self { current_release, previous_release, target_path: target_path.to_owned() })
+        if target_path.is_empty() {
+            return Err(DomainError::InvalidPlan);
+        }
+        Ok(Self {
+            current_release,
+            previous_release,
+            target_path: target_path.to_owned(),
+        })
     }
-    pub fn current_release(&self) -> &PackageRelease { &self.current_release }
-    pub fn previous_release(&self) -> &PackageRelease { &self.previous_release }
-    pub fn target_path(&self) -> &str { &self.target_path }
+    pub fn current_release(&self) -> &PackageRelease {
+        &self.current_release
+    }
+    pub fn previous_release(&self) -> &PackageRelease {
+        &self.previous_release
+    }
+    pub fn target_path(&self) -> &str {
+        &self.target_path
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -212,10 +297,22 @@ impl UninstallPlan {
         target_path: &str,
     ) -> Result<Self, DomainError> {
         let target_path = target_path.trim();
-        if target_path.is_empty() { return Err(DomainError::InvalidPlan); }
-        Ok(Self { package_id, installed_version, target_path: target_path.to_owned() })
+        if target_path.is_empty() {
+            return Err(DomainError::InvalidPlan);
+        }
+        Ok(Self {
+            package_id,
+            installed_version,
+            target_path: target_path.to_owned(),
+        })
     }
-    pub fn package_id(&self) -> &PackageId { &self.package_id }
-    pub fn installed_version(&self) -> &SemanticVersion { &self.installed_version }
-    pub fn target_path(&self) -> &str { &self.target_path }
+    pub fn package_id(&self) -> &PackageId {
+        &self.package_id
+    }
+    pub fn installed_version(&self) -> &SemanticVersion {
+        &self.installed_version
+    }
+    pub fn target_path(&self) -> &str {
+        &self.target_path
+    }
 }
