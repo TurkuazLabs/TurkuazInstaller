@@ -39,9 +39,7 @@ impl fmt::Display for ManifestVerificationError {
             Self::CertificatePinMismatch => {
                 "Manifest signer certificate SHA-256 pin does not match the package trust policy."
             }
-            Self::UnsupportedPlatform => {
-                "CMS manifest verification is supported only on Windows."
-            }
+            Self::UnsupportedPlatform => "CMS manifest verification is supported only on Windows.",
         })
     }
 }
@@ -128,8 +126,7 @@ mod windows_crypto {
 
         let mut verify_parameters = CRYPT_VERIFY_MESSAGE_PARA::default();
         verify_parameters.cbSize = size_of::<CRYPT_VERIFY_MESSAGE_PARA>() as u32;
-        verify_parameters.dwMsgAndCertEncodingType =
-            X509_ASN_ENCODING | PKCS_7_ASN_ENCODING;
+        verify_parameters.dwMsgAndCertEncodingType = X509_ASN_ENCODING | PKCS_7_ASN_ENCODING;
 
         let content_pointers = [manifest_content.as_ptr()];
         let content_lengths = [content_length];
