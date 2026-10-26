@@ -14,6 +14,7 @@ members = [
     "crates/manifest-verification",
     "crates/manifest-trust-store",
     "crates/manifest-pipeline",
+    "crates/manifest-parser",
 ]
 
 [workspace.dependencies]
