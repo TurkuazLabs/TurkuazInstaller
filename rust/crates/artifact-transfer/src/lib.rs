@@ -13,7 +13,7 @@ use std::{
 };
 
 use percent_encoding::percent_decode_str;
-use reqwest::{Client, Response, redirect::Policy};
+use reqwest::{redirect::Policy, Client, Response};
 use tokio::{
     fs::{self, File, OpenOptions},
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
@@ -110,6 +110,9 @@ impl DefaultArtifactDownloader {
             return Err(ArtifactTransferError::InvalidStagingPath);
         }
 
+        fs::create_dir_all(staging_directory)
+            .await
+            .map_err(ArtifactTransferError::Io)?;
         let staging_root = staging_directory
             .canonicalize()
             .map_err(ArtifactTransferError::Io)?;
@@ -122,16 +125,10 @@ impl DefaultArtifactDownloader {
             .map_err(ArtifactTransferError::Io)?;
 
         let download_root = create_unique_directory(&downloads_root).await?;
-        let file_name = resolve_file_name(artifact);
-        let destination_path = download_root.join(file_name);
+        let destination_path = download_root.join(resolve_file_name(artifact));
         let partial_path = append_suffix(&destination_path, PARTIAL_SUFFIX);
 
-        let result = self
-            .download_into(artifact, &partial_path)
-            .await
-            .and_then(|()| Ok(()));
-
-        match result {
+        match self.download_into(artifact, &partial_path).await {
             Ok(()) => {
                 if let Err(error) = fs::rename(&partial_path, &destination_path).await {
                     cleanup_failed_staging(&partial_path, &download_root, &downloads_root).await;
@@ -166,17 +163,8 @@ impl DefaultArtifactDownloader {
                 }
 
                 let mut destination = create_destination(partial_path).await?;
-                copy_exact(
-                    &mut source,
-                    &mut destination,
-                    artifact.size_bytes(),
-                )
-                .await?;
-                destination
-                    .flush()
-                    .await
-                    .map_err(ArtifactTransferError::Io)?;
-                Ok(())
+                copy_exact(&mut source, &mut destination, artifact.size_bytes()).await?;
+                destination.flush().await.map_err(ArtifactTransferError::Io)
             }
             "https" => {
                 let response = self
@@ -196,11 +184,7 @@ impl DefaultArtifactDownloader {
 
                 let mut destination = create_destination(partial_path).await?;
                 copy_response_exact(response, &mut destination, artifact.size_bytes()).await?;
-                destination
-                    .flush()
-                    .await
-                    .map_err(ArtifactTransferError::Io)?;
-                Ok(())
+                destination.flush().await.map_err(ArtifactTransferError::Io)
             }
             _ => Err(ArtifactTransferError::UnsupportedScheme),
         }
