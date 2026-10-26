@@ -121,6 +121,7 @@ pub fn parse_manifest(yaml: &str) -> Result<PackageRelease, ManifestParseError> 
     let package_id = PackageId::parse(&document.package.id)?;
     let version = SemanticVersion::parse(&document.package.version)?;
     let channel = parse_channel(&document.package.channel)?;
+    let install_mode = parse_install_mode(&document.install.mode)?;
     let artifact = parse_artifact(&document.artifact, false)?;
     let delta_artifact = parse_delta(document.artifact.delta.as_ref())?;
     let prerequisites = document
@@ -143,7 +144,7 @@ pub fn parse_manifest(yaml: &str) -> Result<PackageRelease, ManifestParseError> 
         .collect::<Result<Vec<_>, _>>()?;
     let windows_integration = parse_windows(document.install.windows.as_ref())?;
     let install = PackageInstallPolicy::new(
-        PackageInstallMode::Full,
+        install_mode,
         Some(&document.install.target),
         prerequisites,
         preserve_paths,
@@ -170,6 +171,13 @@ fn parse_channel(value: &str) -> Result<ReleaseChannel, ManifestParseError> {
         "stable" => Ok(ReleaseChannel::Stable),
         "beta" => Ok(ReleaseChannel::Beta),
         _ => Err(ManifestParseError::UnsupportedChannel),
+    }
+}
+
+fn parse_install_mode(value: &str) -> Result<PackageInstallMode, ManifestParseError> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "full" => Ok(PackageInstallMode::Full),
+        _ => Err(ManifestParseError::UnsupportedInstallMode),
     }
 }
 
@@ -238,7 +246,7 @@ fn parse_prerequisite(
     let install_action = prerequisite
         .install
         .as_ref()
-        .map(|install| {
+        .map(|install| -> Result<PrerequisiteInstallAction, ManifestParseError> {
             let artifact = parse_artifact(&install.artifact, true)?;
             Ok(PrerequisiteInstallAction::new(
                 artifact,
