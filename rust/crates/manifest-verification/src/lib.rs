@@ -92,10 +92,9 @@ mod windows_crypto {
     use turkuaz_installer_domain::manifest_trust_policy::ManifestTrustPolicy;
     use windows::Win32::Security::Cryptography::{
         CERT_CONTEXT, CERT_NAME_STR_REVERSE_FLAG, CERT_STRING_TYPE, CERT_X500_NAME_STR,
-        CRYPT_VERIFY_MESSAGE_PARA,
-        CertFreeCertificateContext, CertNameToStrW, CertVerifyTimeValidity,
-        CryptGetMessageSignerCount, CryptVerifyDetachedMessageSignature, PKCS_7_ASN_ENCODING,
-        X509_ASN_ENCODING,
+        CRYPT_VERIFY_MESSAGE_PARA, CertFreeCertificateContext, CertNameToStrW,
+        CertVerifyTimeValidity, CryptGetMessageSignerCount, CryptVerifyDetachedMessageSignature,
+        PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
     };
 
     use crate::ManifestVerificationError;
