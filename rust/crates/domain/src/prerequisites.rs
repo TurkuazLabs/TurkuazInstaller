@@ -5,7 +5,7 @@
 // Aciklama: Prerequisite installer artifacti icin signature policy zorunlulugunu korur
 // Bagimli Oldugu Katman: Model | Service | Tool
 
-use crate::{artifacts::ArtifactDescriptor, DomainError};
+use crate::{DomainError, artifacts::ArtifactDescriptor};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrerequisiteInstallAction {
