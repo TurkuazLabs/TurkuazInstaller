@@ -15,6 +15,7 @@ use turkuaz_installer_domain::manifest_trust_policy::ManifestTrustPolicy;
 pub enum ManifestVerificationError {
     EmptyContent,
     EmptySignature,
+    InvalidUtf8,
     InvalidSignature,
     InvalidSignerCertificate,
     SignerCertificateExpired,
@@ -28,6 +29,7 @@ impl fmt::Display for ManifestVerificationError {
         formatter.write_str(match self {
             Self::EmptyContent => "Manifest content is empty.",
             Self::EmptySignature => "Detached manifest signature is missing.",
+            Self::InvalidUtf8 => "Installer manifest must be valid UTF-8.",
             Self::InvalidSignature => "Detached manifest signature is invalid.",
             Self::InvalidSignerCertificate => "Manifest signer certificate is invalid.",
             Self::SignerCertificateExpired => {
@@ -51,6 +53,18 @@ impl std::error::Error for ManifestVerificationError {}
 /// The caller must first enforce manifest and signature byte limits. This function
 /// verifies the signer cryptographic signature without building a certificate trust
 /// chain, then checks the package's out-of-band subject and certificate pin.
+/// Verifies the detached signature before decoding the manifest as strict UTF-8.
+pub fn verify_and_decode_manifest(
+    manifest_content: &[u8],
+    detached_signature: &[u8],
+    trust_policy: &ManifestTrustPolicy,
+) -> Result<String, ManifestVerificationError> {
+    verify_detached_manifest(manifest_content, detached_signature, trust_policy)?;
+    let yaml = std::str::from_utf8(manifest_content)
+        .map_err(|_| ManifestVerificationError::InvalidUtf8)?;
+    Ok(yaml.to_owned())
+}
+
 #[cfg(windows)]
 pub fn verify_detached_manifest(
     manifest_content: &[u8],
