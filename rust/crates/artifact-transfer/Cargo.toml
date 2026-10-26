@@ -1,0 +1,24 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/artifact-transfer/Cargo.toml
+# Amac: HTTPS ve file artifactlarini exact-size staging alanina indirmek
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Stream boyutunu imzali metadata ile karsilastirip partial dosyayi atomik olarak finalize eder
+# Bagimli Oldugu Katman: Infrastructure
+
+[package]
+name = "turkuaz-installer-artifact-transfer"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+percent-encoding = "2.3"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
+tokio = { workspace = true }
+turkuaz-installer-domain = { path = "../domain" }
+uuid = { version = "1", features = ["v4"] }
+
+[lib]
+name = "turkuaz_installer_artifact_transfer"
+path = "src/lib.rs"
