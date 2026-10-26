@@ -8,8 +8,9 @@
 use std::{error::Error, fmt};
 
 use tokio::io::AsyncRead;
-use turkuaz_installer_domain::package_id::PackageId;
+use turkuaz_installer_domain::{package_id::PackageId, release::PackageRelease};
 use turkuaz_installer_manifest_trust_store::{TrustStoreError, YamlManifestTrustPolicyRepository};
+use turkuaz_installer_manifest_parser::{ManifestParseError, parse_manifest};
 use turkuaz_installer_manifest_verification::{
     ManifestVerificationError, verify_and_decode_manifest,
 };
@@ -24,6 +25,7 @@ pub enum VerifiedManifestError {
     TrustStore(TrustStoreError),
     MissingTrustPolicy,
     Verification(ManifestVerificationError),
+    ManifestParse(ManifestParseError),
 }
 
 impl fmt::Display for VerifiedManifestError {
@@ -34,6 +36,7 @@ impl fmt::Display for VerifiedManifestError {
             Self::MissingTrustPolicy => formatter
                 .write_str("No manifest signer trust policy is configured for this package."),
             Self::Verification(error) => write!(formatter, "{error}"),
+            Self::ManifestParse(error) => write!(formatter, "{error}"),
         }
     }
 }
@@ -44,6 +47,7 @@ impl Error for VerifiedManifestError {
             Self::ContentLimit(error) => Some(error),
             Self::TrustStore(error) => Some(error),
             Self::Verification(error) => Some(error),
+            Self::ManifestParse(error) => Some(error),
             Self::MissingTrustPolicy => None,
         }
     }
@@ -90,4 +94,30 @@ where
 
     verify_and_decode_manifest(&manifest, &signature, &trust_policy)
         .map_err(VerifiedManifestError::Verification)
+}
+
+/// Reads, verifies, decodes, and parses a signed manifest into its domain release model.
+pub async fn read_verified_release<M, S>(
+    manifest_source: &mut M,
+    detached_signature_source: &mut S,
+    manifest_content_length: Option<u64>,
+    signature_content_length: Option<u64>,
+    requested_package_id: &PackageId,
+    trust_store: &YamlManifestTrustPolicyRepository,
+) -> Result<PackageRelease, VerifiedManifestError>
+where
+    M: AsyncRead + Unpin,
+    S: AsyncRead + Unpin,
+{
+    let yaml = read_verified_manifest(
+        manifest_source,
+        detached_signature_source,
+        manifest_content_length,
+        signature_content_length,
+        requested_package_id,
+        trust_store,
+    )
+    .await?;
+
+    parse_manifest(&yaml).map_err(VerifiedManifestError::ManifestParse)
 }
