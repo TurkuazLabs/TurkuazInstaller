@@ -10,8 +10,8 @@ use std::{error::Error, fmt};
 use serde::Deserialize;
 use turkuaz_installer_domain::{
     DomainError,
-    artifacts::{ArtifactDescriptor, ArtifactSignatureAlgorithm, ArtifactSignatureDescriptor},
     artifact_digest::ArtifactDigest,
+    artifacts::{ArtifactDescriptor, ArtifactSignatureAlgorithm, ArtifactSignatureDescriptor},
     integrations::{
         WindowsIntegrationPolicy, WindowsProtocolIntegration, WindowsShortcutIntegration,
         WindowsShortcutLocation,
@@ -246,15 +246,17 @@ fn parse_prerequisite(
     let install_action = prerequisite
         .install
         .as_ref()
-        .map(|install| -> Result<PrerequisiteInstallAction, ManifestParseError> {
-            let artifact = parse_artifact(&install.artifact, true)?;
-            PrerequisiteInstallAction::new(
-                artifact,
-                install.arguments.clone(),
-                install.requires_elevation,
-            )
-            .map_err(ManifestParseError::Domain)
-        })
+        .map(
+            |install| -> Result<PrerequisiteInstallAction, ManifestParseError> {
+                let artifact = parse_artifact(&install.artifact, true)?;
+                PrerequisiteInstallAction::new(
+                    artifact,
+                    install.arguments.clone(),
+                    install.requires_elevation,
+                )
+                .map_err(ManifestParseError::Domain)
+            },
+        )
         .transpose()?;
     Ok(Prerequisite::new(
         &prerequisite.id,
