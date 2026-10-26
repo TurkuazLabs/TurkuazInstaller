@@ -38,7 +38,10 @@ impl WindowsShortcutIntegration {
             || matches!(name, "." | "..")
             || name.chars().any(|character| {
                 character < ' '
-                    || matches!(character, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')
+                    || matches!(
+                        character,
+                        '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'
+                    )
             })
         {
             return Err(DomainError::InvalidWindowsIntegration);
@@ -51,10 +54,18 @@ impl WindowsShortcutIntegration {
         })
     }
 
-    pub fn id(&self) -> &str { &self.id }
-    pub fn name(&self) -> &str { &self.name }
-    pub const fn location(&self) -> WindowsShortcutLocation { self.location }
-    pub fn executable_relative_path(&self) -> &str { &self.executable_relative_path }
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub const fn location(&self) -> WindowsShortcutLocation {
+        self.location
+    }
+    pub fn executable_relative_path(&self) -> &str {
+        &self.executable_relative_path
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,8 +91,12 @@ impl WindowsProtocolIntegration {
         })
     }
 
-    pub fn scheme(&self) -> &str { &self.scheme }
-    pub fn executable_relative_path(&self) -> &str { &self.executable_relative_path }
+    pub fn scheme(&self) -> &str {
+        &self.scheme
+    }
+    pub fn executable_relative_path(&self) -> &str {
+        &self.executable_relative_path
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,23 +118,41 @@ impl WindowsIntegrationPolicy {
             return Err(DomainError::InvalidWindowsIntegration);
         }
         let mut shortcut_ids = HashSet::new();
-        if !shortcuts.iter().all(|item| shortcut_ids.insert(item.id.to_lowercase())) {
+        if !shortcuts
+            .iter()
+            .all(|item| shortcut_ids.insert(item.id.to_lowercase()))
+        {
             return Err(DomainError::InvalidWindowsIntegration);
         }
         let mut schemes = HashSet::new();
-        if !protocols.iter().all(|item| schemes.insert(item.scheme.to_lowercase())) {
+        if !protocols
+            .iter()
+            .all(|item| schemes.insert(item.scheme.to_lowercase()))
+        {
             return Err(DomainError::InvalidWindowsIntegration);
         }
-        Ok(Self { shortcuts, protocols })
+        Ok(Self {
+            shortcuts,
+            protocols,
+        })
     }
 
     pub fn empty() -> Self {
-        Self { shortcuts: Vec::new(), protocols: Vec::new() }
+        Self {
+            shortcuts: Vec::new(),
+            protocols: Vec::new(),
+        }
     }
 
-    pub fn shortcuts(&self) -> &[WindowsShortcutIntegration] { &self.shortcuts }
-    pub fn protocols(&self) -> &[WindowsProtocolIntegration] { &self.protocols }
-    pub fn has_actions(&self) -> bool { !self.shortcuts.is_empty() || !self.protocols.is_empty() }
+    pub fn shortcuts(&self) -> &[WindowsShortcutIntegration] {
+        &self.shortcuts
+    }
+    pub fn protocols(&self) -> &[WindowsProtocolIntegration] {
+        &self.protocols
+    }
+    pub fn has_actions(&self) -> bool {
+        !self.shortcuts.is_empty() || !self.protocols.is_empty()
+    }
 }
 
 fn normalize_identifier(value: &str, maximum: usize) -> Result<String, DomainError> {
@@ -127,9 +160,9 @@ fn normalize_identifier(value: &str, maximum: usize) -> Result<String, DomainErr
     if normalized.is_empty()
         || normalized.len() > maximum
         || !normalized.chars().next().is_some_and(char::is_alphanumeric)
-        || !normalized.chars().all(|character| {
-            character.is_alphanumeric() || matches!(character, '.' | '_' | '-')
-        })
+        || !normalized
+            .chars()
+            .all(|character| character.is_alphanumeric() || matches!(character, '.' | '_' | '-'))
     {
         return Err(DomainError::InvalidWindowsIntegration);
     }
@@ -138,12 +171,17 @@ fn normalize_identifier(value: &str, maximum: usize) -> Result<String, DomainErr
 
 fn validate_relative_exe(value: &str) -> Result<String, DomainError> {
     let normalized = value.trim().replace('\\', "/");
-    let segments: Vec<_> = normalized.split('/').filter(|segment| !segment.is_empty()).collect();
+    let segments: Vec<_> = normalized
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect();
     if normalized.starts_with('/')
         || normalized.contains(':')
         || segments.is_empty()
         || !normalized.to_ascii_lowercase().ends_with(".exe")
-        || segments.iter().any(|segment| matches!(*segment, "." | ".."))
+        || segments
+            .iter()
+            .any(|segment| matches!(*segment, "." | ".."))
     {
         return Err(DomainError::InvalidWindowsIntegration);
     }
