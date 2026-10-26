@@ -12,6 +12,9 @@ edition = "2024"
 rust-version = "1.85"
 publish = false
 
+[dependencies]
+url = "2.5"
+
 [lib]
 name = "turkuaz_installer_domain"
 path = "src/lib.rs"
