@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 0.4.0
+Version: 0.5.0
 Aciklama: Mevcut .NET davranisini koruyarak asamali Rust portu icin mimari sinir ve gercek kapsam durumunu belirtir
 Bagimli Oldugu Katman: Documentation
 -->
@@ -24,9 +24,10 @@ Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .N
 - `domain`: package id, SemVer, SHA-256 digest, release channel, artifact/signature, prerequisite, Windows integration, release policy, install/update/repair/rollback/uninstall plan modelleri ve package-scoped manifest signer trust policy.
 - `metadata`: manifest/signature icin 1 MiB / 256 KiB limitler, Content-Length kontrolu ve stream sirasinda bounded read.
 - `artifact-verification`: staged artifact stream'i icin imzali descriptor'daki tam byte boyutu ve SHA-256 kontrolu; asiri uzun stream'de erken kesme.
-- Community Rust CI format ve workspace compile kapisidir. .NET CI mevcut Community davranis referansini dogrulamaya devam eder.
+- `manifest-verification`: Windows CryptoAPI ile detached CMS/PKCS#7 imzasini dogrulama; tek signer, sertifika gecerlilik zamani, trust policy subject eslesmesi ve sertifika SHA-256 pini kontrolu. Sertifika zinciri dogrulamasi yapilmaz; mevcut .NET sozlesmesiyle ayni signature-only guven modelini izler.
+- Community Rust CI Linux format/workspace compile ve Windows workspace compile kapilarini calistirir. .NET CI mevcut Community davranis referansini dogrulamaya devam eder.
 
-Artifact verifier yalniz stream dogrulamasidir. Cagiran katman artifact'i staging alaninda tutmali ve bu fonksiyon basarili olmadan apply etmemelidir. Ag provider'i, staging/path guvenligi, indirmenin tam yasam dongusu ve Windows Authenticode henuz tasinmadi. Manifest trust modeli su an yalnız domain tipidir; YAML trust-store repository'si ve CMS imza kontrolu sonraki dilimlerdir. Bu parcalar tek basina install/update runtime'i saglamaz.
+Artifact verifier yalniz stream dogrulamasidir. Cagiran katman artifact'i staging alaninda tutmali ve bu fonksiyon basarili olmadan apply etmemelidir. Ag provider'i, staging/path guvenligi, indirmenin tam yasam dongusu ve Windows Authenticode henuz tasinmadi. Manifest trust policy domain modeli ve Windows CMS verifier mevcuttur. YAML trust-store repository'si, strict UTF-8/YAML parser entegrasyonu ve guvenli manifest okuma zinciri henuz tasinmadi. Bu parcalar tek basina install/update runtime'i saglamaz.
 
 Strict UTF-8/YAML parse, release providerlari, state/journal, Windows adapterlari, workflow use-case'leri, CLI, WinUI ve paketleme henuz tasinmadi.
 
