@@ -108,7 +108,7 @@ mod windows_crypto {
             return Err(ManifestVerificationError::EmptySignature);
         }
 
-        let signature_length = u32::try_from(detached_signature.len())
+        let _signature_length = u32::try_from(detached_signature.len())
             .map_err(|_| ManifestVerificationError::InvalidSignature)?;
         let content_length = u32::try_from(manifest_content.len())
             .map_err(|_| ManifestVerificationError::InvalidSignature)?;
