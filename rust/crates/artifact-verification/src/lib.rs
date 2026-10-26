@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/artifact-verification/src/lib.rs
 // Amac: Artifact stream'ini kurulumdan once imzali descriptor boyut ve SHA-256 degerleriyle dogrulamak
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Beklenen boyut asilirsa erken durur; kisa stream ve digest uyusmazliginda fail-closed sonuc verir
 // Bagimli Oldugu Katman: Tool | Model
 
@@ -76,10 +76,9 @@ where
             break;
         }
 
-        let chunk_length = u64::try_from(bytes_read).unwrap_or(u64::MAX);
-        let next_length = observed_length
-            .checked_add(chunk_length)
-            .unwrap_or(u64::MAX);
+        // The fixed 64 KiB buffer always fits in u64 on supported Rust targets.
+        let chunk_length = bytes_read as u64;
+        let next_length = observed_length.saturating_add(chunk_length);
         if next_length > expected_length {
             return Err(ArtifactVerificationError::LengthExceeded {
                 expected: expected_length,
