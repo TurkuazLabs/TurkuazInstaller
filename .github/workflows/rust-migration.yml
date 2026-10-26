@@ -40,3 +40,13 @@ jobs:
 
       - name: Compile workspace
         run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets
+
+  rust-windows:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile Windows workspace
+        run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets
