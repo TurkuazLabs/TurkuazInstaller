@@ -12,6 +12,7 @@ members = [
     "crates/metadata",
     "crates/artifact-verification",
     "crates/manifest-verification",
+    "crates/manifest-trust-store",
 ]
 
 [workspace.dependencies]
