@@ -285,9 +285,8 @@ fn resolve_file_name(artifact: &ArtifactDescriptor) -> String {
         .and_then(Iterator::last)
         .unwrap_or_default();
     let decoded = percent_decode_str(last_segment).decode_utf8_lossy();
-    let normalized = decoded.replace('\\\\', "/");
+    let normalized = decoded.replace('\\', "/");
     let sanitized = normalized
-        .replace('\\', "/")
         .rsplit('/')
         .next()
         .unwrap_or_default()
