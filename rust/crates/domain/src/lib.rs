@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/domain/src/lib.rs
 // Amac: Rust domain kutuphanesinin public modullerini ve ortak hata tipini sunmak
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: .NET Domain tiplerinin Rust portu icin platformdan bagimsiz giris noktasi
 // Bagimli Oldugu Katman: Model
 
@@ -10,6 +10,7 @@
 pub mod artifact_digest;
 pub mod artifacts;
 pub mod integrations;
+pub mod manifest_trust_policy;
 pub mod operation;
 pub mod package_id;
 pub mod package_policy;
@@ -26,6 +27,7 @@ pub enum DomainError {
     InvalidSha256Digest,
     InvalidArtifactDescriptor,
     InvalidSignatureDescriptor,
+    InvalidManifestTrustPolicy,
     InvalidPrerequisite,
     InvalidWindowsIntegration,
     InvalidRelease,
@@ -39,6 +41,7 @@ impl std::fmt::Display for DomainError {
             Self::InvalidSemanticVersion => "Version is not valid SemVer 2.0.",
             Self::InvalidArtifactDescriptor => "Artifact descriptor is invalid.",
             Self::InvalidSignatureDescriptor => "Artifact signature policy is invalid.",
+            Self::InvalidManifestTrustPolicy => "Manifest signer trust policy is invalid.",
             Self::InvalidPrerequisite => "Prerequisite policy is invalid.",
             Self::InvalidWindowsIntegration => "Windows integration policy is invalid.",
             Self::InvalidRelease => "Package release metadata is inconsistent.",
