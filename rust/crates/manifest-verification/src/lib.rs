@@ -91,7 +91,8 @@ mod windows_crypto {
     use sha2::{Digest, Sha256};
     use turkuaz_installer_domain::manifest_trust_policy::ManifestTrustPolicy;
     use windows::Win32::Security::Cryptography::{
-        CERT_CONTEXT, CERT_NAME_STR_REVERSE_FLAG, CERT_X500_NAME_STR, CRYPT_VERIFY_MESSAGE_PARA,
+        CERT_CONTEXT, CERT_NAME_STR_REVERSE_FLAG, CERT_STRING_TYPE, CERT_X500_NAME_STR,
+        CRYPT_VERIFY_MESSAGE_PARA,
         CertFreeCertificateContext, CertNameToStrW, CertVerifyTimeValidity,
         CryptGetMessageSignerCount, CryptVerifyDetachedMessageSignature, PKCS_7_ASN_ENCODING,
         X509_ASN_ENCODING,
@@ -139,8 +140,7 @@ mod windows_crypto {
 
         let mut verify_parameters = CRYPT_VERIFY_MESSAGE_PARA::default();
         verify_parameters.cbSize = size_of::<CRYPT_VERIFY_MESSAGE_PARA>() as u32;
-        verify_parameters.dwMsgAndCertEncodingType =
-            (X509_ASN_ENCODING | PKCS_7_ASN_ENCODING).0;
+        verify_parameters.dwMsgAndCertEncodingType = (X509_ASN_ENCODING | PKCS_7_ASN_ENCODING).0;
 
         let content_pointers = [manifest_content.as_ptr()];
         let content_lengths = [content_length];
@@ -188,7 +188,7 @@ mod windows_crypto {
             CertNameToStrW(
                 X509_ASN_ENCODING,
                 &cert_info.Subject as *const _,
-                CERT_X500_NAME_STR.0 | CERT_NAME_STR_REVERSE_FLAG,
+                CERT_STRING_TYPE(CERT_X500_NAME_STR.0 | CERT_NAME_STR_REVERSE_FLAG),
                 None,
             )
         };
@@ -201,7 +201,7 @@ mod windows_crypto {
             CertNameToStrW(
                 X509_ASN_ENCODING,
                 &cert_info.Subject,
-                CERT_X500_NAME_STR | CERT_NAME_STR_REVERSE_FLAG,
+                CERT_STRING_TYPE(CERT_X500_NAME_STR.0 | CERT_NAME_STR_REVERSE_FLAG),
                 Some(&mut subject_buffer),
             )
         };
