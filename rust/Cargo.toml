@@ -9,4 +9,8 @@
 resolver = "2"
 members = [
     "crates/domain",
+    "crates/metadata",
 ]
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["io-util"] }
