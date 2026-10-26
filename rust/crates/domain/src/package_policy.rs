@@ -20,6 +20,8 @@ pub struct PackageRollbackPolicy {
 }
 
 impl PackageRollbackPolicy {
+    pub const DISABLED: Self = Self { supported: false, previous_version_required: false };
+
     pub const DISABLED: Self = Self {
         supported: false,
         previous_version_required: false,
