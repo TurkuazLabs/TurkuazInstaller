@@ -10,9 +10,7 @@ use std::{error::Error, fmt};
 use serde::Deserialize;
 use turkuaz_installer_domain::{
     DomainError,
-    artifacts::{
-        ArtifactDescriptor, ArtifactSignatureAlgorithm, ArtifactSignatureDescriptor,
-    },
+    artifacts::{ArtifactDescriptor, ArtifactSignatureAlgorithm, ArtifactSignatureDescriptor},
     artifact_digest::ArtifactDigest,
     integrations::{
         WindowsIntegrationPolicy, WindowsProtocolIntegration, WindowsShortcutIntegration,
@@ -49,29 +47,35 @@ pub enum ManifestParseError {
 impl fmt::Display for ManifestParseError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidYaml(error) => write!(formatter, "Installer manifest YAML is invalid: {error}"),
+            Self::InvalidYaml(error) => {
+                write!(formatter, "Installer manifest YAML is invalid: {error}")
+            }
             Self::EmptyManifest => formatter.write_str("Installer manifest is empty."),
             Self::UnsupportedSchemaVersion => {
                 formatter.write_str("Installer manifest schema version is not supported.")
             }
-            Self::MissingInstallMode => formatter.write_str("Installer manifest install mode is required."),
-            Self::MissingInstallTarget => formatter.write_str("Installer manifest install target is required."),
-            Self::UnsupportedChannel => formatter.write_str("Installer manifest release channel is not supported."),
-            Self::UnsupportedInstallMode => {
-                formatter.write_str("Installer manifest install mode is not supported by Stable v1.")
+            Self::MissingInstallMode => {
+                formatter.write_str("Installer manifest install mode is required.")
             }
+            Self::MissingInstallTarget => {
+                formatter.write_str("Installer manifest install target is required.")
+            }
+            Self::UnsupportedChannel => {
+                formatter.write_str("Installer manifest release channel is not supported.")
+            }
+            Self::UnsupportedInstallMode => formatter
+                .write_str("Installer manifest install mode is not supported by Stable v1."),
             Self::UnsupportedShortcutLocation => {
                 formatter.write_str("Windows shortcut location is not supported.")
             }
-            Self::UnsupportedSignatureAlgorithm => {
-                formatter.write_str("Installer manifest artifact signature algorithm is not supported.")
-            }
+            Self::UnsupportedSignatureAlgorithm => formatter
+                .write_str("Installer manifest artifact signature algorithm is not supported."),
             Self::MissingPublisherSubject => {
                 formatter.write_str("Authenticode signature policy requires publisher_subject.")
             }
-            Self::MissingPrerequisiteSignature => {
-                formatter.write_str("Prerequisite auto-install artifact requires Authenticode signature policy.")
-            }
+            Self::MissingPrerequisiteSignature => formatter.write_str(
+                "Prerequisite auto-install artifact requires Authenticode signature policy.",
+            ),
             Self::InvalidPreservePath => formatter.write_str("Preserve path must not be empty."),
             Self::Domain(error) => write!(formatter, "{error}"),
         }
