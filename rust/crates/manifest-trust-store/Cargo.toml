@@ -1,0 +1,22 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/manifest-trust-store/Cargo.toml
+# Amac: Dis YAML manifest signer trust store'unu yuklemek
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Community installer disinda tutulan package-scoped CMS signer policy'sini okur
+# Bagimli Oldugu Katman: Infrastructure
+
+[package]
+name = "turkuaz-installer-manifest-trust-store"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_yaml = { package = "yaml_serde", version = "0.10" }
+turkuaz-installer-domain = { path = "../domain" }
+
+[lib]
+name = "turkuaz_installer_manifest_trust_store"
+path = "src/lib.rs"
