@@ -248,11 +248,12 @@ fn parse_prerequisite(
         .as_ref()
         .map(|install| -> Result<PrerequisiteInstallAction, ManifestParseError> {
             let artifact = parse_artifact(&install.artifact, true)?;
-            Ok(PrerequisiteInstallAction::new(
+            PrerequisiteInstallAction::new(
                 artifact,
                 install.arguments.clone(),
                 install.requires_elevation,
-            )?)
+            )
+            .map_err(ManifestParseError::Domain)
         })
         .transpose()?;
     Ok(Prerequisite::new(
@@ -338,7 +339,7 @@ struct DeltaArtifactSection {
     signature: Option<SignatureSection>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Clone, Deserialize)]
 #[serde(default)]
 struct SignatureSection {
     algorithm: String,
