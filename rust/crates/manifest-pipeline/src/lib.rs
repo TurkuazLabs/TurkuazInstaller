@@ -9,9 +9,7 @@ use std::{error::Error, fmt};
 
 use tokio::io::AsyncRead;
 use turkuaz_installer_domain::package_id::PackageId;
-use turkuaz_installer_manifest_trust_store::{
-    TrustStoreError, YamlManifestTrustPolicyRepository,
-};
+use turkuaz_installer_manifest_trust_store::{TrustStoreError, YamlManifestTrustPolicyRepository};
 use turkuaz_installer_manifest_verification::{
     ManifestVerificationError, verify_and_decode_manifest,
 };
@@ -33,9 +31,8 @@ impl fmt::Display for VerifiedManifestError {
         match self {
             Self::ContentLimit(error) => write!(formatter, "{error}"),
             Self::TrustStore(error) => write!(formatter, "{error}"),
-            Self::MissingTrustPolicy => {
-                formatter.write_str("No manifest signer trust policy is configured for this package.")
-            }
+            Self::MissingTrustPolicy => formatter
+                .write_str("No manifest signer trust policy is configured for this package."),
             Self::Verification(error) => write!(formatter, "{error}"),
         }
     }
@@ -66,12 +63,8 @@ where
     M: AsyncRead + Unpin,
     S: AsyncRead + Unpin,
 {
-    validate_declared_length(
-        manifest_content_length,
-        MAXIMUM_MANIFEST_BYTES,
-        "Manifest",
-    )
-    .map_err(VerifiedManifestError::ContentLimit)?;
+    validate_declared_length(manifest_content_length, MAXIMUM_MANIFEST_BYTES, "Manifest")
+        .map_err(VerifiedManifestError::ContentLimit)?;
     validate_declared_length(
         signature_content_length,
         MAXIMUM_DETACHED_SIGNATURE_BYTES,
@@ -79,13 +72,9 @@ where
     )
     .map_err(VerifiedManifestError::ContentLimit)?;
 
-    let manifest = BoundedContentReader::read(
-        manifest_source,
-        MAXIMUM_MANIFEST_BYTES,
-        "Manifest",
-    )
-    .await
-    .map_err(VerifiedManifestError::ContentLimit)?;
+    let manifest = BoundedContentReader::read(manifest_source, MAXIMUM_MANIFEST_BYTES, "Manifest")
+        .await
+        .map_err(VerifiedManifestError::ContentLimit)?;
     let signature = BoundedContentReader::read(
         detached_signature_source,
         MAXIMUM_DETACHED_SIGNATURE_BYTES,
