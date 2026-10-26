@@ -7,7 +7,7 @@
 
 use url::Url;
 
-use crate::{artifact_digest::ArtifactDigest, DomainError};
+use crate::{DomainError, artifact_digest::ArtifactDigest};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(i32)]
