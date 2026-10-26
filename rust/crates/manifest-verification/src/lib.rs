@@ -93,7 +93,7 @@ mod windows_crypto {
         fn drop(&mut self) {
             // SAFETY: CryptoAPI returned this owned context to the successful verify call.
             unsafe {
-                let _ = CertFreeCertificateContext(self.0);
+                let _ = CertFreeCertificateContext(Some(self.0));
             }
         }
     }
@@ -176,7 +176,7 @@ mod windows_crypto {
             // SAFETY: cert_info is live; this call requests the required output length.
             CertNameToStrW(
                 X509_ASN_ENCODING,
-                &cert_info.Subject,
+                &cert_info.Subject as *const _,
                 CERT_X500_NAME_STR | CERT_NAME_STR_REVERSE_FLAG,
                 None,
             )
