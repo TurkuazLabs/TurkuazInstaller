@@ -10,9 +10,5 @@
 mod bounded_reader;
 mod limits;
 
-pub use bounded_reader::{
-    BoundedContentError, BoundedContentReader, validate_declared_length,
-};
-pub use limits::{
-    MAXIMUM_DETACHED_SIGNATURE_BYTES, MAXIMUM_MANIFEST_BYTES, ManifestContentLimits,
-};
+pub use bounded_reader::{BoundedContentError, BoundedContentReader, validate_declared_length};
+pub use limits::{MAXIMUM_DETACHED_SIGNATURE_BYTES, MAXIMUM_MANIFEST_BYTES, ManifestContentLimits};
