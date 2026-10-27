@@ -1,0 +1,34 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/Cargo.toml
+# Amac: Imzali manifestten paket indirip Community Rust install workflow'unu calistiran CLI'yi tanimlamak
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: HTTPS release intake, artifact validation ve install/update service katmanlarini birlestirir
+# Bagimli Oldugu Katman: Application | Tool
+
+[package]
+name = "turkuaz-installer-cli"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream"] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "rt-multi-thread"] }
+turkuaz-installer-artifact-transfer = { path = "../artifact-transfer" }
+turkuaz-installer-artifact-validation = { path = "../artifact-validation" }
+turkuaz-installer-deployment-activation = { path = "../deployment-activation" }
+turkuaz-installer-domain = { path = "../domain" }
+turkuaz-installer-install-state-store = { path = "../install-state-store" }
+turkuaz-installer-install-workflow = { path = "../install-workflow" }
+turkuaz-installer-manifest-pipeline = { path = "../manifest-pipeline" }
+turkuaz-installer-manifest-trust-store = { path = "../manifest-trust-store" }
+turkuaz-installer-operation-context = { path = "../operation-context" }
+turkuaz-installer-operation-journal = { path = "../operation-journal" }
+turkuaz-installer-operation-lock = { path = "../operation-lock" }
+turkuaz-installer-package-engine = { path = "../package-engine" }
+url = "2"
+
+[[bin]]
+name = "turkuaz-installer"
+path = "src/main.rs"
