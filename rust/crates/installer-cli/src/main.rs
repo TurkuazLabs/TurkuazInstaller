@@ -1,0 +1,276 @@
+// Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
+// Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
+// Modul - Rust Binary
+// Version: 0.1.0
+// Aciklama: HTTPS manifest intake, artifact dogrulama ve install workflow'u icin ilk headless giris noktasidir
+// Bagimli Oldugu Katman: Application | Tool
+
+use std::{
+    collections::HashMap,
+    error::Error,
+    io,
+    path::{Path, PathBuf},
+    process,
+};
+
+use reqwest::{Client, Response, redirect::Policy};
+use tokio::io::AsyncReadExt;
+use turkuaz_installer_artifact_transfer::DefaultArtifactDownloader;
+use turkuaz_installer_artifact_validation::download_and_verify;
+use turkuaz_installer_deployment_activation::{
+    DeploymentActivationOptions, VersionedDeploymentStore,
+};
+use turkuaz_installer_domain::{operation::InstallerOperationType, package_id::PackageId};
+use turkuaz_installer_install_state_store::{
+    JsonInstallStateRepository, JsonInstallStateRepositoryOptions,
+};
+use turkuaz_installer_install_workflow::{InstallWorkflow, InstallWorkflowOptions};
+use turkuaz_installer_manifest_pipeline::read_verified_release;
+use turkuaz_installer_manifest_trust_store::YamlManifestTrustPolicyRepository;
+use turkuaz_installer_operation_context::InstallerOperationContext;
+use turkuaz_installer_operation_journal::{
+    JsonOperationJournalRepository, JsonOperationJournalRepositoryOptions,
+};
+use turkuaz_installer_operation_lock::FileOperationLockOptions;
+use turkuaz_installer_package_engine::PackageExtractionLimits;
+use url::Url;
+
+const MAXIMUM_MANIFEST_BYTES: u64 = 1024 * 1024;
+const MAXIMUM_SIGNATURE_BYTES: u64 = 256 * 1024;
+
+#[tokio::main]
+async fn main() {
+    if let Err(error) = run().await {
+        eprintln!("Turkuaz Installer failed: {error}");
+        process::exit(1);
+    }
+}
+
+async fn run() -> Result<(), Box<dyn Error>> {
+    let (operation, values) = parse_arguments()?;
+    let package_id = PackageId::parse(required(&values, "package-id")?)?;
+    let manifest_url = parse_https_url(required(&values, "manifest-url")?)?;
+    let signature_url = parse_https_url(required(&values, "signature-url")?)?;
+    let trust_path = PathBuf::from(required(&values, "trust-store")?);
+    let target_path = required(&values, "target")?;
+    let data_root = PathBuf::from(required(&values, "data-root")?);
+    if target_path.trim().is_empty() || data_root.as_os_str().is_empty() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Target and data-root must be non-empty.").into());
+    }
+
+    let http_client = Client::builder()
+        .redirect(Policy::custom(|attempt| {
+            if attempt.url().scheme() == "https" && attempt.previous().len() < 10 {
+                attempt.follow()
+            } else {
+                attempt.stop()
+            }
+        }))
+        .build()
+        .map_err(|_| io::Error::other("Could not initialize HTTPS client."))?;
+    let (manifest_bytes, manifest_length) =
+        read_bounded_https(&http_client, &manifest_url, MAXIMUM_MANIFEST_BYTES).await?;
+    let (signature_bytes, signature_length) =
+        read_bounded_https(&http_client, &signature_url, MAXIMUM_SIGNATURE_BYTES).await?;
+
+    let trust_store = YamlManifestTrustPolicyRepository::new(trust_path)?;
+    let mut manifest_source = std::io::Cursor::new(manifest_bytes);
+    let mut signature_source = std::io::Cursor::new(signature_bytes);
+    let release = read_verified_release(
+        &mut manifest_source,
+        &mut signature_source,
+        Some(manifest_length),
+        Some(signature_length),
+        &package_id,
+        &trust_store,
+    )
+    .await?;
+
+    let data_root = absolute_path(&data_root)?;
+    tokio::fs::create_dir_all(&data_root).await?;
+    let downloader = DefaultArtifactDownloader::new()
+        .map_err(|_| io::Error::other("Could not initialize artifact downloader."))?;
+    let verified_artifact = download_and_verify(
+        &downloader,
+        release.artifact(),
+        data_root.join("downloads"),
+    )
+    .await
+    .map_err(|_| io::Error::other("Artifact download or integrity validation failed."))?;
+
+    let target_directory = absolute_path(Path::new(target_path))?;
+    let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
+    let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
+        data_root.join("journal"),
+    )?);
+    let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
+        data_root.join("state"),
+    )?);
+    let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
+        target_directory.join(".turkuaz-installer"),
+    )?);
+    let options = InstallWorkflowOptions::new(
+        lock,
+        Some(journal),
+        state,
+        deployment,
+        data_root.join("staging"),
+    )?;
+    let workflow = InstallWorkflow::new(options);
+    let active = workflow
+        .install_or_update(
+            verified_artifact,
+            release,
+            operation,
+            &target_directory.to_string_lossy(),
+            PackageExtractionLimits::default(),
+        )
+        .await?;
+
+    println!("Active package directory: {}", active.directory().display());
+    Ok(())
+}
+
+fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>), io::Error> {
+    let mut arguments = std::env::args().skip(1);
+    let operation = match arguments.next().as_deref() {
+        Some("install") => InstallerOperationType::Install,
+        Some("update") => InstallerOperationType::Update,
+        Some("--help" | "-h") => {
+            println!(
+                "Usage: turkuaz-installer <install|update> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR"
+            );
+            process::exit(0);
+        }
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Expected install or update command. Use --help for usage.",
+            ));
+        }
+    };
+
+    let mut values = HashMap::new();
+    while let Some(flag) = arguments.next() {
+        let Some(key) = flag.strip_prefix("--") else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Arguments after the command must use --name value form.",
+            ));
+        };
+        let value = arguments.next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing.")
+        })?;
+        if values.insert(key.to_owned(), value).is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "An option was provided more than once.",
+            ));
+        }
+    }
+
+    let allowed = [
+        "package-id",
+        "manifest-url",
+        "signature-url",
+        "trust-store",
+        "target",
+        "data-root",
+    ];
+    if values.keys().any(|key| !allowed.contains(&key.as_str())) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "An unknown option was provided.",
+        ));
+    }
+    for key in allowed {
+        required(&values, key)?;
+    }
+    Ok((operation, values))
+}
+
+fn required<'a>(
+    values: &'a HashMap<String, String>,
+    key: &str,
+) -> Result<&'a str, io::Error> {
+    values
+        .get(key)
+        .map(String::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Required option --{key} is missing."),
+            )
+        })
+}
+
+fn parse_https_url(value: &str) -> Result<Url, io::Error> {
+    let url = Url::parse(value)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "A source URL is invalid."))?;
+    if url.scheme() != "https" || url.host_str().is_none() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Manifest and signature URLs must use HTTPS.",
+        ));
+    }
+    Ok(url)
+}
+
+async fn read_bounded_https(
+    client: &Client,
+    url: &Url,
+    maximum_bytes: u64,
+) -> Result<(Vec<u8>, u64), io::Error> {
+    let mut response = client
+        .get(url.clone())
+        .send()
+        .await
+        .map_err(|_| io::Error::other("HTTPS source request failed."))?
+        .error_for_status()
+        .map_err(|_| io::Error::other("HTTPS source returned an unsuccessful status."))?;
+    if response
+        .content_length()
+        .is_some_and(|length| length > maximum_bytes)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "HTTPS source exceeds its configured size limit.",
+        ));
+    }
+    let mut bytes = Vec::new();
+    while let Some(chunk) = next_chunk(&mut response).await? {
+        let next_length = (bytes.len() as u64)
+            .checked_add(chunk.len() as u64)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Source size overflowed."))?;
+        if next_length > maximum_bytes {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "HTTPS source exceeds its configured size limit.",
+            ));
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok((bytes.clone(), bytes.len() as u64))
+}
+
+async fn next_chunk(response: &mut Response) -> Result<Option<bytes::Bytes>, io::Error> {
+    response
+        .chunk()
+        .await
+        .map_err(|_| io::Error::other("HTTPS source response could not be read."))
+}
+
+fn absolute_path(path: &Path) -> io::Result<PathBuf> {
+    if path.as_os_str().is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "A configured path cannot be empty.",
+        ));
+    }
+    if path.is_absolute() {
+        Ok(path.to_path_buf())
+    } else {
+        Ok(std::env::current_dir()?.join(path))
+    }
+}
