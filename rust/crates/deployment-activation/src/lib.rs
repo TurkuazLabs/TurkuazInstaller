@@ -212,6 +212,84 @@ impl VersionedDeploymentStore {
         }
     }
 
+    /// @dev-id TIZ-DEPLOY-016
+    /// @purpose Repair the active version from a verified package without mutating its published directory.
+    /// @reason A replacement must be complete before the active pointer changes, so interruption cannot leave a half-copied payload active.
+    /// @contract Requires a stage for the currently active package/version; publishes a unique immutable directory, writes its inventory, then atomically switches active.json.
+    /// @depends Verified PackageStage, package-scoped operation lock, integrity inventory, and atomic active record replacement.
+    pub fn repair_current(
+        &self,
+        stage: PackageStage,
+    ) -> Result<ActiveDeployment, DeploymentActivationError> {
+        let package_id = stage.package_id().clone();
+        let version = stage.version().clone();
+        let current = self.current(&package_id)?.ok_or(
+            DeploymentActivationError::InvalidLayout("active deployment is missing during repair"),
+        )?;
+        if current.version() != &version {
+            return Err(DeploymentActivationError::ActiveDeploymentMismatch);
+        }
+
+        let package_root = self.package_root(&package_id);
+        let versions_root = package_root.join("versions");
+        ensure_existing_directory(&package_root)?;
+        ensure_existing_directory(&versions_root)?;
+
+        let directory_key = format!("repair-{}", Uuid::new_v4());
+        let temporary_directory = versions_root.join(format!(".stage-{}", Uuid::new_v4()));
+        let destination = self.deployment_directory(&package_id, &directory_key);
+        fs::create_dir(&temporary_directory).map_err(DeploymentActivationError::Io)?;
+        if let Err(error) = copy_payload(stage.payload_directory(), &temporary_directory) {
+            let _ = fs::remove_dir_all(&temporary_directory);
+            return Err(error);
+        }
+        if let Err(error) = fs::rename(&temporary_directory, &destination) {
+            let _ = fs::remove_dir_all(&temporary_directory);
+            return Err(DeploymentActivationError::Io(error));
+        }
+        if let Err(error) =
+            integrity::write_inventory(&package_root, &package_id, &version, &destination)
+        {
+            let _ = fs::remove_dir_all(&destination);
+            let _ = integrity::remove_inventory_for_key(&package_root, &directory_key);
+            return Err(error);
+        }
+
+        let entry_point = stage.entry_point().map(str::to_owned);
+        let previous_directory_key = current
+            .previous_directory()
+            .and_then(|path| path.file_name())
+            .and_then(|name| name.to_str())
+            .map(str::to_owned);
+        let document = ActiveDeploymentDocument {
+            package_id: package_id.to_string(),
+            version: version.to_string(),
+            previous_version: current.previous_version().map(ToString::to_string),
+            directory_key: Some(directory_key),
+            previous_directory_key,
+            entry_point: entry_point.clone(),
+            previous_entry_point: current.previous_entry_point().map(str::to_owned),
+        };
+        if let Err(error) = write_active_document(&package_root, &document) {
+            let _ = fs::remove_dir_all(&destination);
+            let _ = integrity::remove_inventory_for_key(
+                &package_root,
+                destination.file_name().and_then(|name| name.to_str()).unwrap_or_default(),
+            );
+            return Err(error);
+        }
+
+        Ok(ActiveDeployment {
+            package_id,
+            version,
+            directory: destination,
+            previous_version: current.previous_version().cloned(),
+            previous_directory: current.previous_directory().map(Path::to_path_buf),
+            entry_point,
+            previous_entry_point: current.previous_entry_point().map(str::to_owned),
+        })
+    }
+
     /// @dev-id TIZ-DEPLOY-012
     /// @purpose Switch the active pointer to a previously published package version.
     /// @reason Rollback and repair need to select an immutable version without rewriting its files.
