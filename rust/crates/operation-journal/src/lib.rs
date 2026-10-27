@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/operation-journal/src/lib.rs
 // Amac: Install workflow recovery icin operation checkpointlerini kalici JSON journalda saklamak
 // Modul - Rust Library
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: Journal entry'lerini bounded okur ve ayni dizinde atomik rename ile gunceller
 // Bagimli Oldugu Katman: Repo
 
@@ -139,7 +139,9 @@ impl JsonOperationJournalRepository {
             .await
             .map_err(JournalError::Io)?;
         if bytes.len() as u64 > MAX_JOURNAL_BYTES {
-            return Err(JournalError::InvalidEntry("journal exceeds the 1 MiB limit"));
+            return Err(JournalError::InvalidEntry(
+                "journal exceeds the 1 MiB limit",
+            ));
         }
 
         let document: JournalDocument =
