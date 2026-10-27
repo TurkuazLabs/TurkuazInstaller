@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 0.3.0
+// Version: 0.4.0
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -163,16 +163,10 @@ pub async fn stage_full_package(
     .await
     {
         Ok(result) => result,
-        Err(error) => {
-            let _ = tokio::fs::remove_dir_all(&payload_directory).await;
-            return Err(PackageEngineError::BlockingTask(error));
-        }
+        Err(error) => return Err(PackageEngineError::BlockingTask(error)),
     };
 
-    if let Err(error) = result {
-        let _ = tokio::fs::remove_dir_all(&payload_directory).await;
-        return Err(error);
-    }
+    result?;
 
     Ok(PackageStage {
         package_id,
@@ -194,9 +188,10 @@ fn extract_archive(
     payload_directory: &Path,
     limits: PackageExtractionLimits,
 ) -> Result<(), PackageEngineError> {
-    let parent = payload_directory.parent().ok_or(
-        PackageEngineError::InvalidPackage("payload staging path must have a parent directory"),
-    )?;
+    let parent = payload_directory
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(parent).map_err(PackageEngineError::Io)?;
     fs::create_dir(payload_directory).map_err(PackageEngineError::Io)?;
 
