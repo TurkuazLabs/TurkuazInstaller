@@ -55,6 +55,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
 
     let http_client = Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
         .redirect(Policy::custom(|attempt| {
             if attempt.url().scheme() == "https" && attempt.previous().len() < 10 {
                 attempt.follow()
@@ -216,7 +217,7 @@ fn parse_https_url(value: &str) -> Result<Url, io::Error> {
 async fn read_bounded_https(
     client: &Client,
     url: &Url,
-    maximum_bytes: u64,
+    maximum_bytes: usize,
 ) -> Result<(Vec<u8>, u64), io::Error> {
     let mut response = client
         .get(url.clone())
@@ -227,7 +228,7 @@ async fn read_bounded_https(
         .map_err(|_| io::Error::other("HTTPS source returned an unsuccessful status."))?;
     if response
         .content_length()
-        .is_some_and(|length| length > maximum_bytes)
+        .is_some_and(|length| length > maximum_bytes as u64)
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -244,7 +245,7 @@ async fn read_bounded_https(
         let next_length = (bytes.len() as u64)
             .checked_add(chunk.len() as u64)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Source size overflowed."))?;
-        if next_length > maximum_bytes {
+        if next_length > maximum_bytes as u64 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "HTTPS source exceeds its configured size limit.",
