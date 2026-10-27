@@ -12,9 +12,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use turkuaz_installer_domain::{
-    package_id::PackageId, semantic_version::SemanticVersion,
-};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 use turkuaz_installer_package_engine::PackageStage;
 use uuid::Uuid;
 
@@ -40,19 +38,19 @@ impl fmt::Display for DeploymentActivationError {
         match self {
             Self::Io(error) => write!(formatter, "Deployment activation I/O failed: {error}"),
             Self::Json(error) => write!(formatter, "Deployment JSON is invalid: {error}"),
-            Self::InvalidLayout(message) => write!(formatter, "Deployment layout is invalid: {message}"),
-            Self::ActiveDeploymentMismatch => formatter.write_str(
-                "Active deployment record does not match the requested package.",
-            ),
+            Self::InvalidLayout(message) => {
+                write!(formatter, "Deployment layout is invalid: {message}")
+            }
+            Self::ActiveDeploymentMismatch => formatter
+                .write_str("Active deployment record does not match the requested package."),
             Self::VersionAlreadyPublished => {
                 formatter.write_str("This package version is already published.")
             }
             Self::InvalidInventory(message) => {
                 write!(formatter, "Deployment inventory is invalid: {message}")
             }
-            Self::IntegrityMismatch => formatter.write_str(
-                "Deployment files do not match the recorded integrity inventory.",
-            ),
+            Self::IntegrityMismatch => formatter
+                .write_str("Deployment files do not match the recorded integrity inventory."),
         }
     }
 }
@@ -180,12 +178,9 @@ impl VersionedDeploymentStore {
             return Err(DeploymentActivationError::Io(error));
         }
 
-        if let Err(error) = integrity::write_inventory(
-            &package_root,
-            &package_id,
-            &version,
-            &destination,
-        ) {
+        if let Err(error) =
+            integrity::write_inventory(&package_root, &package_id, &version, &destination)
+        {
             let _ = fs::remove_dir_all(&destination);
             let _ = integrity::remove_inventory(&package_root, &version);
             return Err(error);
@@ -303,8 +298,9 @@ impl VersionedDeploymentStore {
         let previous_version = document
             .previous_version
             .map(|value| {
-                SemanticVersion::parse(&value)
-                    .map_err(|_| DeploymentActivationError::InvalidLayout("previous version is invalid"))
+                SemanticVersion::parse(&value).map_err(|_| {
+                    DeploymentActivationError::InvalidLayout("previous version is invalid")
+                })
             })
             .transpose()?;
         if &recorded_package != package_id {
@@ -334,8 +330,8 @@ impl VersionedDeploymentStore {
             version: version.to_string(),
             previous_version: previous_version.as_ref().map(ToString::to_string),
         };
-        let bytes = serde_json::to_vec_pretty(&document)
-            .map_err(DeploymentActivationError::Json)?;
+        let bytes =
+            serde_json::to_vec_pretty(&document).map_err(DeploymentActivationError::Json)?;
         let active_path = package_root.join(ACTIVE_FILE);
         let temporary_path = package_root.join(format!(".active-{}.tmp", Uuid::new_v4()));
         let write_result = (|| {
@@ -345,7 +341,8 @@ impl VersionedDeploymentStore {
                 .open(&temporary_path)
                 .map_err(DeploymentActivationError::Io)?;
             use std::io::Write;
-            file.write_all(&bytes).map_err(DeploymentActivationError::Io)?;
+            file.write_all(&bytes)
+                .map_err(DeploymentActivationError::Io)?;
             file.sync_all().map_err(DeploymentActivationError::Io)?;
             drop(file);
             replace_file(&temporary_path, &active_path).map_err(DeploymentActivationError::Io)
@@ -405,10 +402,7 @@ fn ensure_existing_directory(path: &Path) -> Result<(), DeploymentActivationErro
     }
 }
 
-fn copy_payload(
-    source: &Path,
-    destination: &Path,
-) -> Result<(), DeploymentActivationError> {
+fn copy_payload(source: &Path, destination: &Path) -> Result<(), DeploymentActivationError> {
     ensure_existing_directory(source)?;
     for entry in fs::read_dir(source).map_err(DeploymentActivationError::Io)? {
         let entry = entry.map_err(DeploymentActivationError::Io)?;
