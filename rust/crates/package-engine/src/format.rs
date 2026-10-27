@@ -1,13 +1,13 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/format.rs
 // Amac: Turkuaz .tzpkg arşivinin versioned metadata sozlesmesini tanimlamak
 // Modul - Rust Package Format
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: Paket kimligi ve surumunu payload arşivinden bagimsiz olarak acikca tasir
 // Bagimli Oldugu Katman: Model | Service | Tool
 
 use serde::{Deserialize, Serialize};
 use turkuaz_installer_domain::{
-    package_id::PackageId, release::PackageRelease, semantic_version::SemanticVersion,
+    package_id::PackageId, semantic_version::SemanticVersion,
 };
 
 pub(crate) const PACKAGE_METADATA_ENTRY: &str = "turkuaz-package.json";
@@ -30,9 +30,5 @@ impl PackageArchiveMetadata {
             package_id: package_id.to_string(),
             version: version.to_string(),
         }
-    }
-
-    pub(crate) fn for_release(release: &PackageRelease) -> Self {
-        Self::new(release.package_id(), release.version())
     }
 }
