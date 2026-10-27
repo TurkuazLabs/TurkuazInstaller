@@ -393,7 +393,7 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
                 if installed.version() == active.version()
                     && installed
                         .target_path()
-                        .eq_ignore_ascii_case(target_argument) =>
+                        .eq_ignore_ascii_case(&target_argument) =>
             {
                 deployment.verify_current(&package_id)?.ok_or_else(|| {
                     io::Error::new(io::ErrorKind::InvalidData, "Active deployment is missing.")
@@ -416,7 +416,7 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
     if !entry
         .target_path
         .trim()
-        .eq_ignore_ascii_case(target_argument)
+        .eq_ignore_ascii_case(&target_argument)
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -429,7 +429,7 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
         (Some(installed), Some(active)) => {
             if !installed
                 .target_path()
-                .eq_ignore_ascii_case(target_argument)
+                .eq_ignore_ascii_case(&target_argument)
             {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
@@ -596,7 +596,7 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
         .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Package is not installed."))?;
     if !installed
         .target_path()
-        .eq_ignore_ascii_case(target_argument)
+        .eq_ignore_ascii_case(&target_argument)
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
