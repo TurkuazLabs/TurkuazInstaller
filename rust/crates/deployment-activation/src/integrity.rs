@@ -15,14 +15,10 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use turkuaz_installer_domain::{
-    package_id::PackageId, semantic_version::SemanticVersion,
-};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 use uuid::Uuid;
 
-use super::{
-    ActiveDeployment, DeploymentActivationError, VersionedDeploymentStore,
-};
+use super::{ActiveDeployment, DeploymentActivationError, VersionedDeploymentStore};
 
 const INVENTORY_DIRECTORY: &str = "integrity";
 const INVENTORY_FORMAT_VERSION: u32 = 1;
@@ -66,11 +62,7 @@ struct InventoryEntry {
 }
 
 impl DeploymentInventory {
-    fn new(
-        package_id: &PackageId,
-        version: &SemanticVersion,
-        files: Vec<InventoryEntry>,
-    ) -> Self {
+    fn new(package_id: &PackageId, version: &SemanticVersion, files: Vec<InventoryEntry>) -> Self {
         Self {
             format_version: INVENTORY_FORMAT_VERSION,
             package_id: package_id.to_string(),
@@ -203,9 +195,7 @@ fn read_inventory(
     }
     for entry in &inventory.files {
         validate_inventory_path(&entry.path)?;
-        if entry.sha256.len() != 64
-            || !entry.sha256.bytes().all(|byte| byte.is_ascii_hexdigit())
-        {
+        if entry.sha256.len() != 64 || !entry.sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
             return Err(DeploymentActivationError::InvalidInventory(
                 "inventory contains an invalid SHA-256 digest",
             ));
@@ -266,9 +256,12 @@ fn collect_directory(
 
     for path in children {
         let metadata = fs::symlink_metadata(&path).map_err(DeploymentActivationError::Io)?;
-        *total_entries = total_entries.checked_add(1).ok_or(
-            DeploymentActivationError::InvalidInventory("deployment entry count overflowed"),
-        )?;
+        *total_entries =
+            total_entries
+                .checked_add(1)
+                .ok_or(DeploymentActivationError::InvalidInventory(
+                    "deployment entry count overflowed",
+                ))?;
         if *total_entries > MAXIMUM_INVENTORY_ENTRIES {
             return Err(DeploymentActivationError::InvalidInventory(
                 "deployment exceeds the inventory entry limit",
@@ -345,11 +338,13 @@ fn relative_path_string(path: &Path) -> Result<String, DeploymentActivationError
     let segments = path
         .components()
         .map(|component| match component {
-            Component::Normal(segment) => segment.to_str().ok_or(
-                DeploymentActivationError::InvalidInventory(
-                    "deployment path is not valid Unicode",
-                ),
-            ),
+            Component::Normal(segment) => {
+                segment
+                    .to_str()
+                    .ok_or(DeploymentActivationError::InvalidInventory(
+                        "deployment path is not valid Unicode",
+                    ))
+            }
             _ => Err(DeploymentActivationError::InvalidInventory(
                 "deployment path is not relative",
             )),
@@ -401,8 +396,9 @@ fn validate_inventory_path(path: &str) -> Result<(), DeploymentActivationError> 
             .to_ascii_uppercase();
         let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
             || ["COM", "LPT"].iter().any(|prefix| {
-                stem.strip_prefix(prefix)
-                    .is_some_and(|suffix| matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"))
+                stem.strip_prefix(prefix).is_some_and(|suffix| {
+                    matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
+                })
             });
         if reserved {
             return Err(DeploymentActivationError::InvalidInventory(
