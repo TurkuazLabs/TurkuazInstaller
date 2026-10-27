@@ -22,6 +22,7 @@ turkuaz-installer-domain = { path = "../domain" }
 turkuaz-installer-install-state-store = { path = "../install-state-store" }
 turkuaz-installer-install-workflow = { path = "../install-workflow" }
 turkuaz-installer-manifest-pipeline = { path = "../manifest-pipeline" }
+turkuaz-installer-metadata = { path = "../metadata" }
 turkuaz-installer-manifest-trust-store = { path = "../manifest-trust-store" }
 turkuaz-installer-operation-context = { path = "../operation-context" }
 turkuaz-installer-operation-journal = { path = "../operation-journal" }
