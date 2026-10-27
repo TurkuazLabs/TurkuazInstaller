@@ -182,13 +182,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         data_root.join("staging"),
     )?;
     let workflow = InstallWorkflow::new(options);
-    if operation == InstallerOperationType::Rollback {
-        let active = workflow.rollback(release).await?;
-        println!(
-            "Rolled back to package directory: {}",
-            active.directory().display()
-        );
-    } else if operation == InstallerOperationType::Repair {
+    if operation == InstallerOperationType::Repair {
         let active = workflow
             .repair(
                 verified_artifact,
@@ -271,7 +265,7 @@ fn read_bounded_local_file(
         )
         .into());
     }
-    let mut file = std::fs::File::open(path)?;
+    let file = std::fs::File::open(path)?;
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
     file.take(maximum_bytes as u64 + 1)
         .read_to_end(&mut bytes)?;
