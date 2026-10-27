@@ -281,7 +281,8 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
     let executable_relative = required(&values, "executable")?;
     let executable_relative_path = Path::new(executable_relative);
     if executable_relative_path.is_absolute()
-        || executable_relative.starts_with(['/', '\\'])
+        || executable_relative.starts_with('/')
+        || executable_relative.starts_with('\\')
         || executable_relative.contains(':')
         || executable_relative.contains('\\')
         || executable_relative_path.components().any(|component| {
