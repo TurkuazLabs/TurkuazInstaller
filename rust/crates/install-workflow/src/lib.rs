@@ -414,9 +414,12 @@ impl InstallWorkflow {
             return Err(InstallWorkflowError::CurrentReleaseMismatch);
         }
         if let Some(journal) = &self.options.journal {
-            if journal.get(&package_id).await.map_err(|error| {
-                InstallWorkflowError::Io(io::Error::other(error.to_string()))
-            })?.is_some() {
+            if journal
+                .get(&package_id)
+                .await
+                .map_err(|error| InstallWorkflowError::Io(io::Error::other(error.to_string())))?
+                .is_some()
+            {
                 return Err(InstallWorkflowError::RepairHasPendingOperation);
             }
         }
@@ -431,17 +434,13 @@ impl InstallWorkflow {
         .await;
         context.set_phase(InstallerOperationPhase::Verifying).await;
         context.set_phase(InstallerOperationPhase::Staging).await;
-        let stage_directory = self
-            .options
-            .staging_root
-            .join(format!("{}-repair-{}", package_id.as_str(), Uuid::new_v4()));
-        let stage = match stage_full_package(
-            verified_artifact,
-            &release,
-            &stage_directory,
-            limits,
-        )
-        .await
+        let stage_directory = self.options.staging_root.join(format!(
+            "{}-repair-{}",
+            package_id.as_str(),
+            Uuid::new_v4()
+        ));
+        let stage = match stage_full_package(verified_artifact, &release, &stage_directory, limits)
+            .await
         {
             Ok(stage) => stage,
             Err(error) => {
