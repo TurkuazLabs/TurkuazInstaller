@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/deployment-activation/src/lib.rs
 // Amac: Kurulum payload'ini immutable surum dizinine yayinlayip etkin surumu atomik secmek
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: Yeni deployment hazirlanirken etkin surum isaretcisini korur
 // Bagimli Oldugu Katman: Service | Infrastructure
 
@@ -39,7 +39,7 @@ impl fmt::Display for DeploymentActivationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(error) => write!(formatter, "Deployment activation I/O failed: {error}"),
-            Self::Json(error) => write!(formatter, "Active deployment record is invalid: {error}"),
+            Self::Json(error) => write!(formatter, "Deployment JSON is invalid: {error}"),
             Self::InvalidLayout(message) => write!(formatter, "Deployment layout is invalid: {message}"),
             Self::ActiveDeploymentMismatch => formatter.write_str(
                 "Active deployment record does not match the requested package.",
