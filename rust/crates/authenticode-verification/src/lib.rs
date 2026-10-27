@@ -31,7 +31,9 @@ impl fmt::Display for AuthenticodeVerificationError {
             Self::UnsupportedAlgorithm => "Artifact signature algorithm is not supported.",
             Self::ArtifactMissing => "Artifact file does not exist.",
             Self::InvalidSignature => "Authenticode signature or trust chain is invalid.",
-            Self::PublisherMismatch => "Authenticode publisher does not match signed release metadata.",
+            Self::PublisherMismatch => {
+                "Authenticode publisher does not match signed release metadata."
+            }
             Self::CertificatePinMismatch => {
                 "Authenticode certificate SHA-256 pin does not match signed release metadata."
             }
@@ -87,19 +89,17 @@ mod windows_authenticode {
         Foundation::HWND,
         Security::{
             Cryptography::{
-                CERT_CONTEXT, CERT_INFO, CERT_NAME_STR_REVERSE_FLAG,
-                CERT_X500_NAME_STR, CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED_EMBED,
-                CERT_QUERY_FORMAT_FLAG_BINARY, CERT_QUERY_OBJECT_FILE, CERT_NAME_BLOB,
-                CMSG_SIGNER_COUNT_PARAM, CMSG_SIGNER_INFO, CMSG_SIGNER_INFO_PARAM,
-                CertCloseStore, CertEnumCertificatesInStore, CertFreeCertificateContext,
-                CertNameToStrW, CryptMsgClose, CryptMsgGetParam, CryptQueryObject,
-                X509_ASN_ENCODING,
+                CERT_CONTEXT, CERT_INFO, CERT_NAME_BLOB, CERT_NAME_STR_REVERSE_FLAG,
+                CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED_EMBED, CERT_QUERY_FORMAT_FLAG_BINARY,
+                CERT_QUERY_OBJECT_FILE, CERT_X500_NAME_STR, CMSG_SIGNER_COUNT_PARAM,
+                CMSG_SIGNER_INFO, CMSG_SIGNER_INFO_PARAM, CertCloseStore,
+                CertEnumCertificatesInStore, CertFreeCertificateContext, CertNameToStrW,
+                CryptMsgClose, CryptMsgGetParam, CryptQueryObject, X509_ASN_ENCODING,
             },
             WinTrust::{
-                WINTRUST_DATA, WINTRUST_DATA_0,
-                WINTRUST_FILE_INFO, WinVerifyTrust, WTD_CHOICE_FILE, WTD_DISABLE_MD2_MD4,
-                WTD_REVOKE_WHOLECHAIN, WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT,
-                WTD_STATEACTION_IGNORE, WTD_UI_NONE,
+                WINTRUST_DATA, WINTRUST_DATA_0, WINTRUST_FILE_INFO, WTD_CHOICE_FILE,
+                WTD_DISABLE_MD2_MD4, WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT,
+                WTD_REVOKE_WHOLECHAIN, WTD_STATEACTION_IGNORE, WTD_UI_NONE, WinVerifyTrust,
             },
         },
     };
@@ -381,8 +381,15 @@ mod windows_authenticode {
         Err(AuthenticodeVerificationError::SignerIdentityUnavailable)
     }
 
-    fn blobs_equal(left: &windows_sys::Win32::Security::Cryptography::CRYPT_INTEGER_BLOB, right: &windows_sys::Win32::Security::Cryptography::CRYPT_INTEGER_BLOB) -> bool {
-        if left.cbData != right.cbData || left.cbData == 0 || left.pbData.is_null() || right.pbData.is_null() {
+    fn blobs_equal(
+        left: &windows_sys::Win32::Security::Cryptography::CRYPT_INTEGER_BLOB,
+        right: &windows_sys::Win32::Security::Cryptography::CRYPT_INTEGER_BLOB,
+    ) -> bool {
+        if left.cbData != right.cbData
+            || left.cbData == 0
+            || left.pbData.is_null()
+            || right.pbData.is_null()
+        {
             return false;
         }
         unsafe {
