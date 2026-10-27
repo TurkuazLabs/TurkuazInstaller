@@ -1,15 +1,15 @@
 <!--
 Dosya Yolu: REPO_ROOT/rust/DEPLOYMENT_LAYOUT.md
-Amac: Surumlu deployment klasörlerinin ve etkin surum isaretcisinin davranisini tanımlamak
+Amac: Surumlu deployment klasorlerinin ve etkin surum isaretcisinin davranisini tanimlamak
 Modul - Markdown Specification
 Version: 0.1.0
-Aciklama: Hazırlama, etkinlestirme ve geri alma icin mevcut dosya sistemi sozlesmesini aciklar
+Aciklama: Hazirlama, etkinlestirme ve geri alma icin mevcut dosya sistemi sozlesmesini aciklar
 Bagimli Oldugu Katman: Service | Infrastructure | Documentation
 -->
 
 # Versioned Deployment Layout
 
-Status: implementation draft. The activation crate publishes immutable version directories and atomically replaces the active-version record. Install workflows, installed-state persistence, startup recovery, cleanup, and launch integration are not connected yet.
+Status: implementation draft. The activation crate publishes immutable version directories and atomically replaces the active-version record. First-install and forward-update workflows use this crate. Startup recovery, orphan cleanup, and launch integration are not connected yet.
 
 ## Layout
 
@@ -49,4 +49,4 @@ Windows uses `MoveFileExW` with replace-existing and write-through flags for the
 
 The store resolves `active.json` and verifies that the referenced version directory exists. It does not execute files, mutate the installed-state repository, write operation checkpoints, clean orphan versions, or automatically roll back. The caller must hold the package-scoped operation lock and coordinate journal/state transitions around activation.
 
-No current TurkuazInstaller workflow uses this crate yet. This contract is not a claim of runtime parity or release readiness.
+The install workflow uses this crate for initial install and forward update. This contract is not a claim of complete runtime parity or release readiness.
