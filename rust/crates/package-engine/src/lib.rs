@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 0.4.0
+// Version: 0.5.0
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -285,9 +285,11 @@ fn extract_archive_contents(
             continue;
         }
 
-        let parent = destination.parent().ok_or(PackageEngineError::InvalidPackage(
-            "package file path has no parent directory",
-        ))?;
+        let parent = destination
+            .parent()
+            .ok_or(PackageEngineError::InvalidPackage(
+                "package file path has no parent directory",
+            ))?;
         fs::create_dir_all(parent).map_err(PackageEngineError::Io)?;
 
         let mut source = archive
@@ -299,7 +301,8 @@ fn extract_archive_contents(
             .open(&destination)
             .map_err(PackageEngineError::Io)?;
         let mut bounded_source = (&mut source).take(limits.maximum_file_bytes.saturating_add(1));
-        let copied_bytes = io::copy(&mut bounded_source, &mut target).map_err(PackageEngineError::Io)?;
+        let copied_bytes =
+            io::copy(&mut bounded_source, &mut target).map_err(PackageEngineError::Io)?;
         if copied_bytes != planned.uncompressed_size || copied_bytes > limits.maximum_file_bytes {
             return Err(PackageEngineError::InvalidPackage(
                 "package entry size differs from its declared size",
@@ -340,11 +343,7 @@ fn validate_archive_path(raw_name: &str) -> Result<PathBuf, PackageEngineError> 
             || segment.ends_with('.')
             || segment.ends_with(' ')
             || segment.chars().any(|character| {
-                character < ' '
-                    || matches!(
-                        character,
-                        '<' | '>' | '"' | '|' | '?' | '*'
-                    )
+                character < ' ' || matches!(character, '<' | '>' | '"' | '|' | '?' | '*')
             })
         {
             return Err(PackageEngineError::InvalidPackage(
@@ -378,9 +377,7 @@ fn reject_reserved_windows_name(segment: &str) -> Result<(), PackageEngineError>
     Ok(())
 }
 
-fn validate_entry_conflicts(
-    entry_kinds: &HashMap<String, bool>,
-) -> Result<(), PackageEngineError> {
+fn validate_entry_conflicts(entry_kinds: &HashMap<String, bool>) -> Result<(), PackageEngineError> {
     for (path, _) in entry_kinds {
         let mut parent = path.as_str();
         while let Some((ancestor, _)) = parent.rsplit_once('/') {
