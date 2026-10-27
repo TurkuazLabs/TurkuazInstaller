@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.3.1
+Version: 0.4.0
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -200,7 +200,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- install-bu
   --operation install
 ```
 
-Use `--operation update` for a higher signed version, `repair` for the currently installed version, or `rollback` to restore the previous recorded deployment under the signed rollback policy. The installer rechecks the external trust policy, package digest, optional Authenticode signature, and package archive before activation. The bundle format accepts only its fixed, bounded entries and extracts them into temporary staging under the data root. A graphical bootstrapper, paired NSIS backup, and automated production signing/publishing are still pending.
+Use `--operation update` for a higher signed version, `repair` for the currently installed version, or `rollback` to restore the previous recorded deployment under the signed rollback policy. The installer rechecks the external trust policy, package digest, optional Authenticode signature, and package archive before activation. The bundle format accepts only its fixed, bounded entries and extracts them into temporary staging under the data root. A graphical bootstrapper and automated production signing/publishing are still pending.
 
 ## Self-extracting Windows setup
 
@@ -224,4 +224,15 @@ TurkuazSetup.exe install-self \
   --operation install
 ```
 
-The signer trust policy remains an explicit external input. This first Windows setup is command-line driven and must be Authenticode-signed after the final payload is attached for production distribution. The GUI, automated signing/publishing, and paired NSIS backup are still pending.
+The signer trust policy remains an explicit input to the primary setup. This first Windows setup is command-line driven. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-distribution-pair \\
+  --package-id example.product \\
+  --stub ./rust/target/release/turkuaz-installer.exe \\
+  --bundle ./TurkuazSetup.tzsetup \\
+  --trust-store ./manifest-trust.yaml \\
+  --output-dir ./distribution
+```
+
+The command requires `makensis` on `PATH` (or `--makensis PATH`). It stages both outputs and publishes the directory only after NSIS succeeds. Share `distribution/TurkuazSetup.exe`; `TurkuazInstallerBackup.exe` is the mandatory fallback and currently supports first install. Sign both final executables with Authenticode after building. The GUI and automated signing/publishing are still pending.
