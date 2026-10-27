@@ -141,14 +141,17 @@ impl VersionedDeploymentStore {
     ) -> Result<ActiveDeployment, DeploymentActivationError> {
         let package_id = stage.package_id().clone();
         let version = stage.version().clone();
+        fs::create_dir_all(self.options.root_directory()).map_err(DeploymentActivationError::Io)?;
         let package_root = self.package_root(&package_id);
         let versions_root = package_root.join("versions");
         ensure_directory(&package_root)?;
         ensure_directory(&versions_root)?;
 
         let destination = versions_root.join(version.to_string());
-        if destination.exists() {
-            return Err(DeploymentActivationError::VersionAlreadyPublished);
+        match fs::symlink_metadata(&destination) {
+            Ok(_) => return Err(DeploymentActivationError::VersionAlreadyPublished),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(DeploymentActivationError::Io(error)),
         }
 
         let temporary_directory = versions_root.join(format!(".stage-{}", Uuid::new_v4()));
@@ -192,11 +195,22 @@ impl VersionedDeploymentStore {
     ) -> Result<Option<ActiveDeployment>, DeploymentActivationError> {
         let package_root = self.package_root(package_id);
         let active_path = package_root.join(ACTIVE_FILE);
-        let bytes = match fs::read(&active_path) {
-            Ok(bytes) => bytes,
+        let mut file = match fs::File::open(&active_path) {
+            Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(DeploymentActivationError::Io(error)),
         };
+        let metadata = file.metadata().map_err(DeploymentActivationError::Io)?;
+        if !metadata.is_file() || metadata.len() > MAXIMUM_ACTIVE_FILE_BYTES {
+            return Err(DeploymentActivationError::InvalidLayout(
+                "active deployment record is not a bounded regular file",
+            ));
+        }
+        use std::io::Read;
+        let mut bytes = Vec::with_capacity(metadata.len() as usize);
+        file.take(MAXIMUM_ACTIVE_FILE_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(DeploymentActivationError::Io)?;
         if bytes.len() as u64 > MAXIMUM_ACTIVE_FILE_BYTES {
             return Err(DeploymentActivationError::InvalidLayout(
                 "active deployment record exceeds the 4 KiB limit",
@@ -328,7 +342,8 @@ fn copy_payload(
             copy_payload(&source_path, &destination_path)?;
         } else if metadata.file_type().is_file() {
             let mut input = fs::File::open(&source_path).map_err(DeploymentActivationError::Io)?;
-            if !input.metadata().map_err(DeploymentActivationError::Io)?.is_file() {
+            let opened_metadata = input.metadata().map_err(DeploymentActivationError::Io)?;
+            if !opened_metadata.is_file() || opened_metadata.len() != metadata.len() {
                 return Err(DeploymentActivationError::InvalidLayout(
                     "staged payload entry changed during publication",
                 ));
@@ -338,7 +353,13 @@ fn copy_payload(
                 .create_new(true)
                 .open(&destination_path)
                 .map_err(DeploymentActivationError::Io)?;
-            io::copy(&mut input, &mut output).map_err(DeploymentActivationError::Io)?;
+            let copied_bytes =
+                io::copy(&mut input, &mut output).map_err(DeploymentActivationError::Io)?;
+            if copied_bytes != metadata.len() {
+                return Err(DeploymentActivationError::InvalidLayout(
+                    "staged payload changed size during publication",
+                ));
+            }
             output.sync_all().map_err(DeploymentActivationError::Io)?;
         } else {
             return Err(DeploymentActivationError::InvalidLayout(
