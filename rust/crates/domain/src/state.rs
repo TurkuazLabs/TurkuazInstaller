@@ -1,11 +1,13 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/domain/src/state.rs
 // Amac: Kurulu package bilgisini storage bagimsiz typed domain modeli olarak tasimak
 // Modul - Rust Domain
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: Package, SemVer, release channel ve hedef yolu kurulu state kaydinda birlestirir
 // Bagimli Oldugu Katman: Model | Service
 
-use crate::{package_id::PackageId, release_channel::ReleaseChannel, semantic_version::SemanticVersion};
+use crate::{
+    package_id::PackageId, release_channel::ReleaseChannel, semantic_version::SemanticVersion,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstalledPackageState {
