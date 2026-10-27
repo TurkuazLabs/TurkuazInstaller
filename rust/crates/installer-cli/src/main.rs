@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.1.0
-// Aciklama: HTTPS manifest intake, artifact dogrulama ve install workflow'u icin ilk headless giris noktasidir
+// Version: 0.2.0
+// Aciklama: HTTPS release intake, package build, install/update/rollback ve kurulu deployment dogrulamasi icin headless CLI'dir
 // Bagimli Oldugu Katman: Application | Tool
 
 use std::{
