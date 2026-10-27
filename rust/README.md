@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 1.7.0
+Version: 1.8.0
 Aciklama: Mevcut .NET davranisini koruyarak asamali Rust portu icin mimari sinir ve gercek kapsam durumunu belirtir
 Bagimli Oldugu Katman: Documentation
 -->
@@ -26,7 +26,8 @@ Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .N
 - `artifact-verification`: staged artifact stream'i icin imzali descriptor'daki tam byte boyutu ve SHA-256 kontrolu; asiri uzun stream'de erken kesme.
 - `artifact-transfer`: HTTPS ve `file:` artifactlerini benzersiz staging dizinine stream eder; HTTPS redirect'lerinde HTTPS disina cikmaz, imzali boyut ust sinirini erkenden uygular, exact size kontroluyle `.partial` dosyayi basarili aktarim sonunda atomik adlandirir. Bu crate artifact'i apply etmez.
 - `artifact-validation`: download → tam boyut/SHA-256 → metadata varsa Authenticode siralamasini uygular. Yalniz tum uygulanabilir kapilar basariliysa opaque `VerifiedArtifact` dondurur; dogrulama hatasinda indirilmis dosyayi ve bos staging klasorlerini temizler. Custom package engine bu token'i yalnizca staging icin tuketiyor; hedefe kurulum ve etkinlestirme henuz bagli degil.
-- `package-engine`: `.tzpkg` v1 archive sozlesmesi, `turkuaz-package.json` release identity/version baglamasi, payload builder'i ve verified-artifact staging'i saglar. ZIP-slip, Windows path kurallari, buyuk/kucuk harf path cakismasi, duplicate entry, symlink/ozel dosya ve acilmis boyut/sayi sinirlari kontrol edilir. Ayrintilar: [PACKAGE_FORMAT.md](PACKAGE_FORMAT.md). Henuz hedef kurulumuna veya surum etkinlestirmeye gecmez.
+- `package-engine`: `.tzpkg` v1 archive sozlesmesi, `turkuaz-package.json` release identity/version baglamasi, payload builder'i ve verified-artifact staging'i saglar. ZIP-slip, Windows path kurallari, buyuk/kucuk harf path cakismasi, duplicate entry, symlink/ozel dosya ve acilmis boyut/sayi sinirlari kontrol edilir. Ayrintilar: [PACKAGE_FORMAT.md](PACKAGE_FORMAT.md).
+- `deployment-activation`: Staged payload'i immutable `versions/<version>` dizinine kopyalar; dosyalar sync edildikten sonra `active.json` isaretcisini ayni volume icinde atomik degistirir. Onceki surumu geri alma adayi olarak kaydeder ve mevcut surumleri ezmez. Ayrintilar: [DEPLOYMENT_LAYOUT.md](DEPLOYMENT_LAYOUT.md). Henüz install workflow'una, kurulu state'e, journal/recovery veya launch akisina bagli degildir.
 - `operation-lock`: package ID basina OS advisory file lock alir; ayni paketin ikinci process'teki operation'ini fail-fast reddeder, farkli paketlerin islemleri birbirinden bagimsizdir. Process ID ve UTC unix timestamp'i kilit dosyasinda tanilama icin tutulur. Lease dusurulunce lock serbest kalir; dosya inode race'ini onlemek icin bos dosya olarak birakilir.
 - `operation-journal`: typed operation/phase checkpoint'lerini package basina JSON dosyasinda saklar. 1 MiB okuma siniri ve package ID / enum deger dogrulamasi uygular; guncellemeyi ayni dizindeki gecici dosyayi sync edip rename ederek yazar. .NET journal'daki PascalCase alan adlari ve numeric enum sozlesmesi korunur.
 - `install-state-store`: kurulu paket versiyon/channel/target state'ini package basina JSON'da tutar; bounded okuma, deterministik listeleme, typed deger dogrulamasi ve atomik replace uygular. .NET PascalCase property ve numeric ReleaseChannel sozlesmesi korunur.
