@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/domain/src/lib.rs
 // Amac: Rust domain kutuphanesinin public modullerini ve ortak hata tipini sunmak
 // Modul - Rust Library
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: .NET Domain tiplerinin Rust portu icin platformdan bagimsiz giris noktasi
 // Bagimli Oldugu Katman: Model
 
@@ -18,6 +18,7 @@ pub mod prerequisites;
 pub mod release;
 pub mod release_channel;
 pub mod semantic_version;
+pub mod state;
 
 /// Domain degerleri parse edilirken olusan guvenli ve hassas veri icermeyen hata.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
