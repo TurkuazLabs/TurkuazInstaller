@@ -14,6 +14,7 @@ on:
     paths:
       - "rust/**"
       - ".github/workflows/rust-migration.yml"
+      - "packaging/TurkuazInstallerBackup.nsi"
   push:
     branches:
       - rewrite/rust-community
@@ -54,6 +55,23 @@ jobs:
 
       - name: Compile Windows workspace
         run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets
+
+      - name: Install NSIS
+        run: choco install nsis --yes --no-progress
+
+      - name: Validate NSIS backup script
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "turkuaz-nsis-validation"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Set-Content -LiteralPath (Join-Path $stage "TurkuazSetup.exe") -Value "stub" -Encoding ascii
+          Set-Content -LiteralPath (Join-Path $stage "manifest-trust.yaml") -Value "validation: true" -Encoding ascii
+          $outputPath = Join-Path $stage "TurkuazInstallerBackup.exe"
+          $scriptPath = Join-Path $env:GITHUB_WORKSPACE "packaging/TurkuazInstallerBackup.nsi"
+          $makensis = Join-Path ${env:ProgramFiles(x86)} "NSIS/makensis.exe"
+          & $makensis "/DPACKAGE_ID=validation.example" "/DPRIMARY_SETUP_PATH=$(Join-Path $stage "TurkuazSetup.exe")" "/DTRUST_STORE_PATH=$(Join-Path $stage "manifest-trust.yaml")" "/DOUTPUT_PATH=$outputPath" $scriptPath
+          if ($LASTEXITCODE -ne 0) { throw "NSIS backup script compilation failed." }
+          if (!(Test-Path -LiteralPath $outputPath -PathType Leaf)) { throw "NSIS did not produce the backup executable." }
 
       - name: Build development CLI
         run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer
