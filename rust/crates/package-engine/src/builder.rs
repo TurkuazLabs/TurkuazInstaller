@@ -9,7 +9,6 @@ use std::{
     collections::HashMap,
     error::Error,
     fmt, fs, io,
-    io::Write,
     path::{Component, Path, PathBuf},
 };
 
