@@ -275,6 +275,9 @@ async fn list_command() -> Result<(), Box<dyn Error>> {
         let _lock_lease =
             turkuaz_installer_operation_lock::acquire_package_lock(&lock, package.package_id())
                 .map_err(|_| io::Error::other("Could not acquire package operation lock."))?;
+        let Some(package) = state.get(package.package_id()).await? else {
+            continue;
+        };
         let target_directory = absolute_path(Path::new(package.target_path()))?;
         let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
             target_directory.join(".turkuaz-installer"),
