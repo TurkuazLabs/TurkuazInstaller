@@ -88,7 +88,7 @@ mod windows_authenticode {
         Foundation::HWND,
         Security::{
             Cryptography::{
-                CERT_CONTEXT, CERT_INFO, CERT_NAME_BLOB, CERT_NAME_STR_REVERSE_FLAG,
+                CERT_CONTEXT, CERT_INFO, CERT_NAME_STR_REVERSE_FLAG,
                 CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED_EMBED, CERT_QUERY_FORMAT_FLAG_BINARY,
                 CERT_QUERY_OBJECT_FILE, CERT_X500_NAME_STR, CMSG_SIGNER_COUNT_PARAM,
                 CMSG_SIGNER_INFO, CMSG_SIGNER_INFO_PARAM, CertCloseStore,
