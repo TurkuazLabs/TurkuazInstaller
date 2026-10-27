@@ -8,7 +8,9 @@
 mod builder;
 mod format;
 
-pub use builder::{PackageBuildError, build_full_package};
+pub use builder::{
+    PackageBuildError, build_full_package, build_full_package_with_entry_point,
+};
 
 use std::{
     collections::HashMap,
@@ -102,6 +104,7 @@ pub struct PackageStage {
     package_id: PackageId,
     version: SemanticVersion,
     payload_directory: PathBuf,
+    entry_point: Option<String>,
 }
 
 impl PackageStage {
@@ -115,6 +118,10 @@ impl PackageStage {
 
     pub fn payload_directory(&self) -> &Path {
         &self.payload_directory
+    }
+
+    pub fn entry_point(&self) -> Option<&str> {
+        self.entry_point.as_deref()
     }
 }
 
@@ -184,12 +191,13 @@ pub async fn stage_full_package(
         Err(error) => return Err(PackageEngineError::BlockingTask(error)),
     };
 
-    result?;
+    let entry_point = result?;
 
     Ok(PackageStage {
         package_id,
         version,
         payload_directory,
+        entry_point,
     })
 }
 
@@ -237,7 +245,7 @@ fn extract_archive_contents(
 ) -> Result<(), PackageEngineError> {
     let archive_file = fs::File::open(archive_path).map_err(PackageEngineError::Io)?;
     let mut archive = ZipArchive::new(archive_file).map_err(PackageEngineError::Archive)?;
-    let metadata_index =
+    let (metadata_index, entry_point) =
         read_and_validate_package_metadata(&mut archive, expected_package_id, expected_version)?;
     if archive.len() > limits.maximum_entries {
         return Err(PackageEngineError::InvalidPackage(
@@ -331,6 +339,16 @@ fn extract_archive_contents(
         ));
     }
     validate_entry_conflicts(&entry_kinds)?;
+    if let Some(entry_point) = entry_point.as_deref() {
+        if !entry_kinds
+            .get(&entry_point.to_lowercase())
+            .is_some_and(|is_directory| !*is_directory)
+        {
+            return Err(PackageEngineError::InvalidPackage(
+                "package entry point must name a regular payload file",
+            ));
+        }
+    }
     if entries.is_empty() {
         return Err(PackageEngineError::InvalidPackage(
             "package payload does not contain any entries",
@@ -371,14 +389,14 @@ fn extract_archive_contents(
         target.sync_all().map_err(PackageEngineError::Io)?;
     }
 
-    Ok(())
+    Ok(entry_point)
 }
 
 fn read_and_validate_package_metadata(
     archive: &mut ZipArchive<fs::File>,
     expected_package_id: &str,
     expected_version: &str,
-) -> Result<usize, PackageEngineError> {
+) -> Result<(usize, Option<String>), PackageEngineError> {
     let metadata_index = archive.index_for_name(PACKAGE_METADATA_ENTRY).ok_or(
         PackageEngineError::InvalidPackage("package metadata entry is missing"),
     )?;
@@ -413,7 +431,24 @@ fn read_and_validate_package_metadata(
             "package metadata does not match the requested signed release",
         ));
     }
-    Ok(metadata_index)
+    let entry_point = metadata.entry_point;
+    if let Some(entry_point) = entry_point.as_deref() {
+        let relative = validate_archive_path(entry_point)?;
+        let entry_name = format!(
+            "{PACKAGE_PAYLOAD_ROOT}{}",
+            relative.to_string_lossy().replace('\\', "/")
+        );
+        let index = archive.index_for_name(&entry_name).ok_or(
+            PackageEngineError::InvalidPackage("package entry point file is missing"),
+        )?;
+        let entry = archive.by_index(index).map_err(PackageEngineError::Archive)?;
+        if !entry.is_file() || entry.is_symlink() {
+            return Err(PackageEngineError::InvalidPackage(
+                "package entry point must be a regular payload file",
+            ));
+        }
+    }
+    Ok((metadata_index, entry_point))
 }
 
 fn validate_archive_path(raw_name: &str) -> Result<PathBuf, PackageEngineError> {
