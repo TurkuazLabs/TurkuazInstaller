@@ -3,7 +3,7 @@ Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
 Version: 0.1.0
-Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanım yüzeyini açıklar
+Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
 
