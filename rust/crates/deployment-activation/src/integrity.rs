@@ -28,6 +28,7 @@ const INVENTORY_DIRECTORY: &str = "integrity";
 const INVENTORY_FORMAT_VERSION: u32 = 1;
 const MAXIMUM_INVENTORY_BYTES: u64 = 64 * 1024 * 1024;
 const MAXIMUM_INVENTORY_ENTRIES: usize = 250_000;
+const MAXIMUM_INVENTORY_DIRECTORY_DEPTH: usize = 128;
 const MAXIMUM_INVENTORY_TOTAL_BYTES: u64 = 32 * 1024 * 1024 * 1024;
 const HASH_BUFFER_BYTES: usize = 64 * 1024;
 
@@ -232,6 +233,7 @@ fn collect_inventory(
         deployment_directory,
         &mut files,
         &mut total_entries,
+        0,
         &mut total_bytes,
     )?;
     files.sort();
@@ -243,8 +245,14 @@ fn collect_directory(
     directory: &Path,
     files: &mut Vec<InventoryEntry>,
     total_entries: &mut usize,
+    depth: usize,
     total_bytes: &mut u64,
 ) -> Result<(), DeploymentActivationError> {
+    if depth > MAXIMUM_INVENTORY_DIRECTORY_DEPTH {
+        return Err(DeploymentActivationError::InvalidInventory(
+            "deployment exceeds the inventory directory depth limit",
+        ));
+    }
     let mut children = Vec::new();
     for entry in fs::read_dir(directory).map_err(DeploymentActivationError::Io)? {
         if children.len() >= MAXIMUM_INVENTORY_ENTRIES {
@@ -267,7 +275,7 @@ fn collect_directory(
             ));
         }
         if metadata.file_type().is_dir() {
-            collect_directory(root, &path, files, total_entries, total_bytes)?;
+            collect_directory(root, &path, files, total_entries, depth + 1, total_bytes)?;
             continue;
         }
         if !metadata.file_type().is_file() {
