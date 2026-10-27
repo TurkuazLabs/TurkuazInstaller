@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/crates/package-engine/Cargo.toml
 # Amac: Rust installerin kendi paket uygulama motoru icin crate bagimliliklarini tanimlamak
 # Modul - Cargo Manifest
-# Version: 0.2.0
+# Version: 0.3.0
 # Aciklama: Dogrulanmis Turkuaz ZIP paketlerini guvenli staging icin baglar
 # Bagimli Oldugu Katman: Service | Tool
 
@@ -13,6 +13,8 @@ rust-version = "1.85"
 publish = false
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 tokio.workspace = true
 uuid = { version = "1", features = ["v4"] }
 zip = { version = "6", default-features = false, features = ["deflate"] }
