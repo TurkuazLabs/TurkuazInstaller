@@ -93,7 +93,7 @@ mod windows_authenticode {
                 CMSG_SIGNER_COUNT_PARAM, CMSG_SIGNER_INFO, CMSG_SIGNER_INFO_PARAM,
                 CertCloseStore, CertEnumCertificatesInStore, CertFreeCertificateContext,
                 CertNameToStrW, CryptMsgClose, CryptMsgGetParam, CryptQueryObject,
-                PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
+                X509_ASN_ENCODING,
             },
             WinTrust::{
                 WINTRUST_DATA, WINTRUST_DATA_0,
@@ -238,10 +238,10 @@ mod windows_authenticode {
                 ptr::null_mut(),
             )
         };
-        if query_succeeded == 0 || store.is_null() || message.is_null() {
+        let handles = QueriedMessage { store, message };
+        if query_succeeded == 0 || handles.store.is_null() || handles.message.is_null() {
             return Err(AuthenticodeVerificationError::SignerIdentityUnavailable);
         }
-        let handles = QueriedMessage { store, message };
 
         let mut signer_count = 0_u32;
         let mut count_size = size_of::<u32>() as u32;
@@ -260,17 +260,17 @@ mod windows_authenticode {
         }
 
         let mut signer_info_size = 0_u32;
-        let size_read = unsafe {
-            // SAFETY: null data requests the required size for one signer-info structure.
-            CryptMsgGetParam(
+        unsafe {
+            // SAFETY: a null data buffer asks CryptoAPI to report the required signer-info size.
+            let _ = CryptMsgGetParam(
                 handles.message,
                 CMSG_SIGNER_INFO_PARAM,
                 0,
                 ptr::null_mut(),
                 &mut signer_info_size,
-            )
-        };
-        if size_read == 0 || signer_info_size == 0 || signer_info_size > MAX_SIGNER_INFO_BYTES {
+            );
+        }
+        if signer_info_size == 0 || signer_info_size > MAX_SIGNER_INFO_BYTES {
             return Err(AuthenticodeVerificationError::SignerIdentityUnavailable);
         }
 
