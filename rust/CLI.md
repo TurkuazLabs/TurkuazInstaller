@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.0
+Version: 0.4.1
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -213,7 +213,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-self
   --output ./TurkuazSetup.exe
 ```
 
-The `.exe` stores the bundle after the stub with a fixed footer, bounded length, and SHA-256. The stub can extract its own payload and invoke the same signed bundle workflow:
+The `.exe` stores the bundle after the stub with a fixed footer, bounded length, and SHA-256. The extractor recognizes a terminal PE Authenticode certificate table and locates the footer immediately before it, so signing the final setup does not hide the bundle. The stub can extract its own payload and invoke the same signed bundle workflow:
 
 ```sh
 TurkuazSetup.exe install-self \
