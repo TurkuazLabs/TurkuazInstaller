@@ -178,6 +178,10 @@ impl VersionedDeploymentStore {
         package_id: &PackageId,
         version: &SemanticVersion,
     ) -> Result<ActiveDeployment, DeploymentActivationError> {
+        let package_root = self.package_root(package_id);
+        let versions_root = package_root.join("versions");
+        ensure_existing_directory(&package_root)?;
+        ensure_existing_directory(&versions_root)?;
         let directory = self.version_directory(package_id, version);
         ensure_existing_directory(&directory)?;
         self.activate_published(package_id, version, &directory)
@@ -193,6 +197,18 @@ impl VersionedDeploymentStore {
         package_id: &PackageId,
     ) -> Result<Option<ActiveDeployment>, DeploymentActivationError> {
         let package_root = self.package_root(package_id);
+        match fs::symlink_metadata(&package_root) {
+            Ok(metadata) if metadata.file_type().is_dir() => {}
+            Ok(_) => {
+                return Err(DeploymentActivationError::InvalidLayout(
+                    "package deployment root is not a real directory",
+                ));
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(DeploymentActivationError::Io(error)),
+        }
+        let versions_root = package_root.join("versions");
+        ensure_existing_directory(&versions_root)?;
         let active_path = package_root.join(ACTIVE_FILE);
         match fs::symlink_metadata(&active_path) {
             Ok(metadata) if metadata.file_type().is_file() => {}
