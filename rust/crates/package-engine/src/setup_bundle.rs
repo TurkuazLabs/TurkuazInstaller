@@ -212,12 +212,15 @@ pub fn write_setup_bundle(
         write_entry(&mut archive, BUNDLE_METADATA_ENTRY, &metadata, options)?;
         write_entry(&mut archive, RELEASE_MANIFEST_ENTRY, manifest, options)?;
         write_entry(&mut archive, RELEASE_SIGNATURE_ENTRY, signature, options)?;
+        let package_options = SimpleFileOptions::default()
+            .compression_method(CompressionMethod::Stored)
+            .unix_permissions(0o600);
         write_artifact_entry(
             &mut archive,
             artifact_path,
             release.artifact().size_bytes(),
             release.artifact().digest().as_str(),
-            options,
+            package_options,
         )?;
         let file = archive.finish().map_err(SetupBundleError::Archive)?;
         file.sync_all().map_err(SetupBundleError::Io)
