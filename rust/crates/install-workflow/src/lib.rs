@@ -386,9 +386,10 @@ impl InstallWorkflow {
             return Err(InstallWorkflowError::ActiveAndInstalledStateMismatch);
         }
         if let Some(journal) = &self.options.journal {
-            let pending = journal.get(package_id).await.map_err(|error| {
-                InstallWorkflowError::Io(io::Error::other(error.to_string()))
-            })?;
+            let pending = journal
+                .get(package_id)
+                .await
+                .map_err(|error| InstallWorkflowError::Io(io::Error::other(error.to_string())))?;
             if pending.is_some() {
                 return Err(InstallWorkflowError::UninstallHasPendingOperation);
             }
