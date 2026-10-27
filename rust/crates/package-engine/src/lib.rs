@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 0.8.0
+// Version: 0.9.0
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -468,11 +468,15 @@ fn reject_reserved_windows_name(segment: &str) -> Result<(), PackageEngineError>
         .split('.')
         .next()
         .unwrap_or_default()
+        .trim_end_matches(|character| matches!(character, ' ' | '.'))
         .to_ascii_uppercase();
     let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
         || ["COM", "LPT"].iter().any(|prefix| {
             stem.strip_prefix(prefix).is_some_and(|suffix| {
-                matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
+                matches!(
+                    suffix,
+                    "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+                )
             })
         });
     if reserved {
