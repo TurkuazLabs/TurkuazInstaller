@@ -2,16 +2,18 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.1.6
+Version: 0.1.7
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
 
 # Community Installer CLI
 
-Status: development CLI. This command line entry point is not the distributed Turkuaz setup. Current branch CI compilation is pending.
+Status: development CLI. This command line entry point is not the distributed Turkuaz setup.
 
 ## Build and invocation
+
+Relative target and data-root paths are resolved from the current working directory. Package-state checks compare the resolved target path with the path recorded during installation.
 
 From the repository root, build or invoke the binary with:
 
