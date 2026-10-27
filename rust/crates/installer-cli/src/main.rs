@@ -20,24 +20,20 @@ use turkuaz_installer_deployment_activation::{
     DeploymentActivationOptions, VersionedDeploymentStore,
 };
 use turkuaz_installer_domain::{
-    operation::InstallerOperationType,
-    package_id::PackageId,
-    semantic_version::SemanticVersion,
+    operation::InstallerOperationType, package_id::PackageId, semantic_version::SemanticVersion,
 };
 use turkuaz_installer_install_state_store::{
     JsonInstallStateRepository, JsonInstallStateRepositoryOptions,
 };
 use turkuaz_installer_install_workflow::{InstallWorkflow, InstallWorkflowOptions};
 use turkuaz_installer_manifest_pipeline::read_verified_release;
-use turkuaz_installer_metadata::{MAXIMUM_DETACHED_SIGNATURE_BYTES, MAXIMUM_MANIFEST_BYTES};
 use turkuaz_installer_manifest_trust_store::YamlManifestTrustPolicyRepository;
+use turkuaz_installer_metadata::{MAXIMUM_DETACHED_SIGNATURE_BYTES, MAXIMUM_MANIFEST_BYTES};
 use turkuaz_installer_operation_journal::{
     JsonOperationJournalRepository, JsonOperationJournalRepositoryOptions,
 };
 use turkuaz_installer_operation_lock::FileOperationLockOptions;
-use turkuaz_installer_package_engine::{
-    PackageExtractionLimits, build_full_package,
-};
+use turkuaz_installer_package_engine::{PackageExtractionLimits, build_full_package};
 use url::Url;
 
 #[tokio::main]
@@ -66,7 +62,11 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let target_path = required(&values, "target")?;
     let data_root = PathBuf::from(required(&values, "data-root")?);
     if target_path.trim().is_empty() || data_root.as_os_str().is_empty() {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Target and data-root must be non-empty.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Target and data-root must be non-empty.",
+        )
+        .into());
     }
 
     let http_client = Client::builder()
@@ -82,8 +82,12 @@ async fn run() -> Result<(), Box<dyn Error>> {
         .map_err(|_| io::Error::other("Could not initialize HTTPS client."))?;
     let (manifest_bytes, manifest_length) =
         read_bounded_https(&http_client, &manifest_url, MAXIMUM_MANIFEST_BYTES).await?;
-    let (signature_bytes, signature_length) =
-        read_bounded_https(&http_client, &signature_url, MAXIMUM_DETACHED_SIGNATURE_BYTES).await?;
+    let (signature_bytes, signature_length) = read_bounded_https(
+        &http_client,
+        &signature_url,
+        MAXIMUM_DETACHED_SIGNATURE_BYTES,
+    )
+    .await?;
 
     let trust_store = YamlManifestTrustPolicyRepository::new(trust_path)?;
     let mut manifest_source = std::io::Cursor::new(manifest_bytes);
@@ -106,9 +110,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
         let journal = JsonOperationJournalRepository::new(
             JsonOperationJournalRepositoryOptions::new(data_root.join("journal"))?,
         );
-        let state = JsonInstallStateRepository::new(
-            JsonInstallStateRepositoryOptions::new(data_root.join("state"))?,
-        );
+        let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
+            data_root.join("state"),
+        )?);
         let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
             target_directory.join(".turkuaz-installer"),
         )?);
@@ -120,18 +124,18 @@ async fn run() -> Result<(), Box<dyn Error>> {
             data_root.join("staging"),
         )?;
         let active = InstallWorkflow::new(options).rollback(release).await?;
-        println!("Rolled back to package directory: {}", active.directory().display());
+        println!(
+            "Rolled back to package directory: {}",
+            active.directory().display()
+        );
         return Ok(());
     }
     let downloader = DefaultArtifactDownloader::new()
         .map_err(|_| io::Error::other("Could not initialize artifact downloader."))?;
-    let verified_artifact = download_and_verify(
-        &downloader,
-        release.artifact(),
-        data_root.join("downloads"),
-    )
-    .await
-    .map_err(|_| io::Error::other("Artifact download or integrity validation failed."))?;
+    let verified_artifact =
+        download_and_verify(&downloader, release.artifact(), data_root.join("downloads"))
+            .await
+            .map_err(|_| io::Error::other("Artifact download or integrity validation failed."))?;
     let _downloaded_artifact = DownloadedArtifactGuard(verified_artifact.path().to_path_buf());
 
     let target_directory = absolute_path(Path::new(target_path))?;
@@ -318,9 +322,7 @@ async fn verify_command() -> Result<(), Box<dyn Error>> {
         .peek()
         .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
     {
-        println!(
-            "Usage: turkuaz-installer verify --package-id ID --target DIR --data-root DIR"
-        );
+        println!("Usage: turkuaz-installer verify --package-id ID --target DIR --data-root DIR");
         return Ok(());
     }
 
@@ -470,10 +472,7 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
     Ok((operation, values))
 }
 
-fn required<'a>(
-    values: &'a HashMap<String, String>,
-    key: &str,
-) -> Result<&'a str, io::Error> {
+fn required<'a>(values: &'a HashMap<String, String>, key: &str) -> Result<&'a str, io::Error> {
     values
         .get(key)
         .map(String::as_str)
