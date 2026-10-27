@@ -112,6 +112,7 @@ pub struct ActiveDeployment {
     version: SemanticVersion,
     directory: PathBuf,
     previous_version: Option<SemanticVersion>,
+    previous_directory: Option<PathBuf>,
     entry_point: Option<String>,
     previous_entry_point: Option<String>,
 }
@@ -225,11 +226,18 @@ impl VersionedDeploymentStore {
         let versions_root = package_root.join("versions");
         ensure_existing_directory(&package_root)?;
         ensure_existing_directory(&versions_root)?;
-        let directory = self.version_directory(package_id, version);
-        ensure_existing_directory(&directory)?;
-        let entry_point = self.current(package_id)?.and_then(|active| {
+        let current = self.current(package_id)?;
+        let previous_directory = current.as_ref().and_then(|active| {
             (active.previous_version.as_ref() == Some(version))
-                .then(|| active.previous_entry_point)
+                .then(|| active.previous_directory.clone())
+                .flatten()
+        });
+        let directory = previous_directory
+            .unwrap_or_else(|| self.version_directory(package_id, version));
+        ensure_existing_directory(&directory)?;
+        let entry_point = current.as_ref().and_then(|active| {
+            (active.previous_version.as_ref() == Some(version))
+                .then(|| active.previous_entry_point.clone())
                 .flatten()
         });
         self.activate_published(package_id, version, &directory, entry_point)
@@ -404,18 +412,29 @@ impl VersionedDeploymentStore {
                 })
             })
             .transpose()?;
+        let directory_key = validate_deployment_key(
+            document.directory_key.unwrap_or_else(|| version.to_string()),
+        )?;
+        let previous_directory_key = document
+            .previous_directory_key
+            .or_else(|| previous_version.as_ref().map(ToString::to_string))
+            .map(validate_deployment_key)
+            .transpose()?;
         let entry_point = validate_entry_point(document.entry_point)?;
         let previous_entry_point = validate_entry_point(document.previous_entry_point)?;
         if &recorded_package != package_id {
             return Err(DeploymentActivationError::ActiveDeploymentMismatch);
         }
-        let directory = self.version_directory(package_id, &version);
+        let directory = self.deployment_directory(package_id, &directory_key);
         ensure_existing_directory(&directory)?;
+        let previous_directory = previous_directory_key
+            .map(|key| self.deployment_directory(package_id, &key));
         Ok(Some(ActiveDeployment {
             package_id: recorded_package,
             version,
             directory,
             previous_version,
+            previous_directory,
             entry_point,
             previous_entry_point,
         }))
@@ -431,41 +450,34 @@ impl VersionedDeploymentStore {
         let package_root = self.package_root(package_id);
         let previous = self.current(package_id)?;
         let previous_version = previous.as_ref().map(|active| active.version.clone());
+        let previous_directory = previous.as_ref().map(|active| active.directory.clone());
         let previous_entry_point = previous.and_then(|active| active.entry_point);
+        let directory_key = directory
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or(DeploymentActivationError::InvalidLayout(
+                "deployment directory name is invalid",
+            ))?
+            .to_owned();
         let document = ActiveDeploymentDocument {
             package_id: package_id.to_string(),
             version: version.to_string(),
             previous_version: previous_version.as_ref().map(ToString::to_string),
+            directory_key: Some(directory_key),
+            previous_directory_key: previous_directory.as_ref().and_then(|path| {
+                path.file_name().and_then(|name| name.to_str()).map(str::to_owned)
+            }),
             entry_point: entry_point.clone(),
             previous_entry_point: previous_entry_point.clone(),
         };
-        let bytes =
-            serde_json::to_vec_pretty(&document).map_err(DeploymentActivationError::Json)?;
-        let active_path = package_root.join(ACTIVE_FILE);
-        let temporary_path = package_root.join(format!(".active-{}.tmp", Uuid::new_v4()));
-        let write_result = (|| {
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary_path)
-                .map_err(DeploymentActivationError::Io)?;
-            use std::io::Write;
-            file.write_all(&bytes)
-                .map_err(DeploymentActivationError::Io)?;
-            file.sync_all().map_err(DeploymentActivationError::Io)?;
-            drop(file);
-            replace_file(&temporary_path, &active_path).map_err(DeploymentActivationError::Io)
-        })();
-        if write_result.is_err() {
-            let _ = fs::remove_file(&temporary_path);
-        }
-        write_result?;
+        write_active_document(&package_root, &document)?;
 
         Ok(ActiveDeployment {
             package_id: package_id.clone(),
             version: version.clone(),
             directory: directory.to_path_buf(),
             previous_version,
+            previous_directory,
             entry_point,
             previous_entry_point,
         })
@@ -476,9 +488,13 @@ impl VersionedDeploymentStore {
     }
 
     fn version_directory(&self, package_id: &PackageId, version: &SemanticVersion) -> PathBuf {
+        self.deployment_directory(package_id, &version.to_string())
+    }
+
+    fn deployment_directory(&self, package_id: &PackageId, directory_key: &str) -> PathBuf {
         self.package_root(package_id)
             .join("versions")
-            .join(version.to_string())
+            .join(directory_key)
     }
 
     fn uninstall_quarantine(&self, package_id: &PackageId) -> PathBuf {
@@ -495,9 +511,54 @@ struct ActiveDeploymentDocument {
     version: String,
     previous_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    directory_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    previous_directory_key: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     entry_point: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     previous_entry_point: Option<String>,
+}
+
+fn validate_deployment_key(value: String) -> Result<String, DeploymentActivationError> {
+    if value.is_empty()
+        || value == "."
+        || value == ".."
+        || !value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+')
+        })
+    {
+        return Err(DeploymentActivationError::InvalidLayout(
+            "active deployment directory key is unsafe",
+        ));
+    }
+    Ok(value)
+}
+
+fn write_active_document(
+    package_root: &Path,
+    document: &ActiveDeploymentDocument,
+) -> Result<(), DeploymentActivationError> {
+    let bytes = serde_json::to_vec_pretty(document).map_err(DeploymentActivationError::Json)?;
+    let active_path = package_root.join(ACTIVE_FILE);
+    let temporary_path = package_root.join(format!(".active-{}.tmp", Uuid::new_v4()));
+    let write_result = (|| {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary_path)
+            .map_err(DeploymentActivationError::Io)?;
+        use std::io::Write;
+        file.write_all(&bytes)
+            .map_err(DeploymentActivationError::Io)?;
+        file.sync_all().map_err(DeploymentActivationError::Io)?;
+        drop(file);
+        replace_file(&temporary_path, &active_path).map_err(DeploymentActivationError::Io)
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temporary_path);
+    }
+    write_result
 }
 
 fn validate_entry_point(
