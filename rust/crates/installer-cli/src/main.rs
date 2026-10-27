@@ -266,10 +266,14 @@ fn encode_sha256(bytes: &[u8]) -> String {
 
 fn quote_yaml(value: &str) -> Result<String, io::Error> {
     if value.chars().any(char::is_control) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Manifest scalar must not contain control characters."));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Manifest scalar must not contain control characters.",
+        ));
     }
-    Ok(format!("\\\"{}\\\"", value.replace('\\\\', "\\\\\\\\").replace('\\\"', "\\\\\\\"")))
+    Ok(format!("'{}'", value.replace("'", "''")))
 }
+
 fn build_package_command() -> Result<(), Box<dyn Error>> {
     let mut arguments = std::env::args().skip(2).peekable();
     if arguments
