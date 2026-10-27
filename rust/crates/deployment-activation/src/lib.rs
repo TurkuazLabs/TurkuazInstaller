@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/deployment-activation/src/lib.rs
 // Amac: Kurulum payload'ini immutable surum dizinine yayinlayip etkin surumu atomik secmek
 // Modul - Rust Library
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: Yeni deployment hazirlanirken etkin surum isaretcisini korur
 // Bagimli Oldugu Katman: Service | Infrastructure
 
@@ -255,6 +255,85 @@ impl VersionedDeploymentStore {
         }
     }
 
+    /// Move a validated package deployment to a same-volume quarantine for uninstall.
+    /// The package-scoped operation lock must be held by the caller.
+    pub fn begin_uninstall(
+        &self,
+        package_id: &PackageId,
+        expected_version: &SemanticVersion,
+    ) -> Result<(), DeploymentActivationError> {
+        let package_root = self.package_root(package_id);
+        ensure_existing_directory(&package_root)?;
+        let active = self.current(package_id)?.ok_or(
+            DeploymentActivationError::InvalidLayout("active deployment is missing during uninstall"),
+        )?;
+        if active.version() != expected_version {
+            return Err(DeploymentActivationError::ActiveDeploymentMismatch);
+        }
+        let quarantine = self.uninstall_quarantine(package_id);
+        match fs::symlink_metadata(&quarantine) {
+            Ok(_) => {
+                return Err(DeploymentActivationError::InvalidLayout(
+                    "an uninstall quarantine already exists",
+                ));
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(DeploymentActivationError::Io(error)),
+        }
+        fs::rename(package_root, quarantine).map_err(DeploymentActivationError::Io)
+    }
+
+    /// Check for the package-specific directory left by an interrupted uninstall.
+    pub fn has_uninstall_quarantine(
+        &self,
+        package_id: &PackageId,
+    ) -> Result<bool, DeploymentActivationError> {
+        match fs::symlink_metadata(self.uninstall_quarantine(package_id)) {
+            Ok(metadata) if metadata.file_type().is_dir() => Ok(true),
+            Ok(_) => Err(DeploymentActivationError::InvalidLayout(
+                "uninstall quarantine is not a real directory",
+            )),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(DeploymentActivationError::Io(error)),
+        }
+    }
+
+    /// Restore a quarantined package if uninstall could not remove installed state.
+    pub fn restore_uninstall(
+        &self,
+        package_id: &PackageId,
+    ) -> Result<(), DeploymentActivationError> {
+        if !self.has_uninstall_quarantine(package_id)? {
+            return Err(DeploymentActivationError::InvalidLayout(
+                "uninstall quarantine is missing",
+            ));
+        }
+        let package_root = self.package_root(package_id);
+        match fs::symlink_metadata(&package_root) {
+            Ok(_) => {
+                return Err(DeploymentActivationError::InvalidLayout(
+                    "package deployment root already exists during uninstall restore",
+                ));
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(DeploymentActivationError::Io(error)),
+        }
+        fs::rename(self.uninstall_quarantine(package_id), package_root)
+            .map_err(DeploymentActivationError::Io)
+    }
+
+    /// Permanently remove a quarantined package deployment after state deletion.
+    pub fn finish_uninstall(
+        &self,
+        package_id: &PackageId,
+    ) -> Result<(), DeploymentActivationError> {
+        if !self.has_uninstall_quarantine(package_id)? {
+            return Ok(());
+        }
+        fs::remove_dir_all(self.uninstall_quarantine(package_id))
+            .map_err(DeploymentActivationError::Io)
+    }
+
     /// @dev-id TIZ-DEPLOY-013
     /// @purpose Resolve the package's current immutable deployment.
     /// @reason Launch and recovery code need one validated active-version lookup.
@@ -398,6 +477,12 @@ impl VersionedDeploymentStore {
         self.package_root(package_id)
             .join("versions")
             .join(version.to_string())
+    }
+
+    fn uninstall_quarantine(&self, package_id: &PackageId) -> PathBuf {
+        self.options
+            .root_directory()
+            .join(format!(".uninstall-{}", package_id.as_str()))
     }
 }
 
