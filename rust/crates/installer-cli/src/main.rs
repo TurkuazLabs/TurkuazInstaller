@@ -356,7 +356,7 @@ async fn install_bundle_command() -> Result<(), Box<dyn Error>> {
         _ => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "Bundle operation must be install, update, or repair.",
+                "Bundle operation must be install, update, repair, or rollback.",
             )
             .into());
         }
@@ -412,7 +412,13 @@ async fn install_bundle_command() -> Result<(), Box<dyn Error>> {
         deployment,
         data_root.join("staging"),
     )?);
-    if operation == InstallerOperationType::Repair {
+    if operation == InstallerOperationType::Rollback {
+        let active = workflow.rollback(release).await?;
+        println!(
+            "Rolled back to package directory: {}",
+            active.directory().display()
+        );
+    } else if operation == InstallerOperationType::Repair {
         let active = workflow
             .repair(
                 verified_artifact,
