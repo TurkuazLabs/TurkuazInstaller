@@ -94,7 +94,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     )
     .await
     .map_err(|_| io::Error::other("Artifact download or integrity validation failed."))?;
-    let downloaded_path = verified_artifact.path().to_path_buf();
+    let _downloaded_artifact = DownloadedArtifactGuard(verified_artifact.path().to_path_buf());
 
     let target_directory = absolute_path(Path::new(target_path))?;
     let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
@@ -115,7 +115,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         data_root.join("staging"),
     )?;
     let workflow = InstallWorkflow::new(options);
-    let active_result = workflow
+    let active = workflow
         .install_or_update(
             verified_artifact,
             release,
@@ -123,9 +123,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
             &target_directory.to_string_lossy(),
             PackageExtractionLimits::default(),
         )
-        .await;
-    cleanup_download(&downloaded_path).await;
-    let active = active_result?;
+        .await?;
 
     println!("Active package directory: {}", active.directory().display());
     Ok(())
@@ -279,9 +277,13 @@ fn absolute_path(path: &Path) -> io::Result<PathBuf> {
         Ok(std::env::current_dir()?.join(path))
     }
 }
-async fn cleanup_download(path: &Path) {
-    if let Some(download_directory) = path.parent() {
-        let _ = tokio::fs::remove_file(path).await;
-        let _ = tokio::fs::remove_dir(download_directory).await;
+struct DownloadedArtifactGuard(PathBuf);
+
+impl Drop for DownloadedArtifactGuard {
+    fn drop(&mut self) {
+        if let Some(download_directory) = self.0.parent() {
+            let _ = std::fs::remove_file(&self.0);
+            let _ = std::fs::remove_dir(download_directory);
+        }
     }
 }
