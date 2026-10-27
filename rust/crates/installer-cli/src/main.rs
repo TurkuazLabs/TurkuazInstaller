@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.4
+// Version: 0.2.5
 // Aciklama: HTTPS release intake, package build, install/update/rollback, paket listesi, deployment dogrulamasi ve kurulu uygulamayi baslatma icin headless CLI'dir
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -36,7 +36,9 @@ use turkuaz_installer_operation_journal::{
     JsonOperationJournalRepository, JsonOperationJournalRepositoryOptions,
 };
 use turkuaz_installer_operation_lock::FileOperationLockOptions;
-use turkuaz_installer_package_engine::{PackageExtractionLimits, build_full_package};
+use turkuaz_installer_package_engine::{
+    PackageExtractionLimits, build_full_package_with_entry_point,
+};
 use url::Url;
 
 #[tokio::main]
@@ -346,7 +348,7 @@ fn build_package_command() -> Result<(), Box<dyn Error>> {
         .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
     {
         println!(
-            "Usage: turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg"
+            "Usage: turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg [--executable RELATIVE_PATH]"
         );
         return Ok(());
     }
@@ -370,7 +372,7 @@ fn build_package_command() -> Result<(), Box<dyn Error>> {
             .into());
         }
     }
-    let allowed = ["package-id", "version", "source", "output"];
+    let allowed = ["package-id", "version", "source", "output", "executable"];
     if values.keys().any(|key| !allowed.contains(&key.as_str())) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -382,11 +384,12 @@ fn build_package_command() -> Result<(), Box<dyn Error>> {
     let version = SemanticVersion::parse(required(&values, "version")?)?;
     let source = absolute_path(Path::new(required(&values, "source")?))?;
     let output = absolute_path(Path::new(required(&values, "output")?))?;
-    build_full_package(
+    build_full_package_with_entry_point(
         source,
         &package_id,
         &version,
         &output,
+        values.get("executable").map(String::as_str),
         PackageExtractionLimits::default(),
     )?;
     println!("Built package: {}", output.display());
@@ -588,7 +591,7 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
         .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
     {
         println!(
-            "Usage: turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]"
+            "Usage: turkuaz-installer launch --package-id ID --target DIR --data-root DIR [--executable RELATIVE_PATH] [-- APP_ARGS...]"
         );
         return Ok(());
     }
@@ -631,24 +634,6 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
     let target_directory = absolute_path(Path::new(required(&values, "target")?.trim()))?;
     let target_argument = target_directory.to_string_lossy().into_owned();
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
-    let executable_relative = required(&values, "executable")?;
-    let executable_relative_path = Path::new(executable_relative);
-    if executable_relative_path.is_absolute()
-        || executable_relative.starts_with('/')
-        || executable_relative.starts_with('\\')
-        || executable_relative.contains(':')
-        || executable_relative.contains('\\')
-        || executable_relative_path
-            .components()
-            .any(|component| !matches!(component, std::path::Component::Normal(_)))
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Executable must be a safe relative path using forward slashes.",
-        )
-        .into());
-    }
-
     let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let _lock_lease = turkuaz_installer_operation_lock::acquire_package_lock(&lock, &package_id)
         .map_err(|_| io::Error::other("Could not acquire package operation lock."))?;
@@ -680,6 +665,33 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "Installed state and active deployment version do not match.",
+        )
+        .into());
+    }
+
+    let executable_relative = values
+        .get("executable")
+        .map(String::as_str)
+        .or(report.active().entry_point())
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Package has no declared entry point; provide --executable RELATIVE_PATH.",
+            )
+        })?;
+    let executable_relative_path = Path::new(executable_relative);
+    if executable_relative_path.is_absolute()
+        || executable_relative.starts_with('/')
+        || executable_relative.starts_with('\\')
+        || executable_relative.contains(':')
+        || executable_relative.contains('\\')
+        || executable_relative_path
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Executable must be a safe relative path using forward slashes.",
         )
         .into());
     }
