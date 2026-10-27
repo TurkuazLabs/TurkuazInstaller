@@ -269,16 +269,34 @@ async fn verify_command() -> Result<(), Box<dyn Error>> {
     let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
         data_root.join("state"),
     )?);
-    let installed = state
-        .get(&package_id)
-        .await?
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Package is not installed."))?;
+    let installed = state.get(&package_id).await?;
     let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
         target_directory.join(".turkuaz-installer"),
     )?);
-    let report = deployment
-        .verify_current(&package_id)?
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Active deployment is missing."))?;
+    let report = deployment.verify_current(&package_id)?;
+
+    let (installed, report) = match (installed, report) {
+        (Some(installed), Some(report)) => (installed, report),
+        (None, None) => {
+            return Err(
+                io::Error::new(io::ErrorKind::NotFound, "Package is not installed.").into(),
+            );
+        }
+        (Some(_), None) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Installed state exists but the active deployment is missing.",
+            )
+            .into());
+        }
+        (None, Some(_)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "An active deployment exists without installed state.",
+            )
+            .into());
+        }
+    };
     if report.active().version() != installed.version() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
