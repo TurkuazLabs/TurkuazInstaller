@@ -232,7 +232,7 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
         _ => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "Expected install or update command. Use --help for usage.",
+                "Expected install, update, or rollback command. Use --help for usage.",
             ));
         }
     };
