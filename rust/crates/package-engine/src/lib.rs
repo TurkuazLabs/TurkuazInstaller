@@ -8,9 +8,7 @@
 mod builder;
 mod format;
 
-pub use builder::{
-    PackageBuildError, build_full_package, build_full_package_with_entry_point,
-};
+pub use builder::{PackageBuildError, build_full_package, build_full_package_with_entry_point};
 
 use std::{
     collections::HashMap,
@@ -420,6 +418,7 @@ fn read_and_validate_package_metadata(
             "package metadata size differs from its declared size",
         ));
     }
+    drop(entry);
 
     let metadata: PackageArchiveMetadata = serde_json::from_slice(&bytes)
         .map_err(|_| PackageEngineError::InvalidPackage("package metadata JSON is invalid"))?;
@@ -443,10 +442,15 @@ fn read_and_validate_package_metadata(
             "{PACKAGE_PAYLOAD_ROOT}{}",
             relative.to_string_lossy().replace('\\', "/")
         );
-        let index = archive.index_for_name(&entry_name).ok_or(
-            PackageEngineError::InvalidPackage("package entry point file is missing"),
-        )?;
-        let entry = archive.by_index(index).map_err(PackageEngineError::Archive)?;
+        let index =
+            archive
+                .index_for_name(&entry_name)
+                .ok_or(PackageEngineError::InvalidPackage(
+                    "package entry point file is missing",
+                ))?;
+        let entry = archive
+            .by_index(index)
+            .map_err(PackageEngineError::Archive)?;
         if !entry.is_file() || entry.is_symlink() {
             return Err(PackageEngineError::InvalidPackage(
                 "package entry point must be a regular payload file",
