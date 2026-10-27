@@ -2,14 +2,14 @@
 Dosya Yolu: REPO_ROOT/rust/INSTALL_WORKFLOW.md
 Amac: Verified full package install ve forward update orkestrasyon sözleşmesini açıklamak
 Modul - Markdown Specification
-Version: 0.1.1
+Version: 0.1.2
 Aciklama: Kilit, stage, etkin deployment ve kurulu state adımlarının sırasını kaydeder
 Bagimli Oldugu Katman: Service | Documentation
 -->
 
 # Install Workflow
 
-Status: implementation draft. The Rust service wires verified full packages into first-install, forward-update, and policy-gated rollback operations. The development CLI exposes install and update. This is not a production installer.
+Status: implementation draft. The Rust service wires verified full packages into first-install, forward-update, and policy-gated rollback operations. The development CLI exposes install, update, and policy-gated rollback. This is not a production installer.
 
 ## Inputs
 
@@ -30,7 +30,7 @@ Journal persistence follows the current best-effort operation-context contract. 
 
 ## Rollback
 
-The service rollback method requires the caller to provide the signed current release policy. It selects the previous version recorded in active.json, updates installed state, and restores the former active version if state persistence fails. The CLI does not expose rollback. It can move one recorded activation at a time; release history and startup recovery are not implemented.
+The service rollback method requires the caller to provide the signed current release policy. It selects the previous version recorded in active.json, updates installed state, and restores the former active version if state persistence fails. The CLI exposes this operation when given the signed manifest for the currently installed version. It can move one recorded activation at a time; release history and startup recovery are not implemented.
 
 ## Current limits
 
