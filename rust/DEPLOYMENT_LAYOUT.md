@@ -1,0 +1,52 @@
+<!--
+Dosya Yolu: REPO_ROOT/rust/DEPLOYMENT_LAYOUT.md
+Amac: Sürümlü deployment klasörlerinin ve etkin sürüm işaretçisinin davranışını tanımlamak
+Modul - Markdown Specification
+Version: 0.1.0
+Aciklama: Hazırlama, etkinleştirme ve geri alma için mevcut dosya sistemi sözleşmesini açıklar
+Bagimli Oldugu Katman: Service | Infrastructure | Documentation
+-->
+
+# Versioned Deployment Layout
+
+Status: implementation draft. The activation crate publishes immutable version directories and atomically replaces the active-version record. Install workflows, installed-state persistence, startup recovery, cleanup, and launch integration are not connected yet.
+
+## Layout
+
+For each validated package ID, the configured trusted deployment root contains:
+
+```text
+<root>/<package-id>/
+  active.json
+  versions/
+    <semantic-version>/
+      <application payload>
+```
+
+The active record is bounded JSON:
+
+```json
+{
+  "packageId": "example.product",
+  "version": "1.2.3",
+  "previousVersion": "1.1.0"
+}
+```
+
+`previousVersion` is the version selected immediately before the current record was written. It is a recovery hint; it does not by itself decide whether rollback is allowed.
+
+## Publish and activate
+
+1. A verified package is extracted into a fresh `PackageStage`.
+2. `publish_and_activate` copies only regular files and directories to a unique temporary directory below `versions/`.
+3. It renames that directory to the immutable version path. Existing versions are not overwritten.
+4. It writes and syncs a temporary active record, then atomically replaces `active.json` on the same volume.
+5. If copying or activation fails, the old active record remains intact. A version directory can be left behind if publication succeeded but replacing the active record failed; later recovery/cleanup must treat it as inactive.
+
+Windows uses `MoveFileExW` with replace-existing and write-through flags for the active record. Other platforms use same-directory filesystem rename. Deployment root configuration is trusted input and must be writable by the installer account.
+
+## Recovery boundary
+
+The store resolves `active.json` and verifies that the referenced version directory exists. It does not execute files, mutate the installed-state repository, write operation checkpoints, clean orphan versions, or automatically roll back. The caller must hold the package-scoped operation lock and coordinate journal/state transitions around activation.
+
+No current TurkuazInstaller workflow uses this crate yet. This contract is not a claim of runtime parity or release readiness.
