@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/builder.rs
 // Amac: Uygulama payload dizinini Turkuaz'in ozel .tzpkg ZIP paketine donusturmek
 // Modul - Rust Package Builder
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: Symlink ve path collision reddi, sinirli kaynak taramasi, gecici dosya ve no-overwrite publish uygular
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -9,6 +9,7 @@ use std::{
     collections::HashMap,
     error::Error,
     fmt, fs, io,
+    io::Write,
     path::{Component, Path, PathBuf},
 };
 
@@ -19,7 +20,10 @@ use zip::{
     write::SimpleFileOptions,
 };
 
+use turkuaz_installer_domain::release::PackageRelease;
+
 use crate::{
+    format::{PackageArchiveMetadata, PACKAGE_METADATA_ENTRY, PACKAGE_PAYLOAD_ROOT},
     PackageExtractionLimits, PackageEngineError, validate_archive_path, validate_entry_conflicts,
 };
 
@@ -27,6 +31,7 @@ use crate::{
 pub enum PackageBuildError {
     Io(io::Error),
     Archive(ZipError),
+    Metadata(serde_json::Error),
     InvalidPackage(&'static str),
 }
 
@@ -35,6 +40,7 @@ impl fmt::Display for PackageBuildError {
         match self {
             Self::Io(error) => write!(formatter, "Package build I/O failed: {error}"),
             Self::Archive(error) => write!(formatter, "Package archive build failed: {error}"),
+            Self::Metadata(error) => write!(formatter, "Package metadata serialization failed: {error}"),
             Self::InvalidPackage(message) => write!(formatter, "Package source is invalid: {message}"),
         }
     }
@@ -45,6 +51,7 @@ impl Error for PackageBuildError {
         match self {
             Self::Io(error) => Some(error),
             Self::Archive(error) => Some(error),
+            Self::Metadata(error) => Some(error),
             Self::InvalidPackage(_) => None,
         }
     }
@@ -57,6 +64,7 @@ impl Error for PackageBuildError {
 /// @depends Shared package path validation, zip-rs, and UUID temporary names.
 pub fn build_full_package(
     source_directory: impl AsRef<Path>,
+    release: &PackageRelease,
     output_file: impl AsRef<Path>,
     limits: PackageExtractionLimits,
 ) -> Result<(), PackageBuildError> {
@@ -140,7 +148,9 @@ pub fn build_full_package(
         .map_err(|_| PackageBuildError::InvalidPackage("package source paths conflict"))?;
     entries.sort_by(|left, right| left.archive_path.cmp(&right.archive_path));
 
-    let build_result = build_archive(&temporary_file, &entries);
+    let metadata = PackageArchiveMetadata::for_release(release);
+    let metadata_bytes = serde_json::to_vec(&metadata).map_err(PackageBuildError::Metadata)?;
+    let build_result = build_archive(&temporary_file, &metadata_bytes, &entries);
     if let Err(error) = build_result {
         let _ = fs::remove_file(&temporary_file);
         return Err(error);
@@ -269,7 +279,11 @@ fn archive_path(path: &Path) -> Result<String, PackageBuildError> {
     Ok(segments.join("/"))
 }
 
-fn build_archive(path: &Path, entries: &[BuildEntry]) -> Result<(), PackageBuildError> {
+fn build_archive(
+    path: &Path,
+    metadata: &[u8],
+    entries: &[BuildEntry],
+) -> Result<(), PackageBuildError> {
     let output = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -280,16 +294,27 @@ fn build_archive(path: &Path, entries: &[BuildEntry]) -> Result<(), PackageBuild
         .compression_method(CompressionMethod::Deflated)
         .large_file(true);
 
+    archive
+        .start_file(PACKAGE_METADATA_ENTRY, options)
+        .map_err(PackageBuildError::Archive)?;
+    archive.write_all(metadata).map_err(PackageBuildError::Io)?;
+    archive
+        .add_directory(PACKAGE_PAYLOAD_ROOT, options)
+        .map_err(PackageBuildError::Archive)?;
+
     for entry in entries {
         if entry.is_directory {
             archive
-                .add_directory(format!("{}/", entry.archive_path), options)
+                .add_directory(
+                    format!("{PACKAGE_PAYLOAD_ROOT}{}", entry.archive_path),
+                    options,
+                )
                 .map_err(PackageBuildError::Archive)?;
             continue;
         }
 
         archive
-            .start_file(&entry.archive_path, options)
+            .start_file(format!("{PACKAGE_PAYLOAD_ROOT}{}", entry.archive_path), options)
             .map_err(PackageBuildError::Archive)?;
         let mut source = fs::File::open(&entry.source_path).map_err(PackageBuildError::Io)?;
         let copied_bytes =
