@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/INSTALL_WORKFLOW.md
 Amac: Verified full package install ve forward update orkestrasyon sözleşmesini açıklamak
 Modul - Markdown Specification
-Version: 0.1.2
+Version: 0.1.3
 Aciklama: Kilit, stage, etkin deployment ve kurulu state adımlarının sırasını kaydeder
 Bagimli Oldugu Katman: Service | Documentation
 -->
@@ -26,11 +26,11 @@ The caller supplies a `VerifiedArtifact`, a typed `PackageRelease`, operation ty
 7. If state persistence fails, restore the former active version; for a first install remove the active record. Return a distinct compensation failure if the restore also fails.
 8. Remove the temporary stage on both success and failure, then complete the operation context.
 
-Journal persistence follows the current best-effort operation-context contract. The workflow does not yet reconcile crash states at startup, so it is not a complete transaction/recovery implementation.
+Journal persistence follows the current best-effort operation-context contract. The CLI has an explicit recovery command for provable state transitions after a crash, but recovery is not automatic at startup. A missing journal or ambiguous first-install state fails closed and may require manual recovery.
 
 ## Rollback
 
-The service rollback method requires the caller to provide the signed current release policy. It selects the previous version recorded in active.json, updates installed state, and restores the former active version if state persistence fails. The CLI exposes this operation when given the signed manifest for the currently installed version. It can move one recorded activation at a time; release history and startup recovery are not implemented.
+The service rollback method requires the caller to provide the signed current release policy. It selects the previous version recorded in active.json, updates installed state, and restores the former active version if state persistence fails. The CLI exposes this operation when given the signed manifest for the currently installed version. It can move one recorded activation at a time; release history and automatic startup recovery are not implemented.
 
 ## Current limits
 

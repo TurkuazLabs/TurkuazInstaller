@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.1.5
+Version: 0.1.6
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -55,6 +55,19 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- list \
 ```
 
 This command holds each package's operation lock and checks that its active deployment version matches installed state. It prints one tab-separated row per package and reports an empty list when none are installed; a missing or mismatched active record is reported as an error.
+
+## Recover an interrupted operation
+
+Run this after a process or machine interruption if later commands report a mismatch between installed state and the active deployment:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- recover \
+  --package-id example.product \
+  --target ./installed-app \
+  --data-root ./installer-data
+```
+
+Recovery takes the package lock. It verifies and clears a stale journal when state and active version already agree. If a journal proves that an update or rollback activated its target but did not save installed state, it verifies the active file inventory and completes the state write. It clears a journal for an install that never activated a deployment. Ambiguous state, a missing journal with mismatched state, or a first install that activated but lacks installed state stops for manual recovery. Abandoned staging data is left untouched. This is an explicit CLI command; it does not run automatically at startup.
 
 ## Launch the installed application
 
