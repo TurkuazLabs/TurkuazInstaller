@@ -52,6 +52,9 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
+    if std::env::args().nth(1).as_deref() == Some("build-distribution-pair") {
+        return build_distribution_pair_command();
+    }
     if std::env::args().nth(1).as_deref() == Some("build-self-extracting-setup") {
         return build_self_extracting_setup_command();
     }
@@ -329,6 +332,101 @@ async fn build_setup_bundle_command() -> Result<(), Box<dyn Error>> {
         output_path.display()
     );
     Ok(())
+}
+
+fn build_distribution_pair_command() -> Result<(), Box<dyn Error>> {
+    let values = parse_setup_bundle_options(&[
+        "package-id",
+        "stub",
+        "bundle",
+        "trust-store",
+        "output-dir",
+        "makensis",
+    ])?;
+    if values.is_empty() {
+        println!(
+            "Usage: turkuaz-installer build-distribution-pair --package-id ID --stub FILE.exe --bundle FILE.tzsetup --trust-store FILE --output-dir DIR [--makensis PATH]"
+        );
+        return Ok(());
+    }
+
+    let package_id = PackageId::parse(required(&values, "package-id")?)?;
+    let stub_path = absolute_path(Path::new(required(&values, "stub")?))?;
+    let bundle_path = absolute_path(Path::new(required(&values, "bundle")?))?;
+    let trust_path = absolute_path(Path::new(required(&values, "trust-store")?))?;
+    let output_directory = absolute_path(Path::new(required(&values, "output-dir")?))?;
+    let trust_metadata = std::fs::symlink_metadata(&trust_path)?;
+    if !trust_metadata.file_type().is_file() {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Trust store must be a regular file.").into());
+    }
+    if std::fs::symlink_metadata(&output_directory).is_ok() {
+        return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Output directory already exists.").into());
+    }
+    let parent = output_directory.parent().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "Output directory must have a parent.")
+    })?;
+    if !parent.is_dir() {
+        return Err(io::Error::new(io::ErrorKind::NotFound, "Output parent directory does not exist.").into());
+    }
+
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let staging_directory = parent.join(format!(".turkuaz-pair-{}-{nonce}", process::id()));
+    std::fs::create_dir(&staging_directory)?;
+    let mut staging_guard = DistributionStagingGuard(staging_directory.clone());
+    let primary_setup = staging_directory.join("TurkuazSetup.exe");
+    create_self_extracting_setup(stub_path, bundle_path, &primary_setup)?;
+
+    const MAX_TRUST_STORE_BYTES: usize = 1024 * 1024;
+    let (trust_bytes, _) = read_bounded_local_file(&trust_path, MAX_TRUST_STORE_BYTES)?;
+    let staged_trust = staging_directory.join("manifest-trust.yaml");
+    std::fs::write(&staged_trust, trust_bytes)?;
+    let backup_path = staging_directory.join("TurkuazInstallerBackup.exe");
+    let script_path = staging_directory.join("TurkuazInstallerBackup.nsi");
+    std::fs::write(
+        &script_path,
+        include_str!("../../../../packaging/TurkuazInstallerBackup.nsi"),
+    )?;
+
+    let makensis = values.get("makensis").map(String::as_str).unwrap_or("makensis");
+    let output = process::Command::new(makensis)
+        .arg(format!("/DPACKAGE_ID={package_id}"))
+        .arg(format!("/DPRIMARY_SETUP_PATH={}", primary_setup.display()))
+        .arg(format!("/DTRUST_STORE_PATH={}", staged_trust.display()))
+        .arg(format!("/DOUTPUT_PATH={}", backup_path.display()))
+        .arg(&script_path)
+        .output()?;
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "NSIS backup build failed ({}): {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        ))
+        .into());
+    }
+    let backup_metadata = std::fs::symlink_metadata(&backup_path)?;
+    if !backup_metadata.file_type().is_file() || backup_metadata.len() == 0 {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "NSIS did not produce a backup executable.").into());
+    }
+
+    std::fs::rename(&staging_directory, &output_directory)?;
+    staging_guard.0.clear();
+    println!("Distribution pair written to: {}", output_directory.display());
+    println!("Primary (share this): {}", output_directory.join("TurkuazSetup.exe").display());
+    println!("NSIS backup: {}", output_directory.join("TurkuazInstallerBackup.exe").display());
+    println!("Both executables must be Authenticode-signed after generation.");
+    Ok(())
+}
+
+struct DistributionStagingGuard(PathBuf);
+
+impl Drop for DistributionStagingGuard {
+    fn drop(&mut self) {
+        if !self.0.as_os_str().is_empty() {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
 }
 
 fn build_self_extracting_setup_command() -> Result<(), Box<dyn Error>> {
@@ -1407,7 +1505,7 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
             println!(
                 "Usage:
   turkuaz-installer <install|update|repair|rollback> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
-  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer build-setup-bundle --package-id ID --manifest FILE --signature FILE --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup\n  turkuaz-installer build-self-extracting-setup --stub FILE.exe --bundle FILE.tzsetup --output FILE.exe\n  TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
+  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer build-setup-bundle --package-id ID --manifest FILE --signature FILE --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup\n  turkuaz-installer build-self-extracting-setup --stub FILE.exe --bundle FILE.tzsetup --output FILE.exe\n  turkuaz-installer build-distribution-pair --package-id ID --stub FILE.exe --bundle FILE.tzsetup --trust-store FILE --output-dir DIR [--makensis PATH]\n  TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
             );
             process::exit(0);
         }
