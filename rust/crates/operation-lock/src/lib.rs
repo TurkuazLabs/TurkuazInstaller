@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/operation-lock/src/lib.rs
 // Amac: Ayni package icin concurrent installer islemlerini processler arasinda engellemek
 // Modul - Rust Library
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: OS advisory file lock uzerinden fail-fast package scoped lease saglar
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -26,10 +26,16 @@ impl fmt::Display for OperationLockError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Locked(package_id) => {
-                write!(formatter, "An operation is already active for package {package_id}")
+                write!(
+                    formatter,
+                    "An operation is already active for package {package_id}"
+                )
             }
             Self::Io(error) => {
-                write!(formatter, "Could not acquire installer operation lock: {error}")
+                write!(
+                    formatter,
+                    "Could not acquire installer operation lock: {error}"
+                )
             }
         }
     }
