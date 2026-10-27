@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/Cargo.toml
 # Amac: TurkuazInstaller Rust gecis workspace'ini tanimlamak
 # Modul - Cargo Workspace
-# Version: 0.7.0
+# Version: 0.8.0
 # Aciklama: Mevcut .NET uygulamasini asamali Rust portuyla yan yana tutar
 # Bagimli Oldugu Katman: Tool | Config
 
@@ -14,6 +14,7 @@ members = [
     "crates/artifact-transfer",
     "crates/artifact-validation",
     "crates/operation-lock",
+    "crates/operation-journal",
     "crates/authenticode-verification",
     "crates/manifest-verification",
     "crates/manifest-trust-store",
