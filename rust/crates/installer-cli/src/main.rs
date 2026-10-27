@@ -183,7 +183,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
                 PackageExtractionLimits::default(),
             )
             .await?;
-        println!("Repaired package directory: {}", active.directory().display());
+        println!(
+            "Repaired package directory: {}",
+            active.directory().display()
+        );
         return Ok(());
     }
 
@@ -513,10 +516,14 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
         match (installed.as_ref(), active.as_ref()) {
             (Some(installed), Some(active))
                 if installed.version() == active.version()
-                    && installed.target_path().eq_ignore_ascii_case(&target_argument) =>
+                    && installed
+                        .target_path()
+                        .eq_ignore_ascii_case(&target_argument) =>
             {
                 journal.delete(&package_id).await?;
-                println!("Cleared interrupted repair record; run repair again if deployment files remain damaged.");
+                println!(
+                    "Cleared interrupted repair record; run repair again if deployment files remain damaged."
+                );
             }
             _ => {
                 return Err(io::Error::new(
