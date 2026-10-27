@@ -112,6 +112,8 @@ pub struct ActiveDeployment {
     version: SemanticVersion,
     directory: PathBuf,
     previous_version: Option<SemanticVersion>,
+    entry_point: Option<String>,
+    previous_entry_point: Option<String>,
 }
 
 impl ActiveDeployment {
@@ -129,6 +131,14 @@ impl ActiveDeployment {
 
     pub fn previous_version(&self) -> Option<&SemanticVersion> {
         self.previous_version.as_ref()
+    }
+
+    pub fn entry_point(&self) -> Option<&str> {
+        self.entry_point.as_deref()
+    }
+
+    pub fn previous_entry_point(&self) -> Option<&str> {
+        self.previous_entry_point.as_deref()
     }
 }
 
@@ -186,7 +196,12 @@ impl VersionedDeploymentStore {
             return Err(error);
         }
 
-        match self.activate_published(&package_id, &version, &destination) {
+        match self.activate_published(
+            &package_id,
+            &version,
+            &destination,
+            stage.entry_point().map(str::to_owned),
+        ) {
             Ok(active) => Ok(active),
             Err(error) => {
                 let _ = fs::remove_dir_all(&destination);
@@ -212,7 +227,14 @@ impl VersionedDeploymentStore {
         ensure_existing_directory(&versions_root)?;
         let directory = self.version_directory(package_id, version);
         ensure_existing_directory(&directory)?;
-        self.activate_published(package_id, version, &directory)
+        let entry_point = self
+            .current(package_id)?
+            .and_then(|active| {
+                (active.previous_version.as_ref() == Some(version))
+                    .then(|| active.previous_entry_point)
+                    .flatten()
+            });
+        self.activate_published(package_id, version, &directory, entry_point)
     }
 
     /// @dev-id TIZ-DEPLOY-014
@@ -303,6 +325,8 @@ impl VersionedDeploymentStore {
                 })
             })
             .transpose()?;
+        let entry_point = validate_entry_point(document.entry_point)?;
+        let previous_entry_point = validate_entry_point(document.previous_entry_point)?;
         if &recorded_package != package_id {
             return Err(DeploymentActivationError::ActiveDeploymentMismatch);
         }
@@ -313,6 +337,8 @@ impl VersionedDeploymentStore {
             version,
             directory,
             previous_version,
+            entry_point,
+            previous_entry_point,
         }))
     }
 
@@ -321,14 +347,18 @@ impl VersionedDeploymentStore {
         package_id: &PackageId,
         version: &SemanticVersion,
         directory: &Path,
+        entry_point: Option<String>,
     ) -> Result<ActiveDeployment, DeploymentActivationError> {
         let package_root = self.package_root(package_id);
         let previous = self.current(package_id)?;
-        let previous_version = previous.map(|active| active.version);
+        let previous_version = previous.as_ref().map(|active| active.version.clone());
+        let previous_entry_point = previous.and_then(|active| active.entry_point);
         let document = ActiveDeploymentDocument {
             package_id: package_id.to_string(),
             version: version.to_string(),
             previous_version: previous_version.as_ref().map(ToString::to_string),
+            entry_point: entry_point.clone(),
+            previous_entry_point: previous_entry_point.clone(),
         };
         let bytes =
             serde_json::to_vec_pretty(&document).map_err(DeploymentActivationError::Json)?;
@@ -357,6 +387,8 @@ impl VersionedDeploymentStore {
             version: version.clone(),
             directory: directory.to_path_buf(),
             previous_version,
+            entry_point,
+            previous_entry_point,
         })
     }
 
@@ -377,6 +409,31 @@ struct ActiveDeploymentDocument {
     package_id: String,
     version: String,
     previous_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    entry_point: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    previous_entry_point: Option<String>,
+}
+
+fn validate_entry_point(value: Option<String>) -> Result<Option<String>, DeploymentActivationError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let path = Path::new(&value);
+    if value.is_empty()
+        || value.starts_with('/')
+        || value.starts_with('\\')
+        || value.contains('\\')
+        || value.contains(':')
+        || path
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        return Err(DeploymentActivationError::InvalidLayout(
+            "active deployment entry point is not a safe relative path",
+        ));
+    }
+    Ok(Some(value))
 }
 
 fn ensure_directory(path: &Path) -> Result<(), DeploymentActivationError> {
