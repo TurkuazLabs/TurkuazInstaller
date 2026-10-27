@@ -357,16 +357,31 @@ async fn build_distribution_pair_command() -> Result<(), Box<dyn Error>> {
     let output_directory = absolute_path(Path::new(required(&values, "output-dir")?))?;
     let trust_metadata = std::fs::symlink_metadata(&trust_path)?;
     if !trust_metadata.file_type().is_file() {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Trust store must be a regular file.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Trust store must be a regular file.",
+        )
+        .into());
     }
     if std::fs::symlink_metadata(&output_directory).is_ok() {
-        return Err(io::Error::new(io::ErrorKind::AlreadyExists, "Output directory already exists.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "Output directory already exists.",
+        )
+        .into());
     }
     let parent = output_directory.parent().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, "Output directory must have a parent.")
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Output directory must have a parent.",
+        )
     })?;
     if !parent.is_dir() {
-        return Err(io::Error::new(io::ErrorKind::NotFound, "Output parent directory does not exist.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Output parent directory does not exist.",
+        )
+        .into());
     }
 
     let nonce = std::time::SystemTime::now()
@@ -414,7 +429,10 @@ async fn build_distribution_pair_command() -> Result<(), Box<dyn Error>> {
         include_str!("../../../../packaging/TurkuazInstallerBackup.nsi"),
     )?;
 
-    let makensis = values.get("makensis").map(String::as_str).unwrap_or("makensis");
+    let makensis = values
+        .get("makensis")
+        .map(String::as_str)
+        .unwrap_or("makensis");
     let output = process::Command::new(makensis)
         .arg(format!("/DPACKAGE_ID={package_id}"))
         .arg(format!("/DPRIMARY_SETUP_PATH={}", primary_setup.display()))
@@ -432,14 +450,29 @@ async fn build_distribution_pair_command() -> Result<(), Box<dyn Error>> {
     }
     let backup_metadata = std::fs::symlink_metadata(&backup_path)?;
     if !backup_metadata.file_type().is_file() || backup_metadata.len() == 0 {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "NSIS did not produce a backup executable.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "NSIS did not produce a backup executable.",
+        )
+        .into());
     }
 
     std::fs::rename(&staging_directory, &output_directory)?;
     staging_guard.0.clear();
-    println!("Distribution pair written to: {}", output_directory.display());
-    println!("Primary (share this): {}", output_directory.join("TurkuazSetup.exe").display());
-    println!("NSIS backup: {}", output_directory.join("TurkuazInstallerBackup.exe").display());
+    println!(
+        "Distribution pair written to: {}",
+        output_directory.display()
+    );
+    println!(
+        "Primary (share this): {}",
+        output_directory.join("TurkuazSetup.exe").display()
+    );
+    println!(
+        "NSIS backup: {}",
+        output_directory
+            .join("TurkuazInstallerBackup.exe")
+            .display()
+    );
     println!("Both executables must be Authenticode-signed after generation.");
     Ok(())
 }
