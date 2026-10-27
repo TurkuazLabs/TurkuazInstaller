@@ -227,11 +227,11 @@ TurkuazSetup.exe install-self \
 The signer trust policy remains an explicit input to the primary setup. This first Windows setup is command-line driven. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store:
 
 ```sh
-cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-distribution-pair \\
-  --package-id example.product \\
-  --stub ./rust/target/release/turkuaz-installer.exe \\
-  --bundle ./TurkuazSetup.tzsetup \\
-  --trust-store ./manifest-trust.yaml \\
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-distribution-pair \
+  --package-id example.product \
+  --stub ./rust/target/release/turkuaz-installer.exe \
+  --bundle ./TurkuazSetup.tzsetup \
+  --trust-store ./manifest-trust.yaml \
   --output-dir ./distribution
 ```
 
