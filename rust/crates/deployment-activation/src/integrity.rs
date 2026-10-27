@@ -226,10 +226,12 @@ fn collect_inventory(
     ensure_existing_real_directory(deployment_directory)?;
     let mut files = Vec::new();
     let mut total_bytes = 0_u64;
+    let mut total_entries = 0_usize;
     collect_directory(
         deployment_directory,
         deployment_directory,
         &mut files,
+        &mut total_entries,
         &mut total_bytes,
     )?;
     files.sort();
@@ -240,19 +242,32 @@ fn collect_directory(
     root: &Path,
     directory: &Path,
     files: &mut Vec<InventoryEntry>,
+    total_entries: &mut usize,
     total_bytes: &mut u64,
 ) -> Result<(), DeploymentActivationError> {
-    let mut children = fs::read_dir(directory)
-        .map_err(DeploymentActivationError::Io)?
-        .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(DeploymentActivationError::Io)?;
+    let mut children = Vec::new();
+    for entry in fs::read_dir(directory).map_err(DeploymentActivationError::Io)? {
+        if children.len() >= MAXIMUM_INVENTORY_ENTRIES {
+            return Err(DeploymentActivationError::InvalidInventory(
+                "directory exceeds the inventory entry limit",
+            ));
+        }
+        children.push(entry.map_err(DeploymentActivationError::Io)?.path());
+    }
     children.sort();
 
     for path in children {
         let metadata = fs::symlink_metadata(&path).map_err(DeploymentActivationError::Io)?;
+        *total_entries = total_entries.checked_add(1).ok_or(
+            DeploymentActivationError::InvalidInventory("deployment entry count overflowed"),
+        )?;
+        if *total_entries > MAXIMUM_INVENTORY_ENTRIES {
+            return Err(DeploymentActivationError::InvalidInventory(
+                "deployment exceeds the inventory entry limit",
+            ));
+        }
         if metadata.file_type().is_dir() {
-            collect_directory(root, &path, files, total_bytes)?;
+            collect_directory(root, &path, files, total_entries, total_bytes)?;
             continue;
         }
         if !metadata.file_type().is_file() {
@@ -260,12 +275,6 @@ fn collect_directory(
                 "deployment contains a symlink or special file",
             ));
         }
-        if files.len() >= MAXIMUM_INVENTORY_ENTRIES {
-            return Err(DeploymentActivationError::InvalidInventory(
-                "deployment exceeds the inventory file count limit",
-            ));
-        }
-
         let relative_path = path.strip_prefix(root).map_err(|_| {
             DeploymentActivationError::InvalidInventory("deployment entry escaped its root")
         })?;
@@ -343,7 +352,13 @@ fn relative_path_string(path: &Path) -> Result<String, DeploymentActivationError
             "deployment path is empty",
         ));
     }
-    Ok(segments.join("/"))
+    let path = segments.join("/");
+    if path.len() > 32 * 1024 {
+        return Err(DeploymentActivationError::InvalidInventory(
+            "deployment path exceeds the inventory path limit",
+        ));
+    }
+    Ok(path)
 }
 
 fn validate_inventory_path(path: &str) -> Result<(), DeploymentActivationError> {
