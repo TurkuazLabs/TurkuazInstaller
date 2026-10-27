@@ -7,7 +7,6 @@
 
 use std::{
     error::Error,
-    ffi::OsStr,
     fmt, fs, io,
     path::{Path, PathBuf},
 };
@@ -195,7 +194,17 @@ impl VersionedDeploymentStore {
     ) -> Result<Option<ActiveDeployment>, DeploymentActivationError> {
         let package_root = self.package_root(package_id);
         let active_path = package_root.join(ACTIVE_FILE);
-        let mut file = match fs::File::open(&active_path) {
+        match fs::symlink_metadata(&active_path) {
+            Ok(metadata) if metadata.file_type().is_file() => {}
+            Ok(_) => {
+                return Err(DeploymentActivationError::InvalidLayout(
+                    "active deployment record is not a regular file",
+                ));
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(DeploymentActivationError::Io(error)),
+        }
+        let file = match fs::File::open(&active_path) {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(DeploymentActivationError::Io(error)),
