@@ -9,7 +9,7 @@ Bagimli Oldugu Katman: Service | Documentation
 
 # Install Workflow
 
-Status: implementation draft. The Rust service currently wires a verified full package into first-install and forward-update operations. Release discovery/download, prerequisite installation, Windows integration, repair, rollback, uninstall, startup recovery, CLI, and UI are not connected.
+Status: implementation draft. The Rust service currently wires a verified full package into first-install, forward-update, and policy-gated rollback operations. Release discovery/download, prerequisite installation, Windows integration, repair, rollback, uninstall, startup recovery, CLI, and UI are not connected.
 
 ## Inputs
 
@@ -28,10 +28,14 @@ The caller supplies a `VerifiedArtifact`, a typed `PackageRelease`, operation ty
 
 Journal persistence follows the current best-effort operation-context contract. The workflow does not yet reconcile crash states at startup, so it is not a complete transaction/recovery implementation.
 
+## Rollback
+
+The rollback method requires the caller to provide the signed current release policy. It selects the previous version recorded in active.json, updates installed state, and restores the former active version if state persistence fails. It can move one recorded activation at a time; release history and startup recovery are not implemented.
+
 ## Current limits
 
-- Only `Install` and forward `Update` are accepted.
+- Install and forward Update are supported by the CLI; the service also supports policy-gated rollback.
 - The package must be a full `.tzpkg`; delta application is not wired.
 - The deployment directory is selected by caller configuration. The workflow records the requested target path in installed state, but does not create shortcuts or a stable launch entry.
-- Prerequisite checks/installers, Windows registry/shortcut integration, progress events, cancellation, repair, rollback, uninstall, and UI/CLI integration remain future work.
+- Prerequisite checks/installers, Windows registry/shortcut integration, progress events, cancellation, repair, uninstall, and UI integration remain future work.
 - No Rust tests were run for this implementation. CI format and workspace compilation are pending on the branch.
