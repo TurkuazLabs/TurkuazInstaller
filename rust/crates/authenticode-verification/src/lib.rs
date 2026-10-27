@@ -207,7 +207,7 @@ mod windows_authenticode {
             WinVerifyTrust(
                 ptr::null_mut::<c_void>() as HWND,
                 &mut action,
-                &mut trust_data,
+                (&mut trust_data as *mut WINTRUST_DATA).cast(),
             )
         }
     }
@@ -308,7 +308,7 @@ mod windows_authenticode {
             // SAFETY: cert_info is owned by the live certificate context.
             CertNameToStrW(
                 X509_ASN_ENCODING,
-                &cert_info.Subject as *const CERT_NAME_BLOB,
+                &cert_info.Subject as *const _,
                 CERT_X500_NAME_STR | CERT_NAME_STR_REVERSE_FLAG,
                 ptr::null_mut(),
                 0,
