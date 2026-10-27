@@ -184,7 +184,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let workflow = InstallWorkflow::new(options);
     if operation == InstallerOperationType::Rollback {
         let active = workflow.rollback(release).await?;
-        println!("Rolled back to package directory: {}", active.directory().display());
+        println!(
+            "Rolled back to package directory: {}",
+            active.directory().display()
+        );
     } else if operation == InstallerOperationType::Repair {
         let active = workflow
             .repair(
@@ -215,11 +218,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-
-
-fn parse_setup_bundle_options(
-    allowed: &[&str],
-) -> Result<HashMap<String, String>, Box<dyn Error>> {
+fn parse_setup_bundle_options(allowed: &[&str]) -> Result<HashMap<String, String>, Box<dyn Error>> {
     let mut arguments = std::env::args().skip(2).peekable();
     if arguments
         .peek()
