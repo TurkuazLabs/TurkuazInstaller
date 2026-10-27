@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/artifact-validation/src/lib.rs
 // Amac: Artifact download, digest ve publisher signature kapilarini sirali uygulamak
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: Dogrulanmamis artifactleri VerifiedArtifact olarak disari cikarmadan staging kalintilarini temizler
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -15,12 +15,8 @@ use tokio::{
     fs::{self, File},
     task,
 };
-use turkuaz_installer_artifact_transfer::{
-    ArtifactTransferError, DefaultArtifactDownloader,
-};
-use turkuaz_installer_artifact_verification::{
-    ArtifactVerificationError, verify_reader,
-};
+use turkuaz_installer_artifact_transfer::{ArtifactTransferError, DefaultArtifactDownloader};
+use turkuaz_installer_artifact_verification::{ArtifactVerificationError, verify_reader};
 use turkuaz_installer_authenticode_verification::{
     AuthenticodeVerificationError, verify_authenticode,
 };
