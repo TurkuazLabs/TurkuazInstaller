@@ -52,6 +52,7 @@ pub enum InstallWorkflowError {
     PreviousVersionUnavailable,
     ActivationCompensationFailed(String, String),
     UninstallHasPendingOperation,
+    RepairHasPendingOperation,
 }
 
 impl fmt::Display for InstallWorkflowError {
@@ -105,6 +106,9 @@ impl fmt::Display for InstallWorkflowError {
             Self::UninstallHasPendingOperation => formatter.write_str(
                 "A journaled operation is pending; recover it before uninstalling this package.",
             ),
+            Self::RepairHasPendingOperation => formatter.write_str(
+                "A journaled operation is pending; recover it before repairing this package.",
+            ),
         }
     }
 }
@@ -130,7 +134,8 @@ impl Error for InstallWorkflowError {
             | Self::RollbackNotAllowed
             | Self::PreviousVersionUnavailable
             | Self::ActivationCompensationFailed(_, _)
-            | Self::UninstallHasPendingOperation => None,
+            | Self::UninstallHasPendingOperation
+            | Self::RepairHasPendingOperation => None,
         }
     }
 }
@@ -412,7 +417,7 @@ impl InstallWorkflow {
             if journal.get(&package_id).await.map_err(|error| {
                 InstallWorkflowError::Io(io::Error::other(error.to_string()))
             })?.is_some() {
-                return Err(InstallWorkflowError::UninstallHasPendingOperation);
+                return Err(InstallWorkflowError::RepairHasPendingOperation);
             }
         }
 
