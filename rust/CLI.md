@@ -235,4 +235,4 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-dist
   --output-dir ./distribution
 ```
 
-The command requires `makensis` on `PATH` (or `--makensis PATH`). It stages both outputs and publishes the directory only after NSIS succeeds. Share `distribution/TurkuazSetup.exe`; `TurkuazInstallerBackup.exe` is the mandatory fallback and currently supports first install. Sign both final executables with Authenticode after building. The GUI and automated signing/publishing are still pending.
+The command requires `makensis` on `PATH` (or `--makensis PATH`). It stages both outputs and publishes the directory only after NSIS succeeds. Share `distribution/TurkuazSetup.exe`; `TurkuazInstallerBackup.exe` is the mandatory fallback and supports install, update, repair, and policy-authorized rollback. Sign both final executables with Authenticode after building. The GUI and automated signing/publishing are still pending.
