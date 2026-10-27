@@ -227,9 +227,11 @@ impl VersionedDeploymentStore {
     ) -> Result<ActiveDeployment, DeploymentActivationError> {
         let package_id = stage.package_id().clone();
         let version = stage.version().clone();
-        let current = self.current(&package_id)?.ok_or(
-            DeploymentActivationError::InvalidLayout("active deployment is missing during repair"),
-        )?;
+        let current =
+            self.current(&package_id)?
+                .ok_or(DeploymentActivationError::InvalidLayout(
+                    "active deployment is missing during repair",
+                ))?;
         if current.version() != &version {
             return Err(DeploymentActivationError::ActiveDeploymentMismatch);
         }
@@ -278,7 +280,10 @@ impl VersionedDeploymentStore {
             let _ = fs::remove_dir_all(&destination);
             let _ = integrity::remove_inventory_for_key(
                 &package_root,
-                destination.file_name().and_then(|name| name.to_str()).unwrap_or_default(),
+                destination
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default(),
             );
             return Err(error);
         }
@@ -314,8 +319,8 @@ impl VersionedDeploymentStore {
                 .then(|| active.previous_directory.clone())
                 .flatten()
         });
-        let directory = previous_directory
-            .unwrap_or_else(|| self.version_directory(package_id, version));
+        let directory =
+            previous_directory.unwrap_or_else(|| self.version_directory(package_id, version));
         ensure_existing_directory(&directory)?;
         let entry_point = current.as_ref().and_then(|active| {
             (active.previous_version.as_ref() == Some(version))
@@ -495,7 +500,9 @@ impl VersionedDeploymentStore {
             })
             .transpose()?;
         let directory_key = validate_deployment_key(
-            document.directory_key.unwrap_or_else(|| version.to_string()),
+            document
+                .directory_key
+                .unwrap_or_else(|| version.to_string()),
         )?;
         let previous_directory_key = document
             .previous_directory_key
@@ -509,8 +516,8 @@ impl VersionedDeploymentStore {
         }
         let directory = self.deployment_directory(package_id, &directory_key);
         ensure_existing_directory(&directory)?;
-        let previous_directory = previous_directory_key
-            .map(|key| self.deployment_directory(package_id, &key));
+        let previous_directory =
+            previous_directory_key.map(|key| self.deployment_directory(package_id, &key));
         Ok(Some(ActiveDeployment {
             package_id: recorded_package,
             version,
@@ -547,7 +554,9 @@ impl VersionedDeploymentStore {
             previous_version: previous_version.as_ref().map(ToString::to_string),
             directory_key: Some(directory_key),
             previous_directory_key: previous_directory.as_ref().and_then(|path| {
-                path.file_name().and_then(|name| name.to_str()).map(str::to_owned)
+                path.file_name()
+                    .and_then(|name| name.to_str())
+                    .map(str::to_owned)
             }),
             entry_point: entry_point.clone(),
             previous_entry_point: previous_entry_point.clone(),
@@ -606,9 +615,9 @@ fn validate_deployment_key(value: String) -> Result<String, DeploymentActivation
     if value.is_empty()
         || value == "."
         || value == ".."
-        || !value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+')
-        })
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+'))
     {
         return Err(DeploymentActivationError::InvalidLayout(
             "active deployment directory key is unsafe",
