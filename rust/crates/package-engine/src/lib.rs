@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 0.7.0
+// Version: 0.8.0
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -241,13 +241,14 @@ fn extract_archive_contents(
         read_and_validate_package_metadata(&mut archive, expected_package_id, expected_version)?;
     if archive.len() > limits.maximum_entries {
         return Err(PackageEngineError::InvalidPackage(
-            "package entry count is empty or exceeds the configured limit",
+            "package entry count exceeds the configured limit",
         ));
     }
 
     let mut entries = Vec::with_capacity(archive.len());
     let mut entry_kinds = HashMap::<String, bool>::with_capacity(archive.len());
     let mut total_declared_bytes = 0_u64;
+    let mut payload_root_seen = false;
 
     for index in 0..archive.len() {
         if index == metadata_index {
@@ -263,11 +264,12 @@ fn extract_archive_contents(
             ));
         }
         if raw_name == "payload/" {
-            if !entry.is_dir() || entry.size() != 0 {
+            if payload_root_seen || !entry.is_dir() || entry.size() != 0 {
                 return Err(PackageEngineError::InvalidPackage(
-                    "package payload root entry is invalid",
+                    "package payload root entry is missing, duplicated, or invalid",
                 ));
             }
+            payload_root_seen = true;
             continue;
         }
         let payload_name = raw_name
@@ -323,6 +325,11 @@ fn extract_archive_contents(
         });
     }
 
+    if !payload_root_seen {
+        return Err(PackageEngineError::InvalidPackage(
+            "package payload root directory is missing",
+        ));
+    }
     validate_entry_conflicts(&entry_kinds)?;
     if entries.is_empty() {
         return Err(PackageEngineError::InvalidPackage(
