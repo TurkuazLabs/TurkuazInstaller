@@ -243,8 +243,8 @@ fn describe_package_command() -> Result<(), Box<dyn Error>> {
     }
     let output = absolute_path(Path::new(required(&values, "output")?))?;
     let manifest = format!(
-        "schema_version: 1\\npackage:\\n  id: {}\\n  version: {}\\n  channel: {}\\nartifact:\\n  uri: {}\\n  sha256: {}\\n  size_bytes: {}\\ninstall:\\n  mode: full\\n  target: {}\\nrollback:\\n  supported: false\\n  previous_version_required: true\\n",
-        package_id, version, channel, quote_yaml(target)?, digest, actual_size
+        "schema_version: 1\npackage:\n  id: {}\n  version: {}\n  channel: {}\nartifact:\n  uri: {}\n  sha256: {}\n  size_bytes: {}\ninstall:\n  mode: full\n  target: {}\nrollback:\n  supported: false\n  previous_version_required: true\n",
+        package_id, version, channel, quote_yaml(artifact_uri.as_str())?, digest, actual_size, quote_yaml(target)?
     );
     let mut output_file = std::fs::OpenOptions::new().write(true).create_new(true).open(&output)?;
     use std::io::Write;
