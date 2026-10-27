@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.0
+# Version: 0.2.1
 # Aciklama: Rust workspace icin format/compile kontrolu ve kisa omurlu Windows development CLI artifact'i uretir
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -20,6 +20,10 @@ on:
     paths:
       - "rust/**"
       - ".github/workflows/rust-migration.yml"
+
+concurrency:
+  group: rust-migration-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
