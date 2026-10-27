@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.2
+// Version: 0.2.3
 // Aciklama: HTTPS release intake, package build, install/update/rollback, paket listesi, deployment dogrulamasi ve kurulu uygulamayi baslatma icin headless CLI'dir
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -20,7 +20,9 @@ use turkuaz_installer_deployment_activation::{
     DeploymentActivationOptions, VersionedDeploymentStore,
 };
 use turkuaz_installer_domain::{
-    operation::InstallerOperationType, package_id::PackageId, semantic_version::SemanticVersion,
+    operation::{InstallerOperationPhase, InstallerOperationType},
+    package_id::PackageId,
+    semantic_version::SemanticVersion,
 };
 use turkuaz_installer_install_state_store::{
     JsonInstallStateRepository, JsonInstallStateRepositoryOptions,
@@ -56,6 +58,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     if std::env::args().nth(1).as_deref() == Some("launch") {
         return launch_command().await;
+    }
+    if std::env::args().nth(1).as_deref() == Some("recover") {
+        return recover_command().await;
     }
     let (operation, values) = parse_arguments()?;
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
@@ -225,6 +230,183 @@ fn build_package_command() -> Result<(), Box<dyn Error>> {
         PackageExtractionLimits::default(),
     )?;
     println!("Built package: {}", output.display());
+    Ok(())
+}
+
+async fn recover_command() -> Result<(), Box<dyn Error>> {
+    let mut arguments = std::env::args().skip(2).peekable();
+    if arguments
+        .peek()
+        .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
+    {
+        println!("Usage: turkuaz-installer recover --package-id ID --target DIR --data-root DIR");
+        return Ok(());
+    }
+
+    let mut values = HashMap::new();
+    while let Some(flag) = arguments.next() {
+        let Some(key) = flag.strip_prefix("--") else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Recover options must use --name value form.",
+            )
+            .into());
+        };
+        let value = arguments.next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing.")
+        })?;
+        if values.insert(key.to_owned(), value).is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "An option was provided more than once.",
+            )
+            .into());
+        }
+    }
+    let allowed = ["package-id", "target", "data-root"];
+    if values.keys().any(|key| !allowed.contains(&key.as_str())) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "An unknown recover option was provided.",
+        )
+        .into());
+    }
+
+    let package_id = PackageId::parse(required(&values, "package-id")?)?;
+    let target_argument = required(&values, "target")?.trim();
+    let target_directory = absolute_path(Path::new(target_argument))?;
+    let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
+    let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
+    let _lock_lease = turkuaz_installer_operation_lock::acquire_package_lock(&lock, &package_id)
+        .map_err(|_| io::Error::other("Could not acquire package operation lock."))?;
+
+    let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
+        data_root.join("state"),
+    )?);
+    let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
+        data_root.join("journal"),
+    )?);
+    let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
+        target_directory.join(".turkuaz-installer"),
+    )?);
+    let installed = state.get(&package_id).await?;
+    let active = deployment.current(&package_id)?;
+    let Some(entry) = journal.get(&package_id).await? else {
+        match (installed.as_ref(), active.as_ref()) {
+            (None, None) => println!("No installed package or pending operation."),
+            (Some(installed), Some(active))
+                if installed.version() == active.version()
+                    && installed.target_path().eq_ignore_ascii_case(target_argument) =>
+            {
+                deployment.verify_current(&package_id)?.ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Active deployment is missing.")
+                })?;
+                println!("Installed state and active deployment are consistent; no journal exists.");
+            }
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "State and active deployment disagree, but no recovery journal exists. Manual recovery is required.",
+                )
+                .into());
+            }
+        }
+        return Ok(());
+    };
+
+    if !entry.target_path.trim().eq_ignore_ascii_case(target_argument) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Recovery target does not match the operation journal.",
+        )
+        .into());
+    }
+
+    match (installed, active) {
+        (Some(installed), Some(active)) => {
+            if !installed.target_path().eq_ignore_ascii_case(target_argument) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Recovery target does not match installed package state.",
+                )
+                .into());
+            }
+            if installed.version() == active.version() {
+                deployment.verify_current(&package_id)?.ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Active deployment is missing.")
+                })?;
+                journal.delete(&package_id).await?;
+                println!(
+                    "Package state is consistent at version {}; stale journal removed.",
+                    installed.version()
+                );
+                return Ok(());
+            }
+
+            let recoverable_phase = matches!(
+                entry.phase,
+                InstallerOperationPhase::Applying
+                    | InstallerOperationPhase::SavingState
+                    | InstallerOperationPhase::Failed
+            );
+            let target_version = entry
+                .version
+                .as_deref()
+                .map(SemanticVersion::parse)
+                .transpose()?;
+            if !recoverable_phase
+                || !matches!(
+                    entry.operation,
+                    InstallerOperationType::Update | InstallerOperationType::Rollback
+                )
+                || target_version.as_ref() != Some(active.version())
+                || active.previous_version() != Some(installed.version())
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "The journal does not prove a safe update/rollback recovery. No files or state were changed.",
+                )
+                .into());
+            }
+
+            let report = deployment.verify_current(&package_id)?.ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidData, "Active deployment is missing.")
+            })?;
+            if report.active().version() != active.version() {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Active deployment changed during recovery.",
+                )
+                .into());
+            }
+            let recovered_state = turkuaz_installer_domain::state::InstalledPackageState::new(
+                package_id.clone(),
+                active.version().clone(),
+                installed.channel(),
+                installed.target_path(),
+            );
+            state.save(&recovered_state).await?;
+            journal.delete(&package_id).await?;
+            println!(
+                "Recovered operation by completing activation: package={} version={}",
+                package_id,
+                active.version()
+            );
+        }
+        (None, None) if entry.operation == InstallerOperationType::Install => {
+            journal.delete(&package_id).await?;
+            println!(
+                "Install did not activate a deployment; stale journal removed. Any abandoned staging directory was left untouched."
+            );
+        }
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "This interrupted operation cannot be recovered safely from its current state. No files or state were changed.",
+            )
+            .into());
+        }
+    }
     Ok(())
 }
 
@@ -553,7 +735,7 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
             println!(
                 "Usage:
   turkuaz-installer <install|update|rollback> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
-  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg"
+  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg"
             );
             process::exit(0);
         }
