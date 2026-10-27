@@ -80,8 +80,7 @@ mod windows_authenticode {
         mem::{size_of, zeroed},
         os::windows::ffi::OsStrExt,
         path::Path,
-        ptr,
-        slice,
+        ptr, slice,
     };
 
     use sha2::{Digest, Sha256};
