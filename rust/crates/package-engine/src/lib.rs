@@ -1,12 +1,12 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     error::Error,
     fmt, fs,
     io::{self, Read, Write},
@@ -131,7 +131,7 @@ pub async fn stage_full_package(
         .rsplit('/')
         .next()
         .and_then(|name| Path::new(name).extension())
-        .is_none_or(|extension| !extension.eq_ignore_ascii_case(PACKAGE_EXTENSION))
+        .is_none_or(|extension| !extension.to_string_lossy().eq_ignore_ascii_case(PACKAGE_EXTENSION))
     {
         return Err(PackageEngineError::InvalidPackage(
             "custom package artifacts must use the .tzpkg extension",
@@ -153,11 +153,17 @@ pub async fn stage_full_package(
 
     let worker_directory = payload_directory.clone();
     let worker_limits = limits;
-    let result = task::spawn_blocking(move || {
+    let result = match task::spawn_blocking(move || {
         extract_archive(&artifact_path, &worker_directory, worker_limits)
     })
     .await
-    .map_err(PackageEngineError::BlockingTask)?;
+    {
+        Ok(result) => result,
+        Err(error) => {
+            let _ = tokio::fs::remove_dir_all(&payload_directory).await;
+            return Err(PackageEngineError::BlockingTask(error));
+        }
+    };
 
     if let Err(error) = result {
         let _ = tokio::fs::remove_dir_all(&payload_directory).await;
@@ -175,7 +181,6 @@ pub async fn stage_full_package(
 struct PlannedEntry {
     index: usize,
     relative_path: PathBuf,
-    normalized_path: String,
     is_directory: bool,
     uncompressed_size: u64,
 }
@@ -220,6 +225,11 @@ fn extract_archive_contents(
             .by_index(index)
             .map_err(PackageEngineError::Archive)?;
         let raw_name = entry.name();
+        if entry.enclosed_name().is_none() {
+            return Err(PackageEngineError::InvalidPackage(
+                "package contains a path outside its archive root",
+            ));
+        }
         let relative_path = validate_archive_path(raw_name)?;
         let is_directory = entry.is_dir();
 
@@ -262,7 +272,6 @@ fn extract_archive_contents(
         entries.push(PlannedEntry {
             index,
             relative_path,
-            normalized_path,
             is_directory,
             uncompressed_size: entry.size(),
         });
@@ -301,10 +310,6 @@ fn extract_archive_contents(
         target.sync_all().map_err(PackageEngineError::Io)?;
     }
 
-    let _ = entries
-        .iter()
-        .map(|entry| &entry.normalized_path)
-        .collect::<HashSet<_>>();
     Ok(())
 }
 
@@ -386,15 +391,6 @@ fn validate_entry_conflicts(
                 ));
             }
             parent = ancestor;
-        }
-        if !is_directory
-            && entry_kinds
-                .keys()
-                .any(|candidate| candidate.starts_with(&format!("{path}/")))
-        {
-            return Err(PackageEngineError::InvalidPackage(
-                "package file path conflicts with a child entry",
-            ));
         }
     }
     Ok(())
