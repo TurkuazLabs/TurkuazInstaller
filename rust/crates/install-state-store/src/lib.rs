@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/install-state-store/src/lib.rs
 // Amac: Kurulu package state kayitlarini kalici JSON dosyalarinda yonetmek
 // Modul - Rust Library
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: Bounded okuma, deterministik listeleme ve atomik state guncellemesi saglar
 // Bagimli Oldugu Katman: Repo
 
@@ -16,7 +16,10 @@ use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use turkuaz_installer_domain::{package_id::PackageId, release_channel::ReleaseChannel, semantic_version::SemanticVersion, state::InstalledPackageState};
+use turkuaz_installer_domain::{
+    package_id::PackageId, release_channel::ReleaseChannel, semantic_version::SemanticVersion,
+    state::InstalledPackageState,
+};
 use uuid::Uuid;
 
 const MAX_STATE_BYTES: u64 = 1024 * 1024;
