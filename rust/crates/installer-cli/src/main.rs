@@ -501,7 +501,9 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
         match (installed.as_ref(), active.as_ref(), has_quarantine) {
             (Some(installed), Some(active), false)
                 if installed.version() == active.version()
-                    && installed.target_path().eq_ignore_ascii_case(&target_argument) =>
+                    && installed
+                        .target_path()
+                        .eq_ignore_ascii_case(&target_argument) =>
             {
                 deployment.verify_current(&package_id)?.ok_or_else(|| {
                     io::Error::new(io::ErrorKind::InvalidData, "Active deployment is missing.")
@@ -510,7 +512,9 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
                 println!("Uninstall did not move the managed deployment; pending record cleared.");
             }
             (Some(installed), None, true)
-                if installed.target_path().eq_ignore_ascii_case(&target_argument) =>
+                if installed
+                    .target_path()
+                    .eq_ignore_ascii_case(&target_argument) =>
             {
                 state.delete(&package_id).await?;
                 deployment.finish_uninstall(&package_id)?;
