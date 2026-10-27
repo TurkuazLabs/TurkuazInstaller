@@ -296,12 +296,16 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
             (None, None) => println!("No installed package or pending operation."),
             (Some(installed), Some(active))
                 if installed.version() == active.version()
-                    && installed.target_path().eq_ignore_ascii_case(target_argument) =>
+                    && installed
+                        .target_path()
+                        .eq_ignore_ascii_case(target_argument) =>
             {
                 deployment.verify_current(&package_id)?.ok_or_else(|| {
                     io::Error::new(io::ErrorKind::InvalidData, "Active deployment is missing.")
                 })?;
-                println!("Installed state and active deployment are consistent; no journal exists.");
+                println!(
+                    "Installed state and active deployment are consistent; no journal exists."
+                );
             }
             _ => {
                 return Err(io::Error::new(
@@ -314,7 +318,11 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
         return Ok(());
     };
 
-    if !entry.target_path.trim().eq_ignore_ascii_case(target_argument) {
+    if !entry
+        .target_path
+        .trim()
+        .eq_ignore_ascii_case(target_argument)
+    {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             "Recovery target does not match the operation journal.",
@@ -324,7 +332,10 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
 
     match (installed, active) {
         (Some(installed), Some(active)) => {
-            if !installed.target_path().eq_ignore_ascii_case(target_argument) {
+            if !installed
+                .target_path()
+                .eq_ignore_ascii_case(target_argument)
+            {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
                     "Recovery target does not match installed package state.",
