@@ -300,8 +300,7 @@ fn setup_payload_end(
     executable
         .read_exact(&mut coff_header)
         .map_err(SetupExecutableError::Io)?;
-    let optional_header_size =
-        u16::from_le_bytes([coff_header[16], coff_header[17]]) as u64;
+    let optional_header_size = u16::from_le_bytes([coff_header[16], coff_header[17]]) as u64;
     let optional_header_start = pe_offset + 24;
     let optional_header_end = optional_header_start
         .checked_add(optional_header_size)
@@ -334,7 +333,9 @@ fn setup_payload_end(
         ));
     }
     executable
-        .seek(SeekFrom::Start(optional_header_start + directory_count_offset))
+        .seek(SeekFrom::Start(
+            optional_header_start + directory_count_offset,
+        ))
         .map_err(SetupExecutableError::Io)?;
     let mut directory_count_bytes = [0_u8; 4];
     executable
@@ -358,23 +359,23 @@ fn setup_payload_end(
     executable
         .read_exact(&mut certificate_entry)
         .map_err(SetupExecutableError::Io)?;
-    let certificate_offset =
-        u32::from_le_bytes(certificate_entry[..4].try_into().map_err(|_| {
-            SetupExecutableError::InvalidSetup("PE certificate offset is invalid")
-        })?) as u64;
-    let certificate_size =
-        u32::from_le_bytes(certificate_entry[4..].try_into().map_err(|_| {
-            SetupExecutableError::InvalidSetup("PE certificate size is invalid")
-        })?) as u64;
+    let certificate_offset = u32::from_le_bytes(
+        certificate_entry[..4]
+            .try_into()
+            .map_err(|_| SetupExecutableError::InvalidSetup("PE certificate offset is invalid"))?,
+    ) as u64;
+    let certificate_size = u32::from_le_bytes(
+        certificate_entry[4..]
+            .try_into()
+            .map_err(|_| SetupExecutableError::InvalidSetup("PE certificate size is invalid"))?,
+    ) as u64;
 
     if certificate_offset == 0 && certificate_size == 0 {
         return Ok(file_length);
     }
-    let certificate_end = certificate_offset
-        .checked_add(certificate_size)
-        .ok_or(SetupExecutableError::InvalidSetup(
-            "PE certificate table length overflows",
-        ))?;
+    let certificate_end = certificate_offset.checked_add(certificate_size).ok_or(
+        SetupExecutableError::InvalidSetup("PE certificate table length overflows"),
+    )?;
     if certificate_offset < optional_header_end
         || certificate_offset % 8 != 0
         || certificate_size < 8
