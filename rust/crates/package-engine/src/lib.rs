@@ -1,11 +1,12 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 0.6.0
+// Version: 0.7.0
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
 mod builder;
+mod format;
 
 pub use builder::{PackageBuildError, build_full_package};
 
@@ -23,6 +24,11 @@ use turkuaz_installer_domain::{
     package_id::PackageId, release::PackageRelease, semantic_version::SemanticVersion,
 };
 use zip::{ZipArchive, result::ZipError};
+
+use crate::format::{
+    MAXIMUM_PACKAGE_METADATA_BYTES, PACKAGE_FORMAT_VERSION, PACKAGE_METADATA_ENTRY,
+    PACKAGE_PAYLOAD_ROOT, PackageArchiveMetadata,
+};
 
 const PACKAGE_EXTENSION: &str = "tzpkg";
 const DEFAULT_MAXIMUM_ENTRIES: usize = 250_000;
@@ -161,8 +167,16 @@ pub async fn stage_full_package(
 
     let worker_directory = payload_directory.clone();
     let worker_limits = limits;
+    let expected_package_id = package_id.to_string();
+    let expected_version = version.to_string();
     let result = match task::spawn_blocking(move || {
-        extract_archive(&artifact_path, &worker_directory, worker_limits)
+        extract_archive(
+            &artifact_path,
+            &worker_directory,
+            worker_limits,
+            &expected_package_id,
+            &expected_version,
+        )
     })
     .await
     {
@@ -191,6 +205,8 @@ fn extract_archive(
     archive_path: &Path,
     payload_directory: &Path,
     limits: PackageExtractionLimits,
+    expected_package_id: &str,
+    expected_version: &str,
 ) -> Result<(), PackageEngineError> {
     let parent = payload_directory
         .parent()
@@ -199,7 +215,13 @@ fn extract_archive(
     fs::create_dir_all(parent).map_err(PackageEngineError::Io)?;
     fs::create_dir(payload_directory).map_err(PackageEngineError::Io)?;
 
-    let result = extract_archive_contents(archive_path, payload_directory, limits);
+    let result = extract_archive_contents(
+        archive_path,
+        payload_directory,
+        limits,
+        expected_package_id,
+        expected_version,
+    );
     if result.is_err() {
         let _ = fs::remove_dir_all(payload_directory);
     }
@@ -210,10 +232,14 @@ fn extract_archive_contents(
     archive_path: &Path,
     payload_directory: &Path,
     limits: PackageExtractionLimits,
+    expected_package_id: &str,
+    expected_version: &str,
 ) -> Result<(), PackageEngineError> {
     let archive_file = fs::File::open(archive_path).map_err(PackageEngineError::Io)?;
     let mut archive = ZipArchive::new(archive_file).map_err(PackageEngineError::Archive)?;
-    if archive.len() == 0 || archive.len() > limits.maximum_entries {
+    let metadata_index =
+        read_and_validate_package_metadata(&mut archive, expected_package_id, expected_version)?;
+    if archive.len() > limits.maximum_entries {
         return Err(PackageEngineError::InvalidPackage(
             "package entry count is empty or exceeds the configured limit",
         ));
@@ -224,6 +250,9 @@ fn extract_archive_contents(
     let mut total_declared_bytes = 0_u64;
 
     for index in 0..archive.len() {
+        if index == metadata_index {
+            continue;
+        }
         let entry = archive
             .by_index(index)
             .map_err(PackageEngineError::Archive)?;
@@ -233,7 +262,21 @@ fn extract_archive_contents(
                 "package contains a path outside its archive root",
             ));
         }
-        let relative_path = validate_archive_path(raw_name)?;
+        if raw_name == "payload/" {
+            if !entry.is_dir() || entry.size() != 0 {
+                return Err(PackageEngineError::InvalidPackage(
+                    "package payload root entry is invalid",
+                ));
+            }
+            continue;
+        }
+        let payload_name = raw_name
+            .strip_prefix(PACKAGE_PAYLOAD_ROOT)
+            .filter(|name| !name.is_empty())
+            .ok_or(PackageEngineError::InvalidPackage(
+                "package entries must be stored beneath payload/",
+            ))?;
+        let relative_path = validate_archive_path(payload_name)?;
         let is_directory = entry.is_dir();
 
         if entry.is_symlink() || (!is_directory && !entry.is_file()) {
@@ -281,6 +324,11 @@ fn extract_archive_contents(
     }
 
     validate_entry_conflicts(&entry_kinds)?;
+    if entries.is_empty() {
+        return Err(PackageEngineError::InvalidPackage(
+            "package payload does not contain any entries",
+        ));
+    }
 
     for planned in &entries {
         let destination = payload_directory.join(&planned.relative_path);
@@ -317,6 +365,53 @@ fn extract_archive_contents(
     }
 
     Ok(())
+}
+
+fn read_and_validate_package_metadata(
+    archive: &mut ZipArchive<fs::File>,
+    expected_package_id: &str,
+    expected_version: &str,
+) -> Result<usize, PackageEngineError> {
+    let metadata_index = archive
+        .index_for_name(PACKAGE_METADATA_ENTRY)
+        .ok_or(PackageEngineError::InvalidPackage(
+            "package metadata entry is missing",
+        ))?;
+    let mut entry = archive
+        .by_index(metadata_index)
+        .map_err(PackageEngineError::Archive)?;
+    if !entry.is_file()
+        || entry.is_symlink()
+        || entry.size() > MAXIMUM_PACKAGE_METADATA_BYTES
+    {
+        return Err(PackageEngineError::InvalidPackage(
+            "package metadata entry is not a bounded regular file",
+        ));
+    }
+
+    let declared_size = entry.size();
+    let mut bytes = Vec::with_capacity(declared_size as usize);
+    (&mut entry)
+        .take(MAXIMUM_PACKAGE_METADATA_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(PackageEngineError::Io)?;
+    if bytes.len() as u64 != declared_size || bytes.len() as u64 > MAXIMUM_PACKAGE_METADATA_BYTES {
+        return Err(PackageEngineError::InvalidPackage(
+            "package metadata size differs from its declared size",
+        ));
+    }
+
+    let metadata: PackageArchiveMetadata = serde_json::from_slice(&bytes)
+        .map_err(|_| PackageEngineError::InvalidPackage("package metadata JSON is invalid"))?;
+    if metadata.format_version != PACKAGE_FORMAT_VERSION
+        || metadata.package_id != expected_package_id
+        || metadata.version != expected_version
+    {
+        return Err(PackageEngineError::InvalidPackage(
+            "package metadata does not match the requested signed release",
+        ));
+    }
+    Ok(metadata_index)
 }
 
 fn validate_archive_path(raw_name: &str) -> Result<PathBuf, PackageEngineError> {
