@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.5
+// Version: 0.2.6
 // Aciklama: HTTPS release intake, package build, install/update/rollback, paket listesi, deployment dogrulamasi ve kurulu uygulamayi baslatma icin headless CLI'dir
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -67,6 +67,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     if std::env::args().nth(1).as_deref() == Some("recover") {
         return recover_command().await;
+    }
+    if std::env::args().nth(1).as_deref() == Some("uninstall") {
+        return uninstall_command().await;
     }
     let (operation, values) = parse_arguments()?;
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
@@ -493,6 +496,47 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
         .into());
     }
 
+    if entry.operation == InstallerOperationType::Uninstall {
+        let has_quarantine = deployment.has_uninstall_quarantine(&package_id)?;
+        match (installed.as_ref(), active.as_ref(), has_quarantine) {
+            (Some(installed), Some(active), false)
+                if installed.version() == active.version()
+                    && installed.target_path().eq_ignore_ascii_case(&target_argument) =>
+            {
+                deployment.verify_current(&package_id)?.ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "Active deployment is missing.")
+                })?;
+                journal.delete(&package_id).await?;
+                println!("Uninstall did not move the managed deployment; pending record cleared.");
+            }
+            (Some(installed), None, true)
+                if installed.target_path().eq_ignore_ascii_case(&target_argument) =>
+            {
+                state.delete(&package_id).await?;
+                deployment.finish_uninstall(&package_id)?;
+                journal.delete(&package_id).await?;
+                println!("Recovered interrupted uninstall and removed managed package files.");
+            }
+            (None, None, true) => {
+                deployment.finish_uninstall(&package_id)?;
+                journal.delete(&package_id).await?;
+                println!("Recovered uninstall cleanup and removed the pending record.");
+            }
+            (None, None, false) => {
+                journal.delete(&package_id).await?;
+                println!("Package is already absent; stale uninstall record removed.");
+            }
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Interrupted uninstall state is ambiguous; no files or state were changed.",
+                )
+                .into());
+            }
+        }
+        return Ok(());
+    }
+
     match (installed, active) {
         (Some(installed), Some(active)) => {
             if !installed
@@ -581,6 +625,79 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
             .into());
         }
     }
+    Ok(())
+}
+
+async fn uninstall_command() -> Result<(), Box<dyn Error>> {
+    let mut arguments = std::env::args().skip(2).peekable();
+    if arguments
+        .peek()
+        .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
+    {
+        println!(
+            "Usage: turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES"
+        );
+        return Ok(());
+    }
+    let mut values = HashMap::new();
+    while let Some(flag) = arguments.next() {
+        let Some(key) = flag.strip_prefix("--") else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Uninstall options must use --name value form.",
+            )
+            .into());
+        };
+        let value = arguments.next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing.")
+        })?;
+        if values.insert(key.to_owned(), value).is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "An option was provided more than once.",
+            )
+            .into());
+        }
+    }
+    let allowed = ["package-id", "target", "data-root", "confirm-uninstall"];
+    if values.keys().any(|key| !allowed.contains(&key.as_str())) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "An unknown uninstall option was provided.",
+        )
+        .into());
+    }
+    if required(&values, "confirm-uninstall")? != "YES" {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Uninstall requires --confirm-uninstall YES.",
+        )
+        .into());
+    }
+
+    let package_id = PackageId::parse(required(&values, "package-id")?)?;
+    let target_directory = absolute_path(Path::new(required(&values, "target")?.trim()))?;
+    let target_path = target_directory.to_string_lossy().into_owned();
+    let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
+    let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
+    let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
+        data_root.join("journal"),
+    )?);
+    let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
+        data_root.join("state"),
+    )?);
+    let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
+        target_directory.join(".turkuaz-installer"),
+    )?);
+    let workflow = InstallWorkflow::new(InstallWorkflowOptions::new(
+        lock,
+        Some(journal),
+        state,
+        deployment,
+        data_root.join("staging"),
+    )?);
+    workflow.uninstall(&package_id, &target_path).await?;
+    println!("Uninstalled package={package_id}");
     Ok(())
 }
 
@@ -930,7 +1047,7 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
             println!(
                 "Usage:
   turkuaz-installer <install|update|rollback> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
-  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
+  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
             );
             process::exit(0);
         }
