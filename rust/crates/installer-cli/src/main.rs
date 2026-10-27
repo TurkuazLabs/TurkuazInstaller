@@ -275,7 +275,7 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
     }
 
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
-    let target_argument = required(&values, "target")?;
+    let target_argument = required(&values, "target")?.trim();
     let target_directory = absolute_path(Path::new(target_argument))?;
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
     let executable_relative = required(&values, "executable")?;
