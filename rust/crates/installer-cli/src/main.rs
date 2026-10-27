@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.0
-// Aciklama: HTTPS release intake, package build, install/update/rollback ve kurulu deployment dogrulamasi icin headless CLI'dir
+// Version: 0.2.1
+// Aciklama: HTTPS release intake, package build, install/update/rollback, paket listesi ve kurulu deployment dogrulamasi icin headless CLI'dir
 // Bagimli Oldugu Katman: Application | Tool
 
 use std::{
@@ -54,6 +54,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     if std::env::args().nth(1).as_deref() == Some("verify") {
         return verify_command().await;
+    }
+    if std::env::args().nth(1).as_deref() == Some("list") {
+        return list_command().await;
     }
     let (operation, values) = parse_arguments()?;
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
@@ -215,6 +218,67 @@ fn build_package_command() -> Result<(), Box<dyn Error>> {
         PackageExtractionLimits::default(),
     )?;
     println!("Built package: {}", output.display());
+    Ok(())
+}
+
+async fn list_command() -> Result<(), Box<dyn Error>> {
+    let mut arguments = std::env::args().skip(2).peekable();
+    if arguments
+        .peek()
+        .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
+    {
+        println!("Usage: turkuaz-installer list --data-root DIR");
+        return Ok(());
+    }
+
+    let mut values = HashMap::new();
+    while let Some(flag) = arguments.next() {
+        let Some(key) = flag.strip_prefix("--") else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "List options must use --name value form.",
+            )
+            .into());
+        };
+        let value = arguments.next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing.")
+        })?;
+        if values.insert(key.to_owned(), value).is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "An option was provided more than once.",
+            )
+            .into());
+        }
+    }
+    if values.keys().any(|key| key != "data-root") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "An unknown list option was provided.",
+        )
+        .into());
+    }
+
+    let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
+    let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
+        data_root.join("state"),
+    )?);
+    let mut installed = state.list().await?;
+    installed.sort_by(|left, right| left.package_id().as_str().cmp(right.package_id().as_str()));
+
+    if installed.is_empty() {
+        println!("No installed packages.");
+        return Ok(());
+    }
+    for package in installed {
+        println!(
+            "{}\t{}\t{:?}\t{}",
+            package.package_id(),
+            package.version(),
+            package.channel(),
+            package.target_path()
+        );
+    }
     Ok(())
 }
 
