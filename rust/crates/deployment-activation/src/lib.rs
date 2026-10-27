@@ -227,13 +227,11 @@ impl VersionedDeploymentStore {
         ensure_existing_directory(&versions_root)?;
         let directory = self.version_directory(package_id, version);
         ensure_existing_directory(&directory)?;
-        let entry_point = self
-            .current(package_id)?
-            .and_then(|active| {
-                (active.previous_version.as_ref() == Some(version))
-                    .then(|| active.previous_entry_point)
-                    .flatten()
-            });
+        let entry_point = self.current(package_id)?.and_then(|active| {
+            (active.previous_version.as_ref() == Some(version))
+                .then(|| active.previous_entry_point)
+                .flatten()
+        });
         self.activate_published(package_id, version, &directory, entry_point)
     }
 
@@ -415,7 +413,9 @@ struct ActiveDeploymentDocument {
     previous_entry_point: Option<String>,
 }
 
-fn validate_entry_point(value: Option<String>) -> Result<Option<String>, DeploymentActivationError> {
+fn validate_entry_point(
+    value: Option<String>,
+) -> Result<Option<String>, DeploymentActivationError> {
     let Some(value) = value else {
         return Ok(None);
     };
