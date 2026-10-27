@@ -379,18 +379,13 @@ fn read_and_validate_package_metadata(
     expected_package_id: &str,
     expected_version: &str,
 ) -> Result<usize, PackageEngineError> {
-    let metadata_index = archive
-        .index_for_name(PACKAGE_METADATA_ENTRY)
-        .ok_or(PackageEngineError::InvalidPackage(
-            "package metadata entry is missing",
-        ))?;
+    let metadata_index = archive.index_for_name(PACKAGE_METADATA_ENTRY).ok_or(
+        PackageEngineError::InvalidPackage("package metadata entry is missing"),
+    )?;
     let mut entry = archive
         .by_index(metadata_index)
         .map_err(PackageEngineError::Archive)?;
-    if !entry.is_file()
-        || entry.is_symlink()
-        || entry.size() > MAXIMUM_PACKAGE_METADATA_BYTES
-    {
+    if !entry.is_file() || entry.is_symlink() || entry.size() > MAXIMUM_PACKAGE_METADATA_BYTES {
         return Err(PackageEngineError::InvalidPackage(
             "package metadata entry is not a bounded regular file",
         ));
