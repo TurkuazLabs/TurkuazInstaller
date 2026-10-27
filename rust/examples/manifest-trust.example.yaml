@@ -1,0 +1,12 @@
+# Dosya Yolu: REPO_ROOT/rust/examples/manifest-trust.example.yaml
+# Amac: Development CLI icin package-scoped dis manifest signer trust store ornegi
+# Modul - YAML Example
+# Version: 0.1.0
+# Aciklama: Degerler bilerek ornek/uyumsuzdur; gercek publisher ve sertifika SHA-256 piniyle degistirilmelidir
+# Bagimli Oldugu Katman: Config | Documentation
+
+schema_version: 1
+packages:
+  - id: example.product
+    publisher_subject: "CN=Example Publisher,O=Example Organization,C=US"
+    certificate_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
