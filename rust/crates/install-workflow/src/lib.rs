@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/install-workflow/src/lib.rs
 // Amac: Verified full package'i stage edip versioned deployment ve installed state akisina baglamak
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: Package-scoped lock altinda install/update state gecislerini orkestre eder
 // Bagimli Oldugu Katman: Service
 
@@ -51,6 +51,7 @@ pub enum InstallWorkflowError {
     RollbackNotAllowed,
     PreviousVersionUnavailable,
     ActivationCompensationFailed(String, String),
+    UninstallHasPendingOperation,
 }
 
 impl fmt::Display for InstallWorkflowError {
@@ -101,6 +102,9 @@ impl fmt::Display for InstallWorkflowError {
                 formatter,
                 "State persistence failed ({state_error}) and activation rollback also failed ({activation_error})."
             ),
+            Self::UninstallHasPendingOperation => formatter.write_str(
+                "A journaled operation is pending; recover it before uninstalling this package.",
+            ),
         }
     }
 }
@@ -125,7 +129,8 @@ impl Error for InstallWorkflowError {
             | Self::CurrentReleaseMismatch
             | Self::RollbackNotAllowed
             | Self::PreviousVersionUnavailable
-            | Self::ActivationCompensationFailed(_, _) => None,
+            | Self::ActivationCompensationFailed(_, _)
+            | Self::UninstallHasPendingOperation => None,
         }
     }
 }
@@ -339,6 +344,95 @@ impl InstallWorkflow {
         let _ = fs::remove_dir_all(&stage_directory);
         context.complete().await;
         Ok(active)
+    }
+
+    /// @dev-id TIZ-WORKFLOW-UNINSTALL-010
+    /// @purpose Remove only the package deployment managed by this installer.
+    /// @reason Uninstall must preserve unrelated target files and recover safely after interruption.
+    /// @contract Requires explicit CLI confirmation, a matching installed target, a consistent active version, and no pending journal; quarantines the package root, removes installed state, then deletes the quarantine.
+    /// @depends Package lock, operation journal, installed-state repository, and versioned deployment store.
+    pub async fn uninstall(
+        &self,
+        package_id: &turkuaz_installer_domain::package_id::PackageId,
+        target_path: &str,
+    ) -> Result<(), InstallWorkflowError> {
+        let target_path = target_path.trim();
+        if target_path.is_empty() {
+            return Err(InstallWorkflowError::Io(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Uninstall target path cannot be empty",
+            )));
+        }
+
+        let _lock_lease = acquire_package_lock(&self.options.lock, package_id)
+            .map_err(InstallWorkflowError::Lock)?;
+        let installed = self
+            .options
+            .state
+            .get(package_id)
+            .await
+            .map_err(InstallWorkflowError::State)?
+            .ok_or(InstallWorkflowError::NotInstalled)?;
+        if !installed.target_path().eq_ignore_ascii_case(target_path) {
+            return Err(InstallWorkflowError::TargetPathChanged);
+        }
+        let active = self
+            .options
+            .deployment
+            .current(package_id)
+            .map_err(InstallWorkflowError::Activation)?
+            .ok_or(InstallWorkflowError::ActiveAndInstalledStateMismatch)?;
+        if active.version() != installed.version() {
+            return Err(InstallWorkflowError::ActiveAndInstalledStateMismatch);
+        }
+        if let Some(journal) = &self.options.journal {
+            let pending = journal.get(package_id).await.map_err(|error| {
+                InstallWorkflowError::Io(io::Error::other(error.to_string()))
+            })?;
+            if pending.is_some() {
+                return Err(InstallWorkflowError::UninstallHasPendingOperation);
+            }
+        }
+
+        let mut context = InstallerOperationContext::start(
+            package_id.clone(),
+            InstallerOperationType::Uninstall,
+            None,
+            target_path.to_owned(),
+            self.options.journal.clone(),
+        )
+        .await;
+        context.set_phase(InstallerOperationPhase::Applying).await;
+        if let Err(error) = self
+            .options
+            .deployment
+            .begin_uninstall(package_id, installed.version())
+        {
+            context.fail(&error.to_string()).await;
+            return Err(InstallWorkflowError::Activation(error));
+        }
+
+        context
+            .set_phase(InstallerOperationPhase::SavingState)
+            .await;
+        if let Err(state_error) = self.options.state.delete(package_id).await {
+            let restore = self.options.deployment.restore_uninstall(package_id);
+            context.fail(&state_error.to_string()).await;
+            if let Err(restore_error) = restore {
+                return Err(InstallWorkflowError::ActivationCompensationFailed(
+                    state_error.to_string(),
+                    restore_error.to_string(),
+                ));
+            }
+            return Err(InstallWorkflowError::State(state_error));
+        }
+
+        if let Err(error) = self.options.deployment.finish_uninstall(package_id) {
+            context.fail(&error.to_string()).await;
+            return Err(InstallWorkflowError::Activation(error));
+        }
+        context.complete().await;
+        Ok(())
     }
 
     /// @dev-id TIZ-WORKFLOW-ROLLBACK-010
