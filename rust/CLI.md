@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.1.2
+Version: 0.1.3
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -44,6 +44,19 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- rollback \
   --target ./installed-app \
   --data-root ./installer-data
 ```
+
+## Verify installed files
+
+After installation or update, compare the active deployment's files with the inventory recorded at publication:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- verify \
+  --package-id example.product \
+  --target ./installed-app \
+  --data-root ./installer-data
+```
+
+The command holds the package operation lock, checks installed state against the active version, and hashes every regular file. It detects additions, removals, and size/content changes relative to the local inventory. The inventory is stored alongside the versioned deployment and is not a cryptographic trust root; this check does not replace signed manifest or artifact verification.
 
 ## Build a package
 
