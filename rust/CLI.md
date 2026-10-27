@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.1.3
+Version: 0.1.4
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -44,6 +44,17 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- rollback \
   --target ./installed-app \
   --data-root ./installer-data
 ```
+
+## List installed packages
+
+Show the installed package ID, version, release channel, and target path recorded in the configured data root:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- list \
+  --data-root ./installer-data
+```
+
+This is a read-only view of the installed-state repository. It prints one tab-separated row per package and reports an empty list when none are installed.
 
 ## Verify installed files
 
