@@ -201,3 +201,27 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- install-bu
 ```
 
 Use `--operation update` for a higher signed version, `repair` for the currently installed version, or `rollback` to restore the previous recorded deployment under the signed rollback policy. The installer rechecks the external trust policy, package digest, optional Authenticode signature, and package archive before activation. The bundle format accepts only its fixed, bounded entries and extracts them into temporary staging under the data root. A graphical bootstrapper, paired NSIS backup, and automated production signing/publishing are still pending.
+
+## Self-extracting Windows setup
+
+Package a verified offline bundle behind a Windows CLI executable stub:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-self-extracting-setup \
+  --stub ./rust/target/release/turkuaz-installer.exe \
+  --bundle ./TurkuazSetup.tzsetup \
+  --output ./TurkuazSetup.exe
+```
+
+The `.exe` stores the bundle after the stub with a fixed footer, bounded length, and SHA-256. The stub can extract its own payload and invoke the same signed bundle workflow:
+
+```sh
+TurkuazSetup.exe install-self \
+  --package-id example.product \
+  --trust-store ./manifest-trust.yaml \
+  --target ./installed-app \
+  --data-root ./installer-data \
+  --operation install
+```
+
+The signer trust policy remains an explicit external input. This first Windows setup is command-line driven and must be Authenticode-signed after the final payload is attached for production distribution. The GUI, automated signing/publishing, and paired NSIS backup are still pending.
