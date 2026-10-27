@@ -18,11 +18,7 @@ use sha2::{Digest, Sha256};
 use turkuaz_installer_artifact_validation::VerifiedArtifact;
 use turkuaz_installer_domain::release::PackageRelease;
 use uuid::Uuid;
-use zip::{
-    CompressionMethod, ZipArchive, ZipWriter,
-    result::ZipError,
-    write::SimpleFileOptions,
-};
+use zip::{CompressionMethod, ZipArchive, ZipWriter, result::ZipError, write::SimpleFileOptions};
 
 const BUNDLE_FORMAT_VERSION: u32 = 1;
 const BUNDLE_METADATA_ENTRY: &str = "bundle.json";
@@ -51,9 +47,8 @@ impl fmt::Display for SetupBundleError {
             Self::Archive(error) => write!(formatter, "Setup bundle archive failed: {error}"),
             Self::Json(error) => write!(formatter, "Setup bundle metadata is invalid: {error}"),
             Self::InvalidBundle(message) => write!(formatter, "Setup bundle is invalid: {message}"),
-            Self::ArtifactChanged => formatter.write_str(
-                "Verified package changed while the setup bundle was being written.",
-            ),
+            Self::ArtifactChanged => formatter
+                .write_str("Verified package changed while the setup bundle was being written."),
         }
     }
 }
@@ -173,8 +168,7 @@ pub fn write_setup_bundle(
     }
 
     let artifact_path = verified_artifact.path();
-    let artifact_metadata =
-        fs::symlink_metadata(artifact_path).map_err(SetupBundleError::Io)?;
+    let artifact_metadata = fs::symlink_metadata(artifact_path).map_err(SetupBundleError::Io)?;
     if !artifact_metadata.file_type().is_file()
         || artifact_metadata.len() != release.artifact().size_bytes()
     {
@@ -276,9 +270,7 @@ pub fn extract_setup_bundle(
         ];
         let mut indices = HashMap::new();
         for index in 0..archive.len() {
-            let entry = archive
-                .by_index(index)
-                .map_err(SetupBundleError::Archive)?;
+            let entry = archive.by_index(index).map_err(SetupBundleError::Archive)?;
             let name = entry.name();
             if !allowed.contains(&name) || entry.is_dir() {
                 return Err(SetupBundleError::InvalidBundle(
@@ -383,9 +375,7 @@ fn write_entry(
     archive
         .start_file(name, options)
         .map_err(SetupBundleError::Archive)?;
-    archive
-        .write_all(contents)
-        .map_err(SetupBundleError::Io)
+    archive.write_all(contents).map_err(SetupBundleError::Io)
 }
 
 fn write_artifact_entry(
