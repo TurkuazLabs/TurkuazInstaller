@@ -29,7 +29,9 @@ impl fmt::Display for SetupExecutableError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(error) => write!(formatter, "Self-extracting setup I/O failed: {error}"),
-            Self::InvalidSetup(message) => write!(formatter, "Self-extracting setup is invalid: {message}"),
+            Self::InvalidSetup(message) => {
+                write!(formatter, "Self-extracting setup is invalid: {message}")
+            }
         }
     }
 }
@@ -130,11 +132,15 @@ pub fn create_self_extracting_setup(
             bundle_metadata.len(),
             "setup bundle changed while being copied",
         )?;
-        output.write_all(&FOOTER_MAGIC).map_err(SetupExecutableError::Io)?;
+        output
+            .write_all(&FOOTER_MAGIC)
+            .map_err(SetupExecutableError::Io)?;
         output
             .write_all(&bundle_metadata.len().to_le_bytes())
             .map_err(SetupExecutableError::Io)?;
-        output.write_all(&digest).map_err(SetupExecutableError::Io)?;
+        output
+            .write_all(&digest)
+            .map_err(SetupExecutableError::Io)?;
         output.sync_all().map_err(SetupExecutableError::Io)
     })();
     if result.is_err() {
@@ -167,9 +173,7 @@ pub fn extract_embedded_setup_bundle(
     }
 
     let mut executable = fs::File::open(executable_path).map_err(SetupExecutableError::Io)?;
-    let opened_metadata = executable
-        .metadata()
-        .map_err(SetupExecutableError::Io)?;
+    let opened_metadata = executable.metadata().map_err(SetupExecutableError::Io)?;
     if !opened_metadata.is_file() || opened_metadata.len() != executable_metadata.len() {
         return Err(SetupExecutableError::InvalidSetup(
             "self-extracting executable changed while being opened",
