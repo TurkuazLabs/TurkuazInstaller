@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.2.0
+Version: 0.3.0
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -33,7 +33,21 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- install \
   --data-root ./installer-data
 ```
 
-Use `update` instead of `install` to require a previously installed package and a strictly higher SemVer version. Manifest and detached signature URLs must use HTTPS. The artifact URL in the signed release may use HTTPS or a local `file:` URI according to the artifact transfer contract.
+Use `update` instead of `install` to require a previously installed package and a strictly higher SemVer version. `repair` re-fetches the signed package for the currently installed version, verifies the artifact, builds a new immutable deployment, and atomically switches the active record. It does not modify the existing deployment in place. Manifest and detached signature URLs must use HTTPS. The artifact URL in the signed release may use HTTPS or a local `file:` URI according to the artifact transfer contract.
+
+Repair a package by passing the signed manifest and detached signature for its installed version:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- repair \\
+  --package-id example.product \\
+  --manifest-url https://updates.example.test/channel.yaml \\
+  --signature-url https://updates.example.test/channel.yaml.p7s \\
+  --trust-store ./manifest-trust.yaml \\
+  --target ./installed-app \\
+  --data-root ./installer-data
+```
+
+The package ID, installed version, and target path must match local state. If a repair is interrupted, run `recover` before retrying.
 
 To roll back, pass the signed manifest and detached signature for the currently installed version. The signed rollback policy must allow rollback, and the active deployment must have a previous version recorded. Rollback does not download an artifact:
 
@@ -154,6 +168,6 @@ The Rust Migration CI workflow builds `turkuaz-installer-cli-development-windows
 
 ## Current limits
 
-This development command rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It does not offer progress/cancellation, recover interrupted operations at startup, or remove old deployment versions. It accepts first install, forward update, and policy-gated rollback. Rollback requires the signed current release policy and selects only the previous recorded activation. Repair is not implemented.
+This development command rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It does not offer progress/cancellation, recover interrupted operations at startup, or automatically remove unreferenced deployment directories. It accepts first install, forward update, same-version repair, and policy-gated rollback. Rollback requires the signed current release policy and selects only the previous recorded activation.
 
 The current binary is headless. It is not a GUI, self-extracting setup, signed release artifact, or production distribution. No Rust tests were run; consult the latest Rust Migration CI run for current format and compilation status.
