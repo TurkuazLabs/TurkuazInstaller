@@ -161,11 +161,13 @@ pub fn build_full_package_with_entry_point(
         limits,
     )?;
     if let Some(entry_point) = entry_point {
-        let relative = validate_archive_path(entry_point).map_err(|_| {
-            PackageBuildError::InvalidPackage("package entry point path is unsafe")
-        })?;
+        let relative = validate_archive_path(entry_point)
+            .map_err(|_| PackageBuildError::InvalidPackage("package entry point path is unsafe"))?;
         let key = relative.to_string_lossy().replace('\\', "/").to_lowercase();
-        if !entry_kinds.get(&key).is_some_and(|is_directory| !*is_directory) {
+        if !entry_kinds
+            .get(&key)
+            .is_some_and(|is_directory| !*is_directory)
+        {
             return Err(PackageBuildError::InvalidPackage(
                 "package entry point must name a regular file in the source directory",
             ));
