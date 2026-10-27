@@ -1,0 +1,24 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/artifact-validation/Cargo.toml
+# Amac: Indirilen artifact icin integrity ve publisher imza kapilarini siralamak
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Yalniz dogrulanmis artifact icin VerifiedArtifact tokeni uretir
+# Bagimli Oldugu Katman: Service | Tool
+
+[package]
+name = "turkuaz-installer-artifact-validation"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+tokio.workspace = true
+turkuaz-installer-artifact-transfer = { path = "../artifact-transfer" }
+turkuaz-installer-artifact-verification = { path = "../artifact-verification" }
+turkuaz-installer-authenticode-verification = { path = "../authenticode-verification" }
+turkuaz-installer-domain = { path = "../domain" }
+
+[lib]
+name = "turkuaz_installer_artifact_validation"
+path = "src/lib.rs"
