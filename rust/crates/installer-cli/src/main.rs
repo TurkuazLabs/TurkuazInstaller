@@ -273,8 +273,8 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
     }
 
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
-    let target_argument = required(&values, "target")?.trim();
-    let target_directory = absolute_path(Path::new(target_argument))?;
+    let target_directory = absolute_path(Path::new(required(&values, "target")?.trim()))?;
+    let target_argument = target_directory.to_string_lossy().into_owned();
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
     let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let _lock_lease = turkuaz_installer_operation_lock::acquire_package_lock(&lock, &package_id)
@@ -468,8 +468,8 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
     }
 
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
-    let target_argument = required(&values, "target")?.trim();
-    let target_directory = absolute_path(Path::new(target_argument))?;
+    let target_directory = absolute_path(Path::new(required(&values, "target")?.trim()))?;
+    let target_argument = target_directory.to_string_lossy().into_owned();
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
     let executable_relative = required(&values, "executable")?;
     let executable_relative_path = Path::new(executable_relative);
@@ -681,7 +681,8 @@ async fn verify_command() -> Result<(), Box<dyn Error>> {
     }
 
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
-    let target_directory = absolute_path(Path::new(required(&values, "target")?))?;
+    let target_directory = absolute_path(Path::new(required(&values, "target")?.trim()))?;
+    let target_argument = target_directory.to_string_lossy().into_owned();
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
     let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let _lock_lease = turkuaz_installer_operation_lock::acquire_package_lock(&lock, &package_id)
@@ -691,6 +692,17 @@ async fn verify_command() -> Result<(), Box<dyn Error>> {
         data_root.join("state"),
     )?);
     let installed = state.get(&package_id).await?;
+    if installed.as_ref().is_some_and(|installed| {
+        !installed
+            .target_path()
+            .eq_ignore_ascii_case(&target_argument)
+    }) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Target path does not match the installed package state.",
+        )
+        .into());
+    }
     let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
         target_directory.join(".turkuaz-installer"),
     )?);
