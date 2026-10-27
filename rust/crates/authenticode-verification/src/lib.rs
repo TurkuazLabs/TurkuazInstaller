@@ -84,10 +84,10 @@ mod windows_authenticode {
 
     use sha2::{Digest, Sha256};
     use windows_sys::Win32::{
-        Foundation::{BOOL, HWND},
+        Foundation::HWND,
         Security::{
             Cryptography::{
-                CERT_CONTEXT, CERT_INFO, CERT_NAME_STR_REVERSE_FLAG, CERT_STRING_TYPE,
+                CERT_CONTEXT, CERT_INFO, CERT_NAME_STR_REVERSE_FLAG,
                 CERT_X500_NAME_STR, CERT_QUERY_CONTENT_FLAG_PKCS7_SIGNED_EMBED,
                 CERT_QUERY_FORMAT_FLAG_BINARY, CERT_QUERY_OBJECT_FILE, CERT_NAME_BLOB,
                 CMSG_SIGNER_COUNT_PARAM, CMSG_SIGNER_INFO, CMSG_SIGNER_INFO_PARAM,
@@ -96,7 +96,7 @@ mod windows_authenticode {
                 PKCS_7_ASN_ENCODING, X509_ASN_ENCODING,
             },
             WinTrust::{
-                WINTRUST_ACTION_GENERIC_VERIFY_V2, WINTRUST_DATA, WINTRUST_DATA_0,
+                WINTRUST_DATA, WINTRUST_DATA_0,
                 WINTRUST_FILE_INFO, WinVerifyTrust, WTD_CHOICE_FILE, WTD_DISABLE_MD2_MD4,
                 WTD_REVOKE_WHOLECHAIN, WTD_REVOCATION_CHECK_CHAIN_EXCLUDE_ROOT,
                 WTD_STATEACTION_IGNORE, WTD_UI_NONE,
@@ -107,6 +107,7 @@ mod windows_authenticode {
     use crate::AuthenticodeVerificationError;
 
     const MAX_SIGNER_INFO_BYTES: u32 = 1_048_576;
+    const GENERIC_VERIFY_V2: windows_sys::core::GUID = windows_sys::core::GUID {\n        data1: 0x00aa_c56b,\n        data2: 0xcd44,\n        data3: 0x11d0,\n        data4: [0x8c, 0xc2, 0x00, 0xc0, 0x4f, 0xc2, 0x95, 0xee],\n    };
 
     struct QueriedMessage {
         store: *mut c_void,
@@ -195,7 +196,7 @@ mod windows_authenticode {
             dwUIContext: 0,
             pSignatureSettings: ptr::null_mut(),
         };
-        let mut action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+        let mut action = GENERIC_VERIFY_V2;
         unsafe {
             // SAFETY: all pointers reference stack-owned structures and a live UTF-16 path
             // for the duration of the synchronous WinVerifyTrust call.
@@ -238,14 +239,14 @@ mod windows_authenticode {
         let handles = QueriedMessage { store, message };
 
         let mut signer_count = 0_u32;
-        let count_read = unsafe {
+        let mut count_size = size_of::<u32>() as u32;\n        let count_read = unsafe {
             // SAFETY: message is a live handle from CryptQueryObject; signer_count is writable.
             CryptMsgGetParam(
                 handles.message,
                 CMSG_SIGNER_COUNT_PARAM,
                 0,
                 (&mut signer_count as *mut u32).cast(),
-                &mut size_of::<u32>() as *mut usize as *mut u32,
+                &mut count_size,
             )
         };
         if count_read == 0 || signer_count != 1 {
@@ -303,7 +304,7 @@ mod windows_authenticode {
             CertNameToStrW(
                 X509_ASN_ENCODING,
                 &cert_info.Subject as *const CERT_NAME_BLOB,
-                CERT_STRING_TYPE(CERT_X500_NAME_STR.0 | CERT_NAME_STR_REVERSE_FLAG),
+                CERT_X500_NAME_STR | CERT_NAME_STR_REVERSE_FLAG,
                 ptr::null_mut(),
                 0,
             )
@@ -317,7 +318,7 @@ mod windows_authenticode {
             CertNameToStrW(
                 X509_ASN_ENCODING,
                 &cert_info.Subject,
-                CERT_STRING_TYPE(CERT_X500_NAME_STR.0 | CERT_NAME_STR_REVERSE_FLAG),
+                CERT_X500_NAME_STR | CERT_NAME_STR_REVERSE_FLAG,
                 subject_buffer.as_mut_ptr(),
                 subject_len,
             )
