@@ -39,6 +39,8 @@ The trust-store file is supplied out of band and must contain a signer policy fo
 
 The requested target directory contains a `.turkuaz-installer` deployment store with immutable package version directories and an active record. The separate data root contains operation locks, journal, installed state, downloads, and temporary package stages. The CLI prints the active package directory after a successful operation.
 
+The Rust Migration CI workflow also builds `turkuaz-installer-cli-development-windows-x64` after the Windows compile passes. GitHub Actions retains that development binary for seven days. It is not the Turkuaz setup and is not a production release.
+
 ## Current limits
 
 This development command does not install prerequisites, create application shortcuts, register Windows integrations, offer progress/cancellation, recover interrupted operations at startup, or remove old deployment versions. It accepts only first install and forward update. It is not a GUI, self-extracting setup, signed release artifact, or production distribution.
