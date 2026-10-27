@@ -7,8 +7,10 @@
 
 mod builder;
 mod format;
+mod setup_bundle;
 
 pub use builder::{PackageBuildError, build_full_package, build_full_package_with_entry_point};
+pub use setup_bundle::{SetupBundleError, SetupBundleFiles, extract_setup_bundle, write_setup_bundle};
 
 use std::{
     collections::HashMap,
