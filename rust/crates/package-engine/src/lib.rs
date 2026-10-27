@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -131,7 +131,11 @@ pub async fn stage_full_package(
         .rsplit('/')
         .next()
         .and_then(|name| Path::new(name).extension())
-        .is_none_or(|extension| !extension.to_string_lossy().eq_ignore_ascii_case(PACKAGE_EXTENSION))
+        .is_none_or(|extension| {
+            !extension
+                .to_string_lossy()
+                .eq_ignore_ascii_case(PACKAGE_EXTENSION)
+        })
     {
         return Err(PackageEngineError::InvalidPackage(
             "custom package artifacts must use the .tzpkg extension",
@@ -367,8 +371,9 @@ fn reject_reserved_windows_name(segment: &str) -> Result<(), PackageEngineError>
         .to_ascii_uppercase();
     let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
         || ["COM", "LPT"].iter().any(|prefix| {
-            stem.strip_prefix(prefix)
-                .is_some_and(|suffix| matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"))
+            stem.strip_prefix(prefix).is_some_and(|suffix| {
+                matches!(suffix, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9")
+            })
         });
     if reserved {
         return Err(PackageEngineError::InvalidPackage(
@@ -381,10 +386,12 @@ fn reject_reserved_windows_name(segment: &str) -> Result<(), PackageEngineError>
 fn validate_entry_conflicts(
     entry_kinds: &HashMap<String, bool>,
 ) -> Result<(), PackageEngineError> {
-    for (path, is_directory) in entry_kinds {
+    for (path, _) in entry_kinds {
         let mut parent = path.as_str();
         while let Some((ancestor, _)) = parent.rsplit_once('/') {
-            if entry_kinds.get(ancestor).is_some_and(|ancestor_is_directory| !ancestor_is_directory)
+            if entry_kinds
+                .get(ancestor)
+                .is_some_and(|ancestor_is_directory| !ancestor_is_directory)
             {
                 return Err(PackageEngineError::InvalidPackage(
                     "package file path conflicts with a parent file",
