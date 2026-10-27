@@ -19,7 +19,11 @@ use turkuaz_installer_artifact_validation::download_and_verify;
 use turkuaz_installer_deployment_activation::{
     DeploymentActivationOptions, VersionedDeploymentStore,
 };
-use turkuaz_installer_domain::{operation::InstallerOperationType, package_id::PackageId};
+use turkuaz_installer_domain::{
+    operation::InstallerOperationType,
+    package_id::PackageId,
+    semantic_version::SemanticVersion,
+};
 use turkuaz_installer_install_state_store::{
     JsonInstallStateRepository, JsonInstallStateRepositoryOptions,
 };
@@ -31,7 +35,9 @@ use turkuaz_installer_operation_journal::{
     JsonOperationJournalRepository, JsonOperationJournalRepositoryOptions,
 };
 use turkuaz_installer_operation_lock::FileOperationLockOptions;
-use turkuaz_installer_package_engine::PackageExtractionLimits;
+use turkuaz_installer_package_engine::{
+    PackageExtractionLimits, build_full_package,
+};
 use url::Url;
 
 #[tokio::main]
@@ -43,6 +49,9 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
+    if std::env::args().nth(1).as_deref() == Some("build-package") {
+        return build_package_command();
+    }
     let (operation, values) = parse_arguments()?;
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
     let manifest_url = parse_https_url(required(&values, "manifest-url")?)?;
@@ -129,6 +138,58 @@ async fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn build_package_command() -> Result<(), Box<dyn Error>> {
+    let mut arguments = std::env::args().skip(2);
+    let mut values = HashMap::new();
+    while let Some(flag) = arguments.next() {
+        let Some(key) = flag.strip_prefix("--") else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Package options must use --name value form.",
+            )
+            .into());
+        };
+        let value = arguments.next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing.")
+        })?;
+        if values.insert(key.to_owned(), value).is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "An option was provided more than once.",
+            )
+            .into());
+        }
+    }
+    let allowed = ["package-id", "version", "source", "output"];
+    if values.keys().any(|key| !allowed.contains(&key.as_str())) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "An unknown package option was provided.",
+        )
+        .into());
+    }
+    if values.contains_key("help") || values.contains_key("h") {
+        println!(
+            "Usage: turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg"
+        );
+        return Ok(());
+    }
+
+    let package_id = PackageId::parse(required(&values, "package-id")?)?;
+    let version = SemanticVersion::parse(required(&values, "version")?)?;
+    let source = absolute_path(Path::new(required(&values, "source")?))?;
+    let output = absolute_path(Path::new(required(&values, "output")?))?;
+    build_full_package(
+        source,
+        &package_id,
+        &version,
+        &output,
+        PackageExtractionLimits::default(),
+    )?;
+    println!("Built package: {}", output.display());
+    Ok(())
+}
+
 fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>), io::Error> {
     let mut arguments = std::env::args().skip(1);
     let operation = match arguments.next().as_deref() {
@@ -136,7 +197,9 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
         Some("update") => InstallerOperationType::Update,
         Some("--help" | "-h") => {
             println!(
-                "Usage: turkuaz-installer <install|update> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR"
+                "Usage:
+  turkuaz-installer <install|update> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
+  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg"
             );
             process::exit(0);
         }
