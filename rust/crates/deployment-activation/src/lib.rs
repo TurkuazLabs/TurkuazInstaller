@@ -18,6 +18,9 @@ use turkuaz_installer_domain::{
 use turkuaz_installer_package_engine::PackageStage;
 use uuid::Uuid;
 
+mod integrity;
+pub use integrity::DeploymentIntegrityReport;
+
 const ACTIVE_FILE: &str = "active.json";
 const MAXIMUM_ACTIVE_FILE_BYTES: u64 = 4 * 1024;
 
@@ -28,6 +31,8 @@ pub enum DeploymentActivationError {
     InvalidLayout(&'static str),
     ActiveDeploymentMismatch,
     VersionAlreadyPublished,
+    InvalidInventory(&'static str),
+    IntegrityMismatch,
 }
 
 impl fmt::Display for DeploymentActivationError {
@@ -42,6 +47,12 @@ impl fmt::Display for DeploymentActivationError {
             Self::VersionAlreadyPublished => {
                 formatter.write_str("This package version is already published.")
             }
+            Self::InvalidInventory(message) => {
+                write!(formatter, "Deployment inventory is invalid: {message}")
+            }
+            Self::IntegrityMismatch => formatter.write_str(
+                "Deployment files do not match the recorded integrity inventory.",
+            ),
         }
     }
 }
@@ -51,7 +62,11 @@ impl Error for DeploymentActivationError {
         match self {
             Self::Io(error) => Some(error),
             Self::Json(error) => Some(error),
-            Self::InvalidLayout(_) | Self::ActiveDeploymentMismatch | Self::VersionAlreadyPublished => None,
+            Self::InvalidLayout(_)
+            | Self::ActiveDeploymentMismatch
+            | Self::VersionAlreadyPublished
+            | Self::InvalidInventory(_)
+            | Self::IntegrityMismatch => None,
         }
     }
 }
@@ -165,7 +180,24 @@ impl VersionedDeploymentStore {
             return Err(DeploymentActivationError::Io(error));
         }
 
-        self.activate_published(&package_id, &version, &destination)
+        if let Err(error) = integrity::write_inventory(
+            &package_root,
+            &package_id,
+            &version,
+            &destination,
+        ) {
+            let _ = fs::remove_dir_all(&destination);
+            return Err(error);
+        }
+
+        match self.activate_published(&package_id, &version, &destination) {
+            Ok(active) => Ok(active),
+            Err(error) => {
+                let _ = fs::remove_dir_all(&destination);
+                let _ = integrity::remove_inventory(&package_root, &version);
+                Err(error)
+            }
+        }
     }
 
     /// @dev-id TIZ-DEPLOY-012
