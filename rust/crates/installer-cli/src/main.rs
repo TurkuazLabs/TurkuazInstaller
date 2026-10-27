@@ -213,45 +213,89 @@ async fn run() -> Result<(), Box<dyn Error>> {
 }
 
 
-fn parse_setup_bundle_options(allowed: &[&str]) -> Result<HashMap<String, String>, Box<dyn Error>> {
+
+fn parse_setup_bundle_options(
+    allowed: &[&str],
+) -> Result<HashMap<String, String>, Box<dyn Error>> {
     let mut arguments = std::env::args().skip(2).peekable();
-    if arguments.peek().is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h")) {
+    if arguments
+        .peek()
+        .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
+    {
         return Ok(HashMap::new());
     }
     let mut values = HashMap::new();
     while let Some(flag) = arguments.next() {
         let Some(key) = flag.strip_prefix("--") else {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Options must use --name value form.").into());
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Options must use --name value form.",
+            )
+            .into());
         };
         if !allowed.contains(&key) {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Unknown setup bundle option.").into());
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Unknown setup bundle option.",
+            )
+            .into());
         }
-        let value = arguments.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing."))?;
+        let value = arguments.next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing.")
+        })?;
         if values.insert(key.to_owned(), value).is_some() {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "An option was provided more than once.").into());
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "An option was provided more than once.",
+            )
+            .into());
         }
     }
     Ok(values)
 }
 
-fn read_bounded_local_file(path: &Path, maximum_bytes: usize) -> Result<(Vec<u8>, u64), Box<dyn Error>> {
+fn read_bounded_local_file(
+    path: &Path,
+    maximum_bytes: usize,
+) -> Result<(Vec<u8>, u64), Box<dyn Error>> {
     let metadata = std::fs::symlink_metadata(path)?;
-    if !metadata.file_type().is_file() || metadata.len() == 0 || metadata.len() > maximum_bytes as u64 {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Input must be a bounded, non-empty regular file.").into());
+    if !metadata.file_type().is_file()
+        || metadata.len() == 0
+        || metadata.len() > maximum_bytes as u64
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Input must be a bounded, non-empty regular file.",
+        )
+        .into());
     }
     let mut file = std::fs::File::open(path)?;
     let mut bytes = Vec::with_capacity(metadata.len() as usize);
-    file.take(maximum_bytes as u64 + 1).read_to_end(&mut bytes)?;
+    file.take(maximum_bytes as u64 + 1)
+        .read_to_end(&mut bytes)?;
     if bytes.len() as u64 != metadata.len() || bytes.len() > maximum_bytes {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Input changed or exceeded its size limit while being read.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Input changed or exceeded its size limit while being read.",
+        )
+        .into());
     }
     Ok((bytes, metadata.len()))
 }
 
 async fn build_setup_bundle_command() -> Result<(), Box<dyn Error>> {
-    let values = parse_setup_bundle_options(&["package-id", "manifest", "signature", "trust-store", "package", "output"])?;
+    let values = parse_setup_bundle_options(&[
+        "package-id",
+        "manifest",
+        "signature",
+        "trust-store",
+        "package",
+        "output",
+    ])?;
     if values.is_empty() {
-        println!("Usage: turkuaz-installer build-setup-bundle --package-id ID --manifest FILE.yaml --signature FILE.p7s --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup");
+        println!(
+            "Usage: turkuaz-installer build-setup-bundle --package-id ID --manifest FILE.yaml --signature FILE.p7s --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup"
+        );
         return Ok(());
     }
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
@@ -259,9 +303,12 @@ async fn build_setup_bundle_command() -> Result<(), Box<dyn Error>> {
     let signature_path = absolute_path(Path::new(required(&values, "signature")?))?;
     let package_path = absolute_path(Path::new(required(&values, "package")?))?;
     let output_path = absolute_path(Path::new(required(&values, "output")?))?;
-    let (manifest, manifest_length) = read_bounded_local_file(&manifest_path, MAXIMUM_MANIFEST_BYTES)?;
-    let (signature, signature_length) = read_bounded_local_file(&signature_path, MAXIMUM_DETACHED_SIGNATURE_BYTES)?;
-    let trust_store = YamlManifestTrustPolicyRepository::new(PathBuf::from(required(&values, "trust-store")?))?;
+    let (manifest, manifest_length) =
+        read_bounded_local_file(&manifest_path, MAXIMUM_MANIFEST_BYTES)?;
+    let (signature, signature_length) =
+        read_bounded_local_file(&signature_path, MAXIMUM_DETACHED_SIGNATURE_BYTES)?;
+    let trust_store =
+        YamlManifestTrustPolicyRepository::new(PathBuf::from(required(&values, "trust-store")?))?;
     let mut manifest_source = std::io::Cursor::new(manifest.as_slice());
     let mut signature_source = std::io::Cursor::new(signature.as_slice());
     let release = read_verified_release(
@@ -271,17 +318,30 @@ async fn build_setup_bundle_command() -> Result<(), Box<dyn Error>> {
         Some(signature_length),
         &package_id,
         &trust_store,
-    ).await?;
+    )
+    .await?;
     let artifact = verify_staged_artifact(&package_path, release.artifact()).await?;
     write_setup_bundle(&manifest, &signature, &release, &artifact, &output_path)?;
-    println!("Signed offline setup bundle written: {}", output_path.display());
+    println!(
+        "Signed offline setup bundle written: {}",
+        output_path.display()
+    );
     Ok(())
 }
 
 async fn install_bundle_command() -> Result<(), Box<dyn Error>> {
-    let values = parse_setup_bundle_options(&["package-id", "bundle", "trust-store", "target", "data-root", "operation"])?;
+    let values = parse_setup_bundle_options(&[
+        "package-id",
+        "bundle",
+        "trust-store",
+        "target",
+        "data-root",
+        "operation",
+    ])?;
     if values.is_empty() {
-        println!("Usage: turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair");
+        println!(
+            "Usage: turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair"
+        );
         return Ok(());
     }
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
@@ -289,18 +349,29 @@ async fn install_bundle_command() -> Result<(), Box<dyn Error>> {
         "install" => InstallerOperationType::Install,
         "update" => InstallerOperationType::Update,
         "repair" => InstallerOperationType::Repair,
-        _ => return Err(io::Error::new(io::ErrorKind::InvalidInput, "Bundle operation must be install, update, or repair.").into()),
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Bundle operation must be install, update, or repair.",
+            )
+            .into());
+        }
     };
     let bundle_path = absolute_path(Path::new(required(&values, "bundle")?))?;
     let trust_path = absolute_path(Path::new(required(&values, "trust-store")?))?;
     let target_directory = absolute_path(Path::new(required(&values, "target")?))?;
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
     std::fs::create_dir_all(&data_root)?;
-    let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
     let extraction_directory = data_root.join(format!(".setup-bundle-{}-{nonce}", process::id()));
     let extraction_path = extraction_directory.clone();
     let bundle_path_for_worker = bundle_path.clone();
-    let files = tokio::task::spawn_blocking(move || extract_setup_bundle(bundle_path_for_worker, extraction_path)).await??;
+    let files = tokio::task::spawn_blocking(move || {
+        extract_setup_bundle(bundle_path_for_worker, extraction_path)
+    })
+    .await??;
     let _extraction_guard = SetupBundleExtractionGuard(files.root().to_path_buf());
 
     let manifest = std::fs::read(files.manifest_path())?;
@@ -315,25 +386,51 @@ async fn install_bundle_command() -> Result<(), Box<dyn Error>> {
         Some(signature.len() as u64),
         &package_id,
         &trust_store,
-    ).await?;
-    let verified_artifact = verify_staged_artifact(files.artifact_path(), release.artifact()).await?;
+    )
+    .await?;
+    let verified_artifact =
+        verify_staged_artifact(files.artifact_path(), release.artifact()).await?;
 
     let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
-    let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(data_root.join("journal"))?);
-    let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(data_root.join("state"))?);
-    let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(target_directory.join(".turkuaz-installer"))?);
+    let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
+        data_root.join("journal"),
+    )?);
+    let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
+        data_root.join("state"),
+    )?);
+    let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
+        target_directory.join(".turkuaz-installer"),
+    )?);
     let workflow = InstallWorkflow::new(InstallWorkflowOptions::new(
-        lock, Some(journal), state, deployment, data_root.join("staging"),
+        lock,
+        Some(journal),
+        state,
+        deployment,
+        data_root.join("staging"),
     )?);
     if operation == InstallerOperationType::Repair {
-        let active = workflow.repair(
-            verified_artifact, release, &target_directory.to_string_lossy(), PackageExtractionLimits::default(),
-        ).await?;
-        println!("Repaired package directory: {}", active.directory().display());
+        let active = workflow
+            .repair(
+                verified_artifact,
+                release,
+                &target_directory.to_string_lossy(),
+                PackageExtractionLimits::default(),
+            )
+            .await?;
+        println!(
+            "Repaired package directory: {}",
+            active.directory().display()
+        );
     } else {
-        let active = workflow.install_or_update(
-            verified_artifact, release, operation, &target_directory.to_string_lossy(), PackageExtractionLimits::default(),
-        ).await?;
+        let active = workflow
+            .install_or_update(
+                verified_artifact,
+                release,
+                operation,
+                &target_directory.to_string_lossy(),
+                PackageExtractionLimits::default(),
+            )
+            .await?;
         println!("Active package directory: {}", active.directory().display());
     }
     Ok(())
