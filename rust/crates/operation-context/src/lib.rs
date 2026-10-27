@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/operation-context/src/lib.rs
 // Amac: Installer operation journal checkpoint yasam dongusunu koordine etmek
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: .NET workflow context'inin typed phase ve reboot resume sozlesmesini tasir
 // Bagimli Oldugu Katman: Service
 
@@ -12,9 +12,7 @@ use turkuaz_installer_domain::{
     operation::{InstallerOperationPhase, InstallerOperationType},
     package_id::PackageId,
 };
-use turkuaz_installer_operation_journal::{
-    JournalEntry, JsonOperationJournalRepository,
-};
+use turkuaz_installer_operation_journal::{JournalEntry, JsonOperationJournalRepository};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,8 +91,7 @@ impl InstallerOperationContext {
     ) -> Result<Self, OperationContextError> {
         if !matches!(
             entry.phase,
-            InstallerOperationPhase::AwaitingReboot
-                | InstallerOperationPhase::RebootResumeArmed
+            InstallerOperationPhase::AwaitingReboot | InstallerOperationPhase::RebootResumeArmed
         ) {
             return Err(OperationContextError::ResumePhaseNotSafe);
         }
