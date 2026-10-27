@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.1
-// Aciklama: HTTPS release intake, package build, install/update/rollback, paket listesi ve kurulu deployment dogrulamasi icin headless CLI'dir
+// Version: 0.2.2
+// Aciklama: HTTPS release intake, package build, install/update/rollback, paket listesi, deployment dogrulamasi ve kurulu uygulamayi baslatma icin headless CLI'dir
 // Bagimli Oldugu Katman: Application | Tool
 
 use std::{
@@ -53,6 +53,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     if std::env::args().nth(1).as_deref() == Some("list") {
         return list_command().await;
+    }
+    if std::env::args().nth(1).as_deref() == Some("launch") {
+        return launch_command().await;
     }
     let (operation, values) = parse_arguments()?;
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
@@ -222,6 +225,132 @@ fn build_package_command() -> Result<(), Box<dyn Error>> {
         PackageExtractionLimits::default(),
     )?;
     println!("Built package: {}", output.display());
+    Ok(())
+}
+
+async fn launch_command() -> Result<(), Box<dyn Error>> {
+    let mut arguments = std::env::args().skip(2).peekable();
+    if arguments
+        .peek()
+        .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
+    {
+        println!(
+            "Usage: turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]"
+        );
+        return Ok(());
+    }
+
+    let mut values = HashMap::new();
+    let mut application_arguments = Vec::new();
+    while let Some(flag) = arguments.next() {
+        if flag == "--" {
+            application_arguments.extend(arguments);
+            break;
+        }
+        let Some(key) = flag.strip_prefix("--") else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Launch options must use --name value form; use -- before application arguments.",
+            )
+            .into());
+        };
+        let value = arguments.next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing.")
+        })?;
+        if values.insert(key.to_owned(), value).is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "An option was provided more than once.",
+            )
+            .into());
+        }
+    }
+    let allowed = ["package-id", "target", "data-root", "executable"];
+    if values.keys().any(|key| !allowed.contains(&key.as_str())) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "An unknown launch option was provided.",
+        )
+        .into());
+    }
+
+    let package_id = PackageId::parse(required(&values, "package-id")?)?;
+    let target_directory = absolute_path(Path::new(required(&values, "target")?))?;
+    let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
+    let executable_relative = required(&values, "executable")?;
+    let executable_relative_path = Path::new(executable_relative);
+    if executable_relative_path.is_absolute()
+        || executable_relative.starts_with(['/', '\\'])
+        || executable_relative.contains(':')
+        || executable_relative.contains('\\')
+        || executable_relative_path.components().any(|component| {
+            !matches!(component, std::path::Component::Normal(_))
+        })
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Executable must be a safe relative path using forward slashes.",
+        )
+        .into());
+    }
+
+    let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
+    let _lock_lease = turkuaz_installer_operation_lock::acquire_package_lock(&lock, &package_id)
+        .map_err(|_| io::Error::other("Could not acquire package operation lock."))?;
+    let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
+        data_root.join("state"),
+    )?);
+    let installed = state.get(&package_id).await?.ok_or_else(|| {
+        io::Error::new(io::ErrorKind::NotFound, "Package is not installed.")
+    })?;
+    if !installed
+        .target_path()
+        .eq_ignore_ascii_case(target_directory.to_string_lossy().as_ref())
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Target path does not match the installed package state.",
+        )
+        .into());
+    }
+
+    let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
+        target_directory.join(".turkuaz-installer"),
+    )?);
+    let report = deployment.verify_current(&package_id)?.ok_or_else(|| {
+        io::Error::new(io::ErrorKind::NotFound, "Active deployment is missing.")
+    })?;
+    if report.active().version() != installed.version() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Installed state and active deployment version do not match.",
+        )
+        .into());
+    }
+
+    let canonical_deployment = std::fs::canonicalize(report.active().directory())?;
+    let executable_path = report.active().directory().join(executable_relative_path);
+    let canonical_executable = std::fs::canonicalize(&executable_path)?;
+    if !canonical_executable.starts_with(&canonical_deployment)
+        || !std::fs::metadata(&canonical_executable)?.is_file()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Executable must resolve to a regular file inside the active deployment.",
+        )
+        .into());
+    }
+
+    let child = process::Command::new(&canonical_executable)
+        .args(application_arguments)
+        .current_dir(&canonical_deployment)
+        .spawn()?;
+    println!(
+        "Started package={} version={} pid={}",
+        package_id,
+        report.active().version(),
+        child.id()
+    );
     Ok(())
 }
 
