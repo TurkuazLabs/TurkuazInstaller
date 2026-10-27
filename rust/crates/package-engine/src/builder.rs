@@ -70,6 +70,24 @@ pub fn build_full_package(
     output_file: impl AsRef<Path>,
     limits: PackageExtractionLimits,
 ) -> Result<(), PackageBuildError> {
+    build_full_package_with_entry_point(
+        source_directory,
+        package_id,
+        version,
+        output_file,
+        None,
+        limits,
+    )
+}
+
+pub fn build_full_package_with_entry_point(
+    source_directory: impl AsRef<Path>,
+    package_id: &PackageId,
+    version: &SemanticVersion,
+    output_file: impl AsRef<Path>,
+    entry_point: Option<&str>,
+    limits: PackageExtractionLimits,
+) -> Result<(), PackageBuildError> {
     if limits.maximum_entries == 0
         || limits.maximum_file_bytes == 0
         || limits.maximum_total_bytes == 0
@@ -142,6 +160,17 @@ pub fn build_full_package(
         &mut total_bytes,
         limits,
     )?;
+    if let Some(entry_point) = entry_point {
+        let relative = validate_archive_path(entry_point).map_err(|_| {
+            PackageBuildError::InvalidPackage("package entry point path is unsafe")
+        })?;
+        let key = relative.to_string_lossy().replace('\\', "/").to_lowercase();
+        if !entry_kinds.get(&key).is_some_and(|is_directory| !*is_directory) {
+            return Err(PackageBuildError::InvalidPackage(
+                "package entry point must name a regular file in the source directory",
+            ));
+        }
+    }
     if entries.iter().all(|entry| entry.is_directory) {
         return Err(PackageBuildError::InvalidPackage(
             "package source contains no regular files",
@@ -151,7 +180,11 @@ pub fn build_full_package(
         .map_err(|_| PackageBuildError::InvalidPackage("package source paths conflict"))?;
     entries.sort_by(|left, right| left.archive_path.cmp(&right.archive_path));
 
-    let metadata = PackageArchiveMetadata::new(package_id, version);
+    let metadata = PackageArchiveMetadata::new_with_entry_point(
+        package_id,
+        version,
+        entry_point.map(str::to_owned),
+    );
     let metadata_bytes = serde_json::to_vec(&metadata).map_err(PackageBuildError::Metadata)?;
     let build_result = build_archive(&temporary_file, &metadata_bytes, &entries);
     if let Err(error) = build_result {
