@@ -72,6 +72,8 @@ pub fn create_self_extracting_setup(
             "Windows setup stub does not have an MZ executable header",
         ));
     }
+    stub.seek(SeekFrom::Start(0))
+        .map_err(SetupExecutableError::Io)?;
 
     if !has_extension(bundle_path, "tzsetup") {
         return Err(SetupExecutableError::InvalidSetup(
@@ -269,17 +271,17 @@ fn copy_and_hash(
     let mut hasher = Sha256::new();
     let mut copied = 0_u64;
     let mut buffer = [0_u8; COPY_BUFFER_BYTES];
-    loop {
-        let count = input.read(&mut buffer).map_err(SetupExecutableError::Io)?;
+    while copied < expected_length {
+        let remaining = (expected_length - copied).min(buffer.len() as u64) as usize;
+        let count = input
+            .read(&mut buffer[..remaining])
+            .map_err(SetupExecutableError::Io)?;
         if count == 0 {
             break;
         }
         copied = copied
             .checked_add(count as u64)
             .ok_or(SetupExecutableError::InvalidSetup(changed_message))?;
-        if copied > expected_length {
-            return Err(SetupExecutableError::InvalidSetup(changed_message));
-        }
         output
             .write_all(&buffer[..count])
             .map_err(SetupExecutableError::Io)?;
