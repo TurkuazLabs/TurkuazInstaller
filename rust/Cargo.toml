@@ -15,6 +15,7 @@ members = [
     "crates/artifact-validation",
     "crates/package-engine",
     "crates/deployment-activation",
+    "crates/install-workflow",
     "crates/operation-lock",
     "crates/operation-journal",
     "crates/install-state-store",
