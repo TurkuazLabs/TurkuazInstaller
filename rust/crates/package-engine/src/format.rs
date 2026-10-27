@@ -12,6 +12,7 @@ pub(crate) const PACKAGE_METADATA_ENTRY: &str = "turkuaz-package.json";
 pub(crate) const PACKAGE_PAYLOAD_ROOT: &str = "payload/";
 pub(crate) const MAXIMUM_PACKAGE_METADATA_BYTES: u64 = 64 * 1024;
 pub(crate) const PACKAGE_FORMAT_VERSION: u32 = 1;
+pub(crate) const PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT: u32 = 2;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -34,7 +35,11 @@ impl PackageArchiveMetadata {
         entry_point: Option<String>,
     ) -> Self {
         Self {
-            format_version: PACKAGE_FORMAT_VERSION,
+            format_version: if entry_point.is_some() {
+                PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT
+            } else {
+                PACKAGE_FORMAT_VERSION
+            },
             package_id: package_id.to_string(),
             version: version.to_string(),
             entry_point,
