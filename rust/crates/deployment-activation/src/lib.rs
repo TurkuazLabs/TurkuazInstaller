@@ -264,9 +264,11 @@ impl VersionedDeploymentStore {
     ) -> Result<(), DeploymentActivationError> {
         let package_root = self.package_root(package_id);
         ensure_existing_directory(&package_root)?;
-        let active = self.current(package_id)?.ok_or(
-            DeploymentActivationError::InvalidLayout("active deployment is missing during uninstall"),
-        )?;
+        let active = self
+            .current(package_id)?
+            .ok_or(DeploymentActivationError::InvalidLayout(
+                "active deployment is missing during uninstall",
+            ))?;
         if active.version() != expected_version {
             return Err(DeploymentActivationError::ActiveDeploymentMismatch);
         }
