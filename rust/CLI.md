@@ -111,7 +111,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-pack
   --output ./artifacts/example-product-1.2.3.tzpkg
 ```
 
-The builder rejects unsafe paths and overwriting an existing output. It creates only the `.tzpkg`. Generate an unsigned manifest draft from the finished archive's exact size and SHA-256, then sign it separately:
+The builder rejects unsafe paths and overwriting an existing output. It creates only the `.tzpkg`. Generate an unsigned manifest draft from the finished archive's exact size and SHA-256, then sign it separately.
 
 ## Generate an unsigned release manifest draft
 
