@@ -26,7 +26,7 @@ use turkuaz_installer_install_state_store::{
 use turkuaz_installer_operation_context::InstallerOperationContext;
 use turkuaz_installer_operation_journal::JsonOperationJournalRepository;
 use turkuaz_installer_operation_lock::{
-    FileOperationLockOptions, OperationLockError, OperationLockLease, acquire_package_lock,
+    FileOperationLockOptions, OperationLockError, acquire_package_lock,
 };
 use turkuaz_installer_package_engine::{
     PackageEngineError, PackageExtractionLimits, stage_full_package,
@@ -279,7 +279,7 @@ impl InstallWorkflow {
                 Some(previous) => self
                     .options
                     .deployment
-                    .activate_existing(package_id.as_ref(), previous.version()),
+                    .activate_existing(&package_id, previous.version()),
                 None => self
                     .options
                     .deployment
