@@ -31,7 +31,19 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- install \
   --data-root ./installer-data
 ```
 
-Use `update` instead of `install` to require a previously installed package and a strictly higher SemVer version. Use `rollback` with the signed manifest and detached signature for the currently installed version; the signed rollback policy must allow rollback, and the active deployment must have a previous version recorded. Rollback does not download an artifact. Manifest and detached signature URLs must use HTTPS. The artifact URL in the signed release may use HTTPS or a local `file:` URI according to the artifact transfer contract.
+Use `update` instead of `install` to require a previously installed package and a strictly higher SemVer version. Manifest and detached signature URLs must use HTTPS. The artifact URL in the signed release may use HTTPS or a local `file:` URI according to the artifact transfer contract.
+
+To roll back, pass the signed manifest and detached signature for the currently installed version. The signed rollback policy must allow rollback, and the active deployment must have a previous version recorded. Rollback does not download an artifact:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- rollback \
+  --package-id example.product \
+  --manifest-url https://updates.example.test/channel.yaml \
+  --signature-url https://updates.example.test/channel.yaml.p7s \
+  --trust-store ./manifest-trust.yaml \
+  --target ./installed-app \
+  --data-root ./installer-data
+```
 
 ## Build a package
 
