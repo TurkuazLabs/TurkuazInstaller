@@ -35,7 +35,7 @@ The rollback method requires the caller to provide the signed current release po
 ## Current limits
 
 - Install and forward Update are supported by the CLI; the service also supports policy-gated rollback.
-- The package must be a full `.tzpkg`; delta application is not wired.
+- The package must be a full `.tzpkg`; delta application is not wired. Releases declaring prerequisites, Windows integration actions, or preserved paths are rejected until those adapters are implemented.
 - The deployment directory is selected by caller configuration. The workflow records the requested target path in installed state, but does not create shortcuts or a stable launch entry.
 - Prerequisite checks/installers, Windows registry/shortcut integration, progress events, cancellation, repair, uninstall, and UI integration remain future work.
 - No Rust tests were run for this implementation. CI format and workspace compilation are pending on the branch.
