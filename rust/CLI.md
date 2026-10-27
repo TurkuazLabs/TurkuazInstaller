@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.1.4
+Version: 0.1.5
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -55,6 +55,21 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- list \
 ```
 
 This command holds each package's operation lock and checks that its active deployment version matches installed state. It prints one tab-separated row per package and reports an empty list when none are installed; a missing or mismatched active record is reported as an error.
+
+## Launch the installed application
+
+The v1 package format does not declare an application entry point, so the development CLI requires its relative path explicitly. It checks the package state and active version under the package lock, verifies the active deployment inventory, and starts only a regular file that resolves inside that deployment. Arguments after `--` are passed directly to the process without a shell:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- launch \
+  --package-id example.product \
+  --target ./installed-app \
+  --data-root ./installer-data \
+  --executable bin/app.exe \
+  -- --profile test
+```
+
+Use forward slashes in the relative executable path. The command prints the started process ID. The GUI/start-menu integration and package-declared entry points are not implemented yet.
 
 ## Verify installed files
 
