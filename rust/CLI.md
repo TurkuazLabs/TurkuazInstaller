@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.1.1
+Version: 0.1.2
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -31,7 +31,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- install \
   --data-root ./installer-data
 ```
 
-Use `update` instead of `install` to require a previously installed package and a strictly higher SemVer version. Manifest and detached signature URLs must use HTTPS. The artifact URL in the signed release may use HTTPS or a local `file:` URI according to the artifact transfer contract.
+Use `update` instead of `install` to require a previously installed package and a strictly higher SemVer version. Use `rollback` with the signed manifest and detached signature for the currently installed version; the signed rollback policy must allow rollback, and the active deployment must have a previous version recorded. Rollback does not download an artifact. Manifest and detached signature URLs must use HTTPS. The artifact URL in the signed release may use HTTPS or a local `file:` URI according to the artifact transfer contract.
 
 ## Build a package
 
@@ -57,6 +57,6 @@ The Rust Migration CI workflow builds `turkuaz-installer-cli-development-windows
 
 ## Current limits
 
-This development command rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It does not offer progress/cancellation, recover interrupted operations at startup, or remove old deployment versions. It accepts only first install and forward update; rollback exists only as a service method and requires a signed current release policy. Repair and uninstall are not implemented.
+This development command rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It does not offer progress/cancellation, recover interrupted operations at startup, or remove old deployment versions. It accepts first install, forward update, and policy-gated rollback. Rollback requires the signed current release policy and selects only the previous recorded activation. Repair and uninstall are not implemented.
 
 The current binary is headless. It is not a GUI, self-extracting setup, signed release artifact, or production distribution. No Rust tests were run; consult the latest Rust Migration CI run for current format and compilation status.
