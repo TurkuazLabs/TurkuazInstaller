@@ -134,6 +134,10 @@ impl ActiveDeployment {
         self.previous_version.as_ref()
     }
 
+    pub fn previous_directory(&self) -> Option<&Path> {
+        self.previous_directory.as_deref()
+    }
+
     pub fn entry_point(&self) -> Option<&str> {
         self.entry_point.as_deref()
     }
