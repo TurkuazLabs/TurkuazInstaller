@@ -2,14 +2,14 @@
 Dosya Yolu: REPO_ROOT/rust/DEPLOYMENT_LAYOUT.md
 Amac: Surumlu deployment klasorlerinin ve etkin surum isaretcisinin davranisini tanimlamak
 Modul - Markdown Specification
-Version: 0.3.0
+Version: 0.4.0
 Aciklama: Hazirlama, etkinlestirme ve geri alma icin mevcut dosya sistemi sozlesmesini aciklar
 Bagimli Oldugu Katman: Service | Infrastructure | Documentation
 -->
 
 # Versioned Deployment Layout
 
-Status: implementation draft. The activation crate publishes immutable version directories and atomically replaces the active-version record. First-install, forward-update, rollback, and package-declared launch workflows use this crate. Startup recovery and orphan cleanup are not connected yet; explicit journal-based recovery now completes an interrupted uninstall.
+Status: implementation draft. The activation crate publishes immutable version directories and atomically replaces the active-version record. First-install, forward-update, rollback, and package-declared launch workflows use this crate. Startup recovery and automatic orphan cleanup are not connected yet; explicit journal-based recovery now handles interrupted uninstall and repair operations.
 
 ## Layout
 
@@ -20,19 +20,21 @@ For each validated package ID, the configured trusted deployment root contains:
   active.json
   .uninstall-<package-id>/  (only during an interrupted uninstall)
   integrity/
-    <semantic-version>.json
+    <deployment-directory-key>.json
   versions/
-    <semantic-version>/
+    <semantic-version-or-repair-key>/
       <application payload>
 ```
 
-The active record is bounded JSON:
+The active record is bounded JSON. `directoryKey` and `previousDirectoryKey` are optional for backward compatibility; when present they select validated single path components under `versions/`:
 
 ```json
 {
   "packageId": "example.product",
   "version": "1.2.3",
   "previousVersion": "1.1.0",
+  "directoryKey": "1.2.3",
+  "previousDirectoryKey": "1.1.0",
   "entryPoint": "bin/app.exe",
   "previousEntryPoint": "app.exe"
 }
@@ -45,7 +47,7 @@ The active record is bounded JSON:
 1. A verified package is extracted into a fresh `PackageStage`.
 2. `publish_and_activate` copies only regular files and directories to a unique temporary directory below `versions/`.
 3. It renames that directory to the immutable version path. Existing versions are not overwritten.
-4. It records a bounded JSON inventory of every regular file in `integrity/<semantic-version>.json`, including relative path, byte size, and SHA-256.
+4. It records a bounded JSON inventory of every regular file in `integrity/<deployment-directory-key>.json`, including relative path, byte size, and SHA-256. Legacy active records without directory keys continue to resolve by semantic version.
 5. It writes and syncs a temporary active record, then atomically replaces `active.json` on the same volume.
 6. If inventory creation or activation fails, it attempts to remove the unpublished version and its inventory; a process crash may still leave an inactive orphan for future recovery.
 
@@ -53,6 +55,6 @@ Windows uses `MoveFileExW` with replace-existing and write-through flags for the
 
 ## Recovery boundary
 
-The store resolves `active.json` and verifies that the referenced version directory exists. `verify_current` hashes every regular file and checks the full file set against the saved inventory. This detects local drift when the inventory is unchanged; the inventory is stored beside the deployment and is not itself a cryptographic trust root. The store does not execute files, mutate installed state, write operation checkpoints, clean crash orphans, or automatically roll back. The caller must hold the package-scoped operation lock and coordinate journal/state transitions around activation.
+The store resolves `active.json` and verifies that the referenced immutable deployment directory exists. Repair stages a unique `repair-<id>` directory and switches the active record only after package extraction and inventory creation succeed. `verify_current` hashes every regular file and checks the full file set against the saved inventory. This detects local drift when the inventory is unchanged; the inventory is stored beside the deployment and is not itself a cryptographic trust root. The store does not execute files, mutate installed state, write operation checkpoints, clean crash orphans, or automatically roll back. The caller must hold the package-scoped operation lock and coordinate journal/state transitions around activation.
 
 The install workflow uses this crate for initial install and forward update. This contract is not a claim of complete runtime parity or release readiness.
