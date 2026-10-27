@@ -6,9 +6,7 @@
 // Bagimli Oldugu Katman: Model | Service | Tool
 
 use serde::{Deserialize, Serialize};
-use turkuaz_installer_domain::{
-    package_id::PackageId, semantic_version::SemanticVersion,
-};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 
 pub(crate) const PACKAGE_METADATA_ENTRY: &str = "turkuaz-package.json";
 pub(crate) const PACKAGE_PAYLOAD_ROOT: &str = "payload/";
