@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/builder.rs
 // Amac: Uygulama payload dizinini Turkuaz'in ozel .tzpkg ZIP paketine donusturmek
 // Modul - Rust Package Builder
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: Symlink ve path collision reddi, sinirli kaynak taramasi, gecici dosya ve no-overwrite publish uygular
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -20,7 +20,9 @@ use zip::{
     write::SimpleFileOptions,
 };
 
-use turkuaz_installer_domain::release::PackageRelease;
+use turkuaz_installer_domain::{
+    package_id::PackageId, semantic_version::SemanticVersion,
+};
 
 use crate::{
     format::{PackageArchiveMetadata, PACKAGE_METADATA_ENTRY, PACKAGE_PAYLOAD_ROOT},
@@ -64,7 +66,8 @@ impl Error for PackageBuildError {
 /// @depends Shared package path validation, zip-rs, and UUID temporary names.
 pub fn build_full_package(
     source_directory: impl AsRef<Path>,
-    release: &PackageRelease,
+    package_id: &PackageId,
+    version: &SemanticVersion,
     output_file: impl AsRef<Path>,
     limits: PackageExtractionLimits,
 ) -> Result<(), PackageBuildError> {
@@ -148,7 +151,7 @@ pub fn build_full_package(
         .map_err(|_| PackageBuildError::InvalidPackage("package source paths conflict"))?;
     entries.sort_by(|left, right| left.archive_path.cmp(&right.archive_path));
 
-    let metadata = PackageArchiveMetadata::for_release(release);
+    let metadata = PackageArchiveMetadata::new(package_id, version);
     let metadata_bytes = serde_json::to_vec(&metadata).map_err(PackageBuildError::Metadata)?;
     let build_result = build_archive(&temporary_file, &metadata_bytes, &entries);
     if let Err(error) = build_result {
@@ -188,7 +191,7 @@ fn collect_entries(
     children.sort();
 
     for child in children {
-        if entries.len() >= limits.maximum_entries {
+        if entries.len().saturating_add(2) >= limits.maximum_entries {
             return Err(PackageBuildError::InvalidPackage(
                 "package source exceeds the configured entry count limit",
             ));
