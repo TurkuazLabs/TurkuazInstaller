@@ -2,14 +2,14 @@
 Dosya Yolu: REPO_ROOT/rust/DEPLOYMENT_LAYOUT.md
 Amac: Surumlu deployment klasorlerinin ve etkin surum isaretcisinin davranisini tanimlamak
 Modul - Markdown Specification
-Version: 0.1.1
+Version: 0.2.0
 Aciklama: Hazirlama, etkinlestirme ve geri alma icin mevcut dosya sistemi sozlesmesini aciklar
 Bagimli Oldugu Katman: Service | Infrastructure | Documentation
 -->
 
 # Versioned Deployment Layout
 
-Status: implementation draft. The activation crate publishes immutable version directories and atomically replaces the active-version record. First-install and forward-update workflows use this crate. Startup recovery, orphan cleanup, and launch integration are not connected yet.
+Status: implementation draft. The activation crate publishes immutable version directories and atomically replaces the active-version record. First-install, forward-update, rollback, and package-declared launch workflows use this crate. Startup recovery and orphan cleanup are not connected yet.
 
 ## Layout
 
@@ -31,11 +31,13 @@ The active record is bounded JSON:
 {
   "packageId": "example.product",
   "version": "1.2.3",
-  "previousVersion": "1.1.0"
+  "previousVersion": "1.1.0",
+  "entryPoint": "bin/app.exe",
+  "previousEntryPoint": "app.exe"
 }
 ```
 
-`previousVersion` is the version selected immediately before the current record was written. It is a recovery hint; it does not by itself decide whether rollback is allowed.
+`previousVersion` and `previousEntryPoint` describe the prior activation. The entry point fields are optional so older active records remain readable. A rollback activation moves the selected entry point into `entryPoint` and records the version being left as the new previous entry.
 
 ## Publish and activate
 
