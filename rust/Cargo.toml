@@ -16,6 +16,7 @@ members = [
     "crates/package-engine",
     "crates/deployment-activation",
     "crates/install-workflow",
+    "crates/installer-cli",
     "crates/operation-lock",
     "crates/operation-journal",
     "crates/install-state-store",
