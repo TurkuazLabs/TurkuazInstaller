@@ -46,6 +46,9 @@ pub enum InstallWorkflowError {
     TargetPathChanged,
     UpdateIsNotForward,
     ActiveAndInstalledStateMismatch,
+    CurrentReleaseMismatch,
+    RollbackNotAllowed,
+    PreviousVersionUnavailable,
     ActivationCompensationFailed(String, String),
 }
 
@@ -75,6 +78,15 @@ impl fmt::Display for InstallWorkflowError {
             Self::ActiveAndInstalledStateMismatch => formatter.write_str(
                 "Active deployment and installed package state disagree; recovery is required.",
             ),
+            Self::CurrentReleaseMismatch => formatter.write_str(
+                "Signed current release does not match the installed package state.",
+            ),
+            Self::RollbackNotAllowed => formatter.write_str(
+                "The current signed release policy does not allow rollback.",
+            ),
+            Self::PreviousVersionUnavailable => {
+                formatter.write_str("No previous deployment version is available for rollback.")
+            }
             Self::ActivationCompensationFailed(state_error, activation_error) => write!(
                 formatter,
                 "State persistence failed ({state_error}) and activation rollback also failed ({activation_error})."
@@ -97,6 +109,9 @@ impl Error for InstallWorkflowError {
             | Self::TargetPathChanged
             | Self::UpdateIsNotForward
             | Self::ActiveAndInstalledStateMismatch
+            | Self::CurrentReleaseMismatch
+            | Self::RollbackNotAllowed
+            | Self::PreviousVersionUnavailable
             | Self::ActivationCompensationFailed(_, _) => None,
         }
     }
@@ -300,4 +315,92 @@ impl InstallWorkflow {
         context.complete().await;
         Ok(active)
     }
+
+    /// @dev-id TIZ-WORKFLOW-ROLLBACK-010
+    /// @purpose Roll back to the previous immutable deployment selected by the active record.
+    /// @reason Rollback must follow the signed current release policy and update local installed state with the active pointer.
+    /// @contract Requires an installed state matching current_release and a supported rollback policy; compensates activation if state persistence fails.
+    /// @depends Package lock, current signed release, active deployment history, and installed-state repository.
+    pub async fn rollback(
+        &self,
+        current_release: PackageRelease,
+    ) -> Result<ActiveDeployment, InstallWorkflowError> {
+        let package_id = current_release.package_id().clone();
+        let _lock_lease = acquire_package_lock(&self.options.lock, &package_id)
+            .map_err(InstallWorkflowError::Lock)?;
+        let current_state = self
+            .options
+            .state
+            .get(&package_id)
+            .await
+            .map_err(InstallWorkflowError::State)?
+            .ok_or(InstallWorkflowError::NotInstalled)?;
+        let current_active = self
+            .options
+            .deployment
+            .current(&package_id)
+            .map_err(InstallWorkflowError::Activation)?
+            .ok_or(InstallWorkflowError::ActiveAndInstalledStateMismatch)?;
+
+        if current_state.version() != current_active.version() {
+            return Err(InstallWorkflowError::ActiveAndInstalledStateMismatch);
+        }
+        if current_release.version() != current_state.version() {
+            return Err(InstallWorkflowError::CurrentReleaseMismatch);
+        }
+        if !current_release.rollback().supported() {
+            return Err(InstallWorkflowError::RollbackNotAllowed);
+        }
+        let previous_version = current_active
+            .previous_version()
+            .cloned()
+            .ok_or(InstallWorkflowError::PreviousVersionUnavailable)?;
+
+        let mut context = InstallerOperationContext::start(
+            package_id.clone(),
+            InstallerOperationType::Rollback,
+            Some(previous_version.to_string()),
+            current_state.target_path().to_owned(),
+            self.options.journal.clone(),
+        )
+        .await;
+        context.set_phase(InstallerOperationPhase::Applying).await;
+        let active = match self
+            .options
+            .deployment
+            .activate_existing(&package_id, &previous_version)
+        {
+            Ok(active) => active,
+            Err(error) => {
+                context.fail(&error.to_string()).await;
+                return Err(InstallWorkflowError::Activation(error));
+            }
+        };
+
+        context.set_phase(InstallerOperationPhase::SavingState).await;
+        let previous_state = InstalledPackageState::new(
+            package_id.clone(),
+            previous_version,
+            current_state.channel(),
+            current_state.target_path(),
+        );
+        if let Err(state_error) = self.options.state.save(&previous_state).await {
+            let compensation = self
+                .options
+                .deployment
+                .activate_existing(&package_id, current_active.version());
+            context.fail(&state_error.to_string()).await;
+            if let Err(activation_error) = compensation {
+                return Err(InstallWorkflowError::ActivationCompensationFailed(
+                    state_error.to_string(),
+                    activation_error.to_string(),
+                ));
+            }
+            return Err(InstallWorkflowError::State(state_error));
+        }
+
+        context.complete().await;
+        Ok(active)
+    }
+
 }
