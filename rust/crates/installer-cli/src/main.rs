@@ -139,7 +139,16 @@ async fn run() -> Result<(), Box<dyn Error>> {
 }
 
 fn build_package_command() -> Result<(), Box<dyn Error>> {
-    let mut arguments = std::env::args().skip(2);
+    let mut arguments = std::env::args().skip(2).peekable();
+    if arguments
+        .peek()
+        .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
+    {
+        println!(
+            "Usage: turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg"
+        );
+        return Ok(());
+    }
     let mut values = HashMap::new();
     while let Some(flag) = arguments.next() {
         let Some(key) = flag.strip_prefix("--") else {
@@ -168,13 +177,6 @@ fn build_package_command() -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
-    if values.contains_key("help") || values.contains_key("h") {
-        println!(
-            "Usage: turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg"
-        );
-        return Ok(());
-    }
-
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
     let version = SemanticVersion::parse(required(&values, "version")?)?;
     let source = absolute_path(Path::new(required(&values, "source")?))?;
