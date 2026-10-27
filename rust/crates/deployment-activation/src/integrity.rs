@@ -412,3 +412,14 @@ fn ensure_real_directory(path: &Path) -> Result<(), DeploymentActivationError> {
         Err(error) => Err(DeploymentActivationError::Io(error)),
     }
 }
+
+pub(super) fn remove_inventory(
+    package_root: &Path,
+    version: &SemanticVersion,
+) -> Result<(), DeploymentActivationError> {
+    match fs::remove_file(inventory_path(package_root, version)) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(DeploymentActivationError::Io(error)),
+    }
+}
