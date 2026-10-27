@@ -94,6 +94,29 @@ async fn run() -> Result<(), Box<dyn Error>> {
 
     let data_root = absolute_path(&data_root)?;
     tokio::fs::create_dir_all(&data_root).await?;
+    if operation == InstallerOperationType::Rollback {
+        let target_directory = absolute_path(Path::new(target_path))?;
+        let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
+        let journal = JsonOperationJournalRepository::new(
+            JsonOperationJournalRepositoryOptions::new(data_root.join("journal"))?,
+        );
+        let state = JsonInstallStateRepository::new(
+            JsonInstallStateRepositoryOptions::new(data_root.join("state"))?,
+        );
+        let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
+            target_directory.join(".turkuaz-installer"),
+        )?);
+        let options = InstallWorkflowOptions::new(
+            lock,
+            Some(journal),
+            state,
+            deployment,
+            data_root.join("staging"),
+        )?;
+        let active = InstallWorkflow::new(options).rollback(release).await?;
+        println!("Rolled back to package directory: {}", active.directory().display());
+        return Ok(());
+    }
     let downloader = DefaultArtifactDownloader::new()
         .map_err(|_| io::Error::other("Could not initialize artifact downloader."))?;
     let verified_artifact = download_and_verify(
@@ -197,10 +220,11 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
     let operation = match arguments.next().as_deref() {
         Some("install") => InstallerOperationType::Install,
         Some("update") => InstallerOperationType::Update,
+        Some("rollback") => InstallerOperationType::Rollback,
         Some("--help" | "-h") => {
             println!(
                 "Usage:
-  turkuaz-installer <install|update> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
+  turkuaz-installer <install|update|rollback> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
   turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg"
             );
             process::exit(0);
