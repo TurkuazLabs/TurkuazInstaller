@@ -38,8 +38,8 @@ use turkuaz_installer_operation_journal::{
 };
 use turkuaz_installer_operation_lock::FileOperationLockOptions;
 use turkuaz_installer_package_engine::{
-    PackageExtractionLimits, build_full_package_with_entry_point, extract_setup_bundle,
-    write_setup_bundle,
+    PackageExtractionLimits, build_full_package_with_entry_point, create_self_extracting_setup,
+    extract_embedded_setup_bundle, extract_setup_bundle, write_setup_bundle,
 };
 use url::Url;
 
@@ -52,6 +52,12 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
+    if std::env::args().nth(1).as_deref() == Some("build-self-extracting-setup") {
+        return build_self_extracting_setup_command();
+    }
+    if std::env::args().nth(1).as_deref() == Some("install-self") {
+        return install_self_setup_command().await;
+    }
     if std::env::args().nth(1).as_deref() == Some("build-setup-bundle") {
         return build_setup_bundle_command().await;
     }
@@ -325,6 +331,62 @@ async fn build_setup_bundle_command() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+
+fn build_self_extracting_setup_command() -> Result<(), Box<dyn Error>> {
+    let values = parse_setup_bundle_options(&["stub", "bundle", "output"])?;
+    if values.is_empty() {
+        println!(
+            "Usage: turkuaz-installer build-self-extracting-setup --stub FILE.exe --bundle FILE.tzsetup --output TurkuazSetup.exe"
+        );
+        return Ok(());
+    }
+    let stub_path = absolute_path(Path::new(required(&values, "stub")?))?;
+    let bundle_path = absolute_path(Path::new(required(&values, "bundle")?))?;
+    let output_path = absolute_path(Path::new(required(&values, "output")?))?;
+    create_self_extracting_setup(stub_path, bundle_path, &output_path)?;
+    println!("Self-extracting setup written: {}", output_path.display());
+    Ok(())
+}
+
+async fn install_self_setup_command() -> Result<(), Box<dyn Error>> {
+    let mut values = parse_setup_bundle_options(&[
+        "package-id",
+        "trust-store",
+        "target",
+        "data-root",
+        "operation",
+    ])?;
+    if values.is_empty() {
+        println!(
+            "Usage: TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback"
+        );
+        return Ok(());
+    }
+    let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
+    std::fs::create_dir_all(&data_root)?;
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let embedded_bundle_path = data_root.join(format!(".setup-self-{}-{nonce}.tzsetup", process::id()));
+    let executable_path = std::env::current_exe()?;
+    extract_embedded_setup_bundle(&executable_path, &embedded_bundle_path)?;
+    let _bundle_guard = SetupBundleFileGuard(embedded_bundle_path.clone());
+    values.insert(
+        "bundle".to_owned(),
+        embedded_bundle_path.to_string_lossy().into_owned(),
+    );
+    install_bundle_with_options(values).await
+}
+
+struct SetupBundleFileGuard(PathBuf);
+
+impl Drop for SetupBundleFileGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+
 async fn install_bundle_command() -> Result<(), Box<dyn Error>> {
     let values = parse_setup_bundle_options(&[
         "package-id",
@@ -340,6 +402,12 @@ async fn install_bundle_command() -> Result<(), Box<dyn Error>> {
         );
         return Ok(());
     }
+    install_bundle_with_options(values).await
+}
+
+async fn install_bundle_with_options(
+    values: HashMap<String, String>,
+) -> Result<(), Box<dyn Error>> {
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
     let operation = match required(&values, "operation")? {
         "install" => InstallerOperationType::Install,
@@ -1335,7 +1403,7 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
             println!(
                 "Usage:
   turkuaz-installer <install|update|repair|rollback> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
-  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer build-setup-bundle --package-id ID --manifest FILE --signature FILE --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup\n  turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
+  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer build-setup-bundle --package-id ID --manifest FILE --signature FILE --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup\n  turkuaz-installer build-self-extracting-setup --stub FILE.exe --bundle FILE.tzsetup --output FILE.exe\n  TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
             );
             process::exit(0);
         }
