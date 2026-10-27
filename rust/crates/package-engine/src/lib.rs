@@ -423,7 +423,12 @@ fn read_and_validate_package_metadata(
 
     let metadata: PackageArchiveMetadata = serde_json::from_slice(&bytes)
         .map_err(|_| PackageEngineError::InvalidPackage("package metadata JSON is invalid"))?;
-    if metadata.format_version != PACKAGE_FORMAT_VERSION
+    let metadata_version_is_supported = match metadata.format_version {
+        PACKAGE_FORMAT_VERSION => metadata.entry_point.is_none(),
+        crate::format::PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT => metadata.entry_point.is_some(),
+        _ => false,
+    };
+    if !metadata_version_is_supported
         || metadata.package_id != expected_package_id
         || metadata.version != expected_version
     {
