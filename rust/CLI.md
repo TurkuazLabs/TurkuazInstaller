@@ -43,4 +43,4 @@ The Rust Migration CI workflow also builds `turkuaz-installer-cli-development-wi
 
 ## Current limits
 
-This development command does not install prerequisites, create application shortcuts, register Windows integrations, offer progress/cancellation, recover interrupted operations at startup, or remove old deployment versions. It accepts only first install and forward update. It is not a GUI, self-extracting setup, signed release artifact, or production distribution.
+This development command rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It does not offer progress/cancellation, recover interrupted operations at startup, or remove old deployment versions. It accepts only first install and forward update. It is not a GUI, self-extracting setup, signed release artifact, or production distribution.
