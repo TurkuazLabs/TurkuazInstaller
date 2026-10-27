@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 1.5.0
+Version: 1.6.0
 Aciklama: Mevcut .NET davranisini koruyarak asamali Rust portu icin mimari sinir ve gercek kapsam durumunu belirtir
 Bagimli Oldugu Katman: Documentation
 -->
@@ -25,7 +25,8 @@ Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .N
 - `metadata`: manifest/signature icin 1 MiB / 256 KiB limitler, Content-Length kontrolu ve stream sirasinda bounded read.
 - `artifact-verification`: staged artifact stream'i icin imzali descriptor'daki tam byte boyutu ve SHA-256 kontrolu; asiri uzun stream'de erken kesme.
 - `artifact-transfer`: HTTPS ve `file:` artifactlerini benzersiz staging dizinine stream eder; HTTPS redirect'lerinde HTTPS disina cikmaz, imzali boyut ust sinirini erkenden uygular, exact size kontroluyle `.partial` dosyayi basarili aktarim sonunda atomik adlandirir. Bu crate artifact'i apply etmez.
-- `artifact-validation`: download → tam boyut/SHA-256 → metadata varsa Authenticode siralamasini uygular. Yalniz tum uygulanabilir kapilar basariliysa opaque `VerifiedArtifact` dondurur; dogrulama hatasinda indirilmis dosyayi ve bos staging klasorlerini temizler. Package engine/runtime henuz bu token'i tuketmiyor.
+- `artifact-validation`: download → tam boyut/SHA-256 → metadata varsa Authenticode siralamasini uygular. Yalniz tum uygulanabilir kapilar basariliysa opaque `VerifiedArtifact` dondurur; dogrulama hatasinda indirilmis dosyayi ve bos staging klasorlerini temizler. Custom package engine bu token'i yalnizca staging icin tuketiyor; hedefe kurulum ve etkinlestirme henuz bagli degil.
+- `package-engine`: `.tzpkg` uzantili ozel ZIP payload'larini yalniz dogrulanmis artifact token'iyle staging'e acar. ZIP-slip, Windows'a ozgu path kurallari, buyuk/kucuk harf path cakismasi, duplicate entry, symlink/ozel dosya ve acilmis boyut/sayi sinirlari kontrol edilir. Henüz hedef kurulumuna veya surum etkinlestirmeye gecmez.
 - `operation-lock`: package ID basina OS advisory file lock alir; ayni paketin ikinci process'teki operation'ini fail-fast reddeder, farkli paketlerin islemleri birbirinden bagimsizdir. Process ID ve UTC unix timestamp'i kilit dosyasinda tanilama icin tutulur. Lease dusurulunce lock serbest kalir; dosya inode race'ini onlemek icin bos dosya olarak birakilir.
 - `operation-journal`: typed operation/phase checkpoint'lerini package basina JSON dosyasinda saklar. 1 MiB okuma siniri ve package ID / enum deger dogrulamasi uygular; guncellemeyi ayni dizindeki gecici dosyayi sync edip rename ederek yazar. .NET journal'daki PascalCase alan adlari ve numeric enum sozlesmesi korunur.
 - `install-state-store`: kurulu paket versiyon/channel/target state'ini package basina JSON'da tutar; bounded okuma, deterministik listeleme, typed deger dogrulamasi ve atomik replace uygular. .NET PascalCase property ve numeric ReleaseChannel sozlesmesi korunur.
@@ -37,7 +38,7 @@ Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .N
 - `manifest-parser`: schema v1 YAML alanlarini domain invariant'lariyla eslestirir; bilinmeyen alanlari yok sayar ve taninmayan channel, install mode, shortcut location veya signature algorithm degerlerini reddeder.
 - Community Rust CI Linux format/workspace compile ve Windows workspace compile kapilarini calistirir. .NET CI mevcut Community davranis referansini dogrulamaya devam eder.
 
-Manifest intake typed Rust release modeline ulasir. Artifact dogrulama, operation lock, journal, kurulu-state repository ve operation context ayri crate'lerde bulunur; henüz tek bir install/update workflow'una bagli degiller. Recovery runner, release providerlari, Windows adapterlari, workflow use-case'leri, CLI, WinUI ve paketleme henuz tasinmadi. Rust portu tamamlanmis, release-ready veya mevcut .NET runtime'in yerine gecmis degildir.
+Manifest intake typed Rust release modeline ulasir. Artifact dogrulama ve ozel paket staging motoru eklendi; operation lock, journal, kurulu-state repository ve operation context ayri crate'lerde bulunur. Bu katmanlar henuz tek bir install/update workflow'una bagli degil. Recovery runner, release providerlari, Windows adapterlari, workflow use-case'leri, CLI, WinUI ve paketleme henuz tasinmadi. Rust portu tamamlanmis, release-ready veya mevcut .NET runtime'in yerine gecmis degildir.
 
 ## Migration order
 
@@ -45,10 +46,11 @@ Manifest intake typed Rust release modeline ulasir. Artifact dogrulama, operatio
 2. Manifest bounded input, detached CMS/PKCS#7 signature, external signer trust ve strict YAML parse zincirini port et.
 3. Release providerlari, artifact exact-size transferi, SHA-256 ve Windows Authenticode dogrulamasini port et; bu dogrulamalari install workflow'una bagla.
 4. Package-scoped operation lock, durable operation journal, installed state repository ve operation context'i recovery orchestration'ina bagla.
-5. Install/update/repair/rollback/uninstall ve prerequisite workflow'lerini port et.
-6. x64 ve ARM64 davranisini koruyarak Windows API'lerini port et.
-7. CLI ve NativeAOT bootstrap davranisini port et.
-8. WinUI akislarini Rust-native Windows UI adapteriyla karsila.
-9. .NET uygulamasini kaldirmadan once signing, paired packaging, clean VM startup ve install/update/repair/rollback/uninstall parity'sini kanitla.
+5. Ozel `.tzpkg` paket formatini ve guvenli staging motorunu tamamla; paket icerigi/build aracini ayni sozlesmeye bagla.
+6. Install/update/repair/rollback/uninstall ve prerequisite workflow'lerini port et; versioned deployment ve atomik etkinlestirmeyi bagla.
+7. x64 ve ARM64 davranisini koruyarak Windows API'lerini port et.
+8. CLI ve NativeAOT bootstrap davranisini port et.
+9. WinUI akislarini Rust-native Windows UI adapteriyla karsila.
+10. .NET uygulamasini kaldirmadan once signing, paired packaging, clean VM startup ve install/update/repair/rollback/uninstall parity'sini kanitla.
 
 Rust portu tamamlanmis, release-ready veya mevcut .NET runtime'in yerine gecmis degildir.
