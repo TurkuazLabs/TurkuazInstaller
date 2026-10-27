@@ -200,4 +200,4 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- install-bu
   --operation install
 ```
 
-Use `--operation update` for a higher signed version or `repair` for the currently installed version. The installer rechecks the external trust policy, package digest, optional Authenticode signature, and package archive before activation. The bundle format accepts only its fixed, bounded entries and extracts them into temporary staging under the data root. A graphical bootstrapper, paired NSIS backup, and automated production signing/publishing are still pending.
+Use `--operation update` for a higher signed version, `repair` for the currently installed version, or `rollback` to restore the previous recorded deployment under the signed rollback policy. The installer rechecks the external trust policy, package digest, optional Authenticode signature, and package archive before activation. The bundle format accepts only its fixed, bounded entries and extracts them into temporary staging under the data root. A graphical bootstrapper, paired NSIS backup, and automated production signing/publishing are still pending.
