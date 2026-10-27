@@ -187,6 +187,26 @@ impl VersionedDeploymentStore {
         self.activate_published(package_id, version, &directory)
     }
 
+    /// @dev-id TIZ-DEPLOY-014
+    /// @purpose Remove the active record only when it still selects the expected version.
+    /// @reason A failed first-install state write must be able to undo activation without touching another operation's version.
+    /// @contract Removes active.json only after a package-scoped lock is held and the record matches expected_version.
+    /// @depends Current active deployment and package-scoped operation lock.
+    pub fn deactivate_if_current(
+        &self,
+        package_id: &PackageId,
+        expected_version: &SemanticVersion,
+    ) -> Result<(), DeploymentActivationError> {
+        match self.current(package_id)? {
+            Some(active) if active.version() == expected_version => {
+                fs::remove_file(self.package_root(package_id).join(ACTIVE_FILE))
+                    .map_err(DeploymentActivationError::Io)
+            }
+            Some(_) => Err(DeploymentActivationError::ActiveDeploymentMismatch),
+            None => Ok(()),
+        }
+    }
+
     /// @dev-id TIZ-DEPLOY-013
     /// @purpose Resolve the package's current immutable deployment.
     /// @reason Launch and recovery code need one validated active-version lookup.
