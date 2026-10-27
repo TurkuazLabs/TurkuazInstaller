@@ -171,3 +171,33 @@ The Rust Migration CI workflow builds `turkuaz-installer-cli-development-windows
 This development command rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It does not offer progress/cancellation, recover interrupted operations at startup, or automatically remove unreferenced deployment directories. It accepts first install, forward update, same-version repair, and policy-gated rollback. Rollback requires the signed current release policy and selects only the previous recorded activation.
 
 The current binary is headless. It is not a GUI, self-extracting setup, signed release artifact, or production distribution. No Rust tests were run; consult the latest Rust Migration CI run for current format and compilation status.
+
+## Offline setup bundles
+
+Create a portable `.tzsetup` from an already signed release. The trust store is supplied locally and is never copied into the bundle:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-setup-bundle \
+  --package-id example.product \
+  --manifest ./release.yaml \
+  --signature ./release.p7s \
+  --trust-store ./manifest-trust.yaml \
+  --package ./application.tzpkg \
+  --output ./TurkuazSetup.tzsetup
+```
+
+The command verifies the detached manifest signature against the package-specific trust policy, verifies the package's signed size and SHA-256 (and Authenticode when declared), then writes the exact verified inputs. It does not sign releases or produce a self-extracting Windows executable.
+
+Install from removable media or a local path without network access:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- install-bundle \
+  --package-id example.product \
+  --bundle ./TurkuazSetup.tzsetup \
+  --trust-store ./manifest-trust.yaml \
+  --target ./installed-app \
+  --data-root ./installer-data \
+  --operation install
+```
+
+Use `--operation update` for a higher signed version or `repair` for the currently installed version. The installer rechecks the external trust policy, package digest, optional Authenticode signature, and package archive before activation. The bundle format accepts only its fixed, bounded entries and extracts them into temporary staging under the data root. A graphical bootstrapper, paired NSIS backup, and automated production signing/publishing are still pending.
