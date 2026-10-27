@@ -128,7 +128,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- describe-p
   --output ./artifacts/channel.yaml
 ```
 
-The output uses a conservative policy (`rollback.supported: false`) and contains no private key material. Review the URI and install target before signing. For a package requiring rollback, edit the policy before signing.
+The output uses a conservative policy (`rollback.supported: false`) and contains no private key material. Review the URI and install target before signing. For a package requiring rollback, edit the policy before signing. The detached CMS signing steps and out-of-band trust setup are documented in [RELEASE_SIGNING.md](RELEASE_SIGNING.md).
 
 ## Trust and storage
 
