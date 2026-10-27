@@ -439,15 +439,14 @@ impl InstallWorkflow {
             package_id.as_str(),
             Uuid::new_v4()
         ));
-        let stage = match stage_full_package(verified_artifact, &release, &stage_directory, limits)
-            .await
-        {
-            Ok(stage) => stage,
-            Err(error) => {
-                context.fail(&error.to_string()).await;
-                return Err(InstallWorkflowError::Package(error));
-            }
-        };
+        let stage =
+            match stage_full_package(verified_artifact, &release, &stage_directory, limits).await {
+                Ok(stage) => stage,
+                Err(error) => {
+                    context.fail(&error.to_string()).await;
+                    return Err(InstallWorkflowError::Package(error));
+                }
+            };
 
         context.set_phase(InstallerOperationPhase::Applying).await;
         let repaired = match self.options.deployment.repair_current(stage) {
