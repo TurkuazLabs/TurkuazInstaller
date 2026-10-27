@@ -19,7 +19,7 @@ use zip::{CompressionMethod, ZipWriter, result::ZipError, write::SimpleFileOptio
 use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 
 use crate::{
-    PackageEngineError, PackageExtractionLimits,
+    PackageExtractionLimits,
     format::{PACKAGE_METADATA_ENTRY, PACKAGE_PAYLOAD_ROOT, PackageArchiveMetadata},
     validate_archive_path, validate_entry_conflicts,
 };
