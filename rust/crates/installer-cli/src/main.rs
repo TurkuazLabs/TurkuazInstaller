@@ -25,6 +25,7 @@ use turkuaz_installer_install_state_store::{
 };
 use turkuaz_installer_install_workflow::{InstallWorkflow, InstallWorkflowOptions};
 use turkuaz_installer_manifest_pipeline::read_verified_release;
+use turkuaz_installer_metadata::{MAXIMUM_DETACHED_SIGNATURE_BYTES, MAXIMUM_MANIFEST_BYTES};
 use turkuaz_installer_manifest_trust_store::YamlManifestTrustPolicyRepository;
 use turkuaz_installer_operation_journal::{
     JsonOperationJournalRepository, JsonOperationJournalRepositoryOptions,
@@ -32,9 +33,6 @@ use turkuaz_installer_operation_journal::{
 use turkuaz_installer_operation_lock::FileOperationLockOptions;
 use turkuaz_installer_package_engine::PackageExtractionLimits;
 use url::Url;
-
-const MAXIMUM_MANIFEST_BYTES: u64 = 1024 * 1024;
-const MAXIMUM_SIGNATURE_BYTES: u64 = 256 * 1024;
 
 #[tokio::main]
 async fn main() {
@@ -69,7 +67,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let (manifest_bytes, manifest_length) =
         read_bounded_https(&http_client, &manifest_url, MAXIMUM_MANIFEST_BYTES).await?;
     let (signature_bytes, signature_length) =
-        read_bounded_https(&http_client, &signature_url, MAXIMUM_SIGNATURE_BYTES).await?;
+        read_bounded_https(&http_client, &signature_url, MAXIMUM_DETACHED_SIGNATURE_BYTES).await?;
 
     let trust_store = YamlManifestTrustPolicyRepository::new(trust_path)?;
     let mut manifest_source = std::io::Cursor::new(manifest_bytes);
