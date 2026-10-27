@@ -182,7 +182,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
         data_root.join("staging"),
     )?;
     let workflow = InstallWorkflow::new(options);
-    if operation == InstallerOperationType::Repair {
+    if operation == InstallerOperationType::Rollback {
+        let active = workflow.rollback(release).await?;
+        println!("Rolled back to package directory: {}", active.directory().display());
+    } else if operation == InstallerOperationType::Repair {
         let active = workflow
             .repair(
                 verified_artifact,
@@ -340,7 +343,7 @@ async fn install_bundle_command() -> Result<(), Box<dyn Error>> {
     ])?;
     if values.is_empty() {
         println!(
-            "Usage: turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair"
+            "Usage: turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback"
         );
         return Ok(());
     }
@@ -349,6 +352,7 @@ async fn install_bundle_command() -> Result<(), Box<dyn Error>> {
         "install" => InstallerOperationType::Install,
         "update" => InstallerOperationType::Update,
         "repair" => InstallerOperationType::Repair,
+        "rollback" => InstallerOperationType::Rollback,
         _ => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
