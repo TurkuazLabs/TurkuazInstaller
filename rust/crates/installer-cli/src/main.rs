@@ -369,7 +369,12 @@ async fn install_self_setup_command() -> Result<(), Box<dyn Error>> {
         .as_nanos();
     let embedded_bundle_path = data_root.join(format!(".setup-self-{}-{nonce}.tzsetup", process::id()));
     let executable_path = std::env::current_exe()?;
-    extract_embedded_setup_bundle(&executable_path, &embedded_bundle_path)?;
+    let executable_for_worker = executable_path.clone();
+    let bundle_for_worker = embedded_bundle_path.clone();
+    tokio::task::spawn_blocking(move || {
+        extract_embedded_setup_bundle(executable_for_worker, bundle_for_worker)
+    })
+    .await??;
     let _bundle_guard = SetupBundleFileGuard(embedded_bundle_path.clone());
     values.insert(
         "bundle".to_owned(),
