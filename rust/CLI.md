@@ -2,14 +2,14 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.1.0
+Version: 0.1.1
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
 
 # Community Installer CLI
 
-Status: development CLI. This command line entry point is not the distributed Turkuaz setup and has not passed its current Rust CI compile yet.
+Status: development CLI. This command line entry point is not the distributed Turkuaz setup. Current branch CI compilation is pending.
 
 ## Build and invocation
 
@@ -53,8 +53,10 @@ The trust-store file is supplied out of band and must contain a signer policy fo
 
 The requested target directory contains a `.turkuaz-installer` deployment store with immutable package version directories and an active record. The separate data root contains operation locks, journal, installed state, downloads, and temporary package stages. The CLI prints the active package directory after a successful operation.
 
-The Rust Migration CI workflow also builds `turkuaz-installer-cli-development-windows-x64` after the Windows compile passes. GitHub Actions retains that development binary for seven days. It is not the Turkuaz setup and is not a production release.
+The Rust Migration CI workflow builds `turkuaz-installer-cli-development-windows-x64` after the Windows compile passes. GitHub Actions retains that development binary for seven days. It is not the Turkuaz setup and is not a production release.
 
 ## Current limits
 
-This development command rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It does not offer progress/cancellation, recover interrupted operations at startup, or remove old deployment versions. It accepts only first install and forward update. It is not a GUI, self-extracting setup, signed release artifact, or production distribution.
+This development command rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It does not offer progress/cancellation, recover interrupted operations at startup, or remove old deployment versions. It accepts only first install and forward update; rollback exists only as a service method and requires a signed current release policy. Repair and uninstall are not implemented.
+
+The current binary is headless. It is not a GUI, self-extracting setup, signed release artifact, or production distribution. No Rust tests were run; consult the latest Rust Migration CI run for current format and compilation status.
