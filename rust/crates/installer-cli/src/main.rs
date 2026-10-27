@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.6
-// Aciklama: HTTPS release intake, package build, install/update/rollback, paket listesi, deployment dogrulamasi ve kurulu uygulamayi baslatma icin headless CLI'dir
+// Version: 0.2.7
+// Aciklama: HTTPS release intake, package build, install/update/repair/rollback, paket listesi, deployment dogrulamasi ve kurulu uygulamayi baslatma icin headless CLI'dir
 // Bagimli Oldugu Katman: Application | Tool
 
 use std::{
@@ -174,6 +174,19 @@ async fn run() -> Result<(), Box<dyn Error>> {
         data_root.join("staging"),
     )?;
     let workflow = InstallWorkflow::new(options);
+    if operation == InstallerOperationType::Repair {
+        let active = workflow
+            .repair(
+                verified_artifact,
+                release,
+                &target_directory.to_string_lossy(),
+                PackageExtractionLimits::default(),
+            )
+            .await?;
+        println!("Repaired package directory: {}", active.directory().display());
+        return Ok(());
+    }
+
     let active = workflow
         .install_or_update(
             verified_artifact,
@@ -494,6 +507,26 @@ async fn recover_command() -> Result<(), Box<dyn Error>> {
             "Recovery target does not match the operation journal.",
         )
         .into());
+    }
+
+    if entry.operation == InstallerOperationType::Repair {
+        match (installed.as_ref(), active.as_ref()) {
+            (Some(installed), Some(active))
+                if installed.version() == active.version()
+                    && installed.target_path().eq_ignore_ascii_case(&target_argument) =>
+            {
+                journal.delete(&package_id).await?;
+                println!("Cleared interrupted repair record; run repair again if deployment files remain damaged.");
+            }
+            _ => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Interrupted repair state is ambiguous; no files or state were changed.",
+                )
+                .into());
+            }
+        }
+        return Ok(());
     }
 
     if entry.operation == InstallerOperationType::Uninstall {
@@ -1046,11 +1079,12 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
     let operation = match arguments.next().as_deref() {
         Some("install") => InstallerOperationType::Install,
         Some("update") => InstallerOperationType::Update,
+        Some("repair") => InstallerOperationType::Repair,
         Some("rollback") => InstallerOperationType::Rollback,
         Some("--help" | "-h") => {
             println!(
                 "Usage:
-  turkuaz-installer <install|update|rollback> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
+  turkuaz-installer <install|update|repair|rollback> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
   turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
             );
             process::exit(0);
@@ -1058,7 +1092,7 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
         _ => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "Expected install, update, or rollback command. Use --help for usage.",
+                "Expected install, update, repair, or rollback command. Use --help for usage.",
             ));
         }
     };
