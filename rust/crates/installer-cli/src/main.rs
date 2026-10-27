@@ -13,8 +13,7 @@ use std::{
     process,
 };
 
-use reqwest::{Client, Response, redirect::Policy};
-use tokio::io::AsyncReadExt;
+use reqwest::{Client, redirect::Policy};
 use turkuaz_installer_artifact_transfer::DefaultArtifactDownloader;
 use turkuaz_installer_artifact_validation::download_and_verify;
 use turkuaz_installer_deployment_activation::{
@@ -27,7 +26,6 @@ use turkuaz_installer_install_state_store::{
 use turkuaz_installer_install_workflow::{InstallWorkflow, InstallWorkflowOptions};
 use turkuaz_installer_manifest_pipeline::read_verified_release;
 use turkuaz_installer_manifest_trust_store::YamlManifestTrustPolicyRepository;
-use turkuaz_installer_operation_context::InstallerOperationContext;
 use turkuaz_installer_operation_journal::{
     JsonOperationJournalRepository, JsonOperationJournalRepositoryOptions,
 };
@@ -238,8 +236,13 @@ async fn read_bounded_https(
             "HTTPS source exceeds its configured size limit.",
         ));
     }
+    let declared_length = response.content_length();
     let mut bytes = Vec::new();
-    while let Some(chunk) = next_chunk(&mut response).await? {
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| io::Error::other("HTTPS source response could not be read."))?
+    {
         let next_length = (bytes.len() as u64)
             .checked_add(chunk.len() as u64)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Source size overflowed."))?;
@@ -251,14 +254,14 @@ async fn read_bounded_https(
         }
         bytes.extend_from_slice(&chunk);
     }
-    Ok((bytes.clone(), bytes.len() as u64))
-}
-
-async fn next_chunk(response: &mut Response) -> Result<Option<bytes::Bytes>, io::Error> {
-    response
-        .chunk()
-        .await
-        .map_err(|_| io::Error::other("HTTPS source response could not be read."))
+    let actual_length = bytes.len() as u64;
+    if declared_length.is_some_and(|length| length != actual_length) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "HTTPS source length does not match its Content-Length.",
+        ));
+    }
+    Ok((bytes, actual_length))
 }
 
 fn absolute_path(path: &Path) -> io::Result<PathBuf> {
