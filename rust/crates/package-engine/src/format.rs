@@ -19,14 +19,25 @@ pub(crate) struct PackageArchiveMetadata {
     pub(crate) format_version: u32,
     pub(crate) package_id: String,
     pub(crate) version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) entry_point: Option<String>,
 }
 
 impl PackageArchiveMetadata {
     pub(crate) fn new(package_id: &PackageId, version: &SemanticVersion) -> Self {
+        Self::new_with_entry_point(package_id, version, None)
+    }
+
+    pub(crate) fn new_with_entry_point(
+        package_id: &PackageId,
+        version: &SemanticVersion,
+        entry_point: Option<String>,
+    ) -> Self {
         Self {
             format_version: PACKAGE_FORMAT_VERSION,
             package_id: package_id.to_string(),
             version: version.to_string(),
+            entry_point,
         }
     }
 }
