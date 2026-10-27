@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.3
+// Version: 0.2.4
 // Aciklama: HTTPS release intake, package build, install/update/rollback, paket listesi, deployment dogrulamasi ve kurulu uygulamayi baslatma icin headless CLI'dir
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -14,6 +14,7 @@ use std::{
 };
 
 use reqwest::{Client, redirect::Policy};
+use sha2::{Digest, Sha256};
 use turkuaz_installer_artifact_transfer::DefaultArtifactDownloader;
 use turkuaz_installer_artifact_validation::download_and_verify;
 use turkuaz_installer_deployment_activation::{
@@ -47,6 +48,9 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
+    if std::env::args().nth(1).as_deref() == Some("describe-package") {
+        return describe_package_command();
+    }
     if std::env::args().nth(1).as_deref() == Some("build-package") {
         return build_package_command();
     }
@@ -179,6 +183,93 @@ async fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn describe_package_command() -> Result<(), Box<dyn Error>> {
+    let mut arguments = std::env::args().skip(2).peekable();
+    if arguments
+        .peek()
+        .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
+    {
+        println!("Usage: turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml");
+        return Ok(());
+    }
+    let mut values = HashMap::new();
+    while let Some(flag) = arguments.next() {
+        let Some(key) = flag.strip_prefix("--") else {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Package description options must use --name value form.").into());
+        };
+        let value = arguments.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing."))?;
+        if values.insert(key.to_owned(), value).is_some() {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "An option was provided more than once.").into());
+        }
+    }
+    let allowed = ["package-id", "version", "channel", "package", "uri", "target", "output"];
+    if values.keys().any(|key| !allowed.contains(&key.as_str())) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "An unknown package description option was provided.").into());
+    }
+    let package_id = PackageId::parse(required(&values, "package-id")?)?;
+    let version = SemanticVersion::parse(required(&values, "version")?)?;
+    let channel = required(&values, "channel")?.trim().to_ascii_lowercase();
+    if !matches!(channel.as_str(), "stable" | "beta") {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Channel must be stable or beta.").into());
+    }
+    let artifact_uri = Url::parse(required(&values, "uri")?)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Artifact URI is invalid."))?;
+    if !matches!(artifact_uri.scheme(), "https" | "file") || (artifact_uri.scheme() == "https" && artifact_uri.host_str().is_none()) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Artifact URI must use HTTPS or file scheme.").into());
+    }
+    let package_path = absolute_path(Path::new(required(&values, "package")?))?;
+    let metadata = std::fs::symlink_metadata(&package_path)?;
+    if !metadata.file_type().is_file() || metadata.len() == 0 {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Package must be a non-empty regular file, not a symlink.").into());
+    }
+    let mut file = std::fs::File::open(&package_path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut actual_size = 0_u64;
+    loop {
+        use std::io::Read;
+        let count = file.read(&mut buffer)?;
+        if count == 0 { break; }
+        actual_size = actual_size.checked_add(count as u64).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Package size overflowed."))?;
+        hasher.update(&buffer[..count]);
+    }
+    if actual_size != metadata.len() {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "Package changed while its descriptor was being generated.").into());
+    }
+    let digest = encode_sha256(&hasher.finalize());
+    let target = required(&values, "target")?;
+    if target.chars().any(char::is_control) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Target must not contain control characters.").into());
+    }
+    let output = absolute_path(Path::new(required(&values, "output")?))?;
+    let manifest = format!(
+        "schema_version: 1\\npackage:\\n  id: {}\\n  version: {}\\n  channel: {}\\nartifact:\\n  uri: {}\\n  sha256: {}\\n  size_bytes: {}\\ninstall:\\n  mode: full\\n  target: {}\\nrollback:\\n  supported: false\\n  previous_version_required: true\\n",
+        package_id, version, channel, quote_yaml(target)?, digest, actual_size
+    );
+    let mut output_file = std::fs::OpenOptions::new().write(true).create_new(true).open(&output)?;
+    use std::io::Write;
+    output_file.write_all(manifest.as_bytes())?;
+    output_file.sync_all()?;
+    println!("Manifest draft written: {} (not signed)", output.display());
+    Ok(())
+}
+
+fn encode_sha256(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(HEX[(byte >> 4) as usize] as char);
+        output.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    output
+}
+
+fn quote_yaml(value: &str) -> Result<String, io::Error> {
+    if value.chars().any(char::is_control) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Manifest scalar must not contain control characters."));
+    }
+    Ok(format!("\\\"{}\\\"", value.replace('\\\\', "\\\\\\\\").replace('\\\"', "\\\\\\\"")))
+}
 fn build_package_command() -> Result<(), Box<dyn Error>> {
     let mut arguments = std::env::args().skip(2).peekable();
     if arguments
@@ -758,7 +849,7 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
             println!(
                 "Usage:
   turkuaz-installer <install|update|rollback> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
-  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg"
+  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
             );
             process::exit(0);
         }
