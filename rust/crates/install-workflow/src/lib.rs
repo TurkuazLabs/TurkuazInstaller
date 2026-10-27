@@ -61,7 +61,7 @@ impl fmt::Display for InstallWorkflowError {
             Self::Package(error) => write!(formatter, "{error}"),
             Self::Activation(error) => write!(formatter, "{error}"),
             Self::UnsupportedOperation => formatter.write_str(
-                "This workflow currently supports install and forward update operations only.",
+                "This workflow does not support the requested operation.",
             ),
             Self::AlreadyInstalled => {
                 formatter.write_str("Package is already installed; use the update workflow.")
