@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/install-state-store/src/lib.rs
 // Amac: Kurulu package state kayitlarini kalici JSON dosyalarinda yonetmek
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: Bounded okuma, deterministik listeleme ve atomik state guncellemesi saglar
 // Bagimli Oldugu Katman: Repo
 
@@ -16,12 +16,7 @@ use tokio::{
     fs::{self, OpenOptions},
     io::{AsyncReadExt, AsyncWriteExt},
 };
-use turkuaz_installer_domain::{
-    package_id::PackageId,
-    release_channel::ReleaseChannel,
-    semantic_version::SemanticVersion,
-    state::InstalledPackageState,
-};
+use turkuaz_installer_domain::{package_id::PackageId, release_channel::ReleaseChannel, semantic_version::SemanticVersion, state::InstalledPackageState};
 use uuid::Uuid;
 
 const MAX_STATE_BYTES: u64 = 1024 * 1024;
@@ -107,9 +102,7 @@ impl JsonInstallStateRepository {
         let path = self.path_for(package_id);
         let document = match read_document(&path).await {
             Ok(document) => document,
-            Err(InstallStateStoreError::Io(error))
-                if error.kind() == io::ErrorKind::NotFound =>
-            {
+            Err(InstallStateStoreError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
                 return Ok(None);
             }
             Err(error) => return Err(error),
@@ -123,9 +116,7 @@ impl JsonInstallStateRepository {
         Ok(Some(state))
     }
 
-    pub async fn list(
-        &self,
-    ) -> Result<Vec<InstalledPackageState>, InstallStateStoreError> {
+    pub async fn list(&self) -> Result<Vec<InstalledPackageState>, InstallStateStoreError> {
         let mut directory = match fs::read_dir(self.options.root_directory()).await {
             Ok(directory) => directory,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -139,7 +130,10 @@ impl JsonInstallStateRepository {
             .map_err(InstallStateStoreError::Io)?
         {
             let path = entry.path();
-            if path.extension().is_some_and(|extension| extension == STATE_EXTENSION) {
+            if path
+                .extension()
+                .is_some_and(|extension| extension == STATE_EXTENSION)
+            {
                 paths.push(path);
             }
         }
@@ -150,7 +144,10 @@ impl JsonInstallStateRepository {
             let document = read_document(&path).await?;
             let state = document.into_state()?;
             let expected_name = format!("{}.{}", state.package_id(), STATE_EXTENSION);
-            if path.file_name().is_none_or(|name| name != expected_name.as_str()) {
+            if path
+                .file_name()
+                .is_none_or(|name| name != expected_name.as_str())
+            {
                 return Err(InstallStateStoreError::InvalidState(
                     "package ID does not match its file name",
                 ));
@@ -165,10 +162,7 @@ impl JsonInstallStateRepository {
     /// @reason Subsequent update, repair, rollback, and uninstall workflows need an authoritative local record.
     /// @contract Serializes the existing PascalCase/numeric-enum JSON shape and atomically replaces the package file.
     /// @depends Tokio filesystem, serde JSON, and Community domain types.
-    pub async fn save(
-        &self,
-        state: &InstalledPackageState,
-    ) -> Result<(), InstallStateStoreError> {
+    pub async fn save(&self, state: &InstalledPackageState) -> Result<(), InstallStateStoreError> {
         fs::create_dir_all(self.options.root_directory())
             .await
             .map_err(InstallStateStoreError::Io)?;
@@ -202,10 +196,7 @@ impl JsonInstallStateRepository {
         write_result
     }
 
-    pub async fn delete(
-        &self,
-        package_id: &PackageId,
-    ) -> Result<(), InstallStateStoreError> {
+    pub async fn delete(&self, package_id: &PackageId) -> Result<(), InstallStateStoreError> {
         match fs::remove_file(self.path_for(package_id)).await {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
