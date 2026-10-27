@@ -302,6 +302,12 @@ fn describe_package_command() -> Result<(), Box<dyn Error>> {
         actual_size,
         quote_yaml(target)?
     );
+    turkuaz_installer_manifest_parser::parse_manifest(&manifest).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Generated manifest draft failed schema validation.",
+        )
+    })?;
     let mut output_file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
