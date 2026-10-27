@@ -126,7 +126,13 @@ pub(super) fn write_inventory(
 
     let inventory_root = package_root.join(INVENTORY_DIRECTORY);
     ensure_real_directory(&inventory_root)?;
-    let destination = inventory_path(package_root, version);
+    let directory_key = deployment_directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(DeploymentActivationError::InvalidInventory(
+            "deployment directory name is invalid",
+        ))?;
+    let destination = inventory_path(package_root, directory_key);
     let temporary = inventory_root.join(format!(".inventory-{}.tmp", Uuid::new_v4()));
     let write_result = (|| {
         let mut file = fs::OpenOptions::new()
@@ -153,7 +159,14 @@ fn read_inventory(
     let package_root = store.package_root(&active.package_id);
     let inventory_root = package_root.join(INVENTORY_DIRECTORY);
     ensure_existing_real_directory(&inventory_root)?;
-    let path = inventory_path(&package_root, &active.version);
+    let directory_key = active
+        .directory
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(DeploymentActivationError::InvalidInventory(
+            "deployment directory name is invalid",
+        ))?;
+    let path = inventory_path(&package_root, directory_key);
     let metadata = fs::symlink_metadata(&path).map_err(DeploymentActivationError::Io)?;
     if !metadata.file_type().is_file() || metadata.len() > MAXIMUM_INVENTORY_BYTES {
         return Err(DeploymentActivationError::InvalidInventory(
@@ -204,10 +217,10 @@ fn read_inventory(
     Ok(inventory)
 }
 
-fn inventory_path(package_root: &Path, version: &SemanticVersion) -> PathBuf {
+fn inventory_path(package_root: &Path, directory_key: &str) -> PathBuf {
     package_root
         .join(INVENTORY_DIRECTORY)
-        .join(format!("{version}.json"))
+        .join(format!("{directory_key}.json"))
 }
 
 fn collect_inventory(
@@ -435,7 +448,14 @@ pub(super) fn remove_inventory(
     package_root: &Path,
     version: &SemanticVersion,
 ) -> Result<(), DeploymentActivationError> {
-    match fs::remove_file(inventory_path(package_root, version)) {
+    remove_inventory_for_key(package_root, &version.to_string())
+}
+
+pub(super) fn remove_inventory_for_key(
+    package_root: &Path,
+    directory_key: &str,
+) -> Result<(), DeploymentActivationError> {
+    match fs::remove_file(inventory_path(package_root, directory_key)) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(DeploymentActivationError::Io(error)),
