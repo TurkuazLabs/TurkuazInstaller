@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.2.2
+Version: 2.2.3
 Aciklama: Mevcut .NET davranisini koruyarak asamali Rust portu icin mimari sinir ve gercek kapsam durumunu belirtir
 Bagimli Oldugu Katman: Documentation
 -->
@@ -29,7 +29,7 @@ Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .N
 - `package-engine`: `.tzpkg` v1 archive sozlesmesi, `turkuaz-package.json` release identity/version baglamasi, payload builder'i ve verified-artifact staging'i saglar. ZIP-slip, Windows path kurallari, buyuk/kucuk harf path cakismasi, duplicate entry, symlink/ozel dosya ve acilmis boyut/sayi sinirlari kontrol edilir. Ayrintilar: [PACKAGE_FORMAT.md](PACKAGE_FORMAT.md).
 - `deployment-activation`: Staged payload'i immutable `versions/<version>` dizinine kopyalar; `integrity/<version>.json` envanterinde dosya boyutu ve SHA-256 kaydeder; `active.json` isaretcisini atomik degistirir. `verify_current` tum dosyalari kayitli envanterle karsilastirir. Envanter yerel tutarlilik kontroludur, kriptografik guven koku degildir. Ayrintilar: [DEPLOYMENT_LAYOUT.md](DEPLOYMENT_LAYOUT.md).
 - `install-workflow`: Package lock altinda `VerifiedArtifact` eslesmesini kontrol eder, ilk install veya ileri SemVer update icin paketi stage eder, etkin deployment'i acar ve installed state'i yazar. State yazimi basarisizsa etkin surumu telafi eder; current signed release policy izin verirse bir onceki etkin surume rollback yapar. Sinirlar: [INSTALL_WORKFLOW.md](INSTALL_WORKFLOW.md).
-- `installer-cli`: HTTPS manifest/signature okuma, signer policy dogrulamasi, release artifact download/hash/imza kontrolu, install/update/rollback, kurulu paket listesi, envanter dogrulamasi, explicit interrupted-operation recovery ve kullanicinin verdigi guvenli goreli exe yoluyla uygulama baslatma komutlarini saglar. `.tzpkg` source builder'i da CLI'dedir. Recovery otomatik startup'ta calismaz ve belirsiz first-install durumlarini fail-closed birakir. Signed release manifest olusturma/imzalama ve paket icinde entrypoint tanimi henuz yoktur. Komut ve klasor sozlesmesi: [CLI.md](CLI.md). Her yeni degisiklik CI'dan gecmeden production setup sayilmaz.
+- `installer-cli`: HTTPS manifest/signature okuma, signer policy dogrulamasi, release artifact download/hash/imza kontrolu, install/update/rollback, kurulu paket listesi, envanter dogrulamasi, explicit interrupted-operation recovery ve kullanicinin verdigi guvenli goreli exe yoluyla uygulama baslatma komutlarini saglar. `.tzpkg` source builder'i ve paketin tam boyut/SHA-256 degerlerinden unsigned release manifest taslagi ureten `describe-package` komutu da CLI'dedir. Taslak imzalama anahtari tasimaz ve imzasizdir; release imzalama ayri yapilmalidir. Recovery otomatik startup'ta calismaz ve belirsiz first-install durumlarini fail-closed birakir. Paket icinde entrypoint tanimi henuz yoktur. Komut ve klasor sozlesmesi: [CLI.md](CLI.md). Her yeni degisiklik CI'dan gecmeden production setup sayilmaz.
 - `operation-lock`: package ID basina OS advisory file lock alir; ayni paketin ikinci process'teki operation'ini fail-fast reddeder, farkli paketlerin islemleri birbirinden bagimsizdir. Process ID ve UTC unix timestamp'i kilit dosyasinda tanilama icin tutulur. Lease dusurulunce lock serbest kalir; dosya inode race'ini onlemek icin bos dosya olarak birakilir.
 - `operation-journal`: typed operation/phase checkpoint'lerini package basina JSON dosyasinda saklar. 1 MiB okuma siniri ve package ID / enum deger dogrulamasi uygular; guncellemeyi ayni dizindeki gecici dosyayi sync edip rename ederek yazar. .NET journal'daki PascalCase alan adlari ve numeric enum sozlesmesi korunur.
 - `install-state-store`: kurulu paket versiyon/channel/target state'ini package basina JSON'da tutar; bounded okuma, deterministik listeleme, typed deger dogrulamasi ve atomik replace uygular. .NET PascalCase property ve numeric ReleaseChannel sozlesmesi korunur.
@@ -49,7 +49,7 @@ Manifest intake typed Rust release modeline ulasir. Ozel paket v1 builder/stagin
 2. Manifest bounded input, detached CMS/PKCS#7 signature, external signer trust ve strict YAML parse zincirini port et.
 3. Release providerlari ve artifact secim/indirme use-case'ini port et; mevcut exact-size transferi, SHA-256 ve Windows Authenticode dogrulamasini workflow'a bagla.
 4. Mevcut package lock, journal, installed state repository ve operation context'i startup recovery orchestration'ina bagla.
-5. `.tzpkg` v1 formatini signed release uretim akisina bagla; artifact size/hash ve manifest imzasini builder ciktisina gore olustur.
+5. `.tzpkg` v1 formatini release uretim akisina bagla; artifact size/hash ve manifest imzasini builder ciktisina gore olustur.
 6. Ilk install/ileri update akisini repair/rollback/uninstall ve prerequisite workflow'leriyle tamamla; startup recovery ve crash-safe state reconciliation ekle.
 7. x64 ve ARM64 davranisini koruyarak Windows API'lerini port et.
 8. Mevcut development CLI'yi compile/acceptance kapilarindan gecirip secure bootstrap, portable data paths ve production command contract'ini tamamla.
