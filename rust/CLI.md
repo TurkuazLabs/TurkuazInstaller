@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.1.8
+Version: 0.1.9
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -73,18 +73,17 @@ Recovery takes the package lock. It verifies and clears a stale journal when sta
 
 ## Launch the installed application
 
-The v1 package format does not declare an application entry point, so the development CLI requires its relative path explicitly. It checks the package state and active version under the package lock, verifies the active deployment inventory, and starts only a regular file that resolves inside that deployment. Arguments after `--` are passed directly to the process without a shell:
+The CLI uses the entry point declared by a v2 package automatically. For v1 packages without one, pass `--executable` explicitly. An optional `--executable` can also override the package default. It checks package state and the active version under the package lock, verifies the active deployment inventory, and starts only a regular file that resolves inside that deployment. Arguments after `--` are passed directly to the process without a shell:
 
 ```sh
 cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- launch \
   --package-id example.product \
   --target ./installed-app \
   --data-root ./installer-data \
-  --executable bin/app.exe \
   -- --profile test
 ```
 
-Use forward slashes in the relative executable path. The command prints the started process ID. The GUI/start-menu integration and package-declared entry points are not implemented yet.
+Use forward slashes in the relative executable path. The command prints the started process ID. GUI and start-menu integration are not implemented yet.
 
 ## Verify installed files
 
@@ -108,10 +107,11 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-pack
   --package-id example.product \
   --version 1.2.3 \
   --source ./publish-directory \
-  --output ./artifacts/example-product-1.2.3.tzpkg
+  --output ./artifacts/example-product-1.2.3.tzpkg \
+  --executable bin/app.exe
 ```
 
-The builder rejects unsafe paths and overwriting an existing output. It creates only the `.tzpkg`. Generate an unsigned manifest draft from the finished archive's exact size and SHA-256, then sign it separately.
+The builder rejects unsafe paths and overwriting an existing output. Pass `--executable bin/app.exe` to embed an entry point and create format v2; omitting it creates a backward-compatible v1 package. Generate an unsigned manifest draft from the finished archive's exact size and SHA-256, then sign it separately.
 
 ## Generate an unsigned release manifest draft
 
