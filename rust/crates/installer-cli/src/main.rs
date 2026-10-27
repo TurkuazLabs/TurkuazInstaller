@@ -275,7 +275,8 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
     }
 
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
-    let target_directory = absolute_path(Path::new(required(&values, "target")?))?;
+    let target_argument = required(&values, "target")?;
+    let target_directory = absolute_path(Path::new(target_argument))?;
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
     let executable_relative = required(&values, "executable")?;
     let executable_relative_path = Path::new(executable_relative);
@@ -305,7 +306,7 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
     })?;
     if !installed
         .target_path()
-        .eq_ignore_ascii_case(target_directory.to_string_lossy().as_ref())
+        .eq_ignore_ascii_case(target_argument)
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
