@@ -215,7 +215,7 @@ fn extract_archive(
     limits: PackageExtractionLimits,
     expected_package_id: &str,
     expected_version: &str,
-) -> Result<(), PackageEngineError> {
+) -> Result<Option<String>, PackageEngineError> {
     let parent = payload_directory
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
@@ -242,7 +242,7 @@ fn extract_archive_contents(
     limits: PackageExtractionLimits,
     expected_package_id: &str,
     expected_version: &str,
-) -> Result<(), PackageEngineError> {
+) -> Result<Option<String>, PackageEngineError> {
     let archive_file = fs::File::open(archive_path).map_err(PackageEngineError::Io)?;
     let mut archive = ZipArchive::new(archive_file).map_err(PackageEngineError::Archive)?;
     let (metadata_index, entry_point) =
