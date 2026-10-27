@@ -35,7 +35,7 @@ Use `update` instead of `install` to require a previously installed package and 
 
 ## Trust and storage
 
-The trust-store file is supplied out of band and must contain a signer policy for the requested package. The CLI does not create or trust a signer policy automatically. The manifest signature is verified before YAML parsing; the selected artifact is downloaded and checked against the signed exact size and SHA-256, plus Authenticode when required by its descriptor.
+The trust-store file is supplied out of band and must contain a signer policy for the requested package. A non-production shape example is [manifest-trust.example.yaml](examples/manifest-trust.example.yaml); replace the example package, publisher subject, and zero certificate pin with the actual values before use. The CLI does not create or trust a signer policy automatically. The manifest signature is verified before YAML parsing; the selected artifact is downloaded and checked against the signed exact size and SHA-256, plus Authenticode when required by its descriptor.
 
 The requested target directory contains a `.turkuaz-installer` deployment store with immutable package version directories and an active record. The separate data root contains operation locks, journal, installed state, downloads, and temporary package stages. The CLI prints the active package directory after a successful operation.
 
