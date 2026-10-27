@@ -285,9 +285,9 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
         || executable_relative.starts_with('\\')
         || executable_relative.contains(':')
         || executable_relative.contains('\\')
-        || executable_relative_path.components().any(|component| {
-            !matches!(component, std::path::Component::Normal(_))
-        })
+        || executable_relative_path
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
     {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -302,9 +302,10 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
     let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
         data_root.join("state"),
     )?);
-    let installed = state.get(&package_id).await?.ok_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, "Package is not installed.")
-    })?;
+    let installed = state
+        .get(&package_id)
+        .await?
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Package is not installed."))?;
     if !installed
         .target_path()
         .eq_ignore_ascii_case(target_argument)
@@ -319,9 +320,9 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
     let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
         target_directory.join(".turkuaz-installer"),
     )?);
-    let report = deployment.verify_current(&package_id)?.ok_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, "Active deployment is missing.")
-    })?;
+    let report = deployment
+        .verify_current(&package_id)?
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Active deployment is missing."))?;
     if report.active().version() != installed.version() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
