@@ -1,9 +1,9 @@
 <!--
 Dosya Yolu: REPO_ROOT/rust/DEPLOYMENT_LAYOUT.md
-Amac: Sürümlü deployment klasörlerinin ve etkin sürüm işaretçisinin davranışını tanımlamak
+Amac: Surumlu deployment klasörlerinin ve etkin surum isaretcisinin davranisini tanımlamak
 Modul - Markdown Specification
 Version: 0.1.0
-Aciklama: Hazırlama, etkinleştirme ve geri alma için mevcut dosya sistemi sözleşmesini açıklar
+Aciklama: Hazırlama, etkinlestirme ve geri alma icin mevcut dosya sistemi sozlesmesini aciklar
 Bagimli Oldugu Katman: Service | Infrastructure | Documentation
 -->
 
