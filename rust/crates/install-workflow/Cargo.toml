@@ -1,0 +1,28 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/install-workflow/Cargo.toml
+# Amac: Verified package staging, version activation ve installed-state kaydini install/update akisinda orkestre etmek
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Package lock, journal, package engine, versioned deployment ve installed state katmanlarini baglar
+# Bagimli Oldugu Katman: Service
+
+[package]
+name = "turkuaz-installer-install-workflow"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+turkuaz-installer-artifact-validation = { path = "../artifact-validation" }
+turkuaz-installer-deployment-activation = { path = "../deployment-activation" }
+turkuaz-installer-domain = { path = "../domain" }
+turkuaz-installer-install-state-store = { path = "../install-state-store" }
+turkuaz-installer-operation-context = { path = "../operation-context" }
+turkuaz-installer-operation-journal = { path = "../operation-journal" }
+turkuaz-installer-operation-lock = { path = "../operation-lock" }
+turkuaz-installer-package-engine = { path = "../package-engine" }
+uuid = { version = "1", features = ["v4"] }
+
+[lib]
+name = "turkuaz_installer_install_workflow"
+path = "src/lib.rs"
