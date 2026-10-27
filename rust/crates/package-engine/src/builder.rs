@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/builder.rs
 // Amac: Uygulama payload dizinini Turkuaz'in ozel .tzpkg ZIP paketine donusturmek
 // Modul - Rust Package Builder
-// Version: 0.3.0
+// Version: 0.4.0
 // Aciklama: Symlink ve path collision reddi, sinirli kaynak taramasi, gecici dosya ve no-overwrite publish uygular
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -309,7 +309,7 @@ fn build_archive(
         if entry.is_directory {
             archive
                 .add_directory(
-                    format!("{PACKAGE_PAYLOAD_ROOT}{}", entry.archive_path),
+                    format!("{PACKAGE_PAYLOAD_ROOT}{}/", entry.archive_path),
                     options,
                 )
                 .map_err(PackageBuildError::Archive)?;
