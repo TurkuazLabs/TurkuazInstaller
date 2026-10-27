@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/setup_executable.rs
 // Amac: Imzali Turkuaz setup bundle'ini Windows CLI stub'ina guvenli bicimde eklemek ve cikarmak
 // Modul - Rust Setup Executable
-// Version: 0.1.0
-// Aciklama: PE stub sonuna bounded bundle, uzunluk, SHA-256 ve format imzasi ekler
+// Version: 0.2.0
+// Aciklama: PE stub sonuna bounded bundle ekler; Authenticode sertifika tablosu sonrasinda footer'i bulabilir
 // Bagimli Oldugu Katman: Service | Tool
 
 use std::{
@@ -179,8 +179,14 @@ pub fn extract_embedded_setup_bundle(
             "self-extracting executable changed while being opened",
         ));
     }
+    let payload_end = setup_payload_end(&mut executable, executable_metadata.len())?;
+    if payload_end <= FOOTER_SIZE_BYTES {
+        return Err(SetupExecutableError::InvalidSetup(
+            "self-extracting executable has no space for a bundle footer",
+        ));
+    }
     executable
-        .seek(SeekFrom::End(-(FOOTER_SIZE_BYTES as i64)))
+        .seek(SeekFrom::Start(payload_end - FOOTER_SIZE_BYTES))
         .map_err(SetupExecutableError::Io)?;
 
     let mut magic = [0_u8; 8];
@@ -199,7 +205,7 @@ pub fn extract_embedded_setup_bundle(
     let bundle_length = u64::from_le_bytes(length_bytes);
     if bundle_length == 0
         || bundle_length > MAXIMUM_BUNDLE_BYTES
-        || bundle_length > executable_metadata.len() - FOOTER_SIZE_BYTES
+        || bundle_length > payload_end - FOOTER_SIZE_BYTES
     {
         return Err(SetupExecutableError::InvalidSetup(
             "embedded bundle length is outside the supported limit",
@@ -209,7 +215,7 @@ pub fn extract_embedded_setup_bundle(
     executable
         .read_exact(&mut expected_digest)
         .map_err(SetupExecutableError::Io)?;
-    let bundle_offset = executable_metadata.len() - FOOTER_SIZE_BYTES - bundle_length;
+    let bundle_offset = payload_end - FOOTER_SIZE_BYTES - bundle_length;
     executable
         .seek(SeekFrom::Start(bundle_offset))
         .map_err(SetupExecutableError::Io)?;
@@ -249,6 +255,136 @@ pub fn extract_embedded_setup_bundle(
         let _ = fs::remove_file(&bundle_output_path);
     }
     result
+}
+
+fn setup_payload_end(
+    executable: &mut fs::File,
+    file_length: u64,
+) -> Result<u64, SetupExecutableError> {
+    if file_length < 0x40 {
+        return Err(SetupExecutableError::InvalidSetup(
+            "self-extracting executable has a truncated DOS header",
+        ));
+    }
+
+    executable
+        .seek(SeekFrom::Start(0x3c))
+        .map_err(SetupExecutableError::Io)?;
+    let mut pe_offset_bytes = [0_u8; 4];
+    executable
+        .read_exact(&mut pe_offset_bytes)
+        .map_err(SetupExecutableError::Io)?;
+    let pe_offset = u32::from_le_bytes(pe_offset_bytes) as u64;
+    if pe_offset
+        .checked_add(24)
+        .is_none_or(|header_end| header_end > file_length)
+    {
+        return Err(SetupExecutableError::InvalidSetup(
+            "self-extracting executable has an invalid PE header offset",
+        ));
+    }
+
+    executable
+        .seek(SeekFrom::Start(pe_offset))
+        .map_err(SetupExecutableError::Io)?;
+    let mut pe_signature = [0_u8; 4];
+    executable
+        .read_exact(&mut pe_signature)
+        .map_err(SetupExecutableError::Io)?;
+    if pe_signature != *b"PE\0\0" {
+        return Err(SetupExecutableError::InvalidSetup(
+            "self-extracting executable has no valid PE signature",
+        ));
+    }
+    let mut coff_header = [0_u8; 20];
+    executable
+        .read_exact(&mut coff_header)
+        .map_err(SetupExecutableError::Io)?;
+    let optional_header_size =
+        u16::from_le_bytes([coff_header[16], coff_header[17]]) as u64;
+    let optional_header_start = pe_offset + 24;
+    let optional_header_end = optional_header_start
+        .checked_add(optional_header_size)
+        .filter(|end| *end <= file_length)
+        .ok_or(SetupExecutableError::InvalidSetup(
+            "self-extracting executable has a truncated PE optional header",
+        ))?;
+
+    executable
+        .seek(SeekFrom::Start(optional_header_start))
+        .map_err(SetupExecutableError::Io)?;
+    let mut optional_magic = [0_u8; 2];
+    executable
+        .read_exact(&mut optional_magic)
+        .map_err(SetupExecutableError::Io)?;
+    let (directory_start, directory_count_offset) = match u16::from_le_bytes(optional_magic) {
+        0x10b => (96_u64, 92_u64),
+        0x20b => (112_u64, 108_u64),
+        _ => {
+            return Err(SetupExecutableError::InvalidSetup(
+                "self-extracting executable uses an unsupported PE optional header",
+            ));
+        }
+    };
+
+    let directory_count_end = optional_header_start + directory_count_offset + 4;
+    if directory_count_end > optional_header_end {
+        return Err(SetupExecutableError::InvalidSetup(
+            "self-extracting executable has an incomplete PE data directory",
+        ));
+    }
+    executable
+        .seek(SeekFrom::Start(optional_header_start + directory_count_offset))
+        .map_err(SetupExecutableError::Io)?;
+    let mut directory_count_bytes = [0_u8; 4];
+    executable
+        .read_exact(&mut directory_count_bytes)
+        .map_err(SetupExecutableError::Io)?;
+    let directory_count = u32::from_le_bytes(directory_count_bytes);
+    if directory_count <= 4 {
+        return Ok(file_length);
+    }
+
+    let certificate_entry_offset = optional_header_start + directory_start + 4 * 8;
+    if certificate_entry_offset + 8 > optional_header_end {
+        return Err(SetupExecutableError::InvalidSetup(
+            "self-extracting executable has a truncated certificate directory entry",
+        ));
+    }
+    executable
+        .seek(SeekFrom::Start(certificate_entry_offset))
+        .map_err(SetupExecutableError::Io)?;
+    let mut certificate_entry = [0_u8; 8];
+    executable
+        .read_exact(&mut certificate_entry)
+        .map_err(SetupExecutableError::Io)?;
+    let certificate_offset =
+        u32::from_le_bytes(certificate_entry[..4].try_into().map_err(|_| {
+            SetupExecutableError::InvalidSetup("PE certificate offset is invalid")
+        })?) as u64;
+    let certificate_size =
+        u32::from_le_bytes(certificate_entry[4..].try_into().map_err(|_| {
+            SetupExecutableError::InvalidSetup("PE certificate size is invalid")
+        })?) as u64;
+
+    if certificate_offset == 0 && certificate_size == 0 {
+        return Ok(file_length);
+    }
+    let certificate_end = certificate_offset
+        .checked_add(certificate_size)
+        .ok_or(SetupExecutableError::InvalidSetup(
+            "PE certificate table length overflows",
+        ))?;
+    if certificate_offset < optional_header_end
+        || certificate_offset % 8 != 0
+        || certificate_size < 8
+        || certificate_end != file_length
+    {
+        return Err(SetupExecutableError::InvalidSetup(
+            "PE certificate table is outside the supported file layout",
+        ));
+    }
+    Ok(certificate_offset)
 }
 
 fn regular_file_metadata(path: &Path) -> Result<fs::Metadata, SetupExecutableError> {
