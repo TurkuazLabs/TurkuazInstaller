@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.3.0
+Version: 0.3.1
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -38,12 +38,12 @@ Use `update` instead of `install` to require a previously installed package and 
 Repair a package by passing the signed manifest and detached signature for its installed version:
 
 ```sh
-cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- repair \\
-  --package-id example.product \\
-  --manifest-url https://updates.example.test/channel.yaml \\
-  --signature-url https://updates.example.test/channel.yaml.p7s \\
-  --trust-store ./manifest-trust.yaml \\
-  --target ./installed-app \\
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- repair \
+  --package-id example.product \
+  --manifest-url https://updates.example.test/channel.yaml \
+  --signature-url https://updates.example.test/channel.yaml.p7s \
+  --trust-store ./manifest-trust.yaml \
+  --target ./installed-app \
   --data-root ./installer-data
 ```
 
