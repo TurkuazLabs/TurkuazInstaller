@@ -263,6 +263,7 @@ async fn list_command() -> Result<(), Box<dyn Error>> {
     let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
         data_root.join("state"),
     )?);
+    let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let mut installed = state.list().await?;
     installed.sort_by(|left, right| left.package_id().as_str().cmp(right.package_id().as_str()));
 
@@ -271,6 +272,32 @@ async fn list_command() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
     for package in installed {
+        let _lock_lease =
+            turkuaz_installer_operation_lock::acquire_package_lock(&lock, package.package_id())
+                .map_err(|_| io::Error::other("Could not acquire package operation lock."))?;
+        let target_directory = absolute_path(Path::new(package.target_path()))?;
+        let deployment = VersionedDeploymentStore::new(DeploymentActivationOptions::new(
+            target_directory.join(".turkuaz-installer"),
+        )?);
+        let active = deployment.current(package.package_id())?.ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Installed state exists but active deployment is missing for package {}.",
+                    package.package_id()
+                ),
+            )
+        })?;
+        if active.version() != package.version() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Installed state and active deployment disagree for package {}.",
+                    package.package_id()
+                ),
+            )
+            .into());
+        }
         println!(
             "{}\t{}\t{:?}\t{}",
             package.package_id(),
