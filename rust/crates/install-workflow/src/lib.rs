@@ -41,6 +41,9 @@ pub enum InstallWorkflowError {
     Package(PackageEngineError),
     Activation(DeploymentActivationError),
     UnsupportedOperation,
+    UnsupportedPrerequisites,
+    UnsupportedWindowsIntegrations,
+    UnsupportedPreservePaths,
     AlreadyInstalled,
     NotInstalled,
     TargetPathChanged,
@@ -62,6 +65,15 @@ impl fmt::Display for InstallWorkflowError {
             Self::Activation(error) => write!(formatter, "{error}"),
             Self::UnsupportedOperation => formatter.write_str(
                 "This workflow does not support the requested operation.",
+            ),
+            Self::UnsupportedPrerequisites => formatter.write_str(
+                "This release requires prerequisites that the current workflow cannot install.",
+            ),
+            Self::UnsupportedWindowsIntegrations => formatter.write_str(
+                "This release declares Windows integrations that the current workflow cannot apply.",
+            ),
+            Self::UnsupportedPreservePaths => formatter.write_str(
+                "This release declares preserved paths that the current workflow cannot migrate.",
             ),
             Self::AlreadyInstalled => {
                 formatter.write_str("Package is already installed; use the update workflow.")
@@ -104,6 +116,9 @@ impl Error for InstallWorkflowError {
             Self::Package(error) => Some(error),
             Self::Activation(error) => Some(error),
             Self::UnsupportedOperation
+            | Self::UnsupportedPrerequisites
+            | Self::UnsupportedWindowsIntegrations
+            | Self::UnsupportedPreservePaths
             | Self::AlreadyInstalled
             | Self::NotInstalled
             | Self::TargetPathChanged
@@ -184,6 +199,17 @@ impl InstallWorkflow {
         ) {
             return Err(InstallWorkflowError::UnsupportedOperation);
         }
+        let install_policy = release.install();
+        if !install_policy.prerequisites().is_empty() {
+            return Err(InstallWorkflowError::UnsupportedPrerequisites);
+        }
+        if install_policy.windows_integration().has_actions() {
+            return Err(InstallWorkflowError::UnsupportedWindowsIntegrations);
+        }
+        if !install_policy.preserve_paths().is_empty() {
+            return Err(InstallWorkflowError::UnsupportedPreservePaths);
+        }
+
         let target_path = target_path.trim();
         if target_path.is_empty() {
             return Err(InstallWorkflowError::Io(io::Error::new(
