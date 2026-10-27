@@ -20,9 +20,7 @@ use turkuaz_installer_domain::{
     release::PackageRelease,
     state::InstalledPackageState,
 };
-use turkuaz_installer_install_state_store::{
-    InstallStateStoreError, JsonInstallStateRepository,
-};
+use turkuaz_installer_install_state_store::{InstallStateStoreError, JsonInstallStateRepository};
 use turkuaz_installer_operation_context::InstallerOperationContext;
 use turkuaz_installer_operation_journal::JsonOperationJournalRepository;
 use turkuaz_installer_operation_lock::{
@@ -261,7 +259,11 @@ impl InstallWorkflow {
                 if !state.target_path().eq_ignore_ascii_case(target_path) {
                     return Err(InstallWorkflowError::TargetPathChanged);
                 }
-                if release.version().compare_precedence(state.version()).is_le() {
+                if release
+                    .version()
+                    .compare_precedence(state.version())
+                    .is_le()
+                {
                     return Err(InstallWorkflowError::UpdateIsNotForward);
                 }
             }
@@ -279,24 +281,18 @@ impl InstallWorkflow {
         context.set_phase(InstallerOperationPhase::Verifying).await;
         context.set_phase(InstallerOperationPhase::Staging).await;
 
-        let stage_directory = self
-            .options
-            .staging_root
-            .join(format!("{}-{}", package_id.as_str(), Uuid::new_v4()));
-        let stage = match stage_full_package(
-            verified_artifact,
-            &release,
-            &stage_directory,
-            limits,
-        )
-        .await
-        {
-            Ok(stage) => stage,
-            Err(error) => {
-                context.fail(&error.to_string()).await;
-                return Err(InstallWorkflowError::Package(error));
-            }
-        };
+        let stage_directory =
+            self.options
+                .staging_root
+                .join(format!("{}-{}", package_id.as_str(), Uuid::new_v4()));
+        let stage =
+            match stage_full_package(verified_artifact, &release, &stage_directory, limits).await {
+                Ok(stage) => stage,
+                Err(error) => {
+                    context.fail(&error.to_string()).await;
+                    return Err(InstallWorkflowError::Package(error));
+                }
+            };
 
         context.set_phase(InstallerOperationPhase::Applying).await;
         let active = match self.options.deployment.publish_and_activate(stage) {
@@ -308,7 +304,9 @@ impl InstallWorkflow {
             }
         };
 
-        context.set_phase(InstallerOperationPhase::SavingState).await;
+        context
+            .set_phase(InstallerOperationPhase::SavingState)
+            .await;
         let new_state = InstalledPackageState::new(
             package_id.clone(),
             release.version().clone(),
@@ -320,7 +318,8 @@ impl InstallWorkflow {
                 Some(previous) => self
                     .options
                     .deployment
-                    .activate_existing(&package_id, previous.version()),
+                    .activate_existing(&package_id, previous.version())
+                    .map(|_| ()),
                 None => self
                     .options
                     .deployment
@@ -403,7 +402,9 @@ impl InstallWorkflow {
             }
         };
 
-        context.set_phase(InstallerOperationPhase::SavingState).await;
+        context
+            .set_phase(InstallerOperationPhase::SavingState)
+            .await;
         let previous_state = InstalledPackageState::new(
             package_id.clone(),
             previous_version,
@@ -428,5 +429,4 @@ impl InstallWorkflow {
         context.complete().await;
         Ok(active)
     }
-
 }
