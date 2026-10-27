@@ -1,9 +1,13 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 0.5.0
+// Version: 0.6.0
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
+
+mod builder;
+
+pub use builder::{PackageBuildError, build_full_package};
 
 use std::{
     collections::HashMap,
