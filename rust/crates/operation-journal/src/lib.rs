@@ -1,14 +1,13 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/operation-journal/src/lib.rs
 // Amac: Install workflow recovery icin operation checkpointlerini kalici JSON journalda saklamak
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: Journal entry'lerini bounded okur ve ayni dizinde atomik rename ile gunceller
 // Bagimli Oldugu Katman: Repo
 
 use std::{
     error::Error,
-    fmt,
-    io,
+    fmt, io,
     path::{Path, PathBuf},
 };
 
@@ -39,7 +38,9 @@ impl fmt::Display for JournalError {
         match self {
             Self::Io(error) => write!(formatter, "Operation journal I/O failed: {error}"),
             Self::Json(error) => write!(formatter, "Operation journal JSON is invalid: {error}"),
-            Self::InvalidEntry(message) => write!(formatter, "Operation journal entry is invalid: {message}"),
+            Self::InvalidEntry(message) => {
+                write!(formatter, "Operation journal entry is invalid: {message}")
+            }
         }
     }
 }
@@ -127,7 +128,9 @@ impl JsonOperationJournalRepository {
 
         let file_length = file.metadata().await.map_err(JournalError::Io)?.len();
         if file_length > MAX_JOURNAL_BYTES {
-            return Err(JournalError::InvalidEntry("journal exceeds the 1 MiB limit"));
+            return Err(JournalError::InvalidEntry(
+                "journal exceeds the 1 MiB limit",
+            ));
         }
 
         let mut bytes = Vec::with_capacity(file_length as usize);
@@ -161,10 +164,7 @@ impl JsonOperationJournalRepository {
             .map_err(JournalError::Io)?;
 
         let path = self.path_for(&entry.package_id);
-        let temporary_path = path.with_extension(format!(
-            "tmp-{}",
-            Uuid::new_v4()
-        ));
+        let temporary_path = path.with_extension(format!("tmp-{}", Uuid::new_v4()));
         let document = JournalDocument::from_entry(entry);
         let bytes = serde_json::to_vec_pretty(&document).map_err(JournalError::Json)?;
 
