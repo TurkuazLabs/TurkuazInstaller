@@ -54,7 +54,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- list \
   --data-root ./installer-data
 ```
 
-This is a read-only view of the installed-state repository. It prints one tab-separated row per package and reports an empty list when none are installed.
+This command holds each package's operation lock and checks that its active deployment version matches installed state. It prints one tab-separated row per package and reports an empty list when none are installed; a missing or mismatched active record is reported as an error.
 
 ## Verify installed files
 
