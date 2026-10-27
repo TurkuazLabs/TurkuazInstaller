@@ -189,38 +189,76 @@ fn describe_package_command() -> Result<(), Box<dyn Error>> {
         .peek()
         .is_some_and(|argument| matches!(argument.as_str(), "--help" | "-h"))
     {
-        println!("Usage: turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml");
+        println!(
+            "Usage: turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
+        );
         return Ok(());
     }
     let mut values = HashMap::new();
     while let Some(flag) = arguments.next() {
         let Some(key) = flag.strip_prefix("--") else {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "Package description options must use --name value form.").into());
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Package description options must use --name value form.",
+            )
+            .into());
         };
-        let value = arguments.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing."))?;
+        let value = arguments.next().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidInput, "An option value is missing.")
+        })?;
         if values.insert(key.to_owned(), value).is_some() {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "An option was provided more than once.").into());
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "An option was provided more than once.",
+            )
+            .into());
         }
     }
-    let allowed = ["package-id", "version", "channel", "package", "uri", "target", "output"];
+    let allowed = [
+        "package-id",
+        "version",
+        "channel",
+        "package",
+        "uri",
+        "target",
+        "output",
+    ];
     if values.keys().any(|key| !allowed.contains(&key.as_str())) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "An unknown package description option was provided.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "An unknown package description option was provided.",
+        )
+        .into());
     }
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
     let version = SemanticVersion::parse(required(&values, "version")?)?;
     let channel = required(&values, "channel")?.trim().to_ascii_lowercase();
     if !matches!(channel.as_str(), "stable" | "beta") {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Channel must be stable or beta.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Channel must be stable or beta.",
+        )
+        .into());
     }
     let artifact_uri = Url::parse(required(&values, "uri")?)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Artifact URI is invalid."))?;
-    if !matches!(artifact_uri.scheme(), "https" | "file") || (artifact_uri.scheme() == "https" && artifact_uri.host_str().is_none()) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Artifact URI must use HTTPS or file scheme.").into());
+    if !matches!(artifact_uri.scheme(), "https" | "file")
+        || (artifact_uri.scheme() == "https" && artifact_uri.host_str().is_none())
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Artifact URI must use HTTPS or file scheme.",
+        )
+        .into());
     }
     let package_path = absolute_path(Path::new(required(&values, "package")?))?;
     let metadata = std::fs::symlink_metadata(&package_path)?;
     if !metadata.file_type().is_file() || metadata.len() == 0 {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Package must be a non-empty regular file, not a symlink.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Package must be a non-empty regular file, not a symlink.",
+        )
+        .into());
     }
     let mut file = std::fs::File::open(&package_path)?;
     let mut hasher = Sha256::new();
@@ -229,24 +267,45 @@ fn describe_package_command() -> Result<(), Box<dyn Error>> {
     loop {
         use std::io::Read;
         let count = file.read(&mut buffer)?;
-        if count == 0 { break; }
-        actual_size = actual_size.checked_add(count as u64).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "Package size overflowed."))?;
+        if count == 0 {
+            break;
+        }
+        actual_size = actual_size.checked_add(count as u64).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::InvalidData, "Package size overflowed.")
+        })?;
         hasher.update(&buffer[..count]);
     }
     if actual_size != metadata.len() {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "Package changed while its descriptor was being generated.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Package changed while its descriptor was being generated.",
+        )
+        .into());
     }
     let digest = encode_sha256(&hasher.finalize());
     let target = required(&values, "target")?;
     if target.chars().any(char::is_control) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Target must not contain control characters.").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Target must not contain control characters.",
+        )
+        .into());
     }
     let output = absolute_path(Path::new(required(&values, "output")?))?;
     let manifest = format!(
         "schema_version: 1\npackage:\n  id: {}\n  version: {}\n  channel: {}\nartifact:\n  uri: {}\n  sha256: {}\n  size_bytes: {}\ninstall:\n  mode: full\n  target: {}\nrollback:\n  supported: false\n  previous_version_required: true\n",
-        package_id, version, channel, quote_yaml(artifact_uri.as_str())?, digest, actual_size, quote_yaml(target)?
+        package_id,
+        version,
+        channel,
+        quote_yaml(artifact_uri.as_str())?,
+        digest,
+        actual_size,
+        quote_yaml(target)?
     );
-    let mut output_file = std::fs::OpenOptions::new().write(true).create_new(true).open(&output)?;
+    let mut output_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&output)?;
     use std::io::Write;
     output_file.write_all(manifest.as_bytes())?;
     output_file.sync_all()?;
