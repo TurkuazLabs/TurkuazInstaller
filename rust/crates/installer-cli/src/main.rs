@@ -53,7 +53,7 @@ async fn main() {
 
 async fn run() -> Result<(), Box<dyn Error>> {
     if std::env::args().nth(1).as_deref() == Some("build-distribution-pair") {
-        return build_distribution_pair_command();
+        return build_distribution_pair_command().await;
     }
     if std::env::args().nth(1).as_deref() == Some("build-self-extracting-setup") {
         return build_self_extracting_setup_command();
@@ -334,7 +334,7 @@ async fn build_setup_bundle_command() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn build_distribution_pair_command() -> Result<(), Box<dyn Error>> {
+async fn build_distribution_pair_command() -> Result<(), Box<dyn Error>> {
     let values = parse_setup_bundle_options(&[
         "package-id",
         "stub",
@@ -375,6 +375,31 @@ fn build_distribution_pair_command() -> Result<(), Box<dyn Error>> {
     let staging_directory = parent.join(format!(".turkuaz-pair-{}-{nonce}", process::id()));
     std::fs::create_dir(&staging_directory)?;
     let mut staging_guard = DistributionStagingGuard(staging_directory.clone());
+    let verification_directory = staging_directory.join(".bundle-validation");
+    let verified_files = extract_setup_bundle(bundle_path.clone(), verification_directory)?;
+    let verification_guard = SetupBundleExtractionGuard(verified_files.root().to_path_buf());
+    let (manifest, manifest_length) =
+        read_bounded_local_file(verified_files.manifest_path(), MAXIMUM_MANIFEST_BYTES)?;
+    let (signature, signature_length) = read_bounded_local_file(
+        verified_files.signature_path(),
+        MAXIMUM_DETACHED_SIGNATURE_BYTES,
+    )?;
+    let trust_store = YamlManifestTrustPolicyRepository::new(trust_path.clone())?;
+    let mut manifest_source = std::io::Cursor::new(manifest.as_slice());
+    let mut signature_source = std::io::Cursor::new(signature.as_slice());
+    let release = read_verified_release(
+        &mut manifest_source,
+        &mut signature_source,
+        Some(manifest_length),
+        Some(signature_length),
+        &package_id,
+        &trust_store,
+    )
+    .await?;
+    let _verified_artifact =
+        verify_staged_artifact(verified_files.artifact_path(), release.artifact()).await?;
+    drop(verification_guard);
+
     let primary_setup = staging_directory.join("TurkuazSetup.exe");
     create_self_extracting_setup(stub_path, bundle_path, &primary_setup)?;
 
