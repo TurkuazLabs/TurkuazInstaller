@@ -187,6 +187,7 @@ impl VersionedDeploymentStore {
             &destination,
         ) {
             let _ = fs::remove_dir_all(&destination);
+            let _ = integrity::remove_inventory(&package_root, &version);
             return Err(error);
         }
 
