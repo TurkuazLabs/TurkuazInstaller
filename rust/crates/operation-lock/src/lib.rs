@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/operation-lock/src/lib.rs
 // Amac: Ayni package icin concurrent installer islemlerini processler arasinda engellemek
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: OS advisory file lock uzerinden fail-fast package scoped lease saglar
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -28,7 +28,9 @@ impl fmt::Display for OperationLockError {
             Self::Locked(package_id) => {
                 write!(formatter, "An operation is already active for package {package_id}")
             }
-            Self::Io(error) => write!(formatter, "Could not acquire installer operation lock: {error}"),
+            Self::Io(error) => {
+                write!(formatter, "Could not acquire installer operation lock: {error}")
+            }
         }
     }
 }
@@ -57,15 +59,18 @@ impl FileOperationLockOptions {
             ));
         }
 
-        Ok(Self {
-            root_directory: fs::canonicalize(root_directory).or_else(|error| {
-                if error.kind() == io::ErrorKind::NotFound {
-                    Ok(root_directory.to_path_buf())
-                } else {
-                    Err(error)
-                }
-            })?,
-        })
+        let absolute_directory = if root_directory.is_absolute() {
+            root_directory.to_path_buf()
+        } else {
+            std::env::current_dir()?.join(root_directory)
+        };
+        let root_directory = match fs::canonicalize(&absolute_directory) {
+            Ok(path) => path,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => absolute_directory,
+            Err(error) => return Err(error),
+        };
+
+        Ok(Self { root_directory })
     }
 
     pub fn root_directory(&self) -> &Path {
@@ -123,20 +128,19 @@ pub fn acquire_package_lock(
 fn write_owner_metadata(file: &File) -> io::Result<()> {
     file.set_len(0)?;
     let metadata = format!(
-        "pid={}\nutc={}\n",
+        "pid={}\nutc_unix_seconds={}\n",
         std::process::id(),
-        chrono_utc_timestamp(),
+        unix_timestamp_seconds(),
     );
     let mut writer = file;
     writer.write_all(metadata.as_bytes())?;
     writer.sync_all()
 }
 
-fn chrono_utc_timestamp() -> String {
+fn unix_timestamp_seconds() -> u64 {
     // Unix seconds are locale independent and sufficient for lock diagnostics.
-    let seconds = std::time::SystemTime::now()
+    std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
-        .as_secs();
-    seconds.to_string()
+        .as_secs()
 }
