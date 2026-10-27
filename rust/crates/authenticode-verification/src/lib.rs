@@ -107,7 +107,12 @@ mod windows_authenticode {
     use crate::AuthenticodeVerificationError;
 
     const MAX_SIGNER_INFO_BYTES: u32 = 1_048_576;
-    const GENERIC_VERIFY_V2: windows_sys::core::GUID = windows_sys::core::GUID {\n        data1: 0x00aa_c56b,\n        data2: 0xcd44,\n        data3: 0x11d0,\n        data4: [0x8c, 0xc2, 0x00, 0xc0, 0x4f, 0xc2, 0x95, 0xee],\n    };
+    const GENERIC_VERIFY_V2: windows_sys::core::GUID = windows_sys::core::GUID {
+        data1: 0x00aa_c56b,
+        data2: 0xcd44,
+        data3: 0x11d0,
+        data4: [0x8c, 0xc2, 0x00, 0xc0, 0x4f, 0xc2, 0x95, 0xee],
+    };
 
     struct QueriedMessage {
         store: *mut c_void,
@@ -239,7 +244,8 @@ mod windows_authenticode {
         let handles = QueriedMessage { store, message };
 
         let mut signer_count = 0_u32;
-        let mut count_size = size_of::<u32>() as u32;\n        let count_read = unsafe {
+        let mut count_size = size_of::<u32>() as u32;
+        let count_read = unsafe {
             // SAFETY: message is a live handle from CryptQueryObject; signer_count is writable.
             CryptMsgGetParam(
                 handles.message,
