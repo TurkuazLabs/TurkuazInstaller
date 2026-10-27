@@ -331,7 +331,6 @@ async fn build_setup_bundle_command() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-
 fn build_self_extracting_setup_command() -> Result<(), Box<dyn Error>> {
     let values = parse_setup_bundle_options(&["stub", "bundle", "output"])?;
     if values.is_empty() {
@@ -367,7 +366,8 @@ async fn install_self_setup_command() -> Result<(), Box<dyn Error>> {
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_nanos();
-    let embedded_bundle_path = data_root.join(format!(".setup-self-{}-{nonce}.tzsetup", process::id()));
+    let embedded_bundle_path =
+        data_root.join(format!(".setup-self-{}-{nonce}.tzsetup", process::id()));
     let executable_path = std::env::current_exe()?;
     let executable_for_worker = executable_path.clone();
     let bundle_for_worker = embedded_bundle_path.clone();
@@ -390,7 +390,6 @@ impl Drop for SetupBundleFileGuard {
         let _ = std::fs::remove_file(&self.0);
     }
 }
-
 
 async fn install_bundle_command() -> Result<(), Box<dyn Error>> {
     let values = parse_setup_bundle_options(&[
