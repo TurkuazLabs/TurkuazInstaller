@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/install-workflow/src/lib.rs
 // Amac: Verified full package'i stage edip versioned deployment ve installed state akisina baglamak
 // Modul - Rust Library
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: Package-scoped lock altinda install/update state gecislerini orkestre eder
 // Bagimli Oldugu Katman: Service
 
@@ -344,6 +344,119 @@ impl InstallWorkflow {
         let _ = fs::remove_dir_all(&stage_directory);
         context.complete().await;
         Ok(active)
+    }
+
+    /// @dev-id TIZ-WORKFLOW-REPAIR-010
+    /// @purpose Replace an installed version from its verified signed package while preserving version identity.
+    /// @reason Repair must work for a damaged deployment without mutating files that may still be in use.
+    /// @contract Requires the signed release version, installed state, active deployment, and target path to agree; stages a fresh immutable deployment and atomically activates it.
+    /// @depends VerifiedArtifact, package engine, operation journal, package lock, deployment store, and installed-state repository.
+    pub async fn repair(
+        &self,
+        verified_artifact: VerifiedArtifact,
+        release: PackageRelease,
+        target_path: &str,
+        limits: PackageExtractionLimits,
+    ) -> Result<ActiveDeployment, InstallWorkflowError> {
+        let install_policy = release.install();
+        if !install_policy.prerequisites().is_empty() {
+            return Err(InstallWorkflowError::UnsupportedPrerequisites);
+        }
+        if install_policy.windows_integration().has_actions() {
+            return Err(InstallWorkflowError::UnsupportedWindowsIntegrations);
+        }
+        if !install_policy.preserve_paths().is_empty() {
+            return Err(InstallWorkflowError::UnsupportedPreservePaths);
+        }
+        let target_path = target_path.trim();
+        if target_path.is_empty() {
+            return Err(InstallWorkflowError::Io(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Repair target path cannot be empty",
+            )));
+        }
+        if verified_artifact.descriptor() != release.artifact() {
+            return Err(InstallWorkflowError::Package(
+                PackageEngineError::InvalidPackage(
+                    "verified artifact does not match the requested signed release",
+                ),
+            ));
+        }
+
+        let package_id = release.package_id().clone();
+        let _lock_lease = acquire_package_lock(&self.options.lock, &package_id)
+            .map_err(InstallWorkflowError::Lock)?;
+        let installed = self
+            .options
+            .state
+            .get(&package_id)
+            .await
+            .map_err(InstallWorkflowError::State)?
+            .ok_or(InstallWorkflowError::NotInstalled)?;
+        if !installed.target_path().eq_ignore_ascii_case(target_path) {
+            return Err(InstallWorkflowError::TargetPathChanged);
+        }
+        let current = self
+            .options
+            .deployment
+            .current(&package_id)
+            .map_err(InstallWorkflowError::Activation)?
+            .ok_or(InstallWorkflowError::ActiveAndInstalledStateMismatch)?;
+        if current.version() != installed.version() {
+            return Err(InstallWorkflowError::ActiveAndInstalledStateMismatch);
+        }
+        if release.version() != installed.version() {
+            return Err(InstallWorkflowError::CurrentReleaseMismatch);
+        }
+        if let Some(journal) = &self.options.journal {
+            if journal.get(&package_id).await.map_err(|error| {
+                InstallWorkflowError::Io(io::Error::other(error.to_string()))
+            })?.is_some() {
+                return Err(InstallWorkflowError::UninstallHasPendingOperation);
+            }
+        }
+
+        let mut context = InstallerOperationContext::start(
+            package_id.clone(),
+            InstallerOperationType::Repair,
+            Some(release.version().to_string()),
+            target_path.to_owned(),
+            self.options.journal.clone(),
+        )
+        .await;
+        context.set_phase(InstallerOperationPhase::Verifying).await;
+        context.set_phase(InstallerOperationPhase::Staging).await;
+        let stage_directory = self
+            .options
+            .staging_root
+            .join(format!("{}-repair-{}", package_id.as_str(), Uuid::new_v4()));
+        let stage = match stage_full_package(
+            verified_artifact,
+            &release,
+            &stage_directory,
+            limits,
+        )
+        .await
+        {
+            Ok(stage) => stage,
+            Err(error) => {
+                context.fail(&error.to_string()).await;
+                return Err(InstallWorkflowError::Package(error));
+            }
+        };
+
+        context.set_phase(InstallerOperationPhase::Applying).await;
+        let repaired = match self.options.deployment.repair_current(stage) {
+            Ok(active) => active,
+            Err(error) => {
+                let _ = fs::remove_dir_all(&stage_directory);
+                context.fail(&error.to_string()).await;
+                return Err(InstallWorkflowError::Activation(error));
+            }
+        };
+        let _ = fs::remove_dir_all(&stage_directory);
+        context.complete().await;
+        Ok(repaired)
     }
 
     /// @dev-id TIZ-WORKFLOW-UNINSTALL-010
