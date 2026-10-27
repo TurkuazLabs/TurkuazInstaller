@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.1.0
-# Aciklama: Yalniz Rust workspace degisikliklerinde format ve compile kontrolu calistirir
+# Version: 0.2.0
+# Aciklama: Rust workspace icin format/compile kontrolu ve kisa omurlu Windows development CLI artifact'i uretir
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -50,3 +50,14 @@ jobs:
 
       - name: Compile Windows workspace
         run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets
+
+      - name: Build development CLI
+        run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer
+
+      - name: Upload development CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-installer-cli-development-windows-x64
+          path: rust/target/release/turkuaz-installer.exe
+          if-no-files-found: error
+          retention-days: 7
