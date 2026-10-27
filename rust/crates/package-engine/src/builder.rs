@@ -14,19 +14,14 @@ use std::{
 };
 
 use uuid::Uuid;
-use zip::{
-    CompressionMethod, ZipWriter,
-    result::ZipError,
-    write::SimpleFileOptions,
-};
+use zip::{CompressionMethod, ZipWriter, result::ZipError, write::SimpleFileOptions};
 
-use turkuaz_installer_domain::{
-    package_id::PackageId, semantic_version::SemanticVersion,
-};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 
 use crate::{
-    format::{PackageArchiveMetadata, PACKAGE_METADATA_ENTRY, PACKAGE_PAYLOAD_ROOT},
-    PackageExtractionLimits, PackageEngineError, validate_archive_path, validate_entry_conflicts,
+    PackageEngineError, PackageExtractionLimits,
+    format::{PACKAGE_METADATA_ENTRY, PACKAGE_PAYLOAD_ROOT, PackageArchiveMetadata},
+    validate_archive_path, validate_entry_conflicts,
 };
 
 #[derive(Debug)]
@@ -42,8 +37,12 @@ impl fmt::Display for PackageBuildError {
         match self {
             Self::Io(error) => write!(formatter, "Package build I/O failed: {error}"),
             Self::Archive(error) => write!(formatter, "Package archive build failed: {error}"),
-            Self::Metadata(error) => write!(formatter, "Package metadata serialization failed: {error}"),
-            Self::InvalidPackage(message) => write!(formatter, "Package source is invalid: {message}"),
+            Self::Metadata(error) => {
+                write!(formatter, "Package metadata serialization failed: {error}")
+            }
+            Self::InvalidPackage(message) => {
+                write!(formatter, "Package source is invalid: {message}")
+            }
         }
     }
 }
@@ -81,8 +80,7 @@ pub fn build_full_package(
     }
 
     let source_directory = source_directory.as_ref();
-    let source_metadata =
-        fs::symlink_metadata(source_directory).map_err(PackageBuildError::Io)?;
+    let source_metadata = fs::symlink_metadata(source_directory).map_err(PackageBuildError::Io)?;
     if source_metadata.file_type().is_symlink() || !source_metadata.is_dir() {
         return Err(PackageBuildError::InvalidPackage(
             "package source must be a non-symlink directory",
@@ -106,9 +104,11 @@ pub fn build_full_package(
         .unwrap_or_else(|| Path::new("."));
     fs::create_dir_all(output_parent).map_err(PackageBuildError::Io)?;
     let output_parent = fs::canonicalize(output_parent).map_err(PackageBuildError::Io)?;
-    let output_name = output_file.file_name().ok_or(PackageBuildError::InvalidPackage(
-        "package output file name is missing",
-    ))?;
+    let output_name = output_file
+        .file_name()
+        .ok_or(PackageBuildError::InvalidPackage(
+            "package output file name is missing",
+        ))?;
     let output_file = output_parent.join(output_name);
     if output_file.starts_with(&source_directory) {
         return Err(PackageBuildError::InvalidPackage(
@@ -212,10 +212,7 @@ fn collect_entries(
 
         let is_directory = metadata.is_dir();
         let normalized_path = archive_path.to_lowercase();
-        if entry_kinds
-            .insert(normalized_path, is_directory)
-            .is_some()
-        {
+        if entry_kinds.insert(normalized_path, is_directory).is_some() {
             return Err(PackageBuildError::InvalidPackage(
                 "package source contains duplicate or case-colliding paths",
             ));
@@ -227,9 +224,12 @@ fn collect_entries(
                 "package source file exceeds the configured size limit",
             ));
         }
-        *total_bytes = total_bytes.checked_add(size_bytes).ok_or(
-            PackageBuildError::InvalidPackage("package source expanded size overflowed"),
-        )?;
+        *total_bytes =
+            total_bytes
+                .checked_add(size_bytes)
+                .ok_or(PackageBuildError::InvalidPackage(
+                    "package source expanded size overflowed",
+                ))?;
         if *total_bytes > limits.maximum_total_bytes {
             return Err(PackageBuildError::InvalidPackage(
                 "package source exceeds the configured total size limit",
@@ -260,13 +260,9 @@ fn archive_path(path: &Path) -> Result<String, PackageBuildError> {
     let mut segments = Vec::new();
     for component in path.components() {
         match component {
-            Component::Normal(segment) => segments.push(
-                segment
-                    .to_str()
-                    .ok_or(PackageBuildError::InvalidPackage(
-                        "package source path is not valid Unicode",
-                    ))?,
-            ),
+            Component::Normal(segment) => segments.push(segment.to_str().ok_or(
+                PackageBuildError::InvalidPackage("package source path is not valid Unicode"),
+            )?),
             _ => {
                 return Err(PackageBuildError::InvalidPackage(
                     "package source path contains a non-relative component",
@@ -317,11 +313,13 @@ fn build_archive(
         }
 
         archive
-            .start_file(format!("{PACKAGE_PAYLOAD_ROOT}{}", entry.archive_path), options)
+            .start_file(
+                format!("{PACKAGE_PAYLOAD_ROOT}{}", entry.archive_path),
+                options,
+            )
             .map_err(PackageBuildError::Archive)?;
         let mut source = fs::File::open(&entry.source_path).map_err(PackageBuildError::Io)?;
-        let copied_bytes =
-            io::copy(&mut source, &mut archive).map_err(PackageBuildError::Io)?;
+        let copied_bytes = io::copy(&mut source, &mut archive).map_err(PackageBuildError::Io)?;
         if copied_bytes != entry.size_bytes {
             return Err(PackageBuildError::InvalidPackage(
                 "package source changed while it was being archived",
