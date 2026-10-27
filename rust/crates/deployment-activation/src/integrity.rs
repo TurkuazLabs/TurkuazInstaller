@@ -1,12 +1,11 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/deployment-activation/src/integrity.rs
 // Amac: Surumlu deployment dosyalarinin SHA-256 envanterini olusturmak ve denetlemek
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Etkin surumde ekleme, silme, boyut ve icerik degisikliklerini kayitli envanterle karsilastirir
 // Bagimli Oldugu Katman: Service | Infrastructure
 
 use std::{
-    error::Error,
     fmt::Write as _,
     fs, io,
     io::{Read, Write},
@@ -162,7 +161,7 @@ fn read_inventory(
         ));
     }
 
-    let mut file = fs::File::open(&path).map_err(DeploymentActivationError::Io)?;
+    let file = fs::File::open(&path).map_err(DeploymentActivationError::Io)?;
     let opened_metadata = file.metadata().map_err(DeploymentActivationError::Io)?;
     if !opened_metadata.is_file() || opened_metadata.len() != metadata.len() {
         return Err(DeploymentActivationError::InvalidInventory(
