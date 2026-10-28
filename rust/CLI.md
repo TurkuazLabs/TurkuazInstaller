@@ -225,7 +225,7 @@ TurkuazSetup.exe install-self \
   --operation install
 ```
 
-The signer trust policy remains an explicit input to the primary setup. The `setup-gui` stub opens a Windows desktop wizard with package ID, publisher trust policy, install/data paths, operation selection, progress state, and cancellation. The trust policy defaults to the adjacent `manifest-trust.yaml` produced in the paired distribution folder; confirm that this is the publisher's real policy, never the example file. Cancellation terminates the worker process; if it interrupted a journaled operation, use `recover` before retrying. Passing explicit CLI arguments continues to support scripted installs. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store. The `--stub` path must point to the `setup-gui` build above:
+The signer trust policy remains an explicit input to the primary setup. The `setup-gui` stub opens a Windows desktop wizard with package ID, publisher trust policy, install/data paths, operation selection, progress state, and cancellation. The trust policy defaults to the adjacent `manifest-trust.yaml` produced in the paired distribution folder; confirm that this is the publisher's real policy, never the example file. Cancellation terminates the worker process and then attempts `recover` automatically. If recovery reports an ambiguous state, follow its message for manual recovery. Passing explicit CLI arguments continues to support scripted installs. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store. The `--stub` path must point to the `setup-gui` build above:
 
 ```sh
 cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-distribution-pair \
