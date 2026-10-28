@@ -2,18 +2,18 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.1.0
+Version: 0.1.1
 Aciklama: Derleme kontrolunden gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
 # Windows smoke test ve kabul akisi
 
-Bu rehber, Community Rust CLI gelistirme ciktisini kontrollu bir Windows makinesinde denemek icindir. Bu cikti mevcut haliyle son kullaniciya dagitilacak GUI kurulum paketi degildir. Gercek imzali release paketi ve yayinlayici tarafindan saglanan guven politikasi olmadan kurulum kabul testi yapilamaz.
+Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde denemek icindir. GUI setup stub artifact'i yalniz arayuz kabugudur; release bundle eklenmeden kurulum yapmaz. Gercek imzali release paketi ve yayinlayici tarafindan saglanan guven politikasi olmadan lifecycle kabul testi yapilamaz.
 
 ## On kosullar
 
-- Guncel PR #63 Rust Migration CI calismasindan Windows x64 gelistirme CLI artifact'ini indirin. Artifact yedi gun sonra silinir; kullanmadan once Actions calismasinin tarihini kontrol edin.
+- Guncel PR #63 Rust Migration CI calismasindan hem Windows x64 development CLI hem de `turkuaz-setup-gui-stub-development-windows-x64` artifact'ini indirin. Ikisi de yedi gun sonra silinir; kullanmadan once Actions calismasinin tarihini kontrol edin.
 - Testi tercihen geri alinabilir bir Windows sanal makinesinde ve yonetici olmayan kullanici ile yapin.
 - Test uygulamasi icin ayri, gercekten imzalanmis `.tzpkg`, bu paketi gosteren imzali manifest ve detached CMS imzasi kullanin.
 - Ayni paket kimligi icin yayinlayici tarafindan saglanmis gercek trust policy dosyasini ayri tutun. Ornek YAML icindeki sifir pin ve ornek sertifika kimligi guvenilir degildir; uretimde kullanilamaz.
@@ -21,7 +21,7 @@ Bu rehber, Community Rust CLI gelistirme ciktisini kontrollu bir Windows makines
 
 ## Pozitif akisi
 
-PowerShell'de artifact'in bulundugu klasore gecip temel CLI yardimini gorun. Ciktiyi argumansiz acarak console-guided akisi da inceleyin; kurulumu baslatmadan cikmak icin Ctrl+C kullanin:
+CLI artifact'i ile komut yardimini gorun. GUI artifact'ini acarak kurulum penceresinin acildigini ve trust policy/dizin secicilerini inceleyin; bu ciplak stub'a bundle eklenmedigi icin kurulum baslatmayin. Tam kurulum akisini asagidaki dagitim cifti testinde kontrol edin:
 
 ```powershell
 .\turkuaz-installer.exe --help
@@ -50,7 +50,7 @@ Ayni test paketi icin yayinlayici tarafindan imzalanmis daha yuksek bir SemVer r
 
 ## Dagitim cifti kabul akisi
 
-Gercek release bundle'i ile `build-distribution-pair` komutunu calistirin. Komut NSIS yedegi de basariyla olusmadan cikti klasorunu yayinlamamalidir. Olusan iki EXE'yi Authenticode ile imzalayin; sonra imza dogrulamasini kontrol edin. Birincil Turkuaz setup ve NSIS yedegini temiz Windows sanal makinelerinde ayri ayri baslatip ayni paketin ayni surumunu kurdugunu dogrulayin. Baslangicta primary kurulum CLI tabanlidir; etkileşimli GUI beklemeyin.
+Gercek release bundle'i ile `build-distribution-pair` komutunu calistirin. Komut NSIS yedegi de basariyla olusmadan cikti klasorunu yayinlamamalidir. Olusan iki EXE'yi Authenticode ile imzalayin; sonra imza dogrulamasini kontrol edin. Birincil Turkuaz setup ve NSIS yedegini temiz Windows sanal makinelerinde ayri ayri baslatip ayni paketin ayni surumunu kurdugunu dogrulayin. Birincil Turkuaz setup `setup-gui` stub'ini kullanir; kurulum penceresi, islem secimi, indeterminate ilerleme durumu ve iptal secenegi gorunmelidir.
 
 ## Basari kanitlari ve hata raporu
 
@@ -60,4 +60,4 @@ Su durumlarda kabul basarisiz sayilir: gecersiz imza veya digest'in reddedilmeme
 
 ## Release oncesi kalan bloklar
 
-Bu rehber otomatik test veya kabul kaniti degildir. Mevcut migration CI workspace'i formatlar/derler ve NSIS script'ini derler; Rust testlerini ya da gercek Windows VM lifecycle'ini calistirmis sayilmaz. Son kullaniciya hazir dagitim icin GUI/progress/cancel, gercek Authenticode imza dogrulamasi, Windows adapter'lari, startup recovery, imzali uretim artifact'i ve temiz VM kabul sonucu ayrica gereklidir.
+Bu rehber otomatik test veya kabul kaniti degildir. Mevcut migration CI workspace'i formatlar/derler ve NSIS script'ini derler; Rust testlerini ya da gercek Windows VM lifecycle'ini calistirmis sayilmaz. Son kullaniciya hazir dagitim icin gercek Authenticode imza dogrulamasi, Windows adapter'lari, startup recovery, imzali uretim artifact'i ve temiz VM kabul sonucu ayrica gereklidir. Mevcut GUI iptali backend process'ini sonlandirir; tamamlanmamis journal varsa recovery gerekebilir.
