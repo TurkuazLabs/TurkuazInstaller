@@ -547,7 +547,9 @@ async fn install_self_setup_command() -> Result<(), Box<dyn Error>> {
 
 fn interactive_setup_options() -> Result<HashMap<String, String>, Box<dyn Error>> {
     println!("Turkuaz Installer - interactive setup");
-    println!("Use the signer trust policy supplied by the publisher. Do not use the example policy.");
+    println!(
+        "Use the signer trust policy supplied by the publisher. Do not use the example policy."
+    );
     println!("");
 
     let package_id = prompt_setup_value("Package ID", None)?;
