@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: Kullanici girdilerini alir, mevcut guvenli CLI kurulum motorunu arka planda calistirir
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -39,9 +39,9 @@ impl SetupOperation {
     const fn label(self) -> &'static str {
         match self {
             Self::Install => "Kur",
-            Self::Update => "Guncelle",
+            Self::Update => "Güncelle",
             Self::Repair => "Onar",
-            Self::Rollback => "Onceki surume don",
+            Self::Rollback => "Önceki sürüme dön",
         }
     }
 }
@@ -119,38 +119,38 @@ impl eframe::App for SetupApp {
         let mut start_requested = false;
         egui::CentralPanel::default().show(context, |ui| {
             ui.heading("Turkuaz Installer");
-            ui.label("Kurulum paketi imza ve butunluk kontrollerinden gecirilir.");
+            ui.label("Kurulum paketi imza ve bütünlük kontrollerinden geçirilir.");
             ui.add_space(12.0);
 
             ui.add_enabled_ui(!is_working, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label("Paket kimligi");
+                    ui.label("Paket kimliği");
                     ui.text_edit_singleline(&mut self.package_id);
                 });
-                ui.label("Paket kimligini yayincidan aldiginiz release bilgisiyle eslestirin.");
+                ui.label("Paket kimliğini yayincidan aldiginiz release bilgisiyle eslestirin.");
                 ui.add_space(10.0);
 
                 ui.horizontal(|ui| {
-                    ui.label("Yayinci guven politikasi");
+                    ui.label("Yayımcı güven politikası");
                     ui.text_edit_singleline(&mut self.trust_store);
-                    if ui.button("Dosya sec").clicked() {
+                    if ui.button("Dosya seç").clicked() {
                         if let Some(path) = rfd::FileDialog::new()
                             .add_filter("YAML", &["yaml", "yml"])
-                            .set_title("Yayinci guven politikasini secin")
+                            .set_title("Yayımcı güven politikasıni secin")
                             .pick_file()
                         {
                             self.trust_store = path.to_string_lossy().into_owned();
                         }
                     }
                 });
-                ui.label("Yayincinin sagladigi gercek trust dosyasini kullanin; ornek dosya guvenilir degildir.");
+                ui.label("Yayımcının sağladığı gerçek güven dosyasını kullanın; örnek dosya güvenilir değildir.");
                 ui.add_space(10.0);
 
                 ui.horizontal(|ui| {
-                    ui.label("Kurulum klasoru");
+                    ui.label("Kurulum klasörü");
                     ui.text_edit_singleline(&mut self.target);
-                    if ui.button("Klasor sec").clicked() {
-                        let mut picker = rfd::FileDialog::new().set_title("Kurulum klasorunu secin");
+                    if ui.button("Klasör seç").clicked() {
+                        let mut picker = rfd::FileDialog::new().set_title("Kurulum klasörünu secin");
                         if PathBuf::from(&self.target).is_dir() {
                             picker = picker.set_directory(&self.target);
                         }
@@ -162,9 +162,9 @@ impl eframe::App for SetupApp {
                 ui.add_space(10.0);
 
                 ui.horizontal(|ui| {
-                    ui.label("Veri klasoru");
+                    ui.label("Veri klasörü");
                     ui.text_edit_singleline(&mut self.data_root);
-                    if ui.button("Klasor sec").clicked() {
+                    if ui.button("Klasör seç").clicked() {
                         let mut picker = rfd::FileDialog::new().set_title("Installer veri klasorunu secin");
                         if PathBuf::from(&self.data_root).is_dir() {
                             picker = picker.set_directory(&self.data_root);
@@ -176,7 +176,7 @@ impl eframe::App for SetupApp {
                 });
                 ui.add_space(10.0);
 
-                egui::ComboBox::from_label("Islem")
+                egui::ComboBox::from_label("İşlem")
                     .selected_text(self.operation.label())
                     .show_ui(ui, |ui| {
                         for operation in SetupOperation::ALL {
@@ -198,14 +198,14 @@ impl eframe::App for SetupApp {
             if is_working {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    ui.label("Kurulum suruyor; release imzasi ve paket butunlugu denetleniyor.");
+                    ui.label("Kurulum sürüyor; sürüm imzası ve paket bütünlüğü denetleniyor.");
                 });
-                ui.label("Iptal edilirse backend durdurulur ve recovery otomatik denenir; durum belirsiz kalirsa manuel recovery gerekir.");
+                ui.label("İptal sırasında kurulum işlemi durdurulur ve kurtarma otomatik denenir; durum belirsiz kalırsa elle kurtarma gerekir.");
                 if ui.button("Kurulumu iptal et").clicked() {
                     self.request_cancel();
                 }
                 if self.cancel_requested {
-                    ui.label("Iptal istegi gonderildi; kurulum islemi sonlandiriliyor.");
+                    ui.label("İptal isteği gönderildi; kurulum işlemi sonlandırılıyor.");
                 }
                 context.request_repaint_after(Duration::from_millis(100));
             }
@@ -233,7 +233,7 @@ impl eframe::App for SetupApp {
 impl SetupApp {
     fn start_install(&mut self) {
         if let Err(error) = PackageId::parse(self.package_id.trim()) {
-            self.status = Some((false, format!("Paket kimligi gecersiz: {error}")));
+            self.status = Some((false, format!("Paket kimliği gecersiz: {error}")));
             return;
         }
         if self.trust_store.trim().is_empty()
@@ -242,7 +242,7 @@ impl SetupApp {
         {
             self.status = Some((
                 false,
-                "Guven politikasi ve klasor alanlari zorunludur.".to_owned(),
+                "Güven politikası ve klasör alanları zorunludur.".to_owned(),
             ));
             return;
         }
@@ -285,7 +285,7 @@ impl SetupApp {
                 Ok(result) => Some(result),
                 Err(TryRecvError::Empty) => None,
                 Err(TryRecvError::Disconnected) => Some(Err(
-                    "Kurulum islemi beklenmedik sekilde sonlandi.".to_owned(),
+                    "Kurulum işlemi beklenmedik şekilde sonlandı.".to_owned(),
                 )),
             },
             None => None,
@@ -354,7 +354,7 @@ fn run_installer_worker(
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait_with_output();
-                let _ = result_sender.send(Err(format!("Kurulum durumu okunamadi: {error}")));
+                let _ = result_sender.send(Err(format!("Kurulum durumu okunamadı: {error}")));
                 return;
             }
         }
@@ -405,10 +405,10 @@ fn run_installer_worker(
                             .unwrap_or("Otomatik recovery tamamlanamadi.")
                             .to_owned();
                         format!(
-                            "Kurulum iptal edildi; durum belirsiz. Manuel recovery gerekli: {detail}"
+                            "Kurulum iptal edildi; durum belirsiz. Elle kurtarma gerekli: {detail}"
                         )
                     }
-                    Err(error) => format!("Kurulum iptal edildi; recovery baslatilamadi: {error}"),
+                    Err(error) => format!("Kurulum iptal edildi; kurtarma başlatılamadı: {error}"),
                 };
                 let _ = result_sender.send(Err(message));
                 return;
@@ -425,7 +425,7 @@ fn run_installer_worker(
                 .lines()
                 .last()
                 .filter(|line| !line.trim().is_empty())
-                .unwrap_or("Kurulum tamamlandi.")
+                .unwrap_or("Kurulum tamamlandı.")
                 .to_owned();
             let _ = result_sender.send(Ok(message));
         }
@@ -437,11 +437,11 @@ fn run_installer_worker(
                 .last()
                 .filter(|line| !line.trim().is_empty())
                 .or_else(|| stdout.lines().last())
-                .unwrap_or("Kurulum basarisiz oldu.");
+                .unwrap_or("Kurulum başarısız oldu.");
             let _ = result_sender.send(Err(detail.to_owned()));
         }
         Err(error) => {
-            let _ = result_sender.send(Err(format!("Kurulum sonucu okunamadi: {error}")));
+            let _ = result_sender.send(Err(format!("Kurulum sonucu okunamadı: {error}")));
         }
     }
 }
