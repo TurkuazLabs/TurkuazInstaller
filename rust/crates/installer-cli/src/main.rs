@@ -156,6 +156,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     tokio::fs::create_dir_all(&data_root).await?;
     if operation == InstallerOperationType::Rollback {
         let target_directory = absolute_path(Path::new(target_path))?;
+        recover_pending_journal(&package_id, &target_directory, &data_root).await?;
         let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
         let journal = JsonOperationJournalRepository::new(
             JsonOperationJournalRepositoryOptions::new(data_root.join("journal"))?,
@@ -189,6 +190,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let _downloaded_artifact = DownloadedArtifactGuard(verified_artifact.path().to_path_buf());
 
     let target_directory = absolute_path(Path::new(target_path))?;
+    recover_pending_journal(&package_id, &target_directory, &data_root).await?;
     let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
         data_root.join("journal"),
@@ -718,14 +720,12 @@ async fn install_bundle_with_options(
     let verified_artifact =
         verify_staged_artifact(files.artifact_path(), release.artifact()).await?;
 
+    recover_pending_journal(&package_id, &target_directory, &data_root).await?;
+
+    let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
         data_root.join("journal"),
     )?);
-    if journal.get(&package_id).await?.is_some() {
-        run_startup_recovery(&package_id, &target_directory, &data_root)?;
-    }
-
-    let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
         data_root.join("state"),
     )?);
@@ -769,6 +769,20 @@ async fn install_bundle_with_options(
             )
             .await?;
         println!("Active package directory: {}", active.directory().display());
+    }
+    Ok(())
+}
+
+async fn recover_pending_journal(
+    package_id: &PackageId,
+    target_directory: &Path,
+    data_root: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
+        data_root.join("journal"),
+    )?);
+    if journal.get(package_id).await?.is_some() {
+        run_startup_recovery(package_id, target_directory, data_root)?;
     }
     Ok(())
 }
