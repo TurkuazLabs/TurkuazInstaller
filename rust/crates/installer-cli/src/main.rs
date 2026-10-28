@@ -773,7 +773,6 @@ async fn install_bundle_with_options(
     Ok(())
 }
 
-
 fn run_startup_recovery(
     package_id: &PackageId,
     target_directory: &Path,
