@@ -200,7 +200,7 @@ impl eframe::App for SetupApp {
                     ui.spinner();
                     ui.label("Kurulum suruyor; release imzasi ve paket butunlugu denetleniyor.");
                 });
-                ui.label("Kurulum kesilirse installed state'i uzlastirmak icin recover komutu gerekebilir.");
+                ui.label("Iptal edilirse backend durdurulur ve recovery otomatik denenir; durum belirsiz kalirsa manuel recovery gerekir.");
                 if ui.button("Kurulumu iptal et").clicked() {
                     self.request_cancel();
                 }
@@ -348,8 +348,32 @@ fn run_installer_worker(
     };
 
     loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {}
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait_with_output();
+                let _ = result_sender.send(Err(format!("Kurulum durumu okunamadi: {error}")));
+                return;
+            }
+        }
+
         match cancel_receiver.try_recv() {
             Ok(()) | Err(TryRecvError::Disconnected) => {
+                match child.try_wait() {
+                    Ok(Some(_)) => break,
+                    Ok(None) => {}
+                    Err(error) => {
+                        let _ = child.kill();
+                        let _ = child.wait_with_output();
+                        let _ = result_sender.send(Err(format!(
+                            "Iptal sirasinda kurulum durumu okunamadi: {error}"
+                        )));
+                        return;
+                    }
+                }
+
                 let _ = child.kill();
                 let _ = child.wait_with_output();
                 let recovery = Command::new(recovery_executable)
@@ -392,16 +416,7 @@ fn run_installer_worker(
             Err(TryRecvError::Empty) => {}
         }
 
-        match child.try_wait() {
-            Ok(Some(_)) => break,
-            Ok(None) => thread::sleep(Duration::from_millis(150)),
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait_with_output();
-                let _ = result_sender.send(Err(format!("Kurulum durumu okunamadi: {error}")));
-                return;
-            }
-        }
+        thread::sleep(Duration::from_millis(150));
     }
 
     match child.wait_with_output() {
