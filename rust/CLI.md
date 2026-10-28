@@ -204,7 +204,7 @@ Use `--operation update` for a higher signed version, `repair` for the currently
 
 ## Self-extracting Windows setup
 
-Package a verified offline bundle behind a Windows CLI executable stub:
+Package a verified offline bundle behind the Windows GUI setup stub. Build the stub with:
 
 ```sh
 cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-self-extracting-setup \
@@ -224,7 +224,7 @@ TurkuazSetup.exe install-self \
   --operation install
 ```
 
-The signer trust policy remains an explicit input to the primary setup. On Windows, launching `TurkuazSetup.exe` without arguments opens a guided console flow for package ID, publisher trust policy, install path, data path, and operation. The trust policy defaults to the adjacent `manifest-trust.yaml` produced in the paired distribution folder; confirm that this is the publisher's real policy, never the example file. The setup still requires a console and does not yet provide a graphical wizard. Passing `--help` shows command usage; passing `install-self` with explicit options continues to support scripted installs. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store:
+The signer trust policy remains an explicit input to the primary setup. The `setup-gui` stub opens a Windows desktop wizard with package ID, publisher trust policy, install/data paths, operation selection, progress state, and cancellation. The trust policy defaults to the adjacent `manifest-trust.yaml` produced in the paired distribution folder; confirm that this is the publisher's real policy, never the example file. Cancellation terminates the worker process; if it interrupted a journaled operation, use `recover` before retrying. Passing explicit CLI arguments continues to support scripted installs. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store:
 
 ```sh
 cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-distribution-pair \
@@ -235,4 +235,4 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-dist
   --output-dir ./distribution
 ```
 
-The command requires `makensis` on `PATH` (or `--makensis PATH`). It stages both outputs and publishes the directory only after NSIS succeeds. Share `distribution/TurkuazSetup.exe`; `TurkuazInstallerBackup.exe` is the mandatory fallback and supports install, update, repair, and policy-authorized rollback. Sign both final executables with Authenticode after building. The GUI and automated signing/publishing are still pending.
+The command requires `makensis` on `PATH` (or `--makensis PATH`). It stages both outputs and publishes the directory only after NSIS succeeds. Share `distribution/TurkuazSetup.exe`; `TurkuazInstallerBackup.exe` is the mandatory fallback and supports install, update, repair, and policy-authorized rollback. Sign both final executables with Authenticode after building. The GUI variant is compiled in Windows CI; real signed-package VM acceptance, automated production signing, and publishing remain pending.
