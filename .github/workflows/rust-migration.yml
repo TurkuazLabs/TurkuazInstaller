@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.2
+# Version: 0.2.3
 # Aciklama: Rust workspace icin format/compile kontrolu ve NSIS yedek setup derlemesini dogrular ve Windows development CLI artifact'i uretir
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -49,7 +49,7 @@ jobs:
 
   rust-windows:
     runs-on: windows-2025
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -81,6 +81,17 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: turkuaz-installer-cli-development-windows-x64
+          path: rust/target/release/turkuaz-installer.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build GUI setup stub
+        run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui
+
+      - name: Upload GUI setup stub artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-setup-gui-stub-development-windows-x64
           path: rust/target/release/turkuaz-installer.exe
           if-no-files-found: error
           retention-days: 7
