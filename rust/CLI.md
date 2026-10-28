@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.1
+Version: 0.4.2
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -224,7 +224,7 @@ TurkuazSetup.exe install-self \
   --operation install
 ```
 
-The signer trust policy remains an explicit input to the primary setup. This first Windows setup is command-line driven. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store:
+The signer trust policy remains an explicit input to the primary setup. On Windows, launching `TurkuazSetup.exe` without arguments opens a guided console flow for package ID, publisher trust policy, install path, data path, and operation. The trust policy defaults to the adjacent `manifest-trust.yaml` produced in the paired distribution folder; confirm that this is the publisher's real policy, never the example file. The setup still requires a console and does not yet provide a graphical wizard. Passing `--help` shows command usage; passing `install-self` with explicit options continues to support scripted installs. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store:
 
 ```sh
 cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-distribution-pair \
