@@ -240,7 +240,10 @@ impl SetupApp {
             || self.target.trim().is_empty()
             || self.data_root.trim().is_empty()
         {
-            self.status = Some((false, "Guven politikasi ve klasor alanlari zorunludur.".to_owned()));
+            self.status = Some((
+                false,
+                "Guven politikasi ve klasor alanlari zorunludur.".to_owned(),
+            ));
             return;
         }
 
@@ -281,9 +284,9 @@ impl SetupApp {
             Some(receiver) => match receiver.try_recv() {
                 Ok(result) => Some(result),
                 Err(TryRecvError::Empty) => None,
-                Err(TryRecvError::Disconnected) => {
-                    Some(Err("Kurulum islemi beklenmedik sekilde sonlandi.".to_owned()))
-                }
+                Err(TryRecvError::Disconnected) => Some(Err(
+                    "Kurulum islemi beklenmedik sekilde sonlandi.".to_owned(),
+                )),
             },
             None => None,
         };
@@ -311,7 +314,9 @@ fn run_installer_worker(
     let executable = match std::env::current_exe() {
         Ok(path) => path,
         Err(error) => {
-            let _ = result_sender.send(Err(format!("Setup executable path could not be read: {error}")));
+            let _ = result_sender.send(Err(format!(
+                "Setup executable path could not be read: {error}"
+            )));
             return;
         }
     };
