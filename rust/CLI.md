@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.2
+Version: 0.4.3
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -97,7 +97,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- recover \
   --data-root ./installer-data
 ```
 
-Recovery takes the package lock. It verifies and clears a stale journal when state and active version already agree. For an interrupted uninstall, it either clears a journal if the package is still active, or completes removal of the quarantined managed package when state indicates uninstall had begun. If a journal proves that an update or rollback activated its target but did not save installed state, it verifies the active file inventory and completes the state write. It clears a journal for an install that never activated a deployment. Ambiguous state, a missing journal with mismatched state, or a first install that activated but lacks installed state stops for manual recovery. Abandoned staging data is left untouched. This is an explicit CLI command; it does not run automatically at startup.
+Recovery takes the package lock. It verifies and clears a stale journal when state and active version already agree. For an interrupted uninstall, it either clears a journal if the package is still active, or completes removal of the quarantined managed package when state indicates uninstall had begun. If a journal proves that an update or rollback activated its target but did not save installed state, it verifies the active file inventory and completes the state write. It clears a journal for an install that never activated a deployment. Ambiguous state, a missing journal with mismatched state, or a first install that activated but lacks installed state stops for manual recovery. Abandoned staging data is left untouched. The online CLI still requires this explicit command. Verified offline bundle setup automatically invokes the same recovery workflow when it finds a pending journal before performing the requested operation.
 
 ## Launch the installed application
 
@@ -168,9 +168,9 @@ The Rust Migration CI workflow builds `turkuaz-installer-cli-development-windows
 
 ## Current limits
 
-This development command rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It does not offer progress/cancellation, recover interrupted operations at startup, or automatically remove unreferenced deployment directories. It accepts first install, forward update, same-version repair, and policy-gated rollback. Rollback requires the signed current release policy and selects only the previous recorded activation.
+The direct online install/update CLI rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It has no interactive progress or cancellation UI and does not automatically remove unreferenced deployment directories. It accepts first install, forward update, same-version repair, and policy-gated rollback. Rollback requires the signed current release policy and selects only the previous recorded activation. A pending operation journal is automatically sent through recovery before a verified offline bundle setup proceeds; ambiguous states stop setup and require manual recovery. The online CLI still requires the explicit `recover` command.
 
-The current binary is headless. It is not a GUI, self-extracting setup, signed release artifact, or production distribution. No Rust tests were run; consult the latest Rust Migration CI run for current format and compilation status.
+The default CLI build is headless. An optional Windows `setup-gui` build provides the desktop wizard and can be packaged with a verified `.tzsetup` bundle. This remains development software, not a signed production distribution. No Rust tests were run; consult the latest Rust Migration CI run for current compilation status.
 
 ## Offline setup bundles
 
@@ -200,7 +200,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- install-bu
   --operation install
 ```
 
-Use `--operation update` for a higher signed version, `repair` for the currently installed version, or `rollback` to restore the previous recorded deployment under the signed rollback policy. The installer rechecks the external trust policy, package digest, optional Authenticode signature, and package archive before activation. The bundle format accepts only its fixed, bounded entries and extracts them into temporary staging under the data root. A graphical bootstrapper and automated production signing/publishing are still pending.
+Use `--operation update` for a higher signed version, `repair` for the currently installed version, or `rollback` to restore the previous recorded deployment under the signed rollback policy. The installer rechecks the external trust policy, package digest, optional Authenticode signature, and package archive before activation. The bundle format accepts only its fixed, bounded entries and extracts them into temporary staging under the data root. After signature and artifact verification, the installer checks for a pending operation journal and runs recovery before starting the requested install/update/repair/rollback. If recovery cannot prove a safe state, the setup stops and reports the manual recovery command. Automated production signing/publishing are still pending.
 
 ## Self-extracting Windows setup
 
