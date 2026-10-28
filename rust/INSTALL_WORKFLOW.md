@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/INSTALL_WORKFLOW.md
 Amac: Verified full package install ve forward update orkestrasyon sözleşmesini açıklamak
 Modul - Markdown Specification
-Version: 0.2.0
+Version: 0.2.1
 Aciklama: Kilit, stage, etkin deployment ve kurulu state adımlarının sırasını kaydeder
 Bagimli Oldugu Katman: Service | Documentation
 -->
@@ -26,7 +26,7 @@ The caller supplies a `VerifiedArtifact`, a typed `PackageRelease`, operation ty
 7. If state persistence fails, restore the former active version; for a first install remove the active record. Return a distinct compensation failure if the restore also fails.
 8. Remove the temporary stage on both success and failure, then complete the operation context.
 
-Journal persistence follows the current best-effort operation-context contract. The CLI has an explicit recovery command for provable state transitions after a crash, but recovery is not automatic at startup. A missing journal or ambiguous first-install state fails closed and may require manual recovery.
+Journal persistence follows the current best-effort operation-context contract. The CLI retains an explicit recovery command for manual use. Online install/update/repair/rollback and verified offline bundle operations also check for a pending journal after verifying the incoming signed release and artifact when applicable, then run conservative recovery before starting the requested operation. Generic recovery at every application launch is not implemented. A missing journal with mismatched state or an ambiguous first-install state fails closed and may require manual recovery.
 
 ## Repair
 
@@ -34,13 +34,13 @@ The repair method requires installed state and active deployment to agree on pac
 
 ## Rollback
 
-The service rollback method requires the caller to provide the signed current release policy. It selects the previous version recorded in active.json, updates installed state, and restores the former active version if state persistence fails. The CLI exposes this operation when given the signed manifest for the currently installed version. It can move one recorded activation at a time; release history and automatic startup recovery are not implemented.
+The service rollback method requires the caller to provide the signed current release policy. It selects the previous version recorded in active.json, updates installed state, and restores the former active version if state persistence fails. The CLI exposes this operation when given the signed manifest for the currently installed version. It can move one recorded activation at a time; release history and generic recovery at application startup are not implemented.
 
 ## Current limits
 
 - Install, forward Update, same-version Repair, and policy-gated rollback are supported by the development CLI and service.
 - The package must be a full `.tzpkg`; delta application is not wired. Releases declaring prerequisites, Windows integration actions, or preserved paths are rejected until those adapters are implemented.
 - The deployment directory is selected by caller configuration. The workflow records the requested target path in installed state, but does not create shortcuts or a stable launch entry.
-- Prerequisite checks/installers, Windows registry/shortcut integration, progress events, cancellation, automatic startup recovery, and UI integration remain future work.
+- Prerequisite checks/installers, Windows registry/shortcut integration, progress events, automatic recovery at application launch, and UI integration remain future work.
 - The Windows CLI CI artifact is a development binary, not the Turkuaz setup.
 - No Rust tests were run for this implementation. Current branch CI compilation/format status must be checked before treating the implementation as buildable.
