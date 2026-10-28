@@ -42,7 +42,11 @@ Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .N
 - `manifest-parser`: schema v1 YAML alanlarini domain invariant'lariyla eslestirir; bilinmeyen alanlari yok sayar ve taninmayan channel, install mode, shortcut location veya signature algorithm degerlerini reddeder.
 - Community Rust CI Linux format/workspace compile ve Windows workspace compile kapilarini calistirir; Windows compile sonrasi yedi gun saklanan development CLI binary artifact'i yukler. Bu binary Turkuaz setup veya production release degildir. .NET CI mevcut Community davranis referansini dogrulamaya devam eder.
 
-Manifest intake typed Rust release modeline ulasir. Ozel paket v1 builder/staging ve versioned activation mevcut; ilk install/ileri update workflow'u bu katmanlari package lock, journal ve kurulu-state repository ile baglar. Release providerlari, startup recovery, prerequisite/Windows integration ve WinUI henuz tasinmadi; rollback service workflow'u ve imzali CLI komutu eklendi; yalnizca active kaydindaki bir onceki deployment'a doner. Development CLI source olarak eklendi. Rust Migration CI #534 Linux/Windows format ve compile kontrollerini, Windows CLI build/artifact upload adimini gecti; gelistirme CLI artifact'i 2026-11-03'e kadar indirilebilir. End-user acceptance henuz yapilmadi. Rust portu tamamlanmis, release-ready veya mevcut .NET runtime'in yerine gecmis degildir.
+Manifest intake typed Rust release modeline ulasir. Ozel paket v1 builder/staging ve versioned activation mevcut; ilk install/ileri update workflow'u bu katmanlari package lock, journal ve kurulu-state repository ile baglar. Release providerlari, startup recovery, prerequisite/Windows integration ve WinUI henuz tasinmadi; rollback service workflow'u ve imzali CLI komutu eklendi; yalnizca active kaydindaki bir onceki deployment'a doner. Development CLI source olarak eklendi. Rust Migration CI #614 Linux/Windows format ve compile kontrollerini, Windows CLI build/artifact upload adimini gecti; gelistirme CLI artifact'i 2026-11-03'e kadar indirilebilir. End-user acceptance henuz yapilmadi. Rust portu tamamlanmis, release-ready veya mevcut .NET runtime'in yerine gecmis degildir.
+
+## Windows smoke test
+
+Gelistirme artifact'ini gercek imzali release girdileriyle temiz bir Windows VM'de denemek icin [SMOKE_TEST.md](SMOKE_TEST.md) adimlarini izleyin. Bu kabul akisi henuz calistirilmis degildir; CI derleme sonucu VM kurulum kabulunun yerine gecmez.
 
 ## Migration order
 
