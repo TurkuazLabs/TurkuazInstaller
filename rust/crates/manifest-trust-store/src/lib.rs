@@ -1,14 +1,15 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/manifest-trust-store/src/lib.rs
 // Amac: Package bazli manifest signer policy'lerini dis YAML dosyasindan resolve etmek
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Schema version, package kimligi, duplicate kayit ve policy pinini fail-closed dogrular
 // Bagimli Oldugu Katman: Infrastructure
 
 use std::{
     collections::HashSet,
     error::Error,
-    fmt, fs, io,
+    fmt, fs,
+    io::{self, Read},
     path::{Path, PathBuf},
 };
 
@@ -16,11 +17,13 @@ use serde::Deserialize;
 use turkuaz_installer_domain::{manifest_trust_policy::ManifestTrustPolicy, package_id::PackageId};
 
 const SUPPORTED_SCHEMA_VERSION: u32 = 1;
+const MAXIMUM_TRUST_STORE_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug)]
 pub enum TrustStoreError {
     Io(io::Error),
     InvalidYaml(serde_yaml::Error),
+    InvalidTrustStoreSize,
     EmptyDocument,
     UnsupportedSchemaVersion,
     InvalidPackageId,
@@ -35,6 +38,9 @@ impl fmt::Display for TrustStoreError {
             Self::InvalidYaml(error) => {
                 write!(formatter, "Manifest trust store YAML is invalid: {error}")
             }
+            Self::InvalidTrustStoreSize => formatter.write_str(
+                "Manifest trust store must be a regular file no larger than 1 MiB and remain unchanged while read.",
+            ),
             Self::EmptyDocument => formatter.write_str("Manifest trust store is empty."),
             Self::UnsupportedSchemaVersion => {
                 formatter.write_str("Manifest trust store schema version is not supported.")
@@ -94,11 +100,23 @@ impl YamlManifestTrustPolicyRepository {
         &self,
         package_id: &PackageId,
     ) -> Result<Option<ManifestTrustPolicy>, TrustStoreError> {
-        let yaml = match fs::read_to_string(&self.file_path) {
-            Ok(yaml) => yaml,
+        let file = match fs::File::open(&self.file_path) {
+            Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(TrustStoreError::Io(error)),
         };
+        let metadata = file.metadata().map_err(TrustStoreError::Io)?;
+        if !metadata.is_file() || metadata.len() > MAXIMUM_TRUST_STORE_BYTES {
+            return Err(TrustStoreError::InvalidTrustStoreSize);
+        }
+
+        let mut yaml = String::new();
+        file.take(MAXIMUM_TRUST_STORE_BYTES + 1)
+            .read_to_string(&mut yaml)
+            .map_err(TrustStoreError::Io)?;
+        if yaml.len() as u64 != metadata.len() || yaml.len() as u64 > MAXIMUM_TRUST_STORE_BYTES {
+            return Err(TrustStoreError::InvalidTrustStoreSize);
+        }
 
         let document: Option<TrustStoreDocument> =
             serde_yaml::from_str(&yaml).map_err(TrustStoreError::InvalidYaml)?;
