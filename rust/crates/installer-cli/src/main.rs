@@ -799,7 +799,8 @@ fn run_startup_recovery(
         .lines()
         .last()
         .filter(|line| !line.trim().is_empty())
-        .unwrap_or("Recovery could not prove a safe package state.");
+        .unwrap_or("Recovery could not prove a safe package state.")
+        .to_owned();
     Err(io::Error::other(format!(
         "Automatic recovery failed; setup stopped safely. Run the recover command manually: {detail}"
     ))
