@@ -320,18 +320,22 @@ fn run_installer_worker(
             return;
         }
     };
+    let recovery_executable = executable.clone();
+    let recovery_package_id = package_id.clone();
+    let recovery_target = target.clone();
+    let recovery_data_root = data_root.clone();
     let mut child = match Command::new(executable)
         .arg("install-self")
         .arg("--package-id")
-        .arg(package_id)
+        .arg(&package_id)
         .arg("--trust-store")
-        .arg(trust_store)
+        .arg(&trust_store)
         .arg("--target")
-        .arg(target)
+        .arg(&target)
         .arg("--data-root")
-        .arg(data_root)
+        .arg(&data_root)
         .arg("--operation")
-        .arg(operation)
+        .arg(&operation)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -348,10 +352,41 @@ fn run_installer_worker(
             Ok(()) | Err(TryRecvError::Disconnected) => {
                 let _ = child.kill();
                 let _ = child.wait_with_output();
-                let _ = result_sender.send(Err(
-                    "Kurulum iptal edildi. Islem yarida kesildiyse recover komutunu calistirin."
-                        .to_owned(),
-                ));
+                let recovery = Command::new(recovery_executable)
+                    .arg("recover")
+                    .arg("--package-id")
+                    .arg(&recovery_package_id)
+                    .arg("--target")
+                    .arg(&recovery_target)
+                    .arg("--data-root")
+                    .arg(&recovery_data_root)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .output();
+                let message = match recovery {
+                    Ok(output) if output.status.success() => {
+                        let detail = String::from_utf8_lossy(&output.stdout)
+                            .lines()
+                            .last()
+                            .filter(|line| !line.trim().is_empty())
+                            .unwrap_or("Kurulum durumu uzlastirildi.");
+                        format!("Kurulum iptal edildi. {detail}")
+                    }
+                    Ok(output) => {
+                        let detail = String::from_utf8_lossy(&output.stderr)
+                            .lines()
+                            .last()
+                            .filter(|line| !line.trim().is_empty())
+                            .unwrap_or("Otomatik recovery tamamlanamadi.");
+                        format!(
+                            "Kurulum iptal edildi; durum belirsiz. Manuel recovery gerekli: {detail}"
+                        )
+                    }
+                    Err(error) => format!(
+                        "Kurulum iptal edildi; recovery baslatilamadi: {error}"
+                    ),
+                };
+                let _ = result_sender.send(Err(message));
                 return;
             }
             Err(TryRecvError::Empty) => {}
