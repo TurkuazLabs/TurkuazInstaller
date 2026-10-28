@@ -1,3 +1,5 @@
+#![cfg_attr(all(windows, feature = "setup-gui"), windows_subsystem = "windows")]
+
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
@@ -43,6 +45,9 @@ use turkuaz_installer_package_engine::{
 };
 use url::Url;
 
+#[cfg(all(windows, feature = "setup-gui"))]
+mod setup_gui;
+
 #[tokio::main]
 async fn main() {
     if let Err(error) = run().await {
@@ -62,7 +67,15 @@ async fn run() -> Result<(), Box<dyn Error>> {
         return install_self_setup_command().await;
     }
     if std::env::args().nth(1).is_none() {
-        return install_self_setup_command().await;
+        #[cfg(all(windows, feature = "setup-gui"))]
+        {
+            setup_gui::run()?;
+            return Ok(());
+        }
+        #[cfg(not(all(windows, feature = "setup-gui")))]
+        {
+            return install_self_setup_command().await;
+        }
     }
     if std::env::args().nth(1).as_deref() == Some("build-setup-bundle") {
         return build_setup_bundle_command().await;
