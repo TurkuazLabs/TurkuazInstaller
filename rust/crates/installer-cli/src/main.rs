@@ -61,6 +61,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
     if std::env::args().nth(1).as_deref() == Some("install-self") {
         return install_self_setup_command().await;
     }
+    if std::env::args().nth(1).is_none() {
+        return install_self_setup_command().await;
+    }
     if std::env::args().nth(1).as_deref() == Some("build-setup-bundle") {
         return build_setup_bundle_command().await;
     }
