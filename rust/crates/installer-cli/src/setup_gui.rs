@@ -382,9 +382,7 @@ fn run_installer_worker(
                             "Kurulum iptal edildi; durum belirsiz. Manuel recovery gerekli: {detail}"
                         )
                     }
-                    Err(error) => format!(
-                        "Kurulum iptal edildi; recovery baslatilamadi: {error}"
-                    ),
+                    Err(error) => format!("Kurulum iptal edildi; recovery baslatilamadi: {error}"),
                 };
                 let _ = result_sender.send(Err(message));
                 return;
