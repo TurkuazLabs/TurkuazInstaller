@@ -21,7 +21,7 @@ Bu rehber, Community Rust CLI gelistirme ciktisini kontrollu bir Windows makines
 
 ## Pozitif akisi
 
-PowerShell'de artifact'in bulundugu klasore gecin ve surumu gorun:
+PowerShell'de artifact'in bulundugu klasore gecip temel CLI yardimini gorun. Ciktiyi argumansiz acarak console-guided akisi da inceleyin; kurulumu baslatmadan cikmak icin Ctrl+C kullanin:
 
 ```powershell
 .\turkuaz-installer.exe --help
