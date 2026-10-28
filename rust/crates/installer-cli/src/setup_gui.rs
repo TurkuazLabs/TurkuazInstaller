@@ -127,7 +127,7 @@ impl eframe::App for SetupApp {
                     ui.label("Paket kimliği");
                     ui.text_edit_singleline(&mut self.package_id);
                 });
-                ui.label("Paket kimliğini yayincidan aldiginiz release bilgisiyle eslestirin.");
+                ui.label("Paket kimliğini yayımcıdan aldığınız yayın bilgileriyle eşleştirin.");
                 ui.add_space(10.0);
 
                 ui.horizontal(|ui| {
@@ -136,7 +136,7 @@ impl eframe::App for SetupApp {
                     if ui.button("Dosya seç").clicked() {
                         if let Some(path) = rfd::FileDialog::new()
                             .add_filter("YAML", &["yaml", "yml"])
-                            .set_title("Yayımcı güven politikasıni secin")
+                            .set_title("Yayımcı güven politikasını seçin")
                             .pick_file()
                         {
                             self.trust_store = path.to_string_lossy().into_owned();
@@ -150,7 +150,7 @@ impl eframe::App for SetupApp {
                     ui.label("Kurulum klasörü");
                     ui.text_edit_singleline(&mut self.target);
                     if ui.button("Klasör seç").clicked() {
-                        let mut picker = rfd::FileDialog::new().set_title("Kurulum klasörünu secin");
+                        let mut picker = rfd::FileDialog::new().set_title("Kurulum klasörünü seçin");
                         if PathBuf::from(&self.target).is_dir() {
                             picker = picker.set_directory(&self.target);
                         }
@@ -165,7 +165,7 @@ impl eframe::App for SetupApp {
                     ui.label("Veri klasörü");
                     ui.text_edit_singleline(&mut self.data_root);
                     if ui.button("Klasör seç").clicked() {
-                        let mut picker = rfd::FileDialog::new().set_title("Installer veri klasorunu secin");
+                        let mut picker = rfd::FileDialog::new().set_title("Yükleyici veri klasörünü seçin");
                         if PathBuf::from(&self.data_root).is_dir() {
                             picker = picker.set_directory(&self.data_root);
                         }
@@ -189,7 +189,7 @@ impl eframe::App for SetupApp {
                     });
                 ui.add_space(14.0);
 
-                if ui.button(format!("{} ve dogrula", self.operation.label())).clicked() {
+                if ui.button(format!("{} ve doğrula", self.operation.label())).clicked() {
                     start_requested = true;
                 }
             });
@@ -233,7 +233,7 @@ impl eframe::App for SetupApp {
 impl SetupApp {
     fn start_install(&mut self) {
         if let Err(error) = PackageId::parse(self.package_id.trim()) {
-            self.status = Some((false, format!("Paket kimliği gecersiz: {error}")));
+            self.status = Some((false, format!("Paket kimliği geçersiz: {error}")));
             return;
         }
         if self.trust_store.trim().is_empty()
@@ -368,7 +368,7 @@ fn run_installer_worker(
                         let _ = child.kill();
                         let _ = child.wait_with_output();
                         let _ = result_sender.send(Err(format!(
-                            "Iptal sirasinda kurulum durumu okunamadi: {error}"
+                            "İptal sırasında kurulum durumu okunamadı: {error}"
                         )));
                         return;
                     }
@@ -393,7 +393,7 @@ fn run_installer_worker(
                             .lines()
                             .last()
                             .filter(|line| !line.trim().is_empty())
-                            .unwrap_or("Kurulum durumu uzlastirildi.")
+                            .unwrap_or("Kurulum durumu uzlaştırıldı.")
                             .to_owned();
                         format!("Kurulum iptal edildi. {detail}")
                     }
@@ -402,7 +402,7 @@ fn run_installer_worker(
                             .lines()
                             .last()
                             .filter(|line| !line.trim().is_empty())
-                            .unwrap_or("Otomatik recovery tamamlanamadi.")
+                            .unwrap_or("Otomatik kurtarma tamamlanamadı.")
                             .to_owned();
                         format!(
                             "Kurulum iptal edildi; durum belirsiz. Elle kurtarma gerekli: {detail}"
