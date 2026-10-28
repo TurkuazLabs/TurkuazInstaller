@@ -551,6 +551,7 @@ fn interactive_setup_options() -> Result<HashMap<String, String>, Box<dyn Error>
     println!("");
 
     let package_id = prompt_setup_value("Package ID", None)?;
+    PackageId::parse(&package_id)?;
     let executable = std::env::current_exe()?;
     let sidecar_trust = executable
         .parent()
