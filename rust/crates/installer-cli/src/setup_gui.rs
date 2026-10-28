@@ -369,7 +369,8 @@ fn run_installer_worker(
                             .lines()
                             .last()
                             .filter(|line| !line.trim().is_empty())
-                            .unwrap_or("Kurulum durumu uzlastirildi.");
+                            .unwrap_or("Kurulum durumu uzlastirildi.")
+                            .to_owned();
                         format!("Kurulum iptal edildi. {detail}")
                     }
                     Ok(output) => {
@@ -377,7 +378,8 @@ fn run_installer_worker(
                             .lines()
                             .last()
                             .filter(|line| !line.trim().is_empty())
-                            .unwrap_or("Otomatik recovery tamamlanamadi.");
+                            .unwrap_or("Otomatik recovery tamamlanamadi.")
+                            .to_owned();
                         format!(
                             "Kurulum iptal edildi; durum belirsiz. Manuel recovery gerekli: {detail}"
                         )
