@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Kullanici girdilerini alir, mevcut guvenli CLI kurulum motorunu arka planda calistirir
 // Bagimli Oldugu Katman: Presentation | Application
 
