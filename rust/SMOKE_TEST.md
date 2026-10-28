@@ -60,4 +60,4 @@ Su durumlarda kabul basarisiz sayilir: gecersiz imza veya digest'in reddedilmeme
 
 ## Release oncesi kalan bloklar
 
-Bu rehber otomatik test veya kabul kaniti degildir. Mevcut migration CI workspace'i formatlar/derler ve NSIS script'ini derler; Rust testlerini ya da gercek Windows VM lifecycle'ini calistirmis sayilmaz. Son kullaniciya hazir dagitim icin gercek Authenticode imza dogrulamasi, Windows adapter'lari, startup recovery, imzali uretim artifact'i ve temiz VM kabul sonucu ayrica gereklidir. Mevcut GUI iptali backend process'ini sonlandirir; tamamlanmamis journal varsa recovery gerekebilir.
+Bu rehber otomatik test veya kabul kaniti degildir. Mevcut migration CI workspace'i formatlar/derler ve NSIS script'ini derler; Rust testlerini ya da gercek Windows VM lifecycle'ini calistirmis sayilmaz. Son kullaniciya hazir dagitim icin gercek Authenticode imza dogrulamasi, Windows adapter'lari, startup recovery, imzali uretim artifact'i ve temiz VM kabul sonucu ayrica gereklidir. GUI iptali backend process'ini sonlandirip recovery'yi otomatik dener; recovery belirsiz durum bildirirse manuel adimlari izleyin.
