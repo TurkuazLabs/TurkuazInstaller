@@ -321,9 +321,7 @@ where
 
             if read >= MAX_CAPTURED_BACKEND_OUTPUT_BYTES {
                 captured.clear();
-                captured.extend_from_slice(
-                    &buffer[read - MAX_CAPTURED_BACKEND_OUTPUT_BYTES..read],
-                );
+                captured.extend_from_slice(&buffer[read - MAX_CAPTURED_BACKEND_OUTPUT_BYTES..read]);
                 continue;
             }
 
@@ -395,7 +393,7 @@ fn run_installer_worker(
             let _ = child.kill();
             let _ = child.wait();
             let _ = result_sender.send(Err(
-                "Setup backend output streams could not be captured.".to_owned(),
+                "Setup backend output streams could not be captured.".to_owned()
             ));
             return;
         }
