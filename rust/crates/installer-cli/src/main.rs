@@ -1,15 +1,15 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.7
-// Aciklama: HTTPS release intake, package build, install/update/repair/rollback, paket listesi, deployment dogrulamasi ve kurulu uygulamayi baslatma icin headless CLI'dir
+// Version: 0.2.8
+// Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
 use std::{
     collections::HashMap,
     error::Error,
     io,
-    io::Read,
+    io::{BufRead, Read},
     path::{Path, PathBuf},
     process,
 };
@@ -512,10 +512,13 @@ async fn install_self_setup_command() -> Result<(), Box<dyn Error>> {
         "operation",
     ])?;
     if values.is_empty() {
-        println!(
-            "Usage: TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback"
-        );
-        return Ok(());
+        if std::env::args().skip(2).next().is_some() {
+            println!(
+                "Usage: TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback"
+            );
+            return Ok(());
+        }
+        values = interactive_setup_options()?;
     }
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
     std::fs::create_dir_all(&data_root)?;
@@ -537,6 +540,86 @@ async fn install_self_setup_command() -> Result<(), Box<dyn Error>> {
         embedded_bundle_path.to_string_lossy().into_owned(),
     );
     install_bundle_with_options(values).await
+}
+
+fn interactive_setup_options() -> Result<HashMap<String, String>, Box<dyn Error>> {
+    println!("Turkuaz Installer - interactive setup");
+    println!("Use the signer trust policy supplied by the publisher. Do not use the example policy.");
+    println!("");
+
+    let package_id = prompt_setup_value("Package ID", None)?;
+    let executable = std::env::current_exe()?;
+    let sidecar_trust = executable
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("manifest-trust.yaml");
+    let sidecar_trust_text = sidecar_trust.to_string_lossy().into_owned();
+    let trust_store = prompt_setup_value("Publisher trust policy file", Some(&sidecar_trust_text))?;
+
+    let local_app_data = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or(std::env::current_dir()?);
+    let default_target = local_app_data
+        .join("Programs")
+        .join("TurkuazLabs")
+        .join(&package_id)
+        .to_string_lossy()
+        .into_owned();
+    let target = prompt_setup_value("Install directory", Some(&default_target))?;
+    let default_data_root = local_app_data
+        .join("TurkuazInstaller")
+        .to_string_lossy()
+        .into_owned();
+    let data_root = prompt_setup_value("Installer data directory", Some(&default_data_root))?;
+
+    println!("");
+    println!("Operation: [1] Install (default)  [2] Update  [3] Repair  [4] Rollback");
+    let selected_operation = prompt_setup_value("Select 1-4", Some("1"))?;
+    let operation = match selected_operation.as_str() {
+        "1" => "install",
+        "2" => "update",
+        "3" => "repair",
+        "4" => "rollback",
+        _ => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Choose operation 1, 2, 3, or 4.",
+            )
+            .into());
+        }
+    };
+
+    let mut values = HashMap::new();
+    values.insert("package-id".to_owned(), package_id);
+    values.insert("trust-store".to_owned(), trust_store);
+    values.insert("target".to_owned(), target);
+    values.insert("data-root".to_owned(), data_root);
+    values.insert("operation".to_owned(), operation.to_owned());
+    Ok(values)
+}
+
+fn prompt_setup_value(label: &str, default: Option<&str>) -> Result<String, io::Error> {
+    match default {
+        Some(value) => println!("{label} [{value}]:"),
+        None => println!("{label}:"),
+    }
+    let mut input = String::new();
+    io::stdin().lock().read_line(&mut input)?;
+    let input = input.trim();
+    let value = if input.is_empty() {
+        default.unwrap_or_default()
+    } else {
+        input
+    }
+    .trim_matches('"')
+    .trim();
+    if value.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("{label} is required."),
+        ));
+    }
+    Ok(value.to_owned())
 }
 
 struct SetupBundleFileGuard(PathBuf);
