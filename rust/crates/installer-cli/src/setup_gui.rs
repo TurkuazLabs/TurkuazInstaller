@@ -6,10 +6,12 @@
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
+    io::{self, Read},
     path::PathBuf,
     process::{Command, Stdio},
     sync::mpsc::{self, Receiver, Sender, TryRecvError},
     thread,
+    thread::JoinHandle,
     time::Duration,
 };
 
@@ -302,6 +304,46 @@ impl SetupApp {
     }
 }
 
+const MAX_CAPTURED_BACKEND_OUTPUT_BYTES: usize = 64 * 1024;
+
+fn start_output_reader<R>(mut reader: R) -> JoinHandle<io::Result<Vec<u8>>>
+where
+    R: Read + Send + 'static,
+{
+    thread::spawn(move || {
+        let mut captured = Vec::with_capacity(MAX_CAPTURED_BACKEND_OUTPUT_BYTES);
+        let mut buffer = [0_u8; 8192];
+        loop {
+            let read = reader.read(&mut buffer)?;
+            if read == 0 {
+                break;
+            }
+
+            if read >= MAX_CAPTURED_BACKEND_OUTPUT_BYTES {
+                captured.clear();
+                captured.extend_from_slice(
+                    &buffer[read - MAX_CAPTURED_BACKEND_OUTPUT_BYTES..read],
+                );
+                continue;
+            }
+
+            let overflow = captured
+                .len()
+                .saturating_add(read)
+                .saturating_sub(MAX_CAPTURED_BACKEND_OUTPUT_BYTES);
+            if overflow > 0 {
+                captured.drain(..overflow);
+            }
+            captured.extend_from_slice(&buffer[..read]);
+        }
+        Ok(captured)
+    })
+}
+
+fn finish_output_reader(reader: JoinHandle<io::Result<Vec<u8>>>) -> Vec<u8> {
+    reader.join().ok().and_then(Result::ok).unwrap_or_default()
+}
+
 fn run_installer_worker(
     package_id: String,
     trust_store: String,
@@ -347,13 +389,29 @@ fn run_installer_worker(
         }
     };
 
+    let (stdout, stderr) = match (child.stdout.take(), child.stderr.take()) {
+        (Some(stdout), Some(stderr)) => (stdout, stderr),
+        _ => {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = result_sender.send(Err(
+                "Setup backend output streams could not be captured.".to_owned(),
+            ));
+            return;
+        }
+    };
+    let stdout_reader = start_output_reader(stdout);
+    let stderr_reader = start_output_reader(stderr);
+
     loop {
         match child.try_wait() {
             Ok(Some(_)) => break,
             Ok(None) => {}
             Err(error) => {
                 let _ = child.kill();
-                let _ = child.wait_with_output();
+                let _ = child.wait();
+                let _ = finish_output_reader(stdout_reader);
+                let _ = finish_output_reader(stderr_reader);
                 let _ = result_sender.send(Err(format!("Kurulum durumu okunamadı: {error}")));
                 return;
             }
@@ -366,7 +424,9 @@ fn run_installer_worker(
                     Ok(None) => {}
                     Err(error) => {
                         let _ = child.kill();
-                        let _ = child.wait_with_output();
+                        let _ = child.wait();
+                        let _ = finish_output_reader(stdout_reader);
+                        let _ = finish_output_reader(stderr_reader);
                         let _ = result_sender.send(Err(format!(
                             "İptal sırasında kurulum durumu okunamadı: {error}"
                         )));
@@ -375,7 +435,9 @@ fn run_installer_worker(
                 }
 
                 let _ = child.kill();
-                let _ = child.wait_with_output();
+                let _ = child.wait();
+                let _ = finish_output_reader(stdout_reader);
+                let _ = finish_output_reader(stderr_reader);
                 let recovery = Command::new(recovery_executable)
                     .arg("recover")
                     .arg("--package-id")
@@ -419,29 +481,35 @@ fn run_installer_worker(
         thread::sleep(Duration::from_millis(150));
     }
 
-    match child.wait_with_output() {
-        Ok(output) if output.status.success() => {
-            let message = String::from_utf8_lossy(&output.stdout)
-                .lines()
-                .last()
-                .filter(|line| !line.trim().is_empty())
-                .unwrap_or("Kurulum tamamlandı.")
-                .to_owned();
-            let _ = result_sender.send(Ok(message));
-        }
-        Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            let detail = stderr
-                .lines()
-                .last()
-                .filter(|line| !line.trim().is_empty())
-                .or_else(|| stdout.lines().last())
-                .unwrap_or("Kurulum başarısız oldu.");
-            let _ = result_sender.send(Err(detail.to_owned()));
-        }
+    let status = match child.wait() {
+        Ok(status) => status,
         Err(error) => {
+            let _ = finish_output_reader(stdout_reader);
+            let _ = finish_output_reader(stderr_reader);
             let _ = result_sender.send(Err(format!("Kurulum sonucu okunamadı: {error}")));
+            return;
         }
+    };
+    let stdout = finish_output_reader(stdout_reader);
+    let stderr = finish_output_reader(stderr_reader);
+
+    if status.success() {
+        let message = String::from_utf8_lossy(&stdout)
+            .lines()
+            .last()
+            .filter(|line| !line.trim().is_empty())
+            .unwrap_or("Kurulum tamamlandı.")
+            .to_owned();
+        let _ = result_sender.send(Ok(message));
+    } else {
+        let stderr = String::from_utf8_lossy(&stderr);
+        let stdout = String::from_utf8_lossy(&stdout);
+        let detail = stderr
+            .lines()
+            .last()
+            .filter(|line| !line.trim().is_empty())
+            .or_else(|| stdout.lines().last())
+            .unwrap_or("Kurulum başarısız oldu.");
+        let _ = result_sender.send(Err(detail.to_owned()));
     }
 }
