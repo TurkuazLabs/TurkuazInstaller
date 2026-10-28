@@ -718,10 +718,14 @@ async fn install_bundle_with_options(
     let verified_artifact =
         verify_staged_artifact(files.artifact_path(), release.artifact()).await?;
 
-    let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
         data_root.join("journal"),
     )?);
+    if journal.get(&package_id).await?.is_some() {
+        run_startup_recovery(&package_id, &target_directory, &data_root)?;
+    }
+
+    let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
         data_root.join("state"),
     )?);
@@ -767,6 +771,40 @@ async fn install_bundle_with_options(
         println!("Active package directory: {}", active.directory().display());
     }
     Ok(())
+}
+
+
+fn run_startup_recovery(
+    package_id: &PackageId,
+    target_directory: &Path,
+    data_root: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let output = process::Command::new(std::env::current_exe()?)
+        .arg("recover")
+        .arg("--package-id")
+        .arg(package_id.to_string())
+        .arg("--target")
+        .arg(target_directory)
+        .arg("--data-root")
+        .arg(data_root)
+        .output()?;
+    if output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stdout);
+        if !detail.trim().is_empty() {
+            print!("{detail}");
+        }
+        return Ok(());
+    }
+
+    let detail = String::from_utf8_lossy(&output.stderr)
+        .lines()
+        .last()
+        .filter(|line| !line.trim().is_empty())
+        .unwrap_or("Recovery could not prove a safe package state.");
+    Err(io::Error::other(format!(
+        "Automatic recovery failed; setup stopped safely. Run the recover command manually: {detail}"
+    ))
+    .into())
 }
 
 struct SetupBundleExtractionGuard(PathBuf);
