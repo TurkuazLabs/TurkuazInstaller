@@ -258,7 +258,14 @@ try {
     $programFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
     $sdkBin = Join-Path $programFilesX86 'Windows Kits\10\bin'
     $signTool = Get-ChildItem -LiteralPath $sdkBin -Filter 'signtool.exe' -File -Recurse |
-        Where-Object { $_.FullName -match '\\x64\\signtool\.exe    $subject = Get-CertificateSubjectForPolicy
+        Where-Object { $_.Directory.Name -eq 'x64' } |
+        Select-Object -First 1
+    if (!$signTool) {
+        throw 'Windows SDK signtool.exe was not found.'
+    }
+    $script:SignToolPath = $signTool.FullName
+
+    $subject = Get-CertificateSubjectForPolicy
     $hasher = [System.Security.Cryptography.SHA256]::Create()
     try {
         $certificatePin = [BitConverter]::ToString($hasher.ComputeHash($script:TestCertificate.RawData)).Replace('-', '').ToLowerInvariant()
