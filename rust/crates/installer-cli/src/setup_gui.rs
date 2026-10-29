@@ -455,7 +455,11 @@ fn run_installer_worker(
     let is_uninstall = operation == "uninstall";
     let mut backend = Command::new(executable);
     backend
-        .arg(if is_uninstall { "uninstall" } else { "install-self" })
+        .arg(if is_uninstall {
+            "uninstall"
+        } else {
+            "install-self"
+        })
         .arg("--package-id")
         .arg(&package_id)
         .arg("--target")
