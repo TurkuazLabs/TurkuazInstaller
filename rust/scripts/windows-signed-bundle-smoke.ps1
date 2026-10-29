@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.5
-# Aciklama: Ephemeral signer guveni eklemeden Authenticode setup akislarini dogrular
+# Version: 0.2.6
+# Aciklama: Imzali lifecycle smoke'unu calistirir ve istenirse test dagitim ciftini saklar
 # Bagimli Oldugu Katman: QA | Tool
 param(
     [Parameter(Mandatory = $true)]
@@ -13,7 +13,10 @@ param(
     [string]$GuiStubPath,
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$MakensisPath
+    [string]$MakensisPath,
+    [Parameter(Mandatory = $false)]
+    [ValidateNotNullOrEmpty()]
+    [string]$RetainDistributionPath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -276,7 +279,7 @@ try {
     Add-Type -AssemblyName System.Security.Cryptography.Pkcs
 
     Write-Host '==> create ephemeral test certificate'
-    $script:TestCertificate = New-SelfSignedCertificate -Subject 'CN=TurkuazInstaller CI Smoke,O=TurkuazLabs,C=US' -CertStoreLocation 'Cert:\CurrentUser\My' -Type CodeSigningCert -KeyAlgorithm RSA -KeyLength 2048 -HashAlgorithm SHA256 -NotAfter (Get-Date).AddDays(2)
+    $script:TestCertificate = New-SelfSignedCertificate -Subject 'CN=TurkuazInstaller CI Smoke,O=TurkuazLabs,C=US' -CertStoreLocation 'Cert:\CurrentUser\My' -Type CodeSigningCert -KeyAlgorithm RSA -KeyLength 2048 -HashAlgorithm SHA256 -NotAfter (Get-Date).AddDays(30)
 
     Write-Host '    Ephemeral test certificate created.'
     Write-Host '==> keep the ephemeral signer out of trusted stores'
@@ -323,14 +326,34 @@ packages:
     $rustSource = @'
 use std::{env, fs};
 
+#[link(name = "user32")]
+extern "system" {
+    fn MessageBoxW(
+        hwnd: *mut std::ffi::c_void,
+        text: *const u16,
+        caption: *const u16,
+        kind: u32,
+    ) -> i32;
+}
+
 fn main() {
-    let marker = env::var_os("TURKUAZ_CI_SMOKE_MARKER").expect("marker path is required");
-    fs::write(marker, "launched").expect("could not write the launch marker");
+    if let Some(marker) = env::var_os("TURKUAZ_CI_SMOKE_MARKER") {
+        fs::write(marker, "launched").expect("could not write the launch marker");
+        return;
+    }
+
+    let caption: Vec<u16> = "Turkuaz Installer test app\0".encode_utf16().collect();
+    let text: Vec<u16> = "Turkuaz Installer test uygulamasi basariyla calisti.\nKurulum ve uygulama baslatma akisinin ornek testi.\0"
+        .encode_utf16()
+        .collect();
+    unsafe {
+        let _ = MessageBoxW(std::ptr::null_mut(), text.as_ptr(), caption.as_ptr(), 0);
+    }
 }
 '@
     [IO.File]::WriteAllText($fixtureSource, $rustSource, [Text.UTF8Encoding]::new($false))
     $rustcResult = Invoke-ExternalProcess -Step 'compile launch fixture' -FilePath 'rustc' -Arguments @(
-        '--edition=2021', $fixtureSource, '-o', $script:FixtureExecutable
+        '--edition=2021', $fixtureSource, '-o', $script:FixtureExecutable, '-C', 'windows-subsystem=windows'
     )
     if ($rustcResult.ExitCode -ne 0) {
         throw "Could not compile the launch fixture; rustc exit code $($rustcResult.ExitCode)."
@@ -472,6 +495,62 @@ fn main() {
     if (!(Test-Path -LiteralPath $sentinelPath -PathType Leaf) -or
         [IO.File]::ReadAllText($sentinelPath) -ne 'unmanaged') {
         throw 'The second uninstall removed or changed the unmanaged sentinel file.'
+    }
+
+    if (![string]::IsNullOrWhiteSpace($RetainDistributionPath)) {
+        $retainedDirectory = [IO.Path]::GetFullPath($RetainDistributionPath)
+        $normalizedRetained = $retainedDirectory.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+        foreach ($ephemeralPath in @($script:WorkDirectory, $script:TargetPath, $script:DataRoot)) {
+            $normalizedEphemeral = [IO.Path]::GetFullPath($ephemeralPath).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+            if ($normalizedRetained.Equals($normalizedEphemeral, [StringComparison]::OrdinalIgnoreCase) -or
+                $normalizedRetained.StartsWith($normalizedEphemeral + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+                throw 'The retained distribution path must be outside the disposable smoke-test paths.'
+            }
+        }
+        if (Test-Path -LiteralPath $retainedDirectory) {
+            throw "Refusing to overwrite retained test distribution: $retainedDirectory"
+        }
+        New-Item -ItemType Directory -Path $retainedDirectory -Force | Out-Null
+        foreach ($sourcePath in @(
+            (Join-Path $distributionDirectory 'TurkuazSetup.exe'),
+            (Join-Path $distributionDirectory 'TurkuazInstallerBackup.exe'),
+            $script:TrustStorePath,
+            $script:InstallerPath
+        )) {
+            Copy-Item -LiteralPath $sourcePath -Destination $retainedDirectory
+        }
+        $readme = @'
+# Turkuaz Installer ornek test kurulumu
+
+Bu arsiv yalnizca gelistirme testi icindir. Paket kimligi ci.smoke, paket surumu 1.1.0'dur.
+
+## Deneme
+
+1. Arsivi ayri bir klasore cikartin.
+2. TurkuazSetup.exe dosyasini calistirin. CI test sertifikasi self-signed ve Windows guven magazasina eklenmemistir; Windows yayinci uyarisi gosterebilir. Bu production imzasi degildir.
+3. Kurulum sihirbazinda paket kimligini ci.smoke birakin. Kurulum dizinini `%LOCALAPPDATA%\TurkuazInstaller-Test\App`, veri dizinini `%LOCALAPPDATA%\TurkuazInstaller-Test\Data` secin.
+4. Kurulumdan sonra ornek uygulamayi baslatmak icin PowerShell'de:
+
+```powershell
+$root = Join-Path $env:LOCALAPPDATA 'TurkuazInstaller-Test'
+& '.\__CLI_FILE__' launch --package-id ci.smoke --target (Join-Path $root 'App') --data-root (Join-Path $root 'Data')
+```
+
+## Temizleme
+
+Ayni App ve Data yollarini kullandiysaniz, test paketini kaldirmak icin:
+
+```powershell
+$root = Join-Path $env:LOCALAPPDATA 'TurkuazInstaller-Test'
+& '.\__CLI_FILE__' uninstall --package-id ci.smoke --target (Join-Path $root 'App') --data-root (Join-Path $root 'Data') --confirm-uninstall YES
+```
+
+Bu dagitim, CI tarafinda olusturulan gecici test sertifikasi ile imzalanmistir. `manifest-trust.yaml` yalnizca test manifestinin dogrulanmasi icindir; production guven politikasi olarak kullanmayin ve sertifikayi Windows Trusted Root deposuna eklemeyin. Artifact yedi gun tutulur.
+'@
+        $readme = $readme.Replace('__CLI_FILE__', [IO.Path]::GetFileName($script:InstallerPath))
+        [IO.File]::WriteAllText((Join-Path $retainedDirectory 'README-TR.txt'), $readme, [Text.UTF8Encoding]::new($false))
+        Write-Host "Retained test-only distribution at: $retainedDirectory"
+        Write-Host 'The retained sample includes a test setup pair, pinned test trust policy, a CLI for launch/uninstall, and a visible demo app.'
     }
 
     Write-Host 'Signed offline bundle and self-extracting distribution smoke passed.'
