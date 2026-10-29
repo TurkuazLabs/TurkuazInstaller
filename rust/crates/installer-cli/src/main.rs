@@ -1348,7 +1348,23 @@ async fn uninstall_command() -> Result<(), Box<dyn Error>> {
     let target_directory = absolute_path(Path::new(required(&values, "target")?.trim()))?;
     let target_path = target_directory.to_string_lossy().into_owned();
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
+    let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
+        data_root.join("journal"),
+    )?);
+    let interrupted_uninstall = journal
+        .get(&package_id)
+        .await?
+        .is_some_and(|entry| entry.operation == InstallerOperationType::Uninstall);
     recover_pending_journal(&package_id, &target_directory, &data_root).await?;
+    if interrupted_uninstall {
+        let state = JsonInstallStateRepository::new(JsonInstallStateRepositoryOptions::new(
+            data_root.join("state"),
+        )?);
+        if state.get(&package_id).await?.is_none() {
+            println!("Recovered interrupted uninstall; package={package_id} is removed.");
+            return Ok(());
+        }
+    }
     let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
         data_root.join("journal"),
