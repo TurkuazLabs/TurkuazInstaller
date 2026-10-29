@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.6
+Version: 0.4.7
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -170,13 +170,13 @@ The trust-store file is supplied out of band and must contain a signer policy fo
 
 The requested target directory contains a `.turkuaz-installer` deployment store with immutable package version directories and an active record. The separate data root contains operation locks, journal, installed state, downloads, and temporary package stages. The CLI prints the active package directory after a successful operation.
 
-The Rust Migration CI workflow builds `turkuaz-installer-cli-development-windows-x64` after the Windows compile passes. GitHub Actions retains that development binary for seven days. It is not the Turkuaz setup and is not a production release.
+The Rust Migration CI workflow builds a versioned Windows x64 development CLI artifact (`turkuaz-installer-cli-v<version>-windows-x64`) after the Windows compile passes. GitHub Actions retains that development binary for seven days. It is not the Turkuaz setup and is not a production release.
 
 ## Current limits
 
 The direct online install/update CLI rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It has no interactive progress or cancellation UI and does not automatically remove unreferenced deployment directories. It accepts first install, forward update, same-version repair, and policy-gated rollback. Rollback requires the signed current release policy and selects only the previous recorded activation. A pending journal is automatically checked and conservatively recovered before verified online/offline setup and before launch, verify, uninstall, or per-package listing. Ambiguous states stop the command for manual recovery.
 
-The default CLI build is headless. An optional Windows `setup-gui` build provides the desktop wizard and can be packaged with a verified `.tzsetup` bundle. This remains development software, not a signed production distribution. No Rust tests were run; consult the latest Rust Migration CI run for current compilation status.
+The default CLI build is headless. An optional Windows `setup-gui` build provides the desktop wizard and can be packaged with a verified `.tzsetup` bundle. This remains development software, not a signed production distribution. Rust workspace tests and strict Clippy are enforced by Rust Migration CI. These checks do not replace real signed-package Windows VM acceptance.
 
 ## Offline setup bundles
 
