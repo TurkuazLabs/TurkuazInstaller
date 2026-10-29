@@ -3,7 +3,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.11
+// Version: 0.2.12
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -534,7 +534,7 @@ async fn install_self_setup_command() -> Result<(), Box<dyn Error>> {
         "operation",
     ])?;
     if values.is_empty() {
-        if std::env::args().skip(2).next().is_some() {
+        if std::env::args().nth(2).is_some() {
             println!(
                 "Usage: TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback"
             );
@@ -569,7 +569,7 @@ fn interactive_setup_options() -> Result<HashMap<String, String>, Box<dyn Error>
     println!(
         "Use the signer trust policy supplied by the publisher. Do not use the example policy."
     );
-    println!("");
+    println!();
 
     let package_id = prompt_setup_value("Package ID", None)?;
     PackageId::parse(&package_id)?;
@@ -597,7 +597,7 @@ fn interactive_setup_options() -> Result<HashMap<String, String>, Box<dyn Error>
         .into_owned();
     let data_root = prompt_setup_value("Installer data directory", Some(&default_data_root))?;
 
-    println!("");
+    println!();
     println!("Operation: [1] Install (default)  [2] Update  [3] Repair  [4] Rollback");
     let selected_operation = prompt_setup_value("Select 1-4", Some("1"))?;
     let operation = match selected_operation.as_str() {
