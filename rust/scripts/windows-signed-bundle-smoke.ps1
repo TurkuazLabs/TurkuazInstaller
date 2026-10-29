@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.3
+# Version: 0.2.4
 # Aciklama: Ephemeral signer guveni eklemeden Authenticode setup akislarini dogrular
 # Bagimli Oldugu Katman: QA | Tool
 param(
@@ -419,8 +419,11 @@ fn main() {
     Write-Host '==> inspect Authenticode signature without adding the test signer to a trusted store'
     $authenticodeSignature = Get-AuthenticodeSignature -LiteralPath $primarySetup
     $authenticodeStatus = [string]$authenticodeSignature.Status
-    if ($authenticodeStatus -notin @('Valid', 'NotTrusted')) {
-        throw "The primary setup Authenticode signature is invalid: status=$authenticodeStatus message=$($authenticodeSignature.StatusMessage)"
+    $statusMessage = [string]$authenticodeSignature.StatusMessage
+    $untrustedRootOnly = $statusMessage -match 'A certificate chain processed,\s*but terminated in a root certificate which is not trusted by the trust provider\.'
+    if ($authenticodeStatus -notin @('Valid', 'NotTrusted') -and
+        !($authenticodeStatus -eq 'UnknownError' -and $untrustedRootOnly)) {
+        throw "The primary setup Authenticode signature is invalid: status=$authenticodeStatus message=$statusMessage"
     }
     if (!$authenticodeSignature.SignerCertificate -or
         $authenticodeSignature.SignerCertificate.Thumbprint -ne $script:TestCertificate.Thumbprint) {

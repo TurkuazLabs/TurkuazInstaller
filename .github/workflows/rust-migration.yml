@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.11
+# Version: 0.2.12
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS ve timeout sinirli Windows setup lifecycle kabulini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
