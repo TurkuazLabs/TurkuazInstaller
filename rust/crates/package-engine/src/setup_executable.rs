@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/setup_executable.rs
 // Amac: Imzali Turkuaz setup bundle'ini Windows CLI stub'ina guvenli bicimde eklemek ve cikarmak
 // Modul - Rust Setup Executable
-// Version: 0.2.0
+// Version: 0.2.1
 // Aciklama: PE stub sonuna bounded bundle ekler; Authenticode sertifika tablosu sonrasinda footer'i bulabilir
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -9,7 +9,7 @@ use std::{
     error::Error,
     fmt, fs, io,
     io::{Read, Seek, SeekFrom, Write},
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use sha2::{Digest, Sha256};

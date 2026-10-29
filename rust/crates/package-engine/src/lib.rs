@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 0.9.0
+// Version: 0.9.1
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -515,7 +515,7 @@ fn reject_reserved_windows_name(segment: &str) -> Result<(), PackageEngineError>
         .split('.')
         .next()
         .unwrap_or_default()
-        .trim_end_matches(|character| matches!(character, ' ' | '.'))
+        .trim_end_matches([' ', '.'])
         .to_ascii_uppercase();
     let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
         || ["COM", "LPT"].iter().any(|prefix| {
@@ -535,7 +535,7 @@ fn reject_reserved_windows_name(segment: &str) -> Result<(), PackageEngineError>
 }
 
 fn validate_entry_conflicts(entry_kinds: &HashMap<String, bool>) -> Result<(), PackageEngineError> {
-    for (path, _) in entry_kinds {
+    for path in entry_kinds.keys() {
         let mut parent = path.as_str();
         while let Some((ancestor, _)) = parent.rsplit_once('/') {
             if entry_kinds

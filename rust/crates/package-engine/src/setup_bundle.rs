@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/setup_bundle.rs
 // Amac: Imzali release girdileriyle tasinabilir .tzsetup paketini guvenli olusturup acmak
 // Modul - Rust Setup Bundle
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Manifest, detached imza ve dogrulanmis tzpkg payloadini sabit isimli ZIP bundle'a koyar
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use turkuaz_installer_artifact_validation::VerifiedArtifact;
 use turkuaz_installer_domain::release::PackageRelease;
-use uuid::Uuid;
 use zip::{CompressionMethod, ZipArchive, ZipWriter, result::ZipError, write::SimpleFileOptions};
 
 const BUNDLE_FORMAT_VERSION: u32 = 1;
@@ -428,7 +427,7 @@ fn read_bounded_entry(
     index: usize,
     maximum_bytes: u64,
 ) -> Result<Vec<u8>, SetupBundleError> {
-    let mut entry = archive.by_index(index).map_err(SetupBundleError::Archive)?;
+    let entry = archive.by_index(index).map_err(SetupBundleError::Archive)?;
     let declared_size = entry.size();
     if declared_size == 0 || declared_size > maximum_bytes {
         return Err(SetupBundleError::InvalidBundle(

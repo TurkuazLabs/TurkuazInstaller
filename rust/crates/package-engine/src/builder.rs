@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/builder.rs
 // Amac: Uygulama payload dizinini Turkuaz'in ozel .tzpkg ZIP paketine donusturmek
 // Modul - Rust Package Builder
-// Version: 0.4.0
+// Version: 0.4.1
 // Aciklama: Symlink ve path collision reddi, sinirli kaynak taramasi, gecici dosya ve no-overwrite publish uygular
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -182,11 +182,14 @@ pub fn build_full_package_with_entry_point(
         .map_err(|_| PackageBuildError::InvalidPackage("package source paths conflict"))?;
     entries.sort_by(|left, right| left.archive_path.cmp(&right.archive_path));
 
-    let metadata = PackageArchiveMetadata::new_with_entry_point(
-        package_id,
-        version,
-        entry_point.map(str::to_owned),
-    );
+    let metadata = match entry_point {
+        Some(entry_point) => PackageArchiveMetadata::new_with_entry_point(
+            package_id,
+            version,
+            Some(entry_point.to_owned()),
+        ),
+        None => PackageArchiveMetadata::new(package_id, version),
+    };
     let metadata_bytes = serde_json::to_vec(&metadata).map_err(PackageBuildError::Metadata)?;
     let build_result = build_archive(&temporary_file, &metadata_bytes, &entries);
     if let Err(error) = build_result {
