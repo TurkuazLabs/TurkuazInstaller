@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.4
+# Version: 0.2.5
 # Aciklama: Ephemeral signer guveni eklemeden Authenticode setup akislarini dogrular
 # Bagimli Oldugu Katman: QA | Tool
 param(
@@ -218,6 +218,37 @@ function New-SignedBundle {
     }
 }
 
+function Invoke-AuthenticodeSignCheck {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Label,
+        [Parameter(Mandatory = $true)]
+        [string]$SetupPath
+    )
+
+    $signResult = Invoke-ExternalProcess -Step "sign $Label with the ephemeral CI certificate" -FilePath $script:SignToolPath -Arguments @(
+        'sign', '/fd', 'SHA256', '/sha1', $script:TestCertificate.Thumbprint, '/s', 'My', $SetupPath
+    )
+    if ($signResult.ExitCode -ne 0) {
+        throw "signtool sign failed for $Label with exit code $($signResult.ExitCode)."
+    }
+
+    Write-Host "==> inspect Authenticode signature for $Label without trusting the test signer"
+    $signature = Get-AuthenticodeSignature -LiteralPath $SetupPath
+    $status = [string]$signature.Status
+    $statusMessage = [string]$signature.StatusMessage
+    $untrustedRootOnly = $statusMessage -match 'A certificate chain processed,\s*but terminated in a root certificate which is not trusted by the trust provider\.'
+    if ($status -notin @('Valid', 'NotTrusted') -and
+        !($status -eq 'UnknownError' -and $untrustedRootOnly)) {
+        throw "The $Label Authenticode signature is invalid: status=$status message=$statusMessage"
+    }
+    if (!$signature.SignerCertificate -or
+        $signature.SignerCertificate.Thumbprint -ne $script:TestCertificate.Thumbprint) {
+        throw "The $Label Authenticode signer does not match the ephemeral CI certificate."
+    }
+    Write-Host "    Authenticode digest and signer identity verified for $Label; status=$status."
+}
+
 function Invoke-SignedSetupInstall {
     param([Parameter(Mandatory = $true)][string]$SetupPath)
 
@@ -409,27 +440,8 @@ fn main() {
         throw 'The distribution pair did not produce both setup executables.'
     }
 
-    $signResult = Invoke-ExternalProcess -Step 'sign primary setup with the ephemeral CI certificate' -FilePath $script:SignToolPath -Arguments @(
-        'sign', '/fd', 'SHA256', '/sha1', $script:TestCertificate.Thumbprint, '/s', 'My', $primarySetup
-    )
-    if ($signResult.ExitCode -ne 0) {
-        throw "signtool sign failed with exit code $($signResult.ExitCode)."
-    }
-
-    Write-Host '==> inspect Authenticode signature without adding the test signer to a trusted store'
-    $authenticodeSignature = Get-AuthenticodeSignature -LiteralPath $primarySetup
-    $authenticodeStatus = [string]$authenticodeSignature.Status
-    $statusMessage = [string]$authenticodeSignature.StatusMessage
-    $untrustedRootOnly = $statusMessage -match 'A certificate chain processed,\s*but terminated in a root certificate which is not trusted by the trust provider\.'
-    if ($authenticodeStatus -notin @('Valid', 'NotTrusted') -and
-        !($authenticodeStatus -eq 'UnknownError' -and $untrustedRootOnly)) {
-        throw "The primary setup Authenticode signature is invalid: status=$authenticodeStatus message=$statusMessage"
-    }
-    if (!$authenticodeSignature.SignerCertificate -or
-        $authenticodeSignature.SignerCertificate.Thumbprint -ne $script:TestCertificate.Thumbprint) {
-        throw 'The primary setup Authenticode signer does not match the ephemeral CI certificate.'
-    }
-    Write-Host "    Authenticode digest and signer identity verified; status=$authenticodeStatus."
+    Invoke-AuthenticodeSignCheck -Label 'primary setup' -SetupPath $primarySetup
+    Invoke-AuthenticodeSignCheck -Label 'NSIS backup' -SetupPath $backupSetup
 
     Invoke-SignedSetupInstall -SetupPath $primarySetup
     $listOutput = Invoke-Installer -Step 'confirm install-self package state' -Arguments @(
