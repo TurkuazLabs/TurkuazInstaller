@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.2.2
+Version: 0.2.3
 Aciklama: Derleme kontrolunden gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -69,6 +69,6 @@ Bu rehber production kabul kaniti degildir; CI bunun bir kismini otomatik calist
 
 Rust Migration CI basarili tamamlandiginda `turkuaz-example-test-setup-v<surum>-windows-x64` adli ayri bir test artifact'i yuklenir. ZIP; `TurkuazSetup.exe`, NSIS yedegi, test icin pinlenmis `manifest-trust.yaml`, CLI ve kucuk bir Windows ornek uygulamasi icerir. Uygulama baslatilinca gorunur bir test mesaji acilir.
 
-ZIP'i ayri bir klasore cikartip yalnizca deneme icin kullanin. Kurulum sihirbazinda paket kimligi `ci.smoke`, kurulum dizini `%LOCALAPPDATA%\TurkuazInstaller-Test\App`, veri dizini `%LOCALAPPDATA%\TurkuazInstaller-Test\Data` olsun. `README-TR.txt` icindeki CLI komutlariyla uygulamayi acabilir ve test paketini kaldirabilirsiniz. Self-signed CI sertifikasi nedeniyle Windows yayinci uyarisi gosterebilir; bu imza production yayincisini dogrulamaz ve sertifika Trusted Root'a eklenmemelidir. Artifact yedi gun tutulur ve production'da kullanilmaz.
+ZIP'i ayri bir klasore cikartip yalnizca deneme icin kullanin. Kurulum sihirbazinda paket kimligi `ci.smoke`, kurulum dizini `%LOCALAPPDATA%\TurkuazInstaller-Test\App`, veri dizini `%LOCALAPPDATA%\TurkuazInstaller-Test\Data` olsun. `README-TR.txt` icindeki adimlarla uygulamayi CLI'dan acip ayni setup sihirbazindan onayli kaldirma yapabilirsiniz. Self-signed CI sertifikasi nedeniyle Windows yayinci uyarisi gosterebilir; bu imza production yayincisini dogrulamaz ve sertifika Trusted Root'a eklenmemelidir. Artifact yedi gun tutulur ve production'da kullanilmaz.
 
 CI artifact'inin olusmasi kod dogrulamasidir; temiz son kullanici makinesinde elle GUI testi yerine gecmez.
