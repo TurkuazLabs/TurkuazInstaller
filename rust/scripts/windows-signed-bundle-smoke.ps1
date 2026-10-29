@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.0
-# Aciklama: Sure sinirli process cagirilariyla imzali bundle ve setup lifecycle akislarini dogrular
+# Version: 0.2.1
+# Aciklama: Asama gunlukleri ve sure sinirlariyla imzali bundle/setup lifecycle akislarini dogrular
 # Bagimli Oldugu Katman: QA | Tool
 param(
     [Parameter(Mandatory = $true)]
@@ -191,6 +191,7 @@ function New-SignedBundle {
     }
     [IO.File]::WriteAllText($manifestPath, $rollbackManifest, [Text.UTF8Encoding]::new($false))
 
+    Write-Host "==> CMS-sign release manifest $Version"
     $contentInfo = [System.Security.Cryptography.Pkcs.ContentInfo]::new(
         [IO.File]::ReadAllBytes($manifestPath)
     )
@@ -200,6 +201,7 @@ function New-SignedBundle {
     $cmsSigner.DigestAlgorithm = [System.Security.Cryptography.Oid]::new('2.16.840.1.101.3.4.2.1')
     $signedCms.ComputeSignature($cmsSigner)
     [IO.File]::WriteAllBytes($signaturePath, $signedCms.Encode())
+    Write-Host "    CMS signature written for $Version."
 
     Invoke-Installer -Step "build signed offline bundle $Version" -Arguments @(
         'build-setup-bundle', '--package-id', $script:PackageId,
@@ -232,54 +234,6 @@ function Invoke-SignedSetupInstall {
     }
 }
 
-function Get-CertificateSubjectForPolicy {
-    Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography.X509Certificates;
-using System.Text;
-
-public static class TurkuazCertSubject
-{
-    [StructLayout(LayoutKind.Sequential)]
-    private struct CertNameBlob
-    {
-        public uint cbData;
-        public IntPtr pbData;
-    }
-
-    [DllImport("crypt32.dll", EntryPoint = "CertNameToStrW", ExactSpelling = true, CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern uint CertNameToStrW(uint encoding, ref CertNameBlob name, uint type, StringBuilder output, uint outputChars);
-
-    public static string GetSubject(X509Certificate2 certificate)
-    {
-        byte[] encoded = certificate.SubjectName.RawData;
-        GCHandle pinned = GCHandle.Alloc(encoded, GCHandleType.Pinned);
-        try
-        {
-            CertNameBlob name = new CertNameBlob();
-            name.cbData = (uint)encoded.Length;
-            name.pbData = pinned.AddrOfPinnedObject();
-            const uint type = 0x02000003;
-            uint length = CertNameToStrW(1, ref name, type, null, 0);
-            if (length < 2 || length > 16384)
-                throw new InvalidOperationException("Could not size the certificate subject.");
-            StringBuilder output = new StringBuilder((int)length);
-            uint written = CertNameToStrW(1, ref name, type, output, length);
-            if (written == 0 || written > length)
-                throw new InvalidOperationException("Could not format the certificate subject.");
-            return output.ToString();
-        }
-        finally
-        {
-            pinned.Free();
-        }
-    }
-}
-'@
-    return [TurkuazCertSubject]::GetSubject($script:TestCertificate)
-}
-
 try {
     if ([string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
         throw 'RUNNER_TEMP is required for this CI smoke test.'
@@ -287,19 +241,25 @@ try {
     New-Item -ItemType Directory -Path $script:WorkDirectory -Force | Out-Null
     Write-Host "Using temporary smoke directory: $script:WorkDirectory"
 
+    Write-Host '==> load certificate and CMS assemblies'
     Add-Type -AssemblyName System.Security
     Add-Type -AssemblyName System.Security.Cryptography.Pkcs
 
+    Write-Host '==> create ephemeral test certificate'
     $script:TestCertificate = New-SelfSignedCertificate -Subject 'CN=TurkuazInstaller CI Smoke,O=TurkuazLabs,C=US' -CertStoreLocation 'Cert:\CurrentUser\My' -Type CodeSigningCert -KeyAlgorithm RSA -KeyLength 2048 -HashAlgorithm SHA256 -NotAfter (Get-Date).AddDays(2)
 
+    Write-Host '    Ephemeral test certificate created.'
+    Write-Host '==> open CurrentUser Root certificate store'
     $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new(
         [System.Security.Cryptography.X509Certificates.StoreName]::Root,
         [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
     )
     $rootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+    Write-Host '==> add ephemeral certificate to CurrentUser Root'
     try {
         $rootStore.Add($script:TestCertificate)
         $script:RootTrustAdded = $true
+        Write-Host '    Test certificate trusted for this runner.'
     }
     finally {
         $rootStore.Close()
@@ -323,8 +283,9 @@ try {
         throw 'Windows SDK x64 signtool.exe was not found in a versioned SDK directory.'
     }
 
-    $subject = Get-CertificateSubjectForPolicy
-    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    Write-Host '==> prepare deterministic trust policy for the fixed CI signer subject'
+    $subject = 'CN=TurkuazInstaller CI Smoke, O=TurkuazLabs, C=US'
+    $hasher= [System.Security.Cryptography.SHA256]::Create()
     try {
         $certificatePin = [BitConverter]::ToString($hasher.ComputeHash($script:TestCertificate.RawData)).Replace('-', '').ToLowerInvariant()
     }
