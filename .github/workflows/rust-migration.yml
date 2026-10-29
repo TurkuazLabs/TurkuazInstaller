@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.12
-# Aciklama: PR degisikliklerinde Rust workspace, NSIS ve timeout sinirli Windows setup lifecycle kabulini dogrular
+# Version: 0.2.13
+# Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -116,4 +116,18 @@ jobs:
         timeout-minutes: 15
         shell: pwsh
         run: |
-          & "rust/scripts/windows-signed-bundle-smoke.ps1" -InstallerPath "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe" -GuiStubPath "rust/target/release/turkuaz-setup-gui-stub-v$env:RUST_CLI_VERSION-windows-x64.exe" -MakensisPath (Join-Path ([Environment]::GetEnvironmentVariable("ProgramFiles(x86)")) "NSIS/makensis.exe")
+          $smokeArguments = @{
+            InstallerPath = "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe"
+            GuiStubPath = "rust/target/release/turkuaz-setup-gui-stub-v$env:RUST_CLI_VERSION-windows-x64.exe"
+            MakensisPath = (Join-Path ([Environment]::GetEnvironmentVariable("ProgramFiles(x86)")) "NSIS/makensis.exe")
+            RetainDistributionPath = (Join-Path $env:RUNNER_TEMP "turkuaz-example-test-setup")
+          }
+          & "rust/scripts/windows-signed-bundle-smoke.ps1" @smokeArguments
+
+      - name: Upload test-only example setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-example-test-setup-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: ${{ runner.temp }}/turkuaz-example-test-setup/**
+          if-no-files-found: error
+          retention-days: 7
