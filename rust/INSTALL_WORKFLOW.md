@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/INSTALL_WORKFLOW.md
 Amac: Verified full package install ve forward update orkestrasyon sözleşmesini açıklamak
 Modul - Markdown Specification
-Version: 0.2.1
+Version: 0.2.2
 Aciklama: Kilit, stage, etkin deployment ve kurulu state adımlarının sırasını kaydeder
 Bagimli Oldugu Katman: Service | Documentation
 -->
@@ -26,7 +26,7 @@ The caller supplies a `VerifiedArtifact`, a typed `PackageRelease`, operation ty
 7. If state persistence fails, restore the former active version; for a first install remove the active record. Return a distinct compensation failure if the restore also fails.
 8. Remove the temporary stage on both success and failure, then complete the operation context.
 
-Journal persistence follows the current best-effort operation-context contract. The CLI retains an explicit recovery command for manual use. Online install/update/repair/rollback and verified offline bundle operations also check for a pending journal after verifying the incoming signed release and artifact when applicable, then run conservative recovery before starting the requested operation. Generic recovery at every application launch is not implemented. A missing journal with mismatched state or an ambiguous first-install state fails closed and may require manual recovery.
+Journal persistence follows the current best-effort operation-context contract. The CLI retains an explicit recovery command for manual use. Online install/update/repair/rollback and verified offline bundle operations check for a pending journal after verifying the incoming signed release and artifact when applicable, then run conservative recovery before starting the requested operation. The CLI also checks and recovers before `launch`, `verify`, `uninstall`, and each `list` entry backed by installed state with a known target path. Merely opening the GUI/CLI without selecting a package operation does not scan every journal. A missing journal with mismatched state or an ambiguous first-install state fails closed and may require manual recovery.
 
 ## Repair
 
