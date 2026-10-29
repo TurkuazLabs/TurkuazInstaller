@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.3
+Version: 0.4.4
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -84,7 +84,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- uninstall 
   --confirm-uninstall YES
 ```
 
-If an operation journal already exists, run `recover` first. If uninstall is interrupted after its managed directory is moved to quarantine, run `recover` with the same package ID and paths to finish the state and filesystem cleanup.
+Before `uninstall`, `launch`, `verify`, and per-package `list`, the CLI checks the known package journal and automatically runs conservative recovery when one exists. If recovery cannot prove a safe state, the command stops and provides the manual `recover` path.
 
 ## Recover an interrupted operation
 
@@ -97,7 +97,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- recover \
   --data-root ./installer-data
 ```
 
-Recovery takes the package lock. It verifies and clears a stale journal when state and active version already agree. For an interrupted uninstall, it either clears a journal if the package is still active, or completes removal of the quarantined managed package when state indicates uninstall had begun. If a journal proves that an update or rollback activated its target but did not save installed state, it verifies the active file inventory and completes the state write. It clears a journal for an install that never activated a deployment. Ambiguous state, a missing journal with mismatched state, or a first install that activated but lacks installed state stops for manual recovery. Abandoned staging data is left untouched. This command remains available for manual recovery. Online install/update/repair/rollback and verified offline bundle setup automatically invoke the same conservative recovery workflow when they find a pending journal, after validating the signed release and artifact when applicable.
+Recovery takes the package lock. It verifies and clears a stale journal when state and active version already agree. For an interrupted uninstall, it either clears a journal if the package is still active, or completes removal of the quarantined managed package when state indicates uninstall had begun. If a journal proves that an update or rollback activated its target but did not save installed state, it verifies the active file inventory and completes the state write. It clears a journal for an install that never activated a deployment. Ambiguous state, a missing journal with mismatched state, or a first install that activated but lacks installed state stops for manual recovery. Abandoned staging data is left untouched. This command remains available for manual recovery. Online install/update/repair/rollback and verified offline bundle setup invoke the same conservative workflow after validating the signed release and artifact when applicable. The CLI also checks for a pending journal before `launch`, `verify`, `uninstall`, and each per-package `list` entry whose installed state provides a target path. Opening the GUI or CLI without a selected package operation does not scan every package journal.
 
 ## Launch the installed application
 
@@ -168,7 +168,7 @@ The Rust Migration CI workflow builds `turkuaz-installer-cli-development-windows
 
 ## Current limits
 
-The direct online install/update CLI rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It has no interactive progress or cancellation UI and does not automatically remove unreferenced deployment directories. It accepts first install, forward update, same-version repair, and policy-gated rollback. Rollback requires the signed current release policy and selects only the previous recorded activation. A pending operation journal is automatically sent through recovery before a candidate-verified online or offline bundle operation proceeds; ambiguous states stop setup and require manual recovery.
+The direct online install/update CLI rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It has no interactive progress or cancellation UI and does not automatically remove unreferenced deployment directories. It accepts first install, forward update, same-version repair, and policy-gated rollback. Rollback requires the signed current release policy and selects only the previous recorded activation. A pending journal is automatically checked and conservatively recovered before verified online/offline setup and before launch, verify, uninstall, or per-package listing. Ambiguous states stop the command for manual recovery.
 
 The default CLI build is headless. An optional Windows `setup-gui` build provides the desktop wizard and can be packaged with a verified `.tzsetup` bundle. This remains development software, not a signed production distribution. No Rust tests were run; consult the latest Rust Migration CI run for current compilation status.
 
