@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.1.5
-// Aciklama: Kullanici girdilerini alir, mevcut guvenli CLI kurulum motorunu arka planda calistirir
+// Version: 0.1.6
+// Aciklama: GUI'den install, update, repair, rollback ve onayli uninstall islemlerini yonetir
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
@@ -26,10 +26,17 @@ enum SetupOperation {
     Update,
     Repair,
     Rollback,
+    Uninstall,
 }
 
 impl SetupOperation {
-    const ALL: [Self; 4] = [Self::Install, Self::Update, Self::Repair, Self::Rollback];
+    const ALL: [Self; 5] = [
+        Self::Install,
+        Self::Update,
+        Self::Repair,
+        Self::Rollback,
+        Self::Uninstall,
+    ];
 
     const fn command_value(self) -> &'static str {
         match self {
@@ -37,6 +44,7 @@ impl SetupOperation {
             Self::Update => "update",
             Self::Repair => "repair",
             Self::Rollback => "rollback",
+            Self::Uninstall => "uninstall",
         }
     }
 
@@ -46,6 +54,7 @@ impl SetupOperation {
             Self::Update => "Güncelle",
             Self::Repair => "Onar",
             Self::Rollback => "Önceki sürüme dön",
+            Self::Uninstall => "Kaldır",
         }
     }
 }
@@ -61,6 +70,7 @@ struct SetupApp {
     status: Option<(bool, String)>,
     cancel_requested: bool,
     recovery_blocked: bool,
+    uninstall_confirmed: bool,
 }
 
 impl Default for SetupApp {
@@ -94,6 +104,7 @@ impl Default for SetupApp {
             status: None,
             cancel_requested: false,
             recovery_blocked: false,
+            uninstall_confirmed: false,
         }
     }
 }
@@ -145,36 +156,46 @@ impl eframe::App for SetupApp {
         let mut start_requested = false;
         egui::CentralPanel::default().show(context, |ui| {
             ui.heading(APP_TITLE);
-            ui.label("Kurulum paketi imza ve bütünlük kontrollerinden geçirilir.");
+            ui.label(if self.operation == SetupOperation::Uninstall {
+                "Seçili paketin yönetilen dosyaları ve durum kaydı kaldırılır."
+            } else {
+                "Kurulum paketi imza ve bütünlük kontrollerinden geçirilir."
+            });
             ui.add_space(12.0);
 
             ui.add_enabled_ui(!is_working && !self.recovery_blocked, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Paket kimliği");
-                    ui.text_edit_singleline(&mut self.package_id);
+                    if ui.text_edit_singleline(&mut self.package_id).changed() {
+                        self.uninstall_confirmed = false;
+                    }
                 });
                 ui.label("Paket kimliğini yayımcıdan aldığınız yayın bilgileriyle eşleştirin.");
                 ui.add_space(10.0);
 
-                ui.horizontal(|ui| {
-                    ui.label("Yayımcı güven politikası");
-                    ui.text_edit_singleline(&mut self.trust_store);
-                    if ui.button("Dosya seç").clicked() {
-                        if let Some(path) = rfd::FileDialog::new()
-                            .add_filter("YAML", &["yaml", "yml"])
-                            .set_title("Yayımcı güven politikasını seçin")
-                            .pick_file()
-                        {
-                            self.trust_store = path.to_string_lossy().into_owned();
+                if self.operation != SetupOperation::Uninstall {
+                    ui.horizontal(|ui| {
+                        ui.label("Yayımcı güven politikası");
+                        ui.text_edit_singleline(&mut self.trust_store);
+                        if ui.button("Dosya seç").clicked() {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("YAML", &["yaml", "yml"])
+                                .set_title("Yayımcı güven politikasını seçin")
+                                .pick_file()
+                            {
+                                self.trust_store = path.to_string_lossy().into_owned();
+                            }
                         }
-                    }
-                });
-                ui.label("Yayımcının sağladığı gerçek güven dosyasını kullanın; örnek dosya güvenilir değildir.");
-                ui.add_space(10.0);
+                    });
+                    ui.label("Yayımcının sağladığı gerçek güven dosyasını kullanın; örnek dosya güvenilir değildir.");
+                    ui.add_space(10.0);
+                }
 
                 ui.horizontal(|ui| {
                     ui.label("Kurulum klasörü");
-                    ui.text_edit_singleline(&mut self.target);
+                    if ui.text_edit_singleline(&mut self.target).changed() {
+                        self.uninstall_confirmed = false;
+                    }
                     if ui.button("Klasör seç").clicked() {
                         let mut picker = rfd::FileDialog::new().set_title("Kurulum klasörünü seçin");
                         if PathBuf::from(&self.target).is_dir() {
@@ -182,6 +203,7 @@ impl eframe::App for SetupApp {
                         }
                         if let Some(path) = picker.pick_folder() {
                             self.target = path.to_string_lossy().into_owned();
+                            self.uninstall_confirmed = false;
                         }
                     }
                 });
@@ -189,7 +211,9 @@ impl eframe::App for SetupApp {
 
                 ui.horizontal(|ui| {
                     ui.label("Veri klasörü");
-                    ui.text_edit_singleline(&mut self.data_root);
+                    if ui.text_edit_singleline(&mut self.data_root).changed() {
+                        self.uninstall_confirmed = false;
+                    }
                     if ui.button("Klasör seç").clicked() {
                         let mut picker = rfd::FileDialog::new().set_title("Yükleyici veri klasörünü seçin");
                         if PathBuf::from(&self.data_root).is_dir() {
@@ -197,11 +221,13 @@ impl eframe::App for SetupApp {
                         }
                         if let Some(path) = picker.pick_folder() {
                             self.data_root = path.to_string_lossy().into_owned();
+                            self.uninstall_confirmed = false;
                         }
                     }
                 });
                 ui.add_space(10.0);
 
+                let previous_operation = self.operation;
                 egui::ComboBox::from_label("İşlem")
                     .selected_text(self.operation.label())
                     .show_ui(ui, |ui| {
@@ -213,9 +239,33 @@ impl eframe::App for SetupApp {
                             );
                         }
                     });
+                if self.operation != previous_operation {
+                    self.uninstall_confirmed = false;
+                }
+
+                if self.operation == SetupOperation::Uninstall {
+                    ui.label(format!("Paket: {}", self.package_id.trim()));
+                    ui.label(format!("Kurulum klasörü: {}", self.target.trim()));
+                    ui.label(format!("Veri klasörü: {}", self.data_root.trim()));
+                    ui.label("Yalnızca bu paketin yönetilen dosyaları ve durum kaydı kaldırılır; diğer dosyalar korunur.");
+                    ui.checkbox(
+                        &mut self.uninstall_confirmed,
+                        "Bu paket ve klasör yolları için kaldırmayı onaylıyorum.",
+                    );
+                }
                 ui.add_space(14.0);
 
-                if ui.button(format!("{} ve doğrula", self.operation.label())).clicked() {
+                let action_label = if self.operation == SetupOperation::Uninstall {
+                    "Paketi kaldır".to_owned()
+                } else {
+                    format!("{} ve doğrula", self.operation.label())
+                };
+                let action_enabled = self.operation != SetupOperation::Uninstall
+                    || self.uninstall_confirmed;
+                if ui
+                    .add_enabled(action_enabled, egui::Button::new(action_label))
+                    .clicked()
+                {
                     start_requested = true;
                 }
             });
@@ -224,20 +274,24 @@ impl eframe::App for SetupApp {
             if is_working {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    ui.label("Kurulum sürüyor; sürüm imzası ve paket bütünlüğü denetleniyor.");
+                    ui.label(if self.operation == SetupOperation::Uninstall {
+                        "Paketin yönetilen dosyaları kaldırılıyor."
+                    } else {
+                        "Kurulum sürüyor; sürüm imzası ve paket bütünlüğü denetleniyor."
+                    });
                 });
-                ui.label("İptal sırasında kurulum işlemi durdurulur ve kurtarma otomatik denenir; durum belirsiz kalırsa elle kurtarma gerekir.");
-                if ui.button("Kurulumu iptal et").clicked() {
+                ui.label("İptal sırasında çalışan işlem durdurulur ve kurtarma otomatik denenir; durum belirsiz kalırsa elle kurtarma gerekir.");
+                if ui.button("İşlemi iptal et").clicked() {
                     self.request_cancel();
                 }
                 if self.cancel_requested {
-                    ui.label("İptal isteği gönderildi; kurulum işlemi sonlandırılıyor.");
+                    ui.label("İptal isteği gönderildi; çalışan işlem sonlandırılıyor.");
                 }
                 context.request_repaint_after(Duration::from_millis(100));
             }
 
             if self.recovery_blocked {
-                ui.label("Kurtarma başarıyla tamamlanmadan yeni kurulum başlatılamaz. Yukarıdaki CLI komutunu konsolda çalıştırın; kurtarma yine başarısız olursa günlük ve deployment dosyalarını silmeyin.");
+                ui.label("Kurtarma başarıyla tamamlanmadan yeni işlem başlatılamaz. Yukarıdaki CLI komutunu konsolda çalıştırın; kurtarma yine başarısız olursa günlük ve deployment dosyalarını silmeyin.");
             }
 
             if let Some((succeeded, message)) = &self.status {
@@ -269,14 +323,16 @@ impl SetupApp {
             self.status = Some((false, format!("Paket kimliği geçersiz: {error}")));
             return;
         }
-        if self.trust_store.trim().is_empty()
+        if (self.operation != SetupOperation::Uninstall && self.trust_store.trim().is_empty())
             || self.target.trim().is_empty()
             || self.data_root.trim().is_empty()
         {
-            self.status = Some((
-                false,
-                "Güven politikası ve klasör alanları zorunludur.".to_owned(),
-            ));
+            let message = if self.operation == SetupOperation::Uninstall {
+                "Kurulum ve veri klasörleri zorunludur."
+            } else {
+                "Güven politikası ve klasör alanları zorunludur."
+            };
+            self.status = Some((false, message.to_owned()));
             return;
         }
 
@@ -291,6 +347,7 @@ impl SetupApp {
         self.cancel_sender = Some(cancel_sender);
         self.cancel_requested = false;
         self.status = None;
+        self.uninstall_confirmed = false;
 
         thread::spawn(move || {
             run_installer_worker(
@@ -318,7 +375,7 @@ impl SetupApp {
                 Ok(result) => Some(result),
                 Err(TryRecvError::Empty) => None,
                 Err(TryRecvError::Disconnected) => Some(Err(
-                    "Kurulum işlemi beklenmedik şekilde sonlandı.".to_owned(),
+                    "Yükleyici işlemi beklenmedik şekilde sonlandı.".to_owned(),
                 )),
             },
             None => None,
@@ -395,18 +452,26 @@ fn run_installer_worker(
     let recovery_package_id = package_id.clone();
     let recovery_target = target.clone();
     let recovery_data_root = data_root.clone();
-    let mut child = match Command::new(executable)
-        .arg("install-self")
+    let is_uninstall = operation == "uninstall";
+    let mut backend = Command::new(executable);
+    backend
+        .arg(if is_uninstall { "uninstall" } else { "install-self" })
         .arg("--package-id")
         .arg(&package_id)
-        .arg("--trust-store")
-        .arg(&trust_store)
         .arg("--target")
         .arg(&target)
         .arg("--data-root")
-        .arg(&data_root)
-        .arg("--operation")
-        .arg(&operation)
+        .arg(&data_root);
+    if is_uninstall {
+        backend.arg("--confirm-uninstall").arg("YES");
+    } else {
+        backend
+            .arg("--trust-store")
+            .arg(&trust_store)
+            .arg("--operation")
+            .arg(&operation);
+    }
+    let mut child = match backend
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -441,7 +506,7 @@ fn run_installer_worker(
                 let _ = child.wait();
                 let _ = finish_output_reader(stdout_reader);
                 let _ = finish_output_reader(stderr_reader);
-                let _ = result_sender.send(Err(format!("Kurulum durumu okunamadı: {error}")));
+                let _ = result_sender.send(Err(format!("İşlem durumu okunamadı: {error}")));
                 return;
             }
         }
@@ -457,7 +522,7 @@ fn run_installer_worker(
                         let _ = finish_output_reader(stdout_reader);
                         let _ = finish_output_reader(stderr_reader);
                         let _ = result_sender.send(Err(format!(
-                            "İptal sırasında kurulum durumu okunamadı: {error}"
+                            "İptal sırasında işlem durumu okunamadı: {error}"
                         )));
                         return;
                     }
@@ -486,7 +551,7 @@ fn run_installer_worker(
                             .filter(|line| !line.trim().is_empty())
                             .unwrap_or("Kurulum durumu uzlaştırıldı.")
                             .to_owned();
-                        format!("Kurulum iptal edildi. {detail}")
+                        format!("İşlem iptal edildi. {detail}")
                     }
                     Ok(output) => {
                         let detail = String::from_utf8_lossy(&output.stderr)
@@ -496,10 +561,10 @@ fn run_installer_worker(
                             .unwrap_or("Otomatik kurtarma tamamlanamadı.")
                             .to_owned();
                         format!(
-                            "Kurulum iptal edildi; durum belirsiz. Elle kurtarma gerekli: {detail}"
+                            "İşlem iptal edildi; durum belirsiz. Elle kurtarma gerekli: {detail}"
                         )
                     }
-                    Err(error) => format!("Kurulum iptal edildi; kurtarma başlatılamadı: {error}"),
+                    Err(error) => format!("İşlem iptal edildi; kurtarma başlatılamadı: {error}"),
                 };
                 let _ = result_sender.send(Err(message));
                 return;
@@ -527,7 +592,7 @@ fn run_installer_worker(
             .lines()
             .last()
             .filter(|line| !line.trim().is_empty())
-            .unwrap_or("Kurulum tamamlandı.")
+            .unwrap_or("İşlem tamamlandı.")
             .to_owned();
         let _ = result_sender.send(Ok(message));
     } else {
@@ -538,7 +603,7 @@ fn run_installer_worker(
             .last()
             .filter(|line| !line.trim().is_empty())
             .or_else(|| stdout.lines().last())
-            .unwrap_or("Kurulum başarısız oldu.");
+            .unwrap_or("İşlem başarısız oldu.");
         let _ = result_sender.send(Err(detail.to_owned()));
     }
 }
