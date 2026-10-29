@@ -277,7 +277,6 @@ fn locate_setup_footer_start(
         .read_exact(&mut trailing_bytes[..scan_length])
         .map_err(SetupExecutableError::Io)?;
 
-    let mut footer_start = None;
     for padding_length in 0..=maximum_padding {
         let footer_end = payload_end - padding_length;
         let candidate_start = footer_end - FOOTER_SIZE_BYTES;
@@ -291,15 +290,11 @@ fn locate_setup_footer_start(
             .all(|byte| *byte == 0);
 
         if trailing_bytes[candidate_index..magic_end_index] == FOOTER_MAGIC[..] && padding_is_zero {
-            if footer_start.replace(candidate_start).is_some() {
-                return Err(SetupExecutableError::InvalidSetup(
-                    "self-extracting setup footer is ambiguous",
-                ));
-            }
+            return Ok(candidate_start);
         }
     }
 
-    footer_start.ok_or(SetupExecutableError::InvalidSetup(
+    Err(SetupExecutableError::InvalidSetup(
         "self-extracting setup footer is missing or unsupported",
     ))
 }
