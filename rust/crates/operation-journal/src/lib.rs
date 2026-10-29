@@ -187,8 +187,9 @@ impl JsonOperationJournalRepository {
             let file_stem = path.file_stem().and_then(|value| value.to_str()).ok_or(
                 JournalError::InvalidEntry("journal filename is not valid UTF-8"),
             )?;
-            let package_id = PackageId::parse(file_stem)
-                .map_err(|_| JournalError::InvalidEntry("journal filename has an invalid package ID"))?;
+            let package_id = PackageId::parse(file_stem).map_err(|_| {
+                JournalError::InvalidEntry("journal filename has an invalid package ID")
+            })?;
             if package_id.as_str() != file_stem {
                 return Err(JournalError::InvalidEntry(
                     "journal filename package ID is not canonical",
