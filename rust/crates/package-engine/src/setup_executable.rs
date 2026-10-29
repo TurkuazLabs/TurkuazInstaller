@@ -202,10 +202,7 @@ pub fn extract_embedded_setup_bundle(
         .read_exact(&mut length_bytes)
         .map_err(SetupExecutableError::Io)?;
     let bundle_length = u64::from_le_bytes(length_bytes);
-    if bundle_length == 0
-        || bundle_length > MAXIMUM_BUNDLE_BYTES
-        || bundle_length > footer_start
-    {
+    if bundle_length == 0 || bundle_length > MAXIMUM_BUNDLE_BYTES || bundle_length > footer_start {
         return Err(SetupExecutableError::InvalidSetup(
             "embedded bundle length is outside the supported limit",
         ));
@@ -266,8 +263,8 @@ fn locate_setup_footer_start(
         ));
     }
 
-    let maximum_padding = MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES
-        .min(payload_end - FOOTER_SIZE_BYTES);
+    let maximum_padding =
+        MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES.min(payload_end - FOOTER_SIZE_BYTES);
     let scan_start = payload_end - FOOTER_SIZE_BYTES - maximum_padding;
     let scan_length = usize::try_from(payload_end - scan_start).map_err(|_| {
         SetupExecutableError::InvalidSetup("self-extracting setup footer offset is too large")
@@ -293,9 +290,7 @@ fn locate_setup_footer_start(
             .iter()
             .all(|byte| *byte == 0);
 
-        if trailing_bytes[candidate_index..magic_end_index] == FOOTER_MAGIC[..]
-            && padding_is_zero
-        {
+        if trailing_bytes[candidate_index..magic_end_index] == FOOTER_MAGIC[..] && padding_is_zero {
             if footer_start.replace(candidate_start).is_some() {
                 return Err(SetupExecutableError::InvalidSetup(
                     "self-extracting setup footer is ambiguous",
@@ -573,7 +568,10 @@ mod tests {
 
             extract_embedded_setup_bundle(&executable_path, &bundle_path)
                 .expect("extract bundle before Authenticode alignment padding");
-            assert_eq!(fs::read(bundle_path).expect("read extracted bundle"), bundle);
+            assert_eq!(
+                fs::read(bundle_path).expect("read extracted bundle"),
+                bundle
+            );
         }
     }
 
@@ -593,7 +591,11 @@ mod tests {
 
         let error = extract_embedded_setup_bundle(&executable_path, &bundle_path)
             .expect_err("nonzero signer alignment data must not be accepted");
-        assert!(error.to_string().contains("footer is missing or unsupported"));
+        assert!(
+            error
+                .to_string()
+                .contains("footer is missing or unsupported")
+        );
         assert!(!bundle_path.exists());
     }
 }
