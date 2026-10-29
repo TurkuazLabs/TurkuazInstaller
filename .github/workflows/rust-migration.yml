@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.6
+# Version: 0.2.7
 # Aciklama: PR degisikliklerinde tek Rust CI run'i ile workspace, NSIS, Windows lifecycle ve setup imzasini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -17,7 +17,7 @@ on:
       - "packaging/TurkuazInstallerBackup.nsi"
 
 concurrency:
-  group: rust-migration-${{ github.head_ref || github.ref_name }}
+  group: rust-migration-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
