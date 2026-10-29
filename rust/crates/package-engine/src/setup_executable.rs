@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/setup_executable.rs
 // Amac: Imzali Turkuaz setup bundle'ini Windows CLI stub'ina guvenli bicimde eklemek ve cikarmak
 // Modul - Rust Setup Executable
-// Version: 0.2.1
-// Aciklama: PE stub sonuna bounded bundle ekler; Authenticode sertifika tablosu sonrasinda footer'i bulabilir
+// Version: 0.2.2
+// Aciklama: Authenticode sertifika tablosundan onceki 8 bayt hizalama dolgusunda footer'i guvenle bulur
 // Bagimli Oldugu Katman: Service | Tool
 
 use std::{
@@ -16,6 +16,9 @@ use sha2::{Digest, Sha256};
 
 const FOOTER_MAGIC: [u8; 8] = *b"TZSETUP1";
 const FOOTER_SIZE_BYTES: u64 = 8 + 8 + 32;
+const MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES: u64 = 7;
+const FOOTER_SCAN_BUFFER_BYTES: usize =
+    FOOTER_SIZE_BYTES as usize + MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES as usize;
 const MAXIMUM_BUNDLE_BYTES: u64 = 33 * 1024 * 1024 * 1024;
 const COPY_BUFFER_BYTES: usize = 64 * 1024;
 
@@ -152,7 +155,7 @@ pub fn create_self_extracting_setup(
 /// @dev-id TIZ-SETUP-EXE-011
 /// @purpose Recover a bounded appended .tzsetup payload from a self-extracting Windows executable.
 /// @reason The setup stub must locate its own payload without trusting a path or length supplied by that payload.
-/// @contract Requires a regular executable with the exact footer, bounded payload length, matching SHA-256, and a new .tzsetup destination.
+/// @contract Requires a regular executable with the exact footer, bounded payload length, matching SHA-256, at most seven zero alignment bytes, and a new .tzsetup destination.
 /// @depends SHA-256, bounded streaming, fixed footer format, and downstream signature/trust verification.
 pub fn extract_embedded_setup_bundle(
     executable_path: impl AsRef<Path>,
@@ -180,13 +183,9 @@ pub fn extract_embedded_setup_bundle(
         ));
     }
     let payload_end = setup_payload_end(&mut executable, executable_metadata.len())?;
-    if payload_end <= FOOTER_SIZE_BYTES {
-        return Err(SetupExecutableError::InvalidSetup(
-            "self-extracting executable has no space for a bundle footer",
-        ));
-    }
+    let footer_start = locate_setup_footer_start(&mut executable, payload_end)?;
     executable
-        .seek(SeekFrom::Start(payload_end - FOOTER_SIZE_BYTES))
+        .seek(SeekFrom::Start(footer_start))
         .map_err(SetupExecutableError::Io)?;
 
     let mut magic = [0_u8; 8];
@@ -205,7 +204,7 @@ pub fn extract_embedded_setup_bundle(
     let bundle_length = u64::from_le_bytes(length_bytes);
     if bundle_length == 0
         || bundle_length > MAXIMUM_BUNDLE_BYTES
-        || bundle_length > payload_end - FOOTER_SIZE_BYTES
+        || bundle_length > footer_start
     {
         return Err(SetupExecutableError::InvalidSetup(
             "embedded bundle length is outside the supported limit",
@@ -215,7 +214,7 @@ pub fn extract_embedded_setup_bundle(
     executable
         .read_exact(&mut expected_digest)
         .map_err(SetupExecutableError::Io)?;
-    let bundle_offset = payload_end - FOOTER_SIZE_BYTES - bundle_length;
+    let bundle_offset = footer_start - bundle_length;
     executable
         .seek(SeekFrom::Start(bundle_offset))
         .map_err(SetupExecutableError::Io)?;
@@ -255,6 +254,59 @@ pub fn extract_embedded_setup_bundle(
         let _ = fs::remove_file(&bundle_output_path);
     }
     result
+}
+
+fn locate_setup_footer_start(
+    executable: &mut fs::File,
+    payload_end: u64,
+) -> Result<u64, SetupExecutableError> {
+    if payload_end < FOOTER_SIZE_BYTES {
+        return Err(SetupExecutableError::InvalidSetup(
+            "self-extracting executable has no space for a bundle footer",
+        ));
+    }
+
+    let maximum_padding = MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES
+        .min(payload_end - FOOTER_SIZE_BYTES);
+    let scan_start = payload_end - FOOTER_SIZE_BYTES - maximum_padding;
+    let scan_length = usize::try_from(payload_end - scan_start).map_err(|_| {
+        SetupExecutableError::InvalidSetup("self-extracting setup footer offset is too large")
+    })?;
+    let mut trailing_bytes = [0_u8; FOOTER_SCAN_BUFFER_BYTES];
+    executable
+        .seek(SeekFrom::Start(scan_start))
+        .map_err(SetupExecutableError::Io)?;
+    executable
+        .read_exact(&mut trailing_bytes[..scan_length])
+        .map_err(SetupExecutableError::Io)?;
+
+    let mut footer_start = None;
+    for padding_length in 0..=maximum_padding {
+        let footer_end = payload_end - padding_length;
+        let candidate_start = footer_end - FOOTER_SIZE_BYTES;
+        let candidate_index = usize::try_from(candidate_start - scan_start).map_err(|_| {
+            SetupExecutableError::InvalidSetup("self-extracting setup footer offset is too large")
+        })?;
+        let footer_end_index = candidate_index + FOOTER_SIZE_BYTES as usize;
+        let magic_end_index = candidate_index + FOOTER_MAGIC.len();
+        let padding_is_zero = trailing_bytes[footer_end_index..scan_length]
+            .iter()
+            .all(|byte| *byte == 0);
+
+        if trailing_bytes[candidate_index..magic_end_index] == FOOTER_MAGIC[..]
+            && padding_is_zero
+        {
+            if footer_start.replace(candidate_start).is_some() {
+                return Err(SetupExecutableError::InvalidSetup(
+                    "self-extracting setup footer is ambiguous",
+                ));
+            }
+        }
+    }
+
+    footer_start.ok_or(SetupExecutableError::InvalidSetup(
+        "self-extracting setup footer is missing or unsupported",
+    ))
 }
 
 fn setup_payload_end(
@@ -432,4 +484,116 @@ fn copy_and_hash(
         return Err(SetupExecutableError::InvalidSetup(changed_message));
     }
     Ok(hasher.finalize().into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "turkuaz-setup-executable-test-{}",
+                uuid::Uuid::new_v4()
+            ));
+            fs::create_dir(&path).expect("create temporary test directory");
+            Self(path)
+        }
+
+        fn join(&self, name: &str) -> PathBuf {
+            self.0.join(name)
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn signed_setup_executable(bundle: &[u8]) -> (Vec<u8>, usize) {
+        const PE_HEADER_OFFSET: u32 = 0x80;
+        const OPTIONAL_HEADER_SIZE: u16 = 0xf0;
+        const CERTIFICATE_SIZE: u32 = 8;
+
+        let mut executable = vec![0_u8; 0x200];
+        executable[..2].copy_from_slice(b"MZ");
+        executable[0x3c..0x40].copy_from_slice(&PE_HEADER_OFFSET.to_le_bytes());
+
+        let pe_header_offset = PE_HEADER_OFFSET as usize;
+        executable[pe_header_offset..pe_header_offset + 4].copy_from_slice(b"PE\0\0");
+        let coff_header_offset = pe_header_offset + 4;
+        executable[coff_header_offset + 16..coff_header_offset + 18]
+            .copy_from_slice(&OPTIONAL_HEADER_SIZE.to_le_bytes());
+
+        let optional_header_offset = coff_header_offset + 20;
+        executable[optional_header_offset..optional_header_offset + 2]
+            .copy_from_slice(&0x20b_u16.to_le_bytes());
+        executable[optional_header_offset + 108..optional_header_offset + 112]
+            .copy_from_slice(&16_u32.to_le_bytes());
+        let certificate_entry_offset = optional_header_offset + 112 + 4 * 8;
+
+        executable.extend_from_slice(bundle);
+        executable.extend_from_slice(&FOOTER_MAGIC);
+        executable.extend_from_slice(&(bundle.len() as u64).to_le_bytes());
+        let digest: [u8; 32] = Sha256::digest(bundle).into();
+        executable.extend_from_slice(&digest);
+
+        let padding_length = (8 - (executable.len() % 8)) % 8;
+        executable.extend_from_slice(&[0_u8; 7][..padding_length]);
+
+        let certificate_offset =
+            u32::try_from(executable.len()).expect("test PE fixture fits in u32");
+        executable[certificate_entry_offset..certificate_entry_offset + 4]
+            .copy_from_slice(&certificate_offset.to_le_bytes());
+        executable[certificate_entry_offset + 4..certificate_entry_offset + 8]
+            .copy_from_slice(&CERTIFICATE_SIZE.to_le_bytes());
+        executable.extend_from_slice(&[0_u8; CERTIFICATE_SIZE as usize]);
+
+        (executable, padding_length)
+    }
+
+    #[test]
+    fn extracts_signed_setup_with_authenticode_alignment_padding() {
+        let directory = TestDirectory::new();
+
+        for bundle_length in 1..=8 {
+            let bundle = (0..bundle_length)
+                .map(|byte| byte as u8)
+                .collect::<Vec<_>>();
+            let (executable, padding_length) = signed_setup_executable(&bundle);
+            assert_eq!(padding_length, (8 - (bundle_length % 8)) % 8);
+
+            let executable_path = directory.join(&format!("{bundle_length}.exe"));
+            let bundle_path = directory.join(&format!("{bundle_length}.tzsetup"));
+            fs::write(&executable_path, executable).expect("write signed PE fixture");
+
+            extract_embedded_setup_bundle(&executable_path, &bundle_path)
+                .expect("extract bundle before Authenticode alignment padding");
+            assert_eq!(fs::read(bundle_path).expect("read extracted bundle"), bundle);
+        }
+    }
+
+    #[test]
+    fn rejects_nonzero_bytes_between_footer_and_certificate_table() {
+        let directory = TestDirectory::new();
+        let bundle = b"bundle-data!!";
+        let (mut executable, padding_length) = signed_setup_executable(bundle);
+        assert!(padding_length > 0);
+
+        let certificate_offset = executable.len() - 8;
+        executable[certificate_offset - 1] = 0xa5;
+
+        let executable_path = directory.join("nonzero-padding.exe");
+        let bundle_path = directory.join("nonzero-padding.tzsetup");
+        fs::write(&executable_path, executable).expect("write signed PE fixture");
+
+        let error = extract_embedded_setup_bundle(&executable_path, &bundle_path)
+            .expect_err("nonzero signer alignment data must not be accepted");
+        assert!(error.to_string().contains("footer is missing or unsupported"));
+        assert!(!bundle_path.exists());
+    }
 }
