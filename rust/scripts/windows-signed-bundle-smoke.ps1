@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.7
+# Version: 0.2.8
 # Aciklama: Imzali lifecycle smoke'unu calistirir ve istenirse test dagitim ciftini saklar
 # Bagimli Oldugu Katman: QA | Tool
 param(
@@ -539,7 +539,13 @@ $root = Join-Path $env:LOCALAPPDATA 'TurkuazInstaller-Test'
 
 ## Temizleme
 
-Ayni App ve Data yollarini kullandiysaniz, test paketini kaldirmak icin:
+Ayni App ve Data yollarini kullandiysaniz, GUI kaldirma akisini deneyin:
+
+1. TurkuazSetup.exe dosyasini yeniden calistirin.
+2. Paket kimligini ci.smoke, kurulum ve veri klasorlerini ayni degerlerde birakin.
+3. Islem listesinden Kaldir'i secin, onay kutusunu isaretleyin ve Paketi kaldir'a basin.
+
+CLI ile kaldirmak icin alternatif komut:
 
 ```powershell
 $root = Join-Path $env:LOCALAPPDATA 'TurkuazInstaller-Test'
