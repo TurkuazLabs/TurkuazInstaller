@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.6
+# Version: 0.2.7
 # Aciklama: Imzali lifecycle smoke'unu calistirir ve istenirse test dagitim ciftini saklar
 # Bagimli Oldugu Katman: QA | Tool
 param(
@@ -324,6 +324,7 @@ packages:
 
     $fixtureSource = Join-Path $script:WorkDirectory 'smoke-app.rs'
     $rustSource = @'
+#![windows_subsystem = "windows"]
 use std::{env, fs};
 
 #[link(name = "user32")]
@@ -353,7 +354,7 @@ fn main() {
 '@
     [IO.File]::WriteAllText($fixtureSource, $rustSource, [Text.UTF8Encoding]::new($false))
     $rustcResult = Invoke-ExternalProcess -Step 'compile launch fixture' -FilePath 'rustc' -Arguments @(
-        '--edition=2021', $fixtureSource, '-o', $script:FixtureExecutable, '-C', 'windows-subsystem=windows'
+        '--edition=2021', $fixtureSource, '-o', $script:FixtureExecutable
     )
     if ($rustcResult.ExitCode -ne 0) {
         throw "Could not compile the launch fixture; rustc exit code $($rustcResult.ExitCode)."
