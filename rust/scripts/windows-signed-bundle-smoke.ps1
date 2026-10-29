@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.2
-# Aciklama: Root'a yalnizca acik anahtar kopyasi ekleyerek signed setup lifecycle akislarini dogrular
+# Version: 0.2.3
+# Aciklama: Ephemeral signer guveni eklemeden Authenticode setup akislarini dogrular
 # Bagimli Oldugu Katman: QA | Tool
 param(
     [Parameter(Mandatory = $true)]
@@ -26,8 +26,6 @@ $script:TargetPath = Join-Path $env:RUNNER_TEMP ('turkuaz-ci-target-' + [Guid]::
 $script:DataRoot = Join-Path $env:RUNNER_TEMP ('turkuaz-ci-data-' + [Guid]::NewGuid().ToString('N'))
 $script:WorkDirectory = Join-Path $env:RUNNER_TEMP ('turkuaz-signed-bundle-smoke-' + [Guid]::NewGuid().ToString('N'))
 $script:TestCertificate = $null
-$script:RootTrustCertificate = $null
-$script:RootTrustAdded = $false
 $script:SignToolPath = $null
 $script:FixtureExecutable = Join-Path $script:WorkDirectory 'smoke-app.exe'
 
@@ -250,24 +248,7 @@ try {
     $script:TestCertificate = New-SelfSignedCertificate -Subject 'CN=TurkuazInstaller CI Smoke,O=TurkuazLabs,C=US' -CertStoreLocation 'Cert:\CurrentUser\My' -Type CodeSigningCert -KeyAlgorithm RSA -KeyLength 2048 -HashAlgorithm SHA256 -NotAfter (Get-Date).AddDays(2)
 
     Write-Host '    Ephemeral test certificate created.'
-    $script:RootTrustCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
-        $script:TestCertificate.RawData
-    )
-    Write-Host '==> open CurrentUser Root certificate store'
-    $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new(
-        [System.Security.Cryptography.X509Certificates.StoreName]::Root,
-        [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
-    )
-    $rootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-    Write-Host '==> add public-only certificate copy to CurrentUser Root'
-    try {
-        $rootStore.Add($script:RootTrustCertificate)
-        $script:RootTrustAdded = $true
-        Write-Host '    Public certificate copy trusted for this runner.'
-    }
-    finally {
-        $rootStore.Close()
-    }
+    Write-Host '==> keep the ephemeral signer out of trusted stores'
 
     $programFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
     $sdkBin = Join-Path $programFilesX86 'Windows Kits\10\bin'
@@ -435,12 +416,17 @@ fn main() {
         throw "signtool sign failed with exit code $($signResult.ExitCode)."
     }
 
-    $verifySignatureResult = Invoke-ExternalProcess -Step 'verify primary setup Authenticode signature' -FilePath $script:SignToolPath -Arguments @(
-        'verify', '/pa', '/v', $primarySetup
-    )
-    if ($verifySignatureResult.ExitCode -ne 0) {
-        throw "signtool verify failed with exit code $($verifySignatureResult.ExitCode)."
+    Write-Host '==> inspect Authenticode signature without adding the test signer to a trusted store'
+    $authenticodeSignature = Get-AuthenticodeSignature -LiteralPath $primarySetup
+    $authenticodeStatus = [string]$authenticodeSignature.Status
+    if ($authenticodeStatus -notin @('Valid', 'NotTrusted')) {
+        throw "The primary setup Authenticode signature is invalid: status=$authenticodeStatus message=$($authenticodeSignature.StatusMessage)"
     }
+    if (!$authenticodeSignature.SignerCertificate -or
+        $authenticodeSignature.SignerCertificate.Thumbprint -ne $script:TestCertificate.Thumbprint) {
+        throw 'The primary setup Authenticode signer does not match the ephemeral CI certificate.'
+    }
+    Write-Host "    Authenticode digest and signer identity verified; status=$authenticodeStatus."
 
     Invoke-SignedSetupInstall -SetupPath $primarySetup
     $listOutput = Invoke-Installer -Step 'confirm install-self package state' -Arguments @(
@@ -480,23 +466,6 @@ finally {
     if ($script:TestCertificate) {
         $certificatePath = 'Cert:\CurrentUser\My\' + $script:TestCertificate.Thumbprint
         Remove-Item -LiteralPath $certificatePath -Force -ErrorAction SilentlyContinue
-    }
-    if ($script:TestCertificate -and $script:RootTrustAdded) {
-        $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new(
-            [System.Security.Cryptography.X509Certificates.StoreName]::Root,
-            [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
-        )
-        try {
-            $rootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-            $rootStore.Remove($script:RootTrustCertificate)
-        }
-        finally {
-            $rootStore.Close()
-            $rootStore.Dispose()
-        }
-    }
-    if ($script:RootTrustCertificate) {
-        $script:RootTrustCertificate.Dispose()
     }
     if (Test-Path -LiteralPath $script:WorkDirectory) {
         Remove-Item -LiteralPath $script:WorkDirectory -Recurse -Force -ErrorAction SilentlyContinue

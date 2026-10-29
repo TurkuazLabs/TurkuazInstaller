@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.10
-# Aciklama: PR degisikliklerinde tek Rust CI run'i ile workspace, NSIS, Windows lifecycle ve sure sinirli setup imzasini dogrular
+# Version: 0.2.11
+# Aciklama: PR degisikliklerinde Rust workspace, NSIS ve timeout sinirli Windows setup lifecycle kabulini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
