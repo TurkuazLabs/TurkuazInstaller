@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.1.0
-# Aciklama: Runner'a ozel test sertifikasi ile install/update/repair/rollback/launch/uninstall akislarini dogrular
+# Version: 0.2.0
+# Aciklama: Sure sinirli process cagirilariyla imzali bundle ve setup lifecycle akislarini dogrular
 # Bagimli Oldugu Katman: QA | Tool
 param(
     [Parameter(Mandatory = $true)]
@@ -30,6 +30,71 @@ $script:RootTrustAdded = $false
 $script:SignToolPath = $null
 $script:FixtureExecutable = Join-Path $script:WorkDirectory 'smoke-app.exe'
 
+function Invoke-ExternalProcess {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Step,
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+        [int]$TimeoutSeconds = 300
+    )
+
+    Write-Host "==> $Step (timeout: $TimeoutSeconds seconds)"
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $FilePath
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    foreach ($argument in $Arguments) {
+        [void]$startInfo.ArgumentList.Add($argument)
+    }
+
+    $process = [System.Diagnostics.Process]::new()
+    $process.StartInfo = $startInfo
+    $timer = [System.Diagnostics.Stopwatch]::StartNew()
+    try {
+        if (!$process.Start()) {
+            throw "Could not start external process '$Step'."
+        }
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        if (!$process.WaitForExit($TimeoutSeconds * 1000)) {
+            try {
+                $process.Kill($true)
+            }
+            catch {
+            }
+            $null = $process.WaitForExit(15000)
+            throw "External process '$Step' timed out after $TimeoutSeconds seconds."
+        }
+        $process.WaitForExit()
+        $stdout = $stdoutTask.GetAwaiter().GetResult()
+        $stderr = $stderrTask.GetAwaiter().GetResult()
+        foreach ($line in ($stdout -split "\r?\n")) {
+            if ($line) {
+                Write-Host "    $line"
+            }
+        }
+        foreach ($line in ($stderr -split "\r?\n")) {
+            if ($line) {
+                Write-Host "    [stderr] $line"
+            }
+        }
+        $durationSeconds = $timer.Elapsed.TotalSeconds
+        Write-Host ("    Finished in {0:N1}s." -f $durationSeconds)
+        return [PSCustomObject]@{
+            ExitCode = $process.ExitCode
+            Output = ($stdout + [Environment]::NewLine + $stderr).Trim()
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
+}
+
 function Invoke-Installer {
     param(
         [Parameter(Mandatory = $true)]
@@ -38,16 +103,11 @@ function Invoke-Installer {
         [string[]]$Arguments
     )
 
-    Write-Host "==> $Step"
-    $lines = @(& $script:InstallerPath @Arguments 2>&1 | ForEach-Object { $_.ToString() })
-    $exitCode = $LASTEXITCODE
-    foreach ($line in $lines) {
-        Write-Host "    $line"
+    $result = Invoke-ExternalProcess -Step $Step -FilePath $script:InstallerPath -Arguments $Arguments
+    if ($result.ExitCode -ne 0) {
+        throw "Installer command '$Step' exited with code $($result.ExitCode)."
     }
-    if ($exitCode -ne 0) {
-        throw "Installer command '$Step' exited with code $exitCode."
-    }
-    return ($lines -join [Environment]::NewLine)
+    return $result.Output
 }
 
 function Invoke-InstallerExpectFailure {
@@ -58,16 +118,11 @@ function Invoke-InstallerExpectFailure {
         [string[]]$Arguments
     )
 
-    Write-Host "==> $Step (expected rejection)"
-    $lines = @(& $script:InstallerPath @Arguments 2>&1 | ForEach-Object { $_.ToString() })
-    $exitCode = $LASTEXITCODE
-    foreach ($line in $lines) {
-        Write-Host "    $line"
-    }
-    if ($exitCode -eq 0) {
+    $result = Invoke-ExternalProcess -Step "$Step (expected rejection)" -FilePath $script:InstallerPath -Arguments $Arguments
+    if ($result.ExitCode -eq 0) {
         throw "Installer unexpectedly accepted '$Step'."
     }
-    return ($lines -join [Environment]::NewLine)
+    return $result.Output
 }
 
 function Invoke-AppLaunchCheck {
@@ -165,20 +220,15 @@ function New-SignedBundle {
 function Invoke-SignedSetupInstall {
     param([Parameter(Mandatory = $true)][string]$SetupPath)
 
-    Write-Host '==> install from signed self-extracting setup'
     $arguments = @(
         'install-self', '--package-id', $script:PackageId,
         '--trust-store', $script:TrustStorePath,
         '--target', $script:TargetPath, '--data-root', $script:DataRoot,
         '--operation', 'install'
     )
-    $lines = @(& $SetupPath @arguments 2>&1 | ForEach-Object { $_.ToString() })
-    $exitCode = $LASTEXITCODE
-    foreach ($line in $lines) {
-        Write-Host "    $line"
-    }
-    if ($exitCode -ne 0) {
-        throw "Signed self-extracting setup exited with code $exitCode."
+    $result = Invoke-ExternalProcess -Step 'install from signed self-extracting setup' -FilePath $SetupPath -Arguments $arguments
+    if ($result.ExitCode -ne 0) {
+        throw "Signed self-extracting setup exited with code $($result.ExitCode)."
     }
 }
 
@@ -257,13 +307,21 @@ try {
 
     $programFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
     $sdkBin = Join-Path $programFilesX86 'Windows Kits\10\bin'
-    $signTool = Get-ChildItem -LiteralPath $sdkBin -Filter 'signtool.exe' -File -Recurse |
-        Where-Object { $_.Directory.Name -eq 'x64' } |
-        Select-Object -First 1
-    if (!$signTool) {
-        throw 'Windows SDK signtool.exe was not found.'
+    Write-Host '==> locate Windows SDK x64 signtool.exe'
+    if (!(Test-Path -LiteralPath $sdkBin -PathType Container)) {
+        throw "Windows SDK bin directory was not found: $sdkBin"
     }
-    $script:SignToolPath = $signTool.FullName
+    $sdkVersions = Get-ChildItem -LiteralPath $sdkBin -Directory | Sort-Object Name -Descending
+    foreach ($sdkVersion in $sdkVersions) {
+        $candidate = Join-Path $sdkVersion.FullName 'x64\signtool.exe'
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            $script:SignToolPath = $candidate
+            break
+        }
+    }
+    if (!$script:SignToolPath) {
+        throw 'Windows SDK x64 signtool.exe was not found in a versioned SDK directory.'
+    }
 
     $subject = Get-CertificateSubjectForPolicy
     $hasher = [System.Security.Cryptography.SHA256]::Create()
@@ -294,11 +352,11 @@ fn main() {
 }
 '@
     [IO.File]::WriteAllText($fixtureSource, $rustSource, [Text.UTF8Encoding]::new($false))
-    Write-Host '==> compile launch fixture'
-    & rustc --edition=2021 $fixtureSource -o $script:FixtureExecutable
-    $rustcExitCode = $LASTEXITCODE
-    if ($rustcExitCode -ne 0) {
-        throw "Could not compile the launch fixture; rustc exit code $rustcExitCode."
+    $rustcResult = Invoke-ExternalProcess -Step 'compile launch fixture' -FilePath 'rustc' -Arguments @(
+        '--edition=2021', $fixtureSource, '-o', $script:FixtureExecutable
+    )
+    if ($rustcResult.ExitCode -ne 0) {
+        throw "Could not compile the launch fixture; rustc exit code $($rustcResult.ExitCode)."
     }
 
     $versionOne = New-SignedBundle -Version '1.0.0'
@@ -405,18 +463,18 @@ fn main() {
         throw 'The distribution pair did not produce both setup executables.'
     }
 
-    Write-Host '==> sign primary setup with the ephemeral CI certificate'
-    & $script:SignToolPath sign /fd SHA256 /sha1 $script:TestCertificate.Thumbprint /s My $primarySetup
-    $signExitCode = $LASTEXITCODE
-    if ($signExitCode -ne 0) {
-        throw "signtool sign failed with exit code $signExitCode."
+    $signResult = Invoke-ExternalProcess -Step 'sign primary setup with the ephemeral CI certificate' -FilePath $script:SignToolPath -Arguments @(
+        'sign', '/fd', 'SHA256', '/sha1', $script:TestCertificate.Thumbprint, '/s', 'My', $primarySetup
+    )
+    if ($signResult.ExitCode -ne 0) {
+        throw "signtool sign failed with exit code $($signResult.ExitCode)."
     }
 
-    Write-Host '==> verify primary setup Authenticode signature'
-    & $script:SignToolPath verify /pa /v $primarySetup
-    $verifySignatureExitCode = $LASTEXITCODE
-    if ($verifySignatureExitCode -ne 0) {
-        throw "signtool verify failed with exit code $verifySignatureExitCode."
+    $verifySignatureResult = Invoke-ExternalProcess -Step 'verify primary setup Authenticode signature' -FilePath $script:SignToolPath -Arguments @(
+        'verify', '/pa', '/v', $primarySetup
+    )
+    if ($verifySignatureResult.ExitCode -ne 0) {
+        throw "signtool verify failed with exit code $($verifySignatureResult.ExitCode)."
     }
 
     Invoke-SignedSetupInstall -SetupPath $primarySetup
