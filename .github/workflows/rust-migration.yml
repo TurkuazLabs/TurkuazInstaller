@@ -103,10 +103,6 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Run signed offline Windows lifecycle smoke
-        shell: pwsh
-        run: |
-          & "rust/scripts/windows-signed-bundle-smoke.ps1" -InstallerPath "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe"
 
       - name: Build GUI setup stub
         run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui
@@ -122,3 +118,8 @@ jobs:
           path: rust/target/release/turkuaz-setup-gui-stub-v${{ env.RUST_CLI_VERSION }}-windows-x64.exe
           if-no-files-found: error
           retention-days: 7
+
+      - name: Run signed offline Windows lifecycle smoke
+        shell: pwsh
+        run: |
+          & "rust/scripts/windows-signed-bundle-smoke.ps1" -InstallerPath "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe" -GuiStubPath "rust/target/release/turkuaz-setup-gui-stub-v$env:RUST_CLI_VERSION-windows-x64.exe" -MakensisPath (Join-Path ([Environment]::GetEnvironmentVariable("ProgramFiles(x86)")) "NSIS/makensis.exe")

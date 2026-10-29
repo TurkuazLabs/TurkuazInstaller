@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.8
+Version: 2.3.9
 Aciklama: Mevcut .NET davranisini koruyarak asamali Rust portu icin mimari sinir ve gercek kapsam durumunu belirtir
 Bagimli Oldugu Katman: Documentation
 -->
@@ -42,7 +42,7 @@ Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .N
 - `manifest-parser`: schema v1 YAML alanlarini domain invariant'lariyla eslestirir; bilinmeyen alanlari yok sayar ve taninmayan channel, install mode, shortcut location veya signature algorithm degerlerini reddeder.
 - Community Rust CI format, Clippy (uyarilar hata sayilir), workspace testleri, Linux/Windows compile, NSIS validation ve surumlenmis Windows x64 CLI/GUI stub artifact'larini dogrular; artifact'lar yedi gun saklanir. CLI surumunu `--version` veya `-V` ile, GUI surumunu pencere basliginda gosterir. Bunlar development artifact'laridir; dagitilabilir Turkuaz setup ya da production release degildir. .NET CI mevcut Community davranis referansini dogrulamaya devam eder.
 
-Rust gecisi halen migration foundation'dir; production veya end-user setup hazirliginda degildir ve mevcut .NET runtime'in yerine gecmez. CLI signed online install/update/repair/rollback, kurulu state listeleme/dogrulama/baslatma/uninstall, signed offline bundle ve self-extracting setup uretim akislarini icerir; no-argument CLI/GUI acilisi varsayilan data root journal'larini tarayip konservatif recovery dener. Ozel data root secilen paket isleminde denetlenir. Prerequisite ve Windows integration adapter'lari, production Authenticode signing/publishing ve gercek imzali paketlerle temiz Windows VM lifecycle kabul testi acik kalir. Windows CI gecici bir self-signed test sertifikasi ile detached CMS dogrulamasini ve offline install/update/repair/rollback/launch/uninstall akisinin tamamini calistirir. Bu test production yayinlayici sertifikasi, Authenticode imzali setup veya temiz son kullanici VM kabulunun yerini tutmaz.
+Rust gecisi halen migration foundation'dir; production veya end-user setup hazirliginda degildir ve mevcut .NET runtime'in yerine gecmez. CLI signed online install/update/repair/rollback, kurulu state listeleme/dogrulama/baslatma/uninstall, signed offline bundle ve self-extracting setup uretim akislarini icerir; no-argument CLI/GUI acilisi varsayilan data root journal'larini tarayip konservatif recovery dener. Ozel data root secilen paket isleminde denetlenir. Prerequisite ve Windows integration adapter'lari, production Authenticode signing/publishing ve gercek imzali paketlerle temiz Windows VM lifecycle kabul testi acik kalir. Windows CI gecici self-signed test sertifikasi ile detached CMS dogrulamasini, offline install/update/repair/rollback/launch/uninstall akisini ve Authenticode sertifikasi eklenmis self-extracting primary setup testini calistirir. Production yayinlayici sertifikasi ve temiz son kullanici VM kabul testi halen gereklidir.
 
 ## Windows smoke test
 

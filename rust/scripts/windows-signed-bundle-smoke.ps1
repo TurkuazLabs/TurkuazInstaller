@@ -7,17 +7,27 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$InstallerPath
+    [string]$InstallerPath,
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$GuiStubPath,
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
+    [string]$MakensisPath
 )
 
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $script:InstallerPath = (Resolve-Path -LiteralPath $InstallerPath -ErrorAction Stop).ProviderPath
+$script:GuiStubPath = (Resolve-Path -LiteralPath $GuiStubPath -ErrorAction Stop).ProviderPath
+$script:MakensisPath = (Resolve-Path -LiteralPath $MakensisPath -ErrorAction Stop).ProviderPath
 $script:PackageId = 'ci.smoke'
 $script:TargetPath = Join-Path $env:RUNNER_TEMP ('turkuaz-ci-target-' + [Guid]::NewGuid().ToString('N'))
 $script:DataRoot = Join-Path $env:RUNNER_TEMP ('turkuaz-ci-data-' + [Guid]::NewGuid().ToString('N'))
 $script:WorkDirectory = Join-Path $env:RUNNER_TEMP ('turkuaz-signed-bundle-smoke-' + [Guid]::NewGuid().ToString('N'))
 $script:TestCertificate = $null
+$script:RootTrustAdded = $false
+$script:SignToolPath = $null
 $script:FixtureExecutable = Join-Path $script:WorkDirectory 'smoke-app.exe'
 
 function Invoke-Installer {
@@ -152,6 +162,26 @@ function New-SignedBundle {
     }
 }
 
+function Invoke-SignedSetupInstall {
+    param([Parameter(Mandatory = $true)][string]$SetupPath)
+
+    Write-Host '==> install from signed self-extracting setup'
+    $arguments = @(
+        'install-self', '--package-id', $script:PackageId,
+        '--trust-store', $script:TrustStorePath,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot,
+        '--operation', 'install'
+    )
+    $lines = @(& $SetupPath @arguments 2>&1 | ForEach-Object { $_.ToString() })
+    $exitCode = $LASTEXITCODE
+    foreach ($line in $lines) {
+        Write-Host "    $line"
+    }
+    if ($exitCode -ne 0) {
+        throw "Signed self-extracting setup exited with code $exitCode."
+    }
+}
+
 function Get-CertificateSubjectForPolicy {
     Add-Type -TypeDefinition @'
 using System;
@@ -211,6 +241,245 @@ try {
     Add-Type -AssemblyName System.Security.Cryptography.Pkcs
 
     $script:TestCertificate = New-SelfSignedCertificate -Subject 'CN=TurkuazInstaller CI Smoke,O=TurkuazLabs,C=US' -CertStoreLocation 'Cert:\CurrentUser\My' -Type CodeSigningCert -KeyAlgorithm RSA -KeyLength 2048 -HashAlgorithm SHA256 -NotAfter (Get-Date).AddDays(2)
+
+    $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new(
+        [System.Security.Cryptography.X509Certificates.StoreName]::Root,
+        [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+    )
+    $rootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+    try {
+        $rootStore.Add($script:TestCertificate)
+        $script:RootTrustAdded = $true
+    }
+    finally {
+        $rootStore.Close()
+    }
+
+    $programFilesX86 = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+    $sdkBin = Join-Path $programFilesX86 'Windows Kits\10\bin'
+    $signTool = Get-ChildItem -LiteralPath $sdkBin -Filter 'signtool.exe' -File -Recurse |
+        Where-Object { $_.FullName -match '\\x64\\signtool\.exe    $subject = Get-CertificateSubjectForPolicy
+    $hasher = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $certificatePin = [BitConverter]::ToString($hasher.ComputeHash($script:TestCertificate.RawData)).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $hasher.Dispose()
+    }
+
+    $script:TrustStorePath = Join-Path $script:WorkDirectory 'manifest-trust.yaml'
+    $trustYaml = @"
+schema_version: 1
+packages:
+  - id: $script:PackageId
+    publisher_subject: "$subject"
+    certificate_sha256: "$certificatePin"
+"@
+    [IO.File]::WriteAllText($script:TrustStorePath, $trustYaml, [Text.UTF8Encoding]::new($false))
+
+    $fixtureSource = Join-Path $script:WorkDirectory 'smoke-app.rs'
+    $rustSource = @'
+use std::{env, fs};
+
+fn main() {
+    let marker = env::var_os("TURKUAZ_CI_SMOKE_MARKER").expect("marker path is required");
+    fs::write(marker, "launched").expect("could not write the launch marker");
+}
+'@
+    [IO.File]::WriteAllText($fixtureSource, $rustSource, [Text.UTF8Encoding]::new($false))
+    Write-Host '==> compile launch fixture'
+    & rustc --edition=2021 $fixtureSource -o $script:FixtureExecutable
+    $rustcExitCode = $LASTEXITCODE
+    if ($rustcExitCode -ne 0) {
+        throw "Could not compile the launch fixture; rustc exit code $rustcExitCode."
+    }
+
+    $versionOne = New-SignedBundle -Version '1.0.0'
+    $versionTwo = New-SignedBundle -Version '1.1.0'
+
+    Invoke-Installer -Step 'install version 1.0.0 from offline bundle' -Arguments @(
+        'install-bundle', '--package-id', $script:PackageId,
+        '--bundle', $versionOne.Bundle, '--trust-store', $script:TrustStorePath,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot,
+        '--operation', 'install'
+    ) | Out-Null
+
+    New-Item -ItemType Directory -Path $script:TargetPath -Force | Out-Null
+    $sentinelPath = Join-Path $script:TargetPath 'keep-me.txt'
+    [IO.File]::WriteAllText($sentinelPath, 'unmanaged', [Text.UTF8Encoding]::new($false))
+    Invoke-AppLaunchCheck -Label 'version 1.0.0'
+
+    Invoke-Installer -Step 'update to version 1.1.0 from offline bundle' -Arguments @(
+        'install-bundle', '--package-id', $script:PackageId,
+        '--bundle', $versionTwo.Bundle, '--trust-store', $script:TrustStorePath,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot,
+        '--operation', 'update'
+    ) | Out-Null
+
+    $verification = Invoke-Installer -Step 'verify version 1.1.0' -Arguments @(
+        'verify', '--package-id', $script:PackageId,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot
+    )
+    if ($verification -notmatch 'version=1\.1\.0\b') {
+        throw 'The active deployment is not version 1.1.0 after update.'
+    }
+    $directoryMatch = [regex]::Match($verification, '(?m)\bdirectory=(.+)$')
+    if (!$directoryMatch.Success) {
+        throw 'Could not identify the active package directory from verify output.'
+    }
+    $activeDirectory = $directoryMatch.Groups[1].Value.Trim()
+    $releasePath = Join-Path $activeDirectory 'release.txt'
+    if (!(Test-Path -LiteralPath $releasePath -PathType Leaf)) {
+        throw 'The active deployment is missing release.txt.'
+    }
+    [IO.File]::WriteAllText($releasePath, 'tampered', [Text.UTF8Encoding]::new($false))
+    Invoke-InstallerExpectFailure -Step 'reject tampered deployment during verify' -Arguments @(
+        'verify', '--package-id', $script:PackageId,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot
+    ) | Out-Null
+
+    Invoke-Installer -Step 'repair version 1.1.0 from offline bundle' -Arguments @(
+        'install-bundle', '--package-id', $script:PackageId,
+        '--bundle', $versionTwo.Bundle, '--trust-store', $script:TrustStorePath,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot,
+        '--operation', 'repair'
+    ) | Out-Null
+    $verification = Invoke-Installer -Step 'verify repaired version 1.1.0' -Arguments @(
+        'verify', '--package-id', $script:PackageId,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot
+    )
+    if ($verification -notmatch 'version=1\.1\.0\b') {
+        throw 'Repair did not restore version 1.1.0.'
+    }
+
+    Invoke-Installer -Step 'rollback to version 1.0.0 under signed policy' -Arguments @(
+        'install-bundle', '--package-id', $script:PackageId,
+        '--bundle', $versionTwo.Bundle, '--trust-store', $script:TrustStorePath,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot,
+        '--operation', 'rollback'
+    ) | Out-Null
+    $verification = Invoke-Installer -Step 'verify rolled back version 1.0.0' -Arguments @(
+        'verify', '--package-id', $script:PackageId,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot
+    )
+    if ($verification -notmatch 'version=1\.0\.0\b') {
+        throw 'Rollback did not restore version 1.0.0.'
+    }
+    Invoke-AppLaunchCheck -Label 'version 1.0.0 after rollback'
+
+    Invoke-Installer -Step 'uninstall managed package' -Arguments @(
+        'uninstall', '--package-id', $script:PackageId,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot,
+        '--confirm-uninstall', 'YES'
+    ) | Out-Null
+    $listOutput = Invoke-Installer -Step 'confirm package is uninstalled' -Arguments @(
+        'list', '--data-root', $script:DataRoot
+    )
+    if ($listOutput -notmatch 'No installed packages\.') {
+        throw 'The package is still listed after uninstall.'
+    }
+    if (!(Test-Path -LiteralPath $sentinelPath -PathType Leaf) -or
+        [IO.File]::ReadAllText($sentinelPath) -ne 'unmanaged') {
+        throw 'Uninstall removed or changed the unmanaged sentinel file.'
+    }
+
+    $distributionDirectory = Join-Path $script:WorkDirectory 'distribution'
+    Invoke-Installer -Step 'build primary and NSIS backup distribution pair' -Arguments @(
+        'build-distribution-pair', '--package-id', $script:PackageId,
+        '--stub', $script:GuiStubPath, '--bundle', $versionTwo.Bundle,
+        '--trust-store', $script:TrustStorePath,
+        '--output-dir', $distributionDirectory, '--makensis', $script:MakensisPath
+    ) | Out-Null
+
+    $primarySetup = Join-Path $distributionDirectory 'TurkuazSetup.exe'
+    $backupSetup = Join-Path $distributionDirectory 'TurkuazInstallerBackup.exe'
+    if (!(Test-Path -LiteralPath $primarySetup -PathType Leaf) -or
+        !(Test-Path -LiteralPath $backupSetup -PathType Leaf)) {
+        throw 'The distribution pair did not produce both setup executables.'
+    }
+
+    Write-Host '==> sign primary setup with the ephemeral CI certificate'
+    & $script:SignToolPath sign /fd SHA256 /sha1 $script:TestCertificate.Thumbprint /s My $primarySetup
+    $signExitCode = $LASTEXITCODE
+    if ($signExitCode -ne 0) {
+        throw "signtool sign failed with exit code $signExitCode."
+    }
+
+    Write-Host '==> verify primary setup Authenticode signature'
+    & $script:SignToolPath verify /pa /v $primarySetup
+    $verifySignatureExitCode = $LASTEXITCODE
+    if ($verifySignatureExitCode -ne 0) {
+        throw "signtool verify failed with exit code $verifySignatureExitCode."
+    }
+
+    Invoke-SignedSetupInstall -SetupPath $primarySetup
+    $listOutput = Invoke-Installer -Step 'confirm install-self package state' -Arguments @(
+        'list', '--data-root', $script:DataRoot
+    )
+    if ($listOutput -notmatch 'ci\.smoke') {
+        throw 'The signed self-extracting setup did not install the package.'
+    }
+    $verification = Invoke-Installer -Step 'verify install-self deployment' -Arguments @(
+        'verify', '--package-id', $script:PackageId,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot
+    )
+    if ($verification -notmatch 'version=1\.1\.0\b') {
+        throw 'The signed self-extracting setup installed the wrong version.'
+    }
+    Invoke-AppLaunchCheck -Label 'version 1.1.0 from signed self-extracting setup'
+    Invoke-Installer -Step 'uninstall self-extractor smoke package' -Arguments @(
+        'uninstall', '--package-id', $script:PackageId,
+        '--target', $script:TargetPath, '--data-root', $script:DataRoot,
+        '--confirm-uninstall', 'YES'
+    ) | Out-Null
+    $listOutput = Invoke-Installer -Step 'confirm self-extractor smoke package is uninstalled' -Arguments @(
+        'list', '--data-root', $script:DataRoot
+    )
+    if ($listOutput -notmatch 'No installed packages\.') {
+        throw 'The self-extractor smoke package remains installed.'
+    }
+    if (!(Test-Path -LiteralPath $sentinelPath -PathType Leaf) -or
+        [IO.File]::ReadAllText($sentinelPath) -ne 'unmanaged') {
+        throw 'The second uninstall removed or changed the unmanaged sentinel file.'
+    }
+
+    Write-Host 'Signed offline bundle and self-extracting distribution smoke passed.'
+}
+finally {
+    Remove-Item Env:TURKUAZ_CI_SMOKE_MARKER -ErrorAction SilentlyContinue
+    if ($script:TestCertificate) {
+        $certificatePath = 'Cert:\CurrentUser\My\' + $script:TestCertificate.Thumbprint
+        Remove-Item -LiteralPath $certificatePath -Force -ErrorAction SilentlyContinue
+    }
+    if ($script:TestCertificate -and $script:RootTrustAdded) {
+        $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new(
+            [System.Security.Cryptography.X509Certificates.StoreName]::Root,
+            [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+        )
+        try {
+            $rootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+            $rootStore.Remove($script:TestCertificate)
+        }
+        finally {
+            $rootStore.Close()
+            $rootStore.Dispose()
+        }
+    }
+    if (Test-Path -LiteralPath $script:WorkDirectory) {
+        Remove-Item -LiteralPath $script:WorkDirectory -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    foreach ($temporaryPath in @($script:TargetPath, $script:DataRoot)) {
+        if (Test-Path -LiteralPath $temporaryPath) {
+            Remove-Item -LiteralPath $temporaryPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+ } |
+        Select-Object -First 1
+    if (!$signTool) {
+        throw 'Windows SDK signtool.exe was not found.'
+    }
+    $script:SignToolPath = $signTool.FullName
 
     $subject = Get-CertificateSubjectForPolicy
     $hasher = [System.Security.Cryptography.SHA256]::Create()

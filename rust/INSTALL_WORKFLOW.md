@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/INSTALL_WORKFLOW.md
 Amac: Verified full package install ve forward update orkestrasyon sözleşmesini açıklamak
 Modul - Markdown Specification
-Version: 0.2.4
+Version: 0.2.5
 Aciklama: Kilit, stage, etkin deployment ve kurulu state adımlarının sırasını kaydeder
 Bagimli Oldugu Katman: Service | Documentation
 -->
@@ -43,4 +43,4 @@ The service rollback method requires the caller to provide the signed current re
 - The deployment directory is selected by caller configuration. The workflow records the requested target path in installed state, but does not create shortcuts or a stable launch entry.
 - Prerequisite checks/installers and Windows registry/shortcut integration remain future work. On no-argument launch, the GUI shows startup recovery results and blocks new setup if recovery is ambiguous; custom data roots are checked per package operation.
 - The Windows CLI CI artifact is a development binary, not the Turkuaz setup.
-- CI also creates an ephemeral Windows test certificate, verifies a detached CMS-signed offline bundle, and runs install, update, launch, tamper detection, repair, rollback, launch, and uninstall. Acceptance with the production publisher certificate and on a clean end-user VM remains unrun.
+- CI also creates an ephemeral Windows test certificate, verifies a detached CMS-signed offline bundle, runs install/update/launch/tamper detection/repair/rollback/uninstall, builds the primary and NSIS backup pair, Authenticode-signs the self-extracting primary with the test certificate, and installs from that signed executable. Acceptance with the production publisher certificate and on a clean end-user VM remains unrun.
