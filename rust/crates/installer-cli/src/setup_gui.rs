@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.1.4
+// Version: 0.1.5
 // Aciklama: Kullanici girdilerini alir, mevcut guvenli CLI kurulum motorunu arka planda calistirir
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -237,7 +237,7 @@ impl eframe::App for SetupApp {
             }
 
             if self.recovery_blocked {
-                ui.label("Kurtarma tamamlanmadan yeni bir kurulum başlatılamaz. Ayrıntıları inceleyin ve `recover` komutuyla güvenli durumu sağlayın.");
+                ui.label("Kurtarma başarıyla tamamlanmadan yeni kurulum başlatılamaz. Yukarıdaki CLI komutunu konsolda çalıştırın; kurtarma yine başarısız olursa günlük ve deployment dosyalarını silmeyin.");
             }
 
             if let Some((succeeded, message)) = &self.status {

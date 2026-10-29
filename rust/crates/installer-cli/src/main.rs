@@ -3,7 +3,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.13
+// Version: 0.2.14
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -836,10 +836,34 @@ fn run_startup_recovery(
         .filter(|line| !line.trim().is_empty())
         .unwrap_or("Recovery could not prove a safe package state.")
         .to_owned();
+    let target = target_directory.to_string_lossy();
+    let data_root = data_root.to_string_lossy();
+    let command = if cfg!(windows) {
+        format!(
+            ".\\turkuaz-installer.exe recover --package-id {package_id} --target {} --data-root {}",
+            quote_recovery_argument(&target),
+            quote_recovery_argument(&data_root)
+        )
+    } else {
+        format!(
+            "./turkuaz-installer recover --package-id {package_id} --target {} --data-root {}",
+            quote_recovery_argument(&target),
+            quote_recovery_argument(&data_root)
+        )
+    };
     Err(io::Error::other(format!(
-        "Automatic recovery failed; setup stopped safely. Run the recover command manually: {detail}"
+        "Automatic recovery failed for package {package_id}; setup stopped safely. Use the console CLI artifact in {} to run: {command}. Keep the journal and deployment files intact if recovery still fails: {detail}",
+        if cfg!(windows) { "PowerShell" } else { "a terminal" }
     ))
     .into())
+}
+
+fn quote_recovery_argument(value: &str) -> String {
+    if cfg!(windows) {
+        format!("'{}'", value.replace(''', "''"))
+    } else {
+        format!("'{}'", value.replace(''', "'\\''"))
+    }
 }
 
 struct SetupBundleExtractionGuard(PathBuf);
