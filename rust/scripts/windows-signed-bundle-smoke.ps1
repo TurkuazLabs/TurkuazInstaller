@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.1
-# Aciklama: Asama gunlukleri ve sure sinirlariyla imzali bundle/setup lifecycle akislarini dogrular
+# Version: 0.2.2
+# Aciklama: Root'a yalnizca acik anahtar kopyasi ekleyerek signed setup lifecycle akislarini dogrular
 # Bagimli Oldugu Katman: QA | Tool
 param(
     [Parameter(Mandatory = $true)]
@@ -26,6 +26,7 @@ $script:TargetPath = Join-Path $env:RUNNER_TEMP ('turkuaz-ci-target-' + [Guid]::
 $script:DataRoot = Join-Path $env:RUNNER_TEMP ('turkuaz-ci-data-' + [Guid]::NewGuid().ToString('N'))
 $script:WorkDirectory = Join-Path $env:RUNNER_TEMP ('turkuaz-signed-bundle-smoke-' + [Guid]::NewGuid().ToString('N'))
 $script:TestCertificate = $null
+$script:RootTrustCertificate = $null
 $script:RootTrustAdded = $false
 $script:SignToolPath = $null
 $script:FixtureExecutable = Join-Path $script:WorkDirectory 'smoke-app.exe'
@@ -249,17 +250,20 @@ try {
     $script:TestCertificate = New-SelfSignedCertificate -Subject 'CN=TurkuazInstaller CI Smoke,O=TurkuazLabs,C=US' -CertStoreLocation 'Cert:\CurrentUser\My' -Type CodeSigningCert -KeyAlgorithm RSA -KeyLength 2048 -HashAlgorithm SHA256 -NotAfter (Get-Date).AddDays(2)
 
     Write-Host '    Ephemeral test certificate created.'
+    $script:RootTrustCertificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+        $script:TestCertificate.RawData
+    )
     Write-Host '==> open CurrentUser Root certificate store'
     $rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new(
         [System.Security.Cryptography.X509Certificates.StoreName]::Root,
         [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
     )
     $rootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-    Write-Host '==> add ephemeral certificate to CurrentUser Root'
+    Write-Host '==> add public-only certificate copy to CurrentUser Root'
     try {
-        $rootStore.Add($script:TestCertificate)
+        $rootStore.Add($script:RootTrustCertificate)
         $script:RootTrustAdded = $true
-        Write-Host '    Test certificate trusted for this runner.'
+        Write-Host '    Public certificate copy trusted for this runner.'
     }
     finally {
         $rootStore.Close()
@@ -484,12 +488,15 @@ finally {
         )
         try {
             $rootStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-            $rootStore.Remove($script:TestCertificate)
+            $rootStore.Remove($script:RootTrustCertificate)
         }
         finally {
             $rootStore.Close()
             $rootStore.Dispose()
         }
+    }
+    if ($script:RootTrustCertificate) {
+        $script:RootTrustCertificate.Dispose()
     }
     if (Test-Path -LiteralPath $script:WorkDirectory) {
         Remove-Item -LiteralPath $script:WorkDirectory -Recurse -Force -ErrorAction SilentlyContinue
