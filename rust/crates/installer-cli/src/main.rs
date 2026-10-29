@@ -3,7 +3,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.9
+// Version: 0.2.10
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -1348,6 +1348,7 @@ async fn uninstall_command() -> Result<(), Box<dyn Error>> {
     let target_directory = absolute_path(Path::new(required(&values, "target")?.trim()))?;
     let target_path = target_directory.to_string_lossy().into_owned();
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
+    recover_pending_journal(&package_id, &target_directory, &data_root).await?;
     let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
         data_root.join("journal"),
@@ -1420,6 +1421,7 @@ async fn launch_command() -> Result<(), Box<dyn Error>> {
     let target_directory = absolute_path(Path::new(required(&values, "target")?.trim()))?;
     let target_argument = target_directory.to_string_lossy().into_owned();
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
+    recover_pending_journal(&package_id, &target_directory, &data_root).await?;
     let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let _lock_lease = turkuaz_installer_operation_lock::acquire_package_lock(&lock, &package_id)
         .map_err(|_| io::Error::other("Could not acquire package operation lock."))?;
@@ -1559,10 +1561,13 @@ async fn list_command() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
     for package in installed {
+        let package_id = package.package_id().clone();
+        let recovery_target = absolute_path(Path::new(package.target_path()))?;
+        recover_pending_journal(&package_id, &recovery_target, &data_root).await?;
         let _lock_lease =
-            turkuaz_installer_operation_lock::acquire_package_lock(&lock, package.package_id())
+            turkuaz_installer_operation_lock::acquire_package_lock(&lock, &package_id)
                 .map_err(|_| io::Error::other("Could not acquire package operation lock."))?;
-        let Some(package) = state.get(package.package_id()).await? else {
+        let Some(package) = state.get(&package_id).await? else {
             continue;
         };
         let target_directory = absolute_path(Path::new(package.target_path()))?;
@@ -1642,6 +1647,7 @@ async fn verify_command() -> Result<(), Box<dyn Error>> {
     let target_directory = absolute_path(Path::new(required(&values, "target")?.trim()))?;
     let target_argument = target_directory.to_string_lossy().into_owned();
     let data_root = absolute_path(Path::new(required(&values, "data-root")?))?;
+    recover_pending_journal(&package_id, &target_directory, &data_root).await?;
     let lock = FileOperationLockOptions::new(data_root.join("locks"))?;
     let _lock_lease = turkuaz_installer_operation_lock::acquire_package_lock(&lock, &package_id)
         .map_err(|_| io::Error::other("Could not acquire package operation lock."))?;
