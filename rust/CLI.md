@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.9
+Version: 0.4.10
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -231,7 +231,7 @@ TurkuazSetup.exe install-self \
   --operation install
 ```
 
-The signer trust policy remains an explicit input to the primary setup. The `setup-gui` stub opens a Windows desktop wizard with package ID, publisher trust policy, install/data paths, operation selection, progress state, and cancellation. The trust policy defaults to the adjacent `manifest-trust.yaml` produced in the paired distribution folder; confirm that this is the publisher's real policy, never the example file. Cancellation terminates the worker process and then attempts `recover` automatically. If recovery reports an ambiguous state, follow its message for manual recovery. Passing explicit CLI arguments continues to support scripted installs. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store. The `--stub` path must point to the `setup-gui` build above:
+The signer trust policy remains an explicit input to the primary setup. The `setup-gui` stub opens a Windows desktop wizard with package ID, publisher trust policy, install/data paths, and install/update/repair/rollback/uninstall selection. Uninstall hides the trust-policy field, shows the package and target paths, requires a separate confirmation checkbox, and invokes the CLI's managed-files-only uninstall command. The wizard also shows progress and supports cancellation. The trust policy defaults to the adjacent `manifest-trust.yaml` produced in the paired distribution folder; confirm that this is the publisher's real policy, never the example file. Cancellation terminates the worker process and then attempts `recover` automatically. If recovery reports an ambiguous state, follow its message for manual recovery. Passing explicit CLI arguments continues to support scripted installs. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store. The `--stub` path must point to the `setup-gui` build above:
 
 ```sh
 cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-distribution-pair \
