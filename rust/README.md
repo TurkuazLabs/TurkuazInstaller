@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.4
+Version: 2.3.5
 Aciklama: Mevcut .NET davranisini koruyarak asamali Rust portu icin mimari sinir ve gercek kapsam durumunu belirtir
 Bagimli Oldugu Katman: Documentation
 -->
@@ -40,9 +40,9 @@ Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .N
 - `manifest-trust-store`: dis YAML trust store okumasini 1 MiB ile sinirlar, yalniz regular file kabul eder, okuma sirasinda boyut degisikligini reddeder; schema version 1, package id, tekrar eden kayit ve package signer policy denetimi yapar; olmayan dosyada policy bulunamadi sonucu.
 - `manifest-pipeline`: manifest ve imza stream'lerini 1 MiB / 256 KiB sinirinda okur, requested package trust policy'sini bulur, CMS imzasini dogrular ve yalnizca strict UTF-8 decode sonrasinda YAML parserini calistirir; sonuc typed `PackageRelease` domain modelidir.
 - `manifest-parser`: schema v1 YAML alanlarini domain invariant'lariyla eslestirir; bilinmeyen alanlari yok sayar ve taninmayan channel, install mode, shortcut location veya signature algorithm degerlerini reddeder.
-- Community Rust CI Linux format/workspace compile ve Windows workspace compile kapilarini calistirir; Windows'ta development CLI ile setup-gui stub'ini ayri ayri derleyip yedi gun saklanan artifact'lar yukler. Bu binary Turkuaz setup veya production release degildir. .NET CI mevcut Community davranis referansini dogrulamaya devam eder.
+- Community Rust CI format, Clippy (uyarilar hata sayilir), workspace testleri, Linux/Windows compile, NSIS validation ve surumlenmis Windows x64 CLI/GUI stub artifact'larini dogrular; artifact'lar yedi gun saklanir. CLI surumunu `--version` veya `-V` ile, GUI surumunu pencere basliginda gosterir. Bunlar development artifact'laridir; dagitilabilir Turkuaz setup ya da production release degildir. .NET CI mevcut Community davranis referansini dogrulamaya devam eder.
 
-Manifest intake typed Rust release modeline ulasir. Ozel paket v1 builder/staging ve versioned activation mevcut; ilk install/ileri update workflow'u bu katmanlari package lock, journal ve kurulu-state repository ile baglar. Release providerlari, startup recovery, prerequisite/Windows integration ve WinUI henuz tasinmadi; rollback service workflow'u ve imzali CLI komutu eklendi; yalnizca active kaydindaki bir onceki deployment'a doner. Development CLI source olarak eklendi. Rust Migration CI #614 Linux/Windows format ve compile kontrollerini, Windows CLI build/artifact upload adimini gecti; gelistirme CLI artifact'i 2026-11-03'e kadar indirilebilir. End-user acceptance henuz yapilmadi. Rust portu tamamlanmis, release-ready veya mevcut .NET runtime'in yerine gecmis degildir.
+Rust gecisi halen migration foundation'dir; production veya end-user setup hazirliginda degildir ve mevcut .NET runtime'in yerine gecmez. CLI signed online install/update/repair/rollback, kurulu state listeleme/dogrulama/baslatma/uninstall, signed offline bundle ve self-extracting setup uretim akislarini icerir; pending journal recovery konservatif ve operasyon bazlidir. Startup geneli recovery, prerequisite ve Windows integration adapter'lari, production Authenticode signing/publishing ve gercek imzali paketlerle temiz Windows VM lifecycle kabul testi acik kalir. CI testleri ve derlemeleri bu kabul testinin yerini tutmaz.
 
 ## Windows smoke test
 

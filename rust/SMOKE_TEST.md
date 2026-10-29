@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.1.1
+Version: 0.1.2
 Aciklama: Derleme kontrolunden gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -13,7 +13,7 @@ Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde
 
 ## On kosullar
 
-- Guncel PR #63 Rust Migration CI calismasindan hem Windows x64 development CLI hem de `turkuaz-setup-gui-stub-development-windows-x64` artifact'ini indirin. Ikisi de yedi gun sonra silinir; kullanmadan once Actions calismasinin tarihini kontrol edin.
+- Guncel PR #63 Rust Migration CI calismasindan `turkuaz-installer-cli-v<surum>-windows-x64` ve `turkuaz-setup-gui-stub-v<surum>-windows-x64` artifact'larini indirin. Ikisi de yedi gun sonra silinir; kullanmadan once Actions tarihini ve CLI'nin `--version` ciktisini kontrol edin.
 - Testi tercihen geri alinabilir bir Windows sanal makinesinde ve yonetici olmayan kullanici ile yapin.
 - Test uygulamasi icin ayri, gercekten imzalanmis `.tzpkg`, bu paketi gosteren imzali manifest ve detached CMS imzasi kullanin.
 - Ayni paket kimligi icin yayinlayici tarafindan saglanmis gercek trust policy dosyasini ayri tutun. Ornek YAML icindeki sifir pin ve ornek sertifika kimligi guvenilir degildir; uretimde kullanilamaz.
@@ -24,6 +24,7 @@ Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde
 CLI artifact'i ile komut yardimini gorun. GUI artifact'ini acarak kurulum penceresinin acildigini ve trust policy/dizin secicilerini inceleyin; bu ciplak stub'a bundle eklenmedigi icin kurulum baslatmayin. Tam kurulum akisini asagidaki dagitim cifti testinde kontrol edin:
 
 ```powershell
+.\turkuaz-installer.exe --version
 .\turkuaz-installer.exe --help
 ```
 

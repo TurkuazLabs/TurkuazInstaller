@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.1.2
+// Version: 0.1.3
 // Aciklama: Kullanici girdilerini alir, mevcut guvenli CLI kurulum motorunu arka planda calistirir
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -17,6 +17,8 @@ use std::{
 
 use eframe::egui;
 use turkuaz_installer_domain::package_id::PackageId;
+
+const APP_TITLE: &str = concat!("Turkuaz Installer v", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SetupOperation {
@@ -99,11 +101,11 @@ pub fn run() -> eframe::Result {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([680.0, 560.0])
             .with_min_inner_size([620.0, 500.0])
-            .with_title("Turkuaz Installer"),
+            .with_title(APP_TITLE),
         ..Default::default()
     };
     eframe::run_native(
-        "Turkuaz Installer",
+        APP_TITLE,
         options,
         Box::new(|_creation_context| Ok(Box::<SetupApp>::default())),
     )
@@ -120,7 +122,7 @@ impl eframe::App for SetupApp {
 
         let mut start_requested = false;
         egui::CentralPanel::default().show(context, |ui| {
-            ui.heading("Turkuaz Installer");
+            ui.heading(APP_TITLE);
             ui.label("Kurulum paketi imza ve bütünlük kontrollerinden geçirilir.");
             ui.add_space(12.0);
 

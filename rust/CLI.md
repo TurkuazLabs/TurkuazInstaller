@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.4
+Version: 0.4.5
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -19,6 +19,12 @@ From the repository root, build or invoke the binary with:
 
 ```sh
 cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- --help
+```
+
+Print the version recorded in Cargo package metadata with `--version` or `-V`:
+
+```sh
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- --version
 ```
 
 The first install command is:

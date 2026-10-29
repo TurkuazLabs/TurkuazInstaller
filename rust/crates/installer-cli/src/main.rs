@@ -3,7 +3,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.10
+// Version: 0.2.11
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -57,6 +57,13 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
+    if matches!(
+        std::env::args().nth(1).as_deref(),
+        Some("--version" | "-V")
+    ) {
+        println!("Turkuaz Installer v{}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     if std::env::args().nth(1).as_deref() == Some("build-distribution-pair") {
         return build_distribution_pair_command().await;
     }
