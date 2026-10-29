@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.4
-# Aciklama: Rust workspace format, Clippy, test ve compile kapilarini; NSIS yedek setup derlemesini ve surumlenmis Windows development artifact'larini dogrular
+# Version: 0.2.5
+# Aciklama: Rust workspace kapilarini, NSIS yedegini ve gecici test imzacisiyla Windows offline lifecycle smoke akisinin calismasini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -102,6 +102,11 @@ jobs:
           path: rust/target/release/turkuaz-installer-v${{ env.RUST_CLI_VERSION }}-windows-x64.exe
           if-no-files-found: error
           retention-days: 7
+
+      - name: Run signed offline Windows lifecycle smoke
+        shell: pwsh
+        run: |
+          & "rust/scripts/windows-signed-bundle-smoke.ps1" -InstallerPath "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe"
 
       - name: Build GUI setup stub
         run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui

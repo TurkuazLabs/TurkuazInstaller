@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.7
+Version: 0.4.8
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -176,7 +176,7 @@ The Rust Migration CI workflow builds a versioned Windows x64 development CLI ar
 
 The direct online install/update CLI rejects releases that require prerequisites, shortcuts, protocol registration, or preserved paths because those adapters are not implemented yet. It has no interactive progress or cancellation UI and does not automatically remove unreferenced deployment directories. It accepts first install, forward update, same-version repair, and policy-gated rollback. Rollback requires the signed current release policy and selects only the previous recorded activation. A pending journal is automatically checked and conservatively recovered before verified online/offline setup and before launch, verify, uninstall, or per-package listing. Ambiguous states stop the command for manual recovery.
 
-The default CLI build is headless. An optional Windows `setup-gui` build provides the desktop wizard and can be packaged with a verified `.tzsetup` bundle. This remains development software, not a signed production distribution. Rust workspace tests and strict Clippy are enforced by Rust Migration CI. These checks do not replace real signed-package Windows VM acceptance.
+The default CLI build is headless. An optional Windows `setup-gui` build provides the desktop wizard and can be packaged with a verified `.tzsetup` bundle. This remains development software, not a signed production distribution. Rust Migration CI also verifies detached CMS signatures and runs the offline install/update/repair/rollback/launch/uninstall flow with an ephemeral test certificate. It does not verify the production publisher certificate or replace clean end-user VM acceptance.
 
 ## Offline setup bundles
 
