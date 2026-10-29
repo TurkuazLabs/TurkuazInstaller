@@ -860,9 +860,9 @@ fn run_startup_recovery(
 
 fn quote_recovery_argument(value: &str) -> String {
     if cfg!(windows) {
-        format!("'{{}}'", value.replace('\'', "''"))
+        format!("'{}'", value.replace('\'', "''"))
     } else {
-        format!("'{{}}'", value.replace('\'', "'\\''"))
+        format!("'{}'", value.replace('\'', "'\\''"))
     }
 }
 
