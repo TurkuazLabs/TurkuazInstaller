@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/INSTALL_WORKFLOW.md
 Amac: Verified full package install ve forward update orkestrasyon sözleşmesini açıklamak
 Modul - Markdown Specification
-Version: 0.2.2
+Version: 0.2.3
 Aciklama: Kilit, stage, etkin deployment ve kurulu state adımlarının sırasını kaydeder
 Bagimli Oldugu Katman: Service | Documentation
 -->
@@ -26,7 +26,7 @@ The caller supplies a `VerifiedArtifact`, a typed `PackageRelease`, operation ty
 7. If state persistence fails, restore the former active version; for a first install remove the active record. Return a distinct compensation failure if the restore also fails.
 8. Remove the temporary stage on both success and failure, then complete the operation context.
 
-Journal persistence follows the current best-effort operation-context contract. The CLI retains an explicit recovery command for manual use. Online install/update/repair/rollback and verified offline bundle operations check for a pending journal after verifying the incoming signed release and artifact when applicable, then run conservative recovery before starting the requested operation. The CLI also checks and recovers before `launch`, `verify`, `uninstall`, and each `list` entry backed by installed state with a known target path. Merely opening the GUI/CLI without selecting a package operation does not scan every journal. A missing journal with mismatched state or an ambiguous first-install state fails closed and may require manual recovery.
+Journal persistence follows the current best-effort operation-context contract. The CLI retains an explicit recovery command for manual use. Online install/update/repair/rollback and verified offline bundle operations check for a pending journal after verifying the incoming signed release and artifact when applicable, then run conservative recovery before starting the requested operation. The CLI also checks and recovers before `launch`, `verify`, `uninstall`, and each `list` entry backed by installed state with a known target path. On a no-argument launch, CLI and GUI startup scan the default data root's canonical journal files and attempt conservative recovery using each recorded target. A malformed or ambiguous record blocks the GUI or stops CLI startup. A custom data root is checked by the per-package preflight when an operation is selected. A missing journal with mismatched state or an ambiguous first-install state fails closed and may require manual recovery.
 
 ## Repair
 
@@ -34,13 +34,13 @@ The repair method requires installed state and active deployment to agree on pac
 
 ## Rollback
 
-The service rollback method requires the caller to provide the signed current release policy. It selects the previous version recorded in active.json, updates installed state, and restores the former active version if state persistence fails. The CLI exposes this operation when given the signed manifest for the currently installed version. It can move one recorded activation at a time; release history and generic recovery at application startup are not implemented.
+The service rollback method requires the caller to provide the signed current release policy. It selects the previous version recorded in active.json, updates installed state, and restores the former active version if state persistence fails. The CLI exposes this operation when given the signed manifest for the currently installed version. It can move one recorded activation at a time; release history is not implemented. A no-argument launch scans the default journal root and attempts conservative recovery for each record; custom data roots still rely on per-package preflight.
 
 ## Current limits
 
 - Install, forward Update, same-version Repair, and policy-gated rollback are supported by the development CLI and service.
 - The package must be a full `.tzpkg`; delta application is not wired. Releases declaring prerequisites, Windows integration actions, or preserved paths are rejected until those adapters are implemented.
 - The deployment directory is selected by caller configuration. The workflow records the requested target path in installed state, but does not create shortcuts or a stable launch entry.
-- Prerequisite checks/installers, Windows registry/shortcut integration, progress events, automatic recovery at application launch, and UI integration remain future work.
+- Prerequisite checks/installers and Windows registry/shortcut integration remain future work. On no-argument launch, the GUI shows startup recovery results and blocks new setup if recovery is ambiguous; custom data roots are checked per package operation.
 - The Windows CLI CI artifact is a development binary, not the Turkuaz setup.
-- No Rust tests were run for this implementation. Current branch CI compilation/format status must be checked before treating the implementation as buildable.
+- Workspace Rust tests, strict Clippy, Linux/Windows compilation, and NSIS validation run in CI. Real signed-package Windows VM lifecycle acceptance remains unrun.

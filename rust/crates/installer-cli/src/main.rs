@@ -3,7 +3,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.12
+// Version: 0.2.13
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -71,13 +71,18 @@ async fn run() -> Result<(), Box<dyn Error>> {
         return install_self_setup_command().await;
     }
     if std::env::args().nth(1).is_none() {
+        let startup_recovery = recover_pending_journals_on_startup(&default_data_root()).await;
         #[cfg(all(windows, feature = "setup-gui"))]
         {
-            setup_gui::run()?;
+            match startup_recovery {
+                Ok(recovered_count) => setup_gui::run_with_recovery_summary(recovered_count)?,
+                Err(error) => setup_gui::run_with_recovery_error(error.to_string())?,
+            }
             return Ok(());
         }
         #[cfg(not(all(windows, feature = "setup-gui")))]
         {
+            startup_recovery?;
             return install_self_setup_command().await;
         }
     }
@@ -789,6 +794,20 @@ async fn recover_pending_journal(
         run_startup_recovery(package_id, target_directory, data_root)?;
     }
     Ok(())
+}
+
+async fn recover_pending_journals_on_startup(
+    data_root: &Path,
+) -> Result<usize, Box<dyn Error>> {
+    let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
+        data_root.join("journal"),
+    )?);
+    let entries = journal.list().await?;
+    for entry in &entries {
+        let target_directory = absolute_path(Path::new(entry.target_path.trim()))?;
+        run_startup_recovery(&entry.package_id, &target_directory, data_root)?;
+    }
+    Ok(entries.len())
 }
 
 fn run_startup_recovery(
@@ -1866,6 +1885,13 @@ async fn read_bounded_https(
         ));
     }
     Ok((bytes, actual_length))
+}
+
+fn default_data_root() -> PathBuf {
+    let local_app_data = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
+    local_app_data.join("TurkuazInstaller")
 }
 
 fn absolute_path(path: &Path) -> io::Result<PathBuf> {

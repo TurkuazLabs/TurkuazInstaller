@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.1.3
+// Version: 0.1.4
 // Aciklama: Kullanici girdilerini alir, mevcut guvenli CLI kurulum motorunu arka planda calistirir
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -60,6 +60,7 @@ struct SetupApp {
     cancel_sender: Option<Sender<()>>,
     status: Option<(bool, String)>,
     cancel_requested: bool,
+    recovery_blocked: bool,
 }
 
 impl Default for SetupApp {
@@ -92,11 +93,27 @@ impl Default for SetupApp {
             cancel_sender: None,
             status: None,
             cancel_requested: false,
+            recovery_blocked: false,
         }
     }
 }
 
-pub fn run() -> eframe::Result {
+pub fn run_with_recovery_summary(recovered_count: usize) -> eframe::Result {
+    let message = if recovered_count == 0 {
+        "Başlangıçta bekleyen işlem bulunamadı.".to_owned()
+    } else {
+        format!(
+            "Başlangıçta {recovered_count} bekleyen işlem güvenli duruma getirildi."
+        )
+    };
+    run_with_startup_notice(Some((true, message)))
+}
+
+pub fn run_with_recovery_error(message: String) -> eframe::Result {
+    run_with_startup_notice(Some((false, message)))
+}
+
+fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([680.0, 560.0])
@@ -107,7 +124,14 @@ pub fn run() -> eframe::Result {
     eframe::run_native(
         APP_TITLE,
         options,
-        Box::new(|_creation_context| Ok(Box::<SetupApp>::default())),
+        Box::new(move |_creation_context| {
+            let mut app = SetupApp::default();
+            if let Some((succeeded, message)) = notice {
+                app.recovery_blocked = !succeeded;
+                app.status = Some((succeeded, message));
+            }
+            Ok(Box::new(app))
+        }),
     )
 }
 
@@ -126,7 +150,7 @@ impl eframe::App for SetupApp {
             ui.label("Kurulum paketi imza ve bütünlük kontrollerinden geçirilir.");
             ui.add_space(12.0);
 
-            ui.add_enabled_ui(!is_working, |ui| {
+            ui.add_enabled_ui(!is_working && !self.recovery_blocked, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("Paket kimliği");
                     ui.text_edit_singleline(&mut self.package_id);
@@ -214,6 +238,10 @@ impl eframe::App for SetupApp {
                 context.request_repaint_after(Duration::from_millis(100));
             }
 
+            if self.recovery_blocked {
+                ui.label("Kurtarma tamamlanmadan yeni bir kurulum başlatılamaz. Ayrıntıları inceleyin ve `recover` komutuyla güvenli durumu sağlayın.");
+            }
+
             if let Some((succeeded, message)) = &self.status {
                 ui.add_space(8.0);
                 ui.separator();
@@ -236,6 +264,9 @@ impl eframe::App for SetupApp {
 
 impl SetupApp {
     fn start_install(&mut self) {
+        if self.recovery_blocked {
+            return;
+        }
         if let Err(error) = PackageId::parse(self.package_id.trim()) {
             self.status = Some((false, format!("Paket kimliği geçersiz: {error}")));
             return;

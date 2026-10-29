@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/operation-journal/src/lib.rs
 // Amac: Install workflow recovery icin operation checkpointlerini kalici JSON journalda saklamak
 // Modul - Rust Library
-// Version: 0.3.0
+// Version: 0.4.0
 // Aciklama: Journal entry'lerini bounded okur ve ayni dizinde atomik rename ile gunceller
 // Bagimli Oldugu Katman: Repo
 
@@ -25,6 +25,7 @@ use uuid::Uuid;
 
 const MAX_JOURNAL_BYTES: u64 = 1024 * 1024;
 const JOURNAL_EXTENSION: &str = "json";
+const MAXIMUM_JOURNAL_SCAN_ENTRIES: usize = 1024;
 
 #[derive(Debug)]
 pub enum JournalError {
@@ -153,6 +154,65 @@ impl JsonOperationJournalRepository {
             ));
         }
         Ok(Some(entry))
+    }
+
+    /// @dev-id TIZ-OP-JOURNAL-012
+    /// @purpose Enumerate and validate canonical package journals for conservative startup recovery.
+    /// @reason An interrupted operation must be discoverable before the user selects a package.
+    /// @contract Ignores temporary files, bounds entries, validates file types and package IDs, and returns entries sorted by package ID.
+    /// @depends Bounded package journal reads and Tokio directory iteration.
+    pub async fn list(&self) -> Result<Vec<JournalEntry>, JournalError> {
+        let mut directory = match fs::read_dir(self.options.root_directory()).await {
+            Ok(directory) => directory,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => return Err(JournalError::Io(error)),
+        };
+        let mut package_ids = Vec::new();
+        while let Some(file) = directory.next_entry().await.map_err(JournalError::Io)? {
+            let path = file.path();
+            let extension = path.extension().and_then(|value| value.to_str());
+            if !extension.is_some_and(|value| value.eq_ignore_ascii_case(JOURNAL_EXTENSION)) {
+                continue;
+            }
+            if extension != Some(JOURNAL_EXTENSION) {
+                return Err(JournalError::InvalidEntry(
+                    "journal file extension is not canonical",
+                ));
+            }
+            if !file.file_type().await.map_err(JournalError::Io)?.is_file() {
+                return Err(JournalError::InvalidEntry(
+                    "journal entry must be a regular file",
+                ));
+            }
+            let file_stem = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .ok_or(JournalError::InvalidEntry(
+                    "journal filename is not valid UTF-8",
+                ))?;
+            let package_id = PackageId::parse(file_stem)
+                .map_err(|_| JournalError::InvalidEntry("journal filename has an invalid package ID"))?;
+            if package_id.as_str() != file_stem {
+                return Err(JournalError::InvalidEntry(
+                    "journal filename package ID is not canonical",
+                ));
+            }
+            if package_ids.len() >= MAXIMUM_JOURNAL_SCAN_ENTRIES {
+                return Err(JournalError::InvalidEntry(
+                    "journal scan exceeds the 1024-entry limit",
+                ));
+            }
+            package_ids.push(package_id);
+        }
+
+        package_ids.sort();
+        let mut entries = Vec::with_capacity(package_ids.len());
+        for package_id in package_ids {
+            if let Some(entry) = self.get(&package_id).await? {
+                entries.push(entry);
+            }
+        }
+        Ok(entries)
     }
 
     /// @dev-id TIZ-OP-JOURNAL-011
@@ -285,5 +345,106 @@ fn phase_from_number(value: i32) -> Result<InstallerOperationPhase, JournalError
         12 => Ok(InstallerOperationPhase::RebootResumeArmed),
         13 => Ok(InstallerOperationPhase::ApplyingIntegrations),
         _ => Err(JournalError::InvalidEntry("phase value is unknown")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{future::Future, path::PathBuf};
+
+    use super::*;
+
+    fn block_on<T>(future: impl Future<Output = T>) -> T {
+        tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("current-thread runtime should build")
+            .block_on(future)
+    }
+
+    fn temporary_directory() -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "turkuaz-operation-journal-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&path).expect("test directory should be created");
+        path
+    }
+
+    fn sample_entry(package_id: &str) -> JournalEntry {
+        let now = OffsetDateTime::now_utc();
+        JournalEntry {
+            operation_id: uuid::Uuid::new_v4(),
+            package_id: PackageId::parse(package_id).expect("package ID should be valid"),
+            operation: InstallerOperationType::Install,
+            version: Some("1.0.0".to_owned()),
+            target_path: "C:\\Turkuaz\\Example".to_owned(),
+            phase: InstallerOperationPhase::Started,
+            started_at_utc: now,
+            updated_at_utc: now,
+            failure: None,
+            pending_prerequisite_id: None,
+        }
+    }
+
+    #[test]
+    fn list_returns_canonical_journals_in_package_order_and_ignores_temporary_files() {
+        let root = temporary_directory();
+        let repository = JsonOperationJournalRepository::new(
+            JsonOperationJournalRepositoryOptions::new(&root)
+                .expect("journal options should be valid"),
+        );
+
+        let entries = block_on(async {
+            repository
+                .save(&sample_entry("z.example"))
+                .await
+                .expect("first journal should save");
+            repository
+                .save(&sample_entry("a.example"))
+                .await
+                .expect("second journal should save");
+            std::fs::write(root.join("a.example.tmp-leftover"), b"partial")
+                .expect("temporary file should be written");
+            repository.list().await.expect("journal scan should succeed")
+        });
+
+        let package_ids = entries
+            .iter()
+            .map(|entry| entry.package_id.to_string())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            package_ids,
+            vec!["a.example".to_owned(), "z.example".to_owned()]
+        );
+        std::fs::remove_dir_all(root).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn list_returns_empty_when_the_journal_directory_does_not_exist() {
+        let parent = temporary_directory();
+        let root = parent.join("journal");
+        let repository = JsonOperationJournalRepository::new(
+            JsonOperationJournalRepositoryOptions::new(&root)
+                .expect("journal options should be valid"),
+        );
+
+        let entries = block_on(repository.list()).expect("missing journal directory is empty");
+        assert!(entries.is_empty());
+        std::fs::remove_dir_all(parent).expect("test directory should be removed");
+    }
+
+    #[test]
+    fn list_rejects_corrupt_journal_json() {
+        let root = temporary_directory();
+        std::fs::write(root.join("broken.example.json"), b"{")
+            .expect("corrupt journal fixture should be written");
+        let repository = JsonOperationJournalRepository::new(
+            JsonOperationJournalRepositoryOptions::new(&root)
+                .expect("journal options should be valid"),
+        );
+
+        let result = block_on(repository.list());
+        assert!(matches!(result, Err(JournalError::Json(_))));
+        std::fs::remove_dir_all(root).expect("test directory should be removed");
     }
 }

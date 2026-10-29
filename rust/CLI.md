@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.5
+Version: 0.4.6
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -103,7 +103,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- recover \
   --data-root ./installer-data
 ```
 
-Recovery takes the package lock. It verifies and clears a stale journal when state and active version already agree. For an interrupted uninstall, it either clears a journal if the package is still active, or completes removal of the quarantined managed package when state indicates uninstall had begun. If a journal proves that an update or rollback activated its target but did not save installed state, it verifies the active file inventory and completes the state write. It clears a journal for an install that never activated a deployment. Ambiguous state, a missing journal with mismatched state, or a first install that activated but lacks installed state stops for manual recovery. Abandoned staging data is left untouched. This command remains available for manual recovery. Online install/update/repair/rollback and verified offline bundle setup invoke the same conservative workflow after validating the signed release and artifact when applicable. The CLI also checks for a pending journal before `launch`, `verify`, `uninstall`, and each per-package `list` entry whose installed state provides a target path. Opening the GUI or CLI without a selected package operation does not scan every package journal.
+Recovery takes the package lock. It verifies and clears a stale journal when state and active version already agree. For an interrupted uninstall, it either clears a journal if the package is still active, or completes removal of the quarantined managed package when state indicates uninstall had begun. If a journal proves that an update or rollback activated its target but did not save installed state, it verifies the active file inventory and completes the state write. It clears a journal for an install that never activated a deployment. Ambiguous state, a missing journal with mismatched state, or a first install that activated but lacks installed state stops for manual recovery. Abandoned staging data is left untouched. This command remains available for manual recovery. Online install/update/repair/rollback and verified offline bundle setup invoke the same conservative workflow after validating the signed release and artifact when applicable. The CLI also checks for a pending journal before `launch`, `verify`, `uninstall`, and each per-package `list` entry whose installed state provides a target path. On a no-argument launch, the CLI and GUI scan the default data root (on Windows, `%LOCALAPPDATA%\TurkuazInstaller`) and attempt conservative recovery for every canonical journal. A malformed or ambiguous journal stops CLI startup or blocks the GUI; a custom data root is checked when the user selects a package operation.
 
 ## Launch the installed application
 
