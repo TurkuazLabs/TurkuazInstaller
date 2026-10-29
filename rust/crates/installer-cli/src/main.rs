@@ -57,10 +57,7 @@ async fn main() {
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
-    if matches!(
-        std::env::args().nth(1).as_deref(),
-        Some("--version" | "-V")
-    ) {
+    if matches!(std::env::args().nth(1).as_deref(), Some("--version" | "-V")) {
         println!("Turkuaz Installer v{}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
