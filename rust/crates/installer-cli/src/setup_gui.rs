@@ -102,9 +102,7 @@ pub fn run_with_recovery_summary(recovered_count: usize) -> eframe::Result {
     let message = if recovered_count == 0 {
         "Başlangıçta bekleyen işlem bulunamadı.".to_owned()
     } else {
-        format!(
-            "Başlangıçta {recovered_count} bekleyen işlem güvenli duruma getirildi."
-        )
+        format!("Başlangıçta {recovered_count} bekleyen işlem güvenli duruma getirildi.")
     };
     run_with_startup_notice(Some((true, message)))
 }

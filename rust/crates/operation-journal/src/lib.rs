@@ -184,12 +184,9 @@ impl JsonOperationJournalRepository {
                     "journal entry must be a regular file",
                 ));
             }
-            let file_stem = path
-                .file_stem()
-                .and_then(|value| value.to_str())
-                .ok_or(JournalError::InvalidEntry(
-                    "journal filename is not valid UTF-8",
-                ))?;
+            let file_stem = path.file_stem().and_then(|value| value.to_str()).ok_or(
+                JournalError::InvalidEntry("journal filename is not valid UTF-8"),
+            )?;
             let package_id = PackageId::parse(file_stem)
                 .map_err(|_| JournalError::InvalidEntry("journal filename has an invalid package ID"))?;
             if package_id.as_str() != file_stem {
@@ -405,7 +402,10 @@ mod tests {
                 .expect("second journal should save");
             std::fs::write(root.join("a.example.tmp-leftover"), b"partial")
                 .expect("temporary file should be written");
-            repository.list().await.expect("journal scan should succeed")
+            repository
+                .list()
+                .await
+                .expect("journal scan should succeed")
         });
 
         let package_ids = entries

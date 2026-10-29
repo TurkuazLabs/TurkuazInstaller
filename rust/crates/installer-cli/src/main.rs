@@ -796,9 +796,7 @@ async fn recover_pending_journal(
     Ok(())
 }
 
-async fn recover_pending_journals_on_startup(
-    data_root: &Path,
-) -> Result<usize, Box<dyn Error>> {
+async fn recover_pending_journals_on_startup(data_root: &Path) -> Result<usize, Box<dyn Error>> {
     let journal = JsonOperationJournalRepository::new(JsonOperationJournalRepositoryOptions::new(
         data_root.join("journal"),
     )?);
