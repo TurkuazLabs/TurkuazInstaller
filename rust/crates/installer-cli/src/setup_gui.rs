@@ -597,7 +597,6 @@ fn setup_summary_row(ui: &mut egui::Ui, label: &str, value: &str) {
     });
 }
 
-
 impl SetupApp {
     fn advance_step(&mut self) {
         match self.step {
@@ -634,7 +633,8 @@ impl SetupApp {
             }
             2 => {
                 if self.target.trim().is_empty() || self.data_root.trim().is_empty() {
-                    self.status = Some((false, "Kurulum ve veri klasörleri zorunludur.".to_owned()));
+                    self.status =
+                        Some((false, "Kurulum ve veri klasörleri zorunludur.".to_owned()));
                     return;
                 }
                 self.status = None;
