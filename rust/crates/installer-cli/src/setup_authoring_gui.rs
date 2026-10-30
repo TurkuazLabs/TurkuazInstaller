@@ -243,10 +243,7 @@ impl eframe::App for BuilderApp {
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let distribution_clicked = ui
-                        .add_enabled(
-                            !is_building,
-                            egui::Button::new("İmzalı dağıtım çifti üret"),
-                        )
+                        .add_enabled(!is_building, egui::Button::new("İmzalı dağıtım çifti üret"))
                         .clicked();
                     if distribution_clicked {
                         self.start_distribution();
@@ -294,10 +291,7 @@ impl eframe::App for BuilderApp {
                 ];
                 for (index, label) in SECTIONS.iter().enumerate() {
                     if ui
-                        .selectable_label(
-                            self.dialog_open && self.active_step == index,
-                            *label,
-                        )
+                        .selectable_label(self.dialog_open && self.active_step == index, *label)
                         .clicked()
                         && !is_building
                     {
@@ -337,7 +331,6 @@ impl eframe::App for BuilderApp {
     }
 }
 
-
 impl BuilderApp {
     fn draw_workspace(&mut self, ui: &mut egui::Ui) {
         ui.heading("Proje çalışma alanı");
@@ -359,21 +352,18 @@ impl BuilderApp {
                         }
                     ));
                 });
-                ui.with_layout(
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        let label = if self.project_path.is_some() {
-                            "Kayıtlı proje"
-                        } else {
-                            "Yeni proje"
-                        };
-                        ui.label(
-                            egui::RichText::new(label)
-                                .color(egui::Color32::from_rgb(18, 121, 132))
-                                .strong(),
-                        );
-                    },
-                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let label = if self.project_path.is_some() {
+                        "Kayıtlı proje"
+                    } else {
+                        "Yeni proje"
+                    };
+                    ui.label(
+                        egui::RichText::new(label)
+                            .color(egui::Color32::from_rgb(18, 121, 132))
+                            .strong(),
+                    );
+                });
             });
         });
         ui.add_space(12.0);
@@ -404,22 +394,14 @@ impl BuilderApp {
             ("Uygulama dosyaları", source_summary),
             (
                 "Setup tasarımı",
-                format!(
-                    "{} teması  •  {}",
-                    theme_label, self.project.brand_name
-                ),
+                format!("{} teması  •  {}", theme_label, self.project.brand_name),
             ),
             ("Yayın ve çıktı", signing_summary),
         ];
 
         ui.columns(2, |columns| {
             for (index, (title, summary)) in sections.iter().enumerate() {
-                self.draw_section_card(
-                    &mut columns[index % 2],
-                    index,
-                    title,
-                    summary,
-                );
+                self.draw_section_card(&mut columns[index % 2], index, title, summary);
             }
         });
 
@@ -430,13 +412,7 @@ impl BuilderApp {
         });
     }
 
-    fn draw_section_card(
-        &mut self,
-        ui: &mut egui::Ui,
-        index: usize,
-        title: &str,
-        summary: &str,
-    ) {
+    fn draw_section_card(&mut self, ui: &mut egui::Ui, index: usize, title: &str, summary: &str) {
         ui.group(|ui| {
             ui.set_min_height(118.0);
             ui.heading(title);
@@ -475,19 +451,16 @@ impl BuilderApp {
                 if ui.button("Kapat").clicked() {
                     close_requested = true;
                 }
-                ui.with_layout(
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        if self.active_step < 3 && ui.button("Sonraki bölüm").clicked() {
-                            next_requested = true;
-                        } else if self.active_step == 3 && ui.button("Tamam").clicked() {
-                            close_requested = true;
-                        }
-                        if self.active_step > 0 && ui.button("Önceki bölüm").clicked() {
-                            previous_requested = true;
-                        }
-                    },
-                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if self.active_step < 3 && ui.button("Sonraki bölüm").clicked() {
+                        next_requested = true;
+                    } else if self.active_step == 3 && ui.button("Tamam").clicked() {
+                        close_requested = true;
+                    }
+                    if self.active_step > 0 && ui.button("Önceki bölüm").clicked() {
+                        previous_requested = true;
+                    }
+                });
             });
         });
 
