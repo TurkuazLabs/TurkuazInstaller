@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.1.7
+// Version: 0.1.8
 // Aciklama: GUI'den install, update, repair, rollback ve onayli uninstall islemlerini yonetir
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -19,6 +19,34 @@ use eframe::egui;
 use turkuaz_installer_domain::package_id::PackageId;
 
 const APP_TITLE: &str = concat!("Turkuaz Installer v", env!("CARGO_PKG_VERSION"));
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum SetupTheme {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl SetupTheme {
+    const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::System => "Sistem",
+            Self::Light => "Açık",
+            Self::Dark => "Koyu",
+        }
+    }
+
+    const fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::System => egui::ThemePreference::System,
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SetupOperation {
@@ -86,6 +114,7 @@ struct SetupApp {
     target: String,
     data_root: String,
     operation: SetupOperation,
+    theme: SetupTheme,
     result_receiver: Option<Receiver<Result<String, String>>>,
     cancel_sender: Option<Sender<()>>,
     status: Option<(bool, String)>,
@@ -122,6 +151,7 @@ impl Default for SetupApp {
                 .to_string_lossy()
                 .into_owned(),
             operation: SetupOperation::Install,
+            theme: SetupTheme::System,
             result_receiver: None,
             cancel_sender: None,
             status: None,
@@ -157,8 +187,11 @@ fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
     eframe::run_native(
         APP_TITLE,
         options,
-        Box::new(move |_creation_context| {
+        Box::new(move |creation_context| {
             let mut app = SetupApp::default();
+            creation_context
+                .egui_ctx
+                .set_theme(app.theme.preference());
             if let Some((succeeded, message)) = notice {
                 app.recovery_blocked = !succeeded;
                 app.status = Some((succeeded, message));
@@ -181,6 +214,7 @@ impl eframe::App for SetupApp {
         let mut next_requested = false;
         let mut back_requested = false;
         let mut close_requested = false;
+        let mut theme_changed = false;
 
         egui::CentralPanel::default().show(context, |ui| {
             ui.add_space(4.0);
@@ -198,6 +232,22 @@ impl eframe::App for SetupApp {
                 ui.with_layout(
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
+                        let previous_theme = self.theme;
+                        egui::ComboBox::from_id_salt("setup-theme")
+                            .selected_text(self.theme.label())
+                            .width(94.0)
+                            .show_ui(ui, |ui| {
+                                for theme in SetupTheme::ALL {
+                                    ui.selectable_value(
+                                        &mut self.theme,
+                                        theme,
+                                        theme.label(),
+                                    );
+                                }
+                            });
+                        theme_changed = previous_theme != self.theme;
+                        ui.label("Tema");
+                        ui.separator();
                         ui.label("Yerel kurulum sihirbazı");
                     },
                 );
@@ -515,6 +565,10 @@ impl eframe::App for SetupApp {
                 }
             });
         });
+
+        if theme_changed {
+            context.set_theme(self.theme.preference());
+        }
 
         if back_requested {
             self.retreat_step();
