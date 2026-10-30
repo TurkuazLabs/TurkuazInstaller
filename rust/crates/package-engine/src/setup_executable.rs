@@ -397,16 +397,18 @@ fn bundle_layout(
             "embedded setup theme length is outside the supported limit",
         ));
     }
-    let payload_length = bundle_length
-        .checked_add(theme_length)
-        .ok_or(SetupExecutableError::InvalidSetup(
-            "embedded setup payload length overflows",
-        ))?;
-    let bundle_offset = footer_start
-        .checked_sub(payload_length)
-        .ok_or(SetupExecutableError::InvalidSetup(
-            "embedded setup payload overlaps its footer",
-        ))?;
+    let payload_length =
+        bundle_length
+            .checked_add(theme_length)
+            .ok_or(SetupExecutableError::InvalidSetup(
+                "embedded setup payload length overflows",
+            ))?;
+    let bundle_offset =
+        footer_start
+            .checked_sub(payload_length)
+            .ok_or(SetupExecutableError::InvalidSetup(
+                "embedded setup payload overlaps its footer",
+            ))?;
     Ok((bundle_offset, bundle_length, bundle_digest))
 }
 
