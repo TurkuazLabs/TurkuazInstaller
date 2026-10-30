@@ -339,12 +339,8 @@ impl eframe::App for BuilderApp {
                     "Yayın ve çıktı",
                 ];
                 for (index, label) in SECTIONS.iter().enumerate() {
-                    if navigation_item(
-                        ui,
-                        self.dialog_open && self.active_step == index,
-                        label,
-                    )
-                    .clicked()
+                    if navigation_item(ui, self.dialog_open && self.active_step == index, label)
+                        .clicked()
                         && !is_building
                     {
                         self.open_editor(index);
@@ -353,14 +349,22 @@ impl eframe::App for BuilderApp {
 
                 ui.add_space(14.0);
                 ui.separator();
-                ui.label(egui::RichText::new(&self.project.product_name).size(18.0).strong());
+                ui.label(
+                    egui::RichText::new(&self.project.product_name)
+                        .size(18.0)
+                        .strong(),
+                );
                 ui.label(
                     egui::RichText::new(&self.project.package_id)
                         .size(13.0)
                         .monospace()
                         .weak(),
                 );
-                ui.label(egui::RichText::new(format!("v{}", self.project.version)).size(13.0).weak());
+                ui.label(
+                    egui::RichText::new(format!("v{}", self.project.version))
+                        .size(13.0)
+                        .weak(),
+                );
             });
 
         egui::SidePanel::right("setup-builder-preview")
@@ -520,9 +524,11 @@ impl BuilderApp {
                 });
             });
             ui.label(
-                egui::RichText::new("Düzenlemeler proje özetine ve setup önizlemesine anında yansır.")
-                    .size(15.0)
-                    .weak(),
+                egui::RichText::new(
+                    "Düzenlemeler proje özetine ve setup önizlemesine anında yansır.",
+                )
+                .size(15.0)
+                .weak(),
             );
             ui.add_space(4.0);
             ui.add(
@@ -767,7 +773,11 @@ impl BuilderApp {
     }
 
     fn draw_preview(&self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new("Kurulum önizlemesi").size(20.0).strong());
+        ui.label(
+            egui::RichText::new("Kurulum önizlemesi")
+                .size(20.0)
+                .strong(),
+        );
         ui.label(
             egui::RichText::new("Son kullanıcının göreceği setup temasını gösterir.")
                 .size(14.0)
@@ -790,9 +800,7 @@ impl BuilderApp {
                         ui.set_min_width(240.0);
                         ui.colored_label(
                             accent,
-                            egui::RichText::new("TURKUAZ SETUP")
-                                .size(12.0)
-                                .strong(),
+                            egui::RichText::new("TURKUAZ SETUP").size(12.0).strong(),
                         );
                         ui.add_space(10.0);
                         egui::Frame::group(ui.style())
@@ -807,9 +815,7 @@ impl BuilderApp {
                                 );
                                 ui.add_space(4.0);
                                 ui.label(
-                                    egui::RichText::new(theme.subtitle())
-                                        .size(15.0)
-                                        .color(text),
+                                    egui::RichText::new(theme.subtitle()).size(15.0).color(text),
                                 );
                                 ui.separator();
                                 ui.label(
@@ -1015,11 +1021,8 @@ fn navigation_item(ui: &mut egui::Ui, selected: bool, label: &str) -> egui::Resp
     let width = ui.available_width();
     ui.add_sized(
         [width, 44.0],
-        egui::Button::selectable(
-            selected,
-            egui::RichText::new(label).size(15.0).strong(),
-        )
-        .frame_when_inactive(selected),
+        egui::Button::selectable(selected, egui::RichText::new(label).size(15.0).strong())
+            .frame_when_inactive(selected),
     )
 }
 
