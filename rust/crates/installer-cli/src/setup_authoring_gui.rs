@@ -509,6 +509,7 @@ impl BuilderApp {
                         &["exe"],
                     );
                     ui.small("NSIS PATH üzerinde değilse makensis.exe yolunu seçin. İki çıktı birlikte hazırlanır: TurkuazSetup.exe ve zorunlu NSIS yedeği.");
+                    ui.small("Dağıtım klasöründeki manifest-trust.yaml dosyasını setup dosyalarının yanında tutun.");
                 });
                 ui.add_space(12.0);
 
@@ -1052,11 +1053,12 @@ fn build_distribution(project: SavedProject) -> Result<String, String> {
     result?;
 
     Ok(format!(
-        "İmzalı dağıtım çifti hazırlandı.\nTurkuaz setup: {}\nNSIS yedeği: {}\nHer iki EXE dosyasını dağıtımdan önce Authenticode ile imzalayın.",
+        "İmzalı dağıtım çifti hazırlandı.\nTurkuaz setup: {}\nNSIS yedeği: {}\nTrust policy: {}\nHer iki EXE dosyasını dağıtımdan önce Authenticode ile imzalayın.",
         distribution_directory.join("TurkuazSetup.exe").display(),
         distribution_directory
             .join("TurkuazInstallerBackup.exe")
-            .display()
+            .display(),
+        distribution_directory.join("manifest-trust.yaml").display()
     ))
 }
 
