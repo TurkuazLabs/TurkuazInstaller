@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
-// Amac: Windows masaustu uygulamasinda Turkuaz setup projesi hazirlamak
+// Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.1.0
-// Aciklama: Urun, payload, kurulum hedefi ve setup temasini yonetilen bir sihirbazla toplar
+// Version: 0.2.0
+// Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
 // Bagimli Oldugu Katman: View | Application
 
 use std::{
@@ -117,6 +117,7 @@ impl Default for SavedProject {
 struct BuilderApp {
     project: SavedProject,
     active_step: usize,
+    dialog_open: bool,
     appearance: AppearancePreference,
     status: Option<(bool, String)>,
     build_receiver: Option<Receiver<Result<String, String>>>,
@@ -128,6 +129,7 @@ impl Default for BuilderApp {
         Self {
             project: SavedProject::default(),
             active_step: 0,
+            dialog_open: false,
             appearance: AppearancePreference::System,
             status: None,
             build_receiver: None,
@@ -181,7 +183,7 @@ impl eframe::App for BuilderApp {
                 );
                 ui.vertical(|ui| {
                     ui.heading("Turkuaz Setup Studio");
-                    ui.small(format!("Sürüm {}", env!("CARGO_PKG_VERSION")));
+                    ui.small("Kurulum projeleri için çalışma alanı");
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let previous_appearance = self.appearance;
@@ -220,7 +222,7 @@ impl eframe::App for BuilderApp {
             context.set_theme(self.appearance.preference());
         }
 
-        egui::TopBottomPanel::bottom("setup-builder-navigation").show(context, |ui| {
+        egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
             ui.separator();
             ui.horizontal(|ui| {
                 if let Some((succeeded, message)) = &self.status {
@@ -234,16 +236,16 @@ impl eframe::App for BuilderApp {
                     );
                 } else if is_building {
                     ui.spinner();
-                    ui.label("Paket dosyaları hazırlanıyor…");
+                    ui.label("Paket ve kurulum dosyaları hazırlanıyor…");
                 } else {
-                    ui.label(format!("Adım {} / 4", self.active_step + 1));
+                    ui.label("Bir bölümü düzenleyin veya derlemeyi başlatın.");
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let distribution_clicked = ui
                         .add_enabled(
-                            !is_building && self.active_step == 3,
-                            egui::Button::new("İmzalı setup üret"),
+                            !is_building,
+                            egui::Button::new("İmzalı dağıtım çifti üret"),
                         )
                         .clicked();
                     if distribution_clicked {
@@ -252,7 +254,7 @@ impl eframe::App for BuilderApp {
 
                     let build_clicked = ui
                         .add_enabled(
-                            !is_building && self.active_step == 3,
+                            !is_building,
                             egui::Button::new("Uygulama paketini hazırla")
                                 .fill(egui::Color32::from_rgb(18, 121, 132)),
                         )
@@ -260,54 +262,50 @@ impl eframe::App for BuilderApp {
                     if build_clicked {
                         self.start_build();
                     }
-
-                    let next_clicked = ui
-                        .add_enabled(
-                            !is_building && self.active_step < 3,
-                            egui::Button::new("Sonraki"),
-                        )
-                        .clicked();
-                    if next_clicked {
-                        self.advance_step();
-                    }
-
-                    let previous_clicked = ui
-                        .add_enabled(
-                            !is_building && self.active_step > 0,
-                            egui::Button::new("Geri"),
-                        )
-                        .clicked();
-                    if previous_clicked {
-                        self.active_step -= 1;
-                        self.status = None;
-                    }
                 });
             });
         });
 
-        egui::SidePanel::left("setup-builder-steps")
+        egui::SidePanel::left("setup-builder-menu")
             .resizable(false)
-            .default_width(215.0)
+            .default_width(220.0)
             .show(context, |ui| {
-                ui.heading("Proje adımları");
-                ui.add_space(10.0);
-                const STEPS: [&str; 4] = [
-                    "1. Ürün bilgileri",
-                    "2. Uygulama dosyaları",
-                    "3. Kurulum tasarımı",
-                    "4. Çıktı ve derleme",
+                ui.heading("Proje menüsü");
+                ui.small("Bölüm seçince düzenleme penceresi açılır.");
+                ui.add_space(12.0);
+
+                if ui
+                    .selectable_label(!self.dialog_open, "Genel bakış")
+                    .clicked()
+                {
+                    self.dialog_open = false;
+                    self.status = None;
+                }
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.label(egui::RichText::new("PROJE BÖLÜMLERİ").small().strong());
+
+                const SECTIONS: [&str; 4] = [
+                    "Ürün bilgileri",
+                    "Uygulama dosyaları",
+                    "Setup tasarımı",
+                    "Yayın ve çıktı",
                 ];
-                for (index, label) in STEPS.iter().enumerate() {
+                for (index, label) in SECTIONS.iter().enumerate() {
                     if ui
-                        .selectable_label(self.active_step == index, *label)
+                        .selectable_label(
+                            self.dialog_open && self.active_step == index,
+                            *label,
+                        )
                         .clicked()
                         && !is_building
                     {
-                        self.active_step = index;
-                        self.status = None;
+                        self.open_editor(index);
                     }
                 }
-                ui.add_space(16.0);
+
+                ui.add_space(14.0);
                 ui.separator();
                 ui.label(egui::RichText::new(&self.project.product_name).strong());
                 ui.small(&self.project.package_id);
@@ -320,10 +318,12 @@ impl eframe::App for BuilderApp {
             .show(context, |ui| self.draw_preview(ui));
 
         egui::CentralPanel::default().show(context, |ui| {
-            egui::ScrollArea::vertical()
-                .auto_shrink([false, false])
-                .show(ui, |ui| self.draw_active_step(ui, is_building));
+            self.draw_workspace(ui);
         });
+
+        if self.dialog_open && !is_building {
+            self.show_editor_modal(context, false);
+        }
 
         if open_requested {
             self.open_project();
@@ -337,11 +337,179 @@ impl eframe::App for BuilderApp {
     }
 }
 
+
 impl BuilderApp {
+    fn draw_workspace(&mut self, ui: &mut egui::Ui) {
+        ui.heading("Proje çalışma alanı");
+        ui.label("Proje ayarlarını bölümlere göre düzenleyin. Kurulum önizlemesi sağ tarafta sürekli görünür.");
+        ui.add_space(14.0);
+
+        ui.group(|ui| {
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.heading(&self.project.product_name);
+                    ui.label(format!(
+                        "{}  •  v{}  •  {}",
+                        self.project.package_id,
+                        self.project.version,
+                        if self.project.channel == "beta" {
+                            "Beta"
+                        } else {
+                            "Stable"
+                        }
+                    ));
+                });
+                ui.with_layout(
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        let label = if self.project_path.is_some() {
+                            "Kayıtlı proje"
+                        } else {
+                            "Yeni proje"
+                        };
+                        ui.label(
+                            egui::RichText::new(label)
+                                .color(egui::Color32::from_rgb(18, 121, 132))
+                                .strong(),
+                        );
+                    },
+                );
+            });
+        });
+        ui.add_space(12.0);
+
+        let theme_label = SetupThemePreset::ALL
+            .into_iter()
+            .find(|preset| preset.as_str() == self.project.theme_preset)
+            .map(SetupThemePreset::label)
+            .unwrap_or("Turkuaz");
+        let source_summary = if self.project.source_directory.trim().is_empty() {
+            "Kaynak klasörü seçilmedi".to_owned()
+        } else {
+            self.project.source_directory.clone()
+        };
+        let signing_summary = if self.project.signed_manifest_path.trim().is_empty() {
+            "İmzalı yayın dosyaları henüz seçilmedi".to_owned()
+        } else {
+            "İmzalı manifest ve yayıncı güven ayarları tanımlandı".to_owned()
+        };
+        let sections = [
+            (
+                "Ürün bilgileri",
+                format!(
+                    "{}  •  {}  •  v{}",
+                    self.project.product_name, self.project.package_id, self.project.version
+                ),
+            ),
+            ("Uygulama dosyaları", source_summary),
+            (
+                "Setup tasarımı",
+                format!(
+                    "{} teması  •  {}",
+                    theme_label, self.project.brand_name
+                ),
+            ),
+            ("Yayın ve çıktı", signing_summary),
+        ];
+
+        ui.columns(2, |columns| {
+            for (index, (title, summary)) in sections.iter().enumerate() {
+                self.draw_section_card(
+                    &mut columns[index % 2],
+                    index,
+                    title,
+                    summary,
+                );
+            }
+        });
+
+        ui.add_space(8.0);
+        ui.group(|ui| {
+            ui.heading("Sonraki adım");
+            ui.label("Önce uygulama paketini oluşturun. İmzalı yayın dosyalarınız hazırsa aynı projeden setup ve NSIS dağıtım çiftini üretebilirsiniz.");
+        });
+    }
+
+    fn draw_section_card(
+        &mut self,
+        ui: &mut egui::Ui,
+        index: usize,
+        title: &str,
+        summary: &str,
+    ) {
+        ui.group(|ui| {
+            ui.set_min_height(118.0);
+            ui.heading(title);
+            ui.label(summary);
+            ui.add_space(4.0);
+            if ui.button("Düzenle").clicked() {
+                self.open_editor(index);
+            }
+        });
+        ui.add_space(10.0);
+    }
+
+    fn show_editor_modal(&mut self, context: &egui::Context, is_building: bool) {
+        const TITLES: [&str; 4] = [
+            "Ürün bilgileri",
+            "Uygulama dosyaları",
+            "Setup tasarımı",
+            "Yayın ve çıktı",
+        ];
+        let title = TITLES[self.active_step];
+        let mut close_requested = false;
+        let mut next_requested = false;
+        let mut previous_requested = false;
+
+        egui::Modal::new(egui::Id::new("setup-builder-section-editor")).show(context, |ui| {
+            ui.set_min_width(720.0);
+            ui.heading(title);
+            ui.small("Düzenlemeler proje özetine ve sağdaki setup önizlemesine anında yansır.");
+            ui.separator();
+            egui::ScrollArea::vertical()
+                .max_height(560.0)
+                .show(ui, |ui| self.draw_active_step(ui, is_building));
+            ui.separator();
+
+            ui.horizontal(|ui| {
+                if ui.button("Kapat").clicked() {
+                    close_requested = true;
+                }
+                ui.with_layout(
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        if self.active_step < 3 && ui.button("Sonraki bölüm").clicked() {
+                            next_requested = true;
+                        } else if self.active_step == 3 && ui.button("Tamam").clicked() {
+                            close_requested = true;
+                        }
+                        if self.active_step > 0 && ui.button("Önceki bölüm").clicked() {
+                            previous_requested = true;
+                        }
+                    },
+                );
+            });
+        });
+
+        if close_requested {
+            self.dialog_open = false;
+        } else if previous_requested {
+            self.active_step = self.active_step.saturating_sub(1);
+            self.status = None;
+        } else if next_requested {
+            self.advance_step();
+        }
+    }
+
+    fn open_editor(&mut self, step: usize) {
+        self.active_step = step.min(3);
+        self.dialog_open = true;
+        self.status = None;
+    }
+
     fn draw_active_step(&mut self, ui: &mut egui::Ui, is_building: bool) {
         match self.active_step {
             0 => {
-                ui.heading("Ürün bilgileri");
                 ui.label("Kurulum projesinin temel kimliğini ve yayın kanalını belirleyin.");
                 ui.add_space(12.0);
 
@@ -374,7 +542,6 @@ impl BuilderApp {
                 ui.small("Paket kimliği publisher.product biçiminde olmalıdır.");
             }
             1 => {
-                ui.heading("Uygulama dosyaları");
                 ui.label("Kurulacak uygulamanın yayımlanmış dosyalarının bulunduğu klasörü seçin.");
                 ui.add_space(12.0);
 
@@ -399,7 +566,6 @@ impl BuilderApp {
                 ui.small("Kaynakta symlink, özel dosya veya Windows ile çakışan yollar varsa paket derlemesi reddedilir.");
             }
             2 => {
-                ui.heading("Kurulum tasarımı");
                 ui.label("Son kullanıcı setup penceresinin hedef klasörünü ve görünümünü seçin.");
                 ui.add_space(12.0);
 
@@ -441,7 +607,6 @@ impl BuilderApp {
                 );
             }
             _ => {
-                ui.heading("Çıktı ve derleme");
                 ui.label("Önce uygulama paketini hazırlayın. İmzalı yayın dosyalarınız hazır olduğunda aynı ekrandan dağıtım çiftini üretebilirsiniz.");
                 ui.add_space(12.0);
 
@@ -638,6 +803,7 @@ impl BuilderApp {
                     self.project = project;
                     self.project_path = Some(path.clone());
                     self.active_step = 0;
+                    self.dialog_open = false;
                     self.status = Some((true, format!("Proje açıldı: {}", path.display())));
                 }
                 Err(error) => self.status = Some((false, error)),
@@ -678,6 +844,7 @@ impl BuilderApp {
         for step in 0..4 {
             if let Err(error) = validate_project_step(&self.project, step) {
                 self.active_step = step;
+                self.dialog_open = true;
                 self.status = Some((false, error));
                 return;
             }
@@ -686,6 +853,7 @@ impl BuilderApp {
         let project = self.project.clone();
         let (sender, receiver) = mpsc::channel();
         self.build_receiver = Some(receiver);
+        self.dialog_open = false;
         self.status = None;
         thread::spawn(move || {
             let _ = sender.send(build_project(project));
@@ -696,14 +864,35 @@ impl BuilderApp {
         for step in [0, 2, 3] {
             if let Err(error) = validate_project_step(&self.project, step) {
                 self.active_step = step;
+                self.dialog_open = true;
                 self.status = Some((false, error));
                 return;
             }
         }
 
+        if [
+            &self.project.signed_manifest_path,
+            &self.project.signature_path,
+            &self.project.trust_store_path,
+            &self.project.setup_stub_path,
+        ]
+        .iter()
+        .any(|path| path.trim().is_empty())
+        {
+            self.active_step = 3;
+            self.dialog_open = true;
+            self.status = Some((
+                false,
+                "Dağıtım üretmek için imzalı manifest, imza, trust store ve setup stub seçin."
+                    .to_owned(),
+            ));
+            return;
+        }
+
         let project = self.project.clone();
         let (sender, receiver) = mpsc::channel();
         self.build_receiver = Some(receiver);
+        self.dialog_open = false;
         self.status = None;
         thread::spawn(move || {
             let _ = sender.send(build_distribution(project));

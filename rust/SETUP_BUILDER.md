@@ -1,15 +1,15 @@
 <!--
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
-Amac: Windows Setup Studio ile paket projesi olusturma ve derleme akisini anlatmak
+Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.1.0
-Aciklama: Setup Builder sihirbazinin girdilerini, proje dosyasini ve imzalama sinirini belgeler
+Version: 0.2.0
+Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
 # Turkuaz Setup Studio
 
-Turkuaz Setup Studio, uygulama dosyalarindan Turkuaz .tzpkg paketi, setup tema ayarlari ve imzali yayin girdilerinden dagitim cifti hazirlayan Windows masaustu aracidir. Baslangic akisi InstallShield Project Assistant benzeri yonlendirmeli adimlardan olusur; son kullaniciya gosterilecek setup icin canli tema onizlemesi sunar. Uygulama gorunumu secenegi yalnizca Setup Studio penceresini etkiler; 3. adimdaki setup preset'i, marka adi, alt baslik ve vurgu rengi son kullanici kurulum sihirbazina uygulanir.
+Turkuaz Setup Studio, uygulama dosyalarindan Turkuaz .tzpkg paketi, setup tema ayarlari ve imzali yayin girdilerinden dagitim cifti hazirlayan Windows masaustu aracidir. Ana ekranda solda bolum menusu, merkezde proje ozeti ve sagda son kullanici setup onizlemesi bulunur. Bolum secimleri formu arka plani kilitleyen modal pencerede acar. Uygulama gorunumu secenegi yalnizca Setup Studio penceresini etkiler; setup tema preset'i, marka adi, alt baslik ve vurgu rengi son kullanici kurulum sihirbazina uygulanir.
 
 ## Windows GUI derlemesi
 
@@ -23,12 +23,16 @@ Olusan dosya:
 
 Argumansiz acildiginda Setup Studio penceresini gosterir. Windows CI, ayni dosyanin surumlu turkuaz-setup-builder-vX.Y.Z-windows-x64.exe gelistirme artifact'ini de uretir.
 
-## Sihirbaz adimlari
+## Proje calisma alani
 
-1. Uygulama adini, paket kimligini, SemVer surumunu ve stable/beta kanalini girin.
-2. Uygulama dosyalarinin klasorunu secin. Isterseniz kaynak klasoru icindeki goreli EXE yolunu belirleyin.
-3. Varsayilan kurulum yolunu, setup tema preset'ini, marka adini, alt basligi ve istege bagli HEX vurgu rengini duzenleyin. Onizleme son kullanici setup penceresinin acik paletini gosterir.
-4. Cikti ust klasorunu secip uygulama paketini olusturun. Yayin manifestini imzaladiktan sonra imzali manifesti, detached imzayi, yayinci trust store'u ve Windows setup GUI stub dosyasini secerek dagitim ciftini olusturun. NSIS PATH uzerinde degilse makensis.exe konumunu belirtin.
+Ana ekranda soldaki proje menusu bolumleri acar, merkez alan proje ozetini gosterir ve sagdaki onizleme son kullanici setup temasini surekli gorunur tutar. Menu veya ozet kartindan bir bolum secildiginde form, arka plani kilitleyen modal pencerede acilir. Modal icindeki onceki/sonraki bolum dugmeleriyle ilerlenebilir.
+
+- Urun bilgileri: uygulama adi, paket kimligi, SemVer surumu ve stable/beta kanali.
+- Uygulama dosyalari: kaynak klasoru ve istege bagli goreli EXE yolu.
+- Setup tasarimi: varsayilan kurulum yolu, hazir tema preset'i, marka adi, alt baslik ve istege bagli HEX vurgu rengi.
+- Yayin ve cikti: cikti klasoru, imzali manifest, detached imza, yayinci trust store'u, setup GUI stub'i ve istege bagli makensis.exe yolu.
+
+Uygulama paketi ve imzali dagitim cifti ana ekrandaki eylemlerden baslatilir. Gerekli bilgiler eksikse ilgili modal editor otomatik acilir.
 
 Projeler .tzproj uzantisiyla kaydedilip Setup Studio icinde tekrar acilabilir. Her uygulama paketi derlemesi yeni bir {package-id}-{version} cikti klasoru olusturur; var olan klasorun ustune yazmaz. Imzali dagitim ciftini hazirlama adimi ayni klasordeki package ve theme dosyalarini kullanir ve yeni bir distribution alt klasoru olusturur.
 
