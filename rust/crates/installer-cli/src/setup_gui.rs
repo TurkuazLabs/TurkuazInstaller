@@ -189,9 +189,7 @@ fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
         options,
         Box::new(move |creation_context| {
             let mut app = SetupApp::default();
-            creation_context
-                .egui_ctx
-                .set_theme(app.theme.preference());
+            creation_context.egui_ctx.set_theme(app.theme.preference());
             if let Some((succeeded, message)) = notice {
                 app.recovery_blocked = !succeeded;
                 app.status = Some((succeeded, message));
