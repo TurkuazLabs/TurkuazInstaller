@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.2.0
+// Version: 0.2.1
 // Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
 // Bagimli Oldugu Katman: View | Application
 
@@ -138,12 +138,49 @@ impl Default for BuilderApp {
     }
 }
 
+fn configure_studio_style(context: &egui::Context) {
+    context.style_mut(|style| {
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(24.0));
+        style.text_styles.insert(
+            egui::TextStyle::Name("PageTitle".into()),
+            egui::FontId::proportional(29.0),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Name("ProductName".into()),
+            egui::FontId::proportional(27.0),
+        );
+        style.spacing.item_spacing = egui::vec2(12.0, 9.0);
+        style.spacing.button_padding = egui::vec2(14.0, 8.0);
+        style.spacing.interact_size = egui::vec2(40.0, 36.0);
+        style.spacing.window_margin = egui::Margin::same(20);
+        style.spacing.menu_margin = egui::Margin::same(10);
+        style.visuals.window_corner_radius = egui::CornerRadius::same(14);
+        style.visuals.menu_corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.open.corner_radius = egui::CornerRadius::same(10);
+    });
+}
+
 pub fn run() -> eframe::Result {
     let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1120.0, 760.0])
-            .with_min_inner_size([920.0, 650.0])
+            .with_inner_size([1280.0, 840.0])
+            .with_min_inner_size([1000.0, 700.0])
             .with_title(title.clone()),
         ..Default::default()
     };
@@ -152,9 +189,9 @@ pub fn run() -> eframe::Result {
         &title,
         options,
         Box::new(|creation_context| {
-            creation_context
-                .egui_ctx
-                .set_theme(AppearancePreference::System.preference());
+            let context = &creation_context.egui_ctx;
+            context.set_theme(AppearancePreference::System.preference());
+            configure_studio_style(context);
             Ok(Box::new(BuilderApp::default()))
         }),
     )
@@ -177,13 +214,18 @@ impl eframe::App for BuilderApp {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("T")
-                        .size(28.0)
+                        .size(32.0)
                         .strong()
                         .color(egui::Color32::from_rgb(18, 121, 132)),
                 );
                 ui.vertical(|ui| {
-                    ui.heading("Turkuaz Setup Studio");
-                    ui.small("Kurulum projeleri için çalışma alanı");
+                    ui.label(
+                        egui::RichText::new("Turkuaz Setup Studio")
+                            .text_style(egui::TextStyle::Name("ProductName".into()))
+                            .strong(),
+                    );
+                    ui.label(egui::RichText::new("Kurulum projeleri için çalışma alanı").weak());
+                    ui.small(format!("v{}", env!("CARGO_PKG_VERSION")));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let previous_appearance = self.appearance;
@@ -220,6 +262,7 @@ impl eframe::App for BuilderApp {
 
         if appearance_changed {
             context.set_theme(self.appearance.preference());
+            configure_studio_style(context);
         }
 
         egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
@@ -265,23 +308,29 @@ impl eframe::App for BuilderApp {
 
         egui::SidePanel::left("setup-builder-menu")
             .resizable(false)
-            .default_width(220.0)
+            .default_width(232.0)
             .show(context, |ui| {
-                ui.heading("Proje menüsü");
-                ui.small("Bölüm seçince düzenleme penceresi açılır.");
+                ui.label(egui::RichText::new("Çalışma alanı").size(19.0).strong());
+                ui.label(
+                    egui::RichText::new("Bölüm seçince düzenleme penceresi açılır.")
+                        .size(14.0)
+                        .weak(),
+                );
                 ui.add_space(12.0);
 
-                if ui
-                    .selectable_label(!self.dialog_open, "Genel bakış")
-                    .clicked()
-                {
+                if navigation_item(ui, !self.dialog_open, "Genel bakış").clicked() {
                     self.dialog_open = false;
                     self.status = None;
                 }
 
                 ui.add_space(8.0);
                 ui.separator();
-                ui.label(egui::RichText::new("PROJE BÖLÜMLERİ").small().strong());
+                ui.label(
+                    egui::RichText::new("PROJE BÖLÜMLERİ")
+                        .size(12.0)
+                        .strong()
+                        .weak(),
+                );
 
                 const SECTIONS: [&str; 4] = [
                     "Ürün bilgileri",
@@ -290,9 +339,12 @@ impl eframe::App for BuilderApp {
                     "Yayın ve çıktı",
                 ];
                 for (index, label) in SECTIONS.iter().enumerate() {
-                    if ui
-                        .selectable_label(self.dialog_open && self.active_step == index, *label)
-                        .clicked()
+                    if navigation_item(
+                        ui,
+                        self.dialog_open && self.active_step == index,
+                        label,
+                    )
+                    .clicked()
                         && !is_building
                     {
                         self.open_editor(index);
@@ -301,14 +353,19 @@ impl eframe::App for BuilderApp {
 
                 ui.add_space(14.0);
                 ui.separator();
-                ui.label(egui::RichText::new(&self.project.product_name).strong());
-                ui.small(&self.project.package_id);
-                ui.small(format!("v{}", self.project.version));
+                ui.label(egui::RichText::new(&self.project.product_name).size(18.0).strong());
+                ui.label(
+                    egui::RichText::new(&self.project.package_id)
+                        .size(13.0)
+                        .monospace()
+                        .weak(),
+                );
+                ui.label(egui::RichText::new(format!("v{}", self.project.version)).size(13.0).weak());
             });
 
         egui::SidePanel::right("setup-builder-preview")
             .resizable(false)
-            .default_width(305.0)
+            .default_width(320.0)
             .show(context, |ui| self.draw_preview(ui));
 
         egui::CentralPanel::default().show(context, |ui| {
@@ -333,14 +390,22 @@ impl eframe::App for BuilderApp {
 
 impl BuilderApp {
     fn draw_workspace(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Proje çalışma alanı");
+        ui.label(
+            egui::RichText::new("Proje çalışma alanı")
+                .text_style(egui::TextStyle::Name("PageTitle".into()))
+                .strong(),
+        );
         ui.label("Proje ayarlarını bölümlere göre düzenleyin. Kurulum önizlemesi sağ tarafta sürekli görünür.");
         ui.add_space(14.0);
 
-        ui.group(|ui| {
+        studio_card(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
-                    ui.heading(&self.project.product_name);
+                    ui.label(
+                        egui::RichText::new(&self.project.product_name)
+                            .text_style(egui::TextStyle::Name("ProductName".into()))
+                            .strong(),
+                    );
                     ui.label(format!(
                         "{}  •  v{}  •  {}",
                         self.project.package_id,
@@ -406,19 +471,23 @@ impl BuilderApp {
         });
 
         ui.add_space(8.0);
-        ui.group(|ui| {
-            ui.heading("Sonraki adım");
+        studio_card(ui, |ui| {
+            ui.label(egui::RichText::new("Sonraki adım").size(19.0).strong());
             ui.label("Önce uygulama paketini oluşturun. İmzalı yayın dosyalarınız hazırsa aynı projeden setup ve NSIS dağıtım çiftini üretebilirsiniz.");
         });
     }
 
     fn draw_section_card(&mut self, ui: &mut egui::Ui, index: usize, title: &str, summary: &str) {
-        ui.group(|ui| {
-            ui.set_min_height(118.0);
-            ui.heading(title);
-            ui.label(summary);
+        studio_card(ui, |ui| {
+            ui.set_min_height(142.0);
+            ui.label(egui::RichText::new(title).size(19.0).strong());
             ui.add_space(4.0);
-            if ui.button("Düzenle").clicked() {
+            ui.label(egui::RichText::new(summary).size(15.0));
+            ui.add_space(8.0);
+            if ui
+                .add_sized([112.0, 38.0], egui::Button::new("Düzenle"))
+                .clicked()
+            {
                 self.open_editor(index);
             }
         });
@@ -438,9 +507,29 @@ impl BuilderApp {
         let mut previous_requested = false;
 
         egui::Modal::new(egui::Id::new("setup-builder-section-editor")).show(context, |ui| {
-            ui.set_min_width(720.0);
-            ui.heading(title);
-            ui.small("Düzenlemeler proje özetine ve sağdaki setup önizlemesine anında yansır.");
+            ui.set_min_width(760.0);
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(title).size(25.0).strong());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        egui::RichText::new(format!("BÖLÜM {} / 4", self.active_step + 1))
+                            .size(13.0)
+                            .strong()
+                            .weak(),
+                    );
+                });
+            });
+            ui.label(
+                egui::RichText::new("Düzenlemeler proje özetine ve setup önizlemesine anında yansır.")
+                    .size(15.0)
+                    .weak(),
+            );
+            ui.add_space(4.0);
+            ui.add(
+                egui::ProgressBar::new((self.active_step + 1) as f32 / 4.0)
+                    .desired_height(6.0)
+                    .fill(egui::Color32::from_rgb(18, 121, 132)),
+            );
             ui.separator();
             egui::ScrollArea::vertical()
                 .max_height(560.0)
@@ -486,30 +575,30 @@ impl BuilderApp {
                 ui.label("Kurulum projesinin temel kimliğini ve yayın kanalını belirleyin.");
                 ui.add_space(12.0);
 
-                ui.group(|ui| {
+                studio_card(ui, |ui| {
                     text_row(ui, "Uygulama adı", &mut self.project.product_name);
                     text_row(ui, "Paket kimliği", &mut self.project.package_id);
                     text_row(ui, "Sürüm", &mut self.project.version);
-                    ui.horizontal(|ui| {
-                        ui.add_sized([150.0, 24.0], egui::Label::new("Yayın kanalı"));
-                        egui::ComboBox::from_id_salt("builder-release-channel")
-                            .selected_text(match self.project.channel.as_str() {
-                                "beta" => "Beta",
-                                _ => "Stable",
-                            })
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.project.channel,
-                                    "stable".to_owned(),
-                                    "Stable",
-                                );
-                                ui.selectable_value(
-                                    &mut self.project.channel,
-                                    "beta".to_owned(),
-                                    "Beta",
-                                );
-                            });
-                    });
+                    field_label(ui, "Yayın kanalı");
+                    egui::ComboBox::from_id_salt("builder-release-channel")
+                        .width(ui.available_width())
+                        .selected_text(match self.project.channel.as_str() {
+                            "beta" => "Beta",
+                            _ => "Stable",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.project.channel,
+                                "stable".to_owned(),
+                                "Stable",
+                            );
+                            ui.selectable_value(
+                                &mut self.project.channel,
+                                "beta".to_owned(),
+                                "Beta",
+                            );
+                        });
+                    ui.add_space(12.0);
                 });
                 ui.add_space(8.0);
                 ui.small("Paket kimliği publisher.product biçiminde olmalıdır.");
@@ -518,7 +607,7 @@ impl BuilderApp {
                 ui.label("Kurulacak uygulamanın yayımlanmış dosyalarının bulunduğu klasörü seçin.");
                 ui.add_space(12.0);
 
-                ui.group(|ui| {
+                studio_card(ui, |ui| {
                     folder_row(
                         ui,
                         "Kaynak klasörü",
@@ -542,33 +631,33 @@ impl BuilderApp {
                 ui.label("Son kullanıcı setup penceresinin hedef klasörünü ve görünümünü seçin.");
                 ui.add_space(12.0);
 
-                ui.group(|ui| {
+                studio_card(ui, |ui| {
                     text_row(
                         ui,
                         "Varsayılan kurulum klasörü",
                         &mut self.project.install_target,
                     );
                     ui.add_space(10.0);
-                    ui.horizontal(|ui| {
-                        ui.add_sized([150.0, 24.0], egui::Label::new("Setup teması"));
-                        egui::ComboBox::from_id_salt("builder-setup-theme")
-                            .selected_text(
-                                SetupThemePreset::ALL
-                                    .into_iter()
-                                    .find(|preset| preset.as_str() == self.project.theme_preset)
-                                    .map(SetupThemePreset::label)
-                                    .unwrap_or("Turkuaz"),
-                            )
-                            .show_ui(ui, |ui| {
-                                for preset in SetupThemePreset::ALL {
-                                    ui.selectable_value(
-                                        &mut self.project.theme_preset,
-                                        preset.as_str().to_owned(),
-                                        preset.label(),
-                                    );
-                                }
-                            });
-                    });
+                    field_label(ui, "Setup teması");
+                    egui::ComboBox::from_id_salt("builder-setup-theme")
+                        .width(ui.available_width())
+                        .selected_text(
+                            SetupThemePreset::ALL
+                                .into_iter()
+                                .find(|preset| preset.as_str() == self.project.theme_preset)
+                                .map(SetupThemePreset::label)
+                                .unwrap_or("Turkuaz"),
+                        )
+                        .show_ui(ui, |ui| {
+                            for preset in SetupThemePreset::ALL {
+                                ui.selectable_value(
+                                    &mut self.project.theme_preset,
+                                    preset.as_str().to_owned(),
+                                    preset.label(),
+                                );
+                            }
+                        });
+                    ui.add_space(12.0);
                     text_row(ui, "Setup marka adı", &mut self.project.brand_name);
                     text_row(ui, "Alt başlık", &mut self.project.subtitle);
                     text_row(ui, "Vurgu rengi", &mut self.project.accent_color);
@@ -583,7 +672,7 @@ impl BuilderApp {
                 ui.label("Önce uygulama paketini hazırlayın. İmzalı yayın dosyalarınız hazır olduğunda aynı ekrandan dağıtım çiftini üretebilirsiniz.");
                 ui.add_space(12.0);
 
-                ui.group(|ui| {
+                studio_card(ui, |ui| {
                     folder_row(
                         ui,
                         "Çıktı üst klasörü",
@@ -593,7 +682,7 @@ impl BuilderApp {
                 });
                 ui.add_space(12.0);
 
-                ui.group(|ui| {
+                studio_card(ui, |ui| {
                     ui.heading("Uygulama paketi");
                     ui.separator();
                     ui.label("• application.tzpkg — uygulama payload paketi");
@@ -603,7 +692,7 @@ impl BuilderApp {
                 });
                 ui.add_space(12.0);
 
-                ui.group(|ui| {
+                studio_card(ui, |ui| {
                     ui.heading("İmzalı kurulum çıktısı");
                     ui.label("İmzalı manifesti, detached imzayı, yayıncı trust store dosyasını ve Windows setup GUI stub dosyasını seçin.");
                     file_row(
@@ -651,7 +740,7 @@ impl BuilderApp {
                 });
                 ui.add_space(12.0);
 
-                ui.group(|ui| {
+                studio_card(ui, |ui| {
                     ui.colored_label(
                         egui::Color32::from_rgb(170, 92, 22),
                         egui::RichText::new("Yayın imzası ve güven politikası gerekir").strong(),
@@ -678,8 +767,12 @@ impl BuilderApp {
     }
 
     fn draw_preview(&self, ui: &mut egui::Ui) {
-        ui.heading("Kurulum önizlemesi");
-        ui.small("Bu alan, son kullanıcının göreceği setup temasını gösterir.");
+        ui.label(egui::RichText::new("Kurulum önizlemesi").size(20.0).strong());
+        ui.label(
+            egui::RichText::new("Son kullanıcının göreceği setup temasını gösterir.")
+                .size(14.0)
+                .weak(),
+        );
         ui.add_space(10.0);
 
         match self.theme_config() {
@@ -690,24 +783,48 @@ impl BuilderApp {
                 let text = color(palette.text);
                 let accent = color(palette.accent);
                 egui::Frame::group(ui.style())
+                    .inner_margin(egui::Margin::symmetric(16, 14))
                     .fill(background)
                     .stroke(egui::Stroke::new(1.0, accent))
                     .show(ui, |ui| {
                         ui.set_min_width(240.0);
-                        ui.colored_label(accent, "TURKUAZ SETUP");
-                        ui.add_space(8.0);
-                        egui::Frame::group(ui.style()).fill(surface).show(ui, |ui| {
-                            ui.heading(egui::RichText::new(theme.brand_name()).color(text));
-                            ui.label(egui::RichText::new(theme.subtitle()).color(text));
-                            ui.separator();
-                            ui.label(egui::RichText::new(&self.project.product_name).color(text));
-                            ui.add_space(8.0);
-                            let button_width = ui.available_width();
-                            ui.add_sized(
-                                [button_width, 34.0],
-                                egui::Button::new("Kuruluma devam et").fill(accent),
-                            );
-                        });
+                        ui.colored_label(
+                            accent,
+                            egui::RichText::new("TURKUAZ SETUP")
+                                .size(12.0)
+                                .strong(),
+                        );
+                        ui.add_space(10.0);
+                        egui::Frame::group(ui.style())
+                            .inner_margin(egui::Margin::symmetric(14, 12))
+                            .fill(surface)
+                            .show(ui, |ui| {
+                                ui.label(
+                                    egui::RichText::new(theme.brand_name())
+                                        .size(21.0)
+                                        .strong()
+                                        .color(text),
+                                );
+                                ui.add_space(4.0);
+                                ui.label(
+                                    egui::RichText::new(theme.subtitle())
+                                        .size(15.0)
+                                        .color(text),
+                                );
+                                ui.separator();
+                                ui.label(
+                                    egui::RichText::new(&self.project.product_name)
+                                        .size(16.0)
+                                        .strong()
+                                        .color(text),
+                                );
+                                ui.add_space(10.0);
+                                let button_width = ui.available_width();
+                                ui.add_sized(
+                                    [button_width, 40.0],
+                                    egui::Button::new("Kuruluma devam et").fill(accent),
+                                );
+                            });
                     });
                 ui.add_space(10.0);
                 ui.label(format!(
@@ -894,25 +1011,58 @@ impl BuilderApp {
     }
 }
 
+fn navigation_item(ui: &mut egui::Ui, selected: bool, label: &str) -> egui::Response {
+    let width = ui.available_width();
+    ui.add_sized(
+        [width, 44.0],
+        egui::Button::selectable(
+            selected,
+            egui::RichText::new(label).size(15.0).strong(),
+        )
+        .frame_when_inactive(selected),
+    )
+}
+
+fn studio_card(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) {
+    egui::Frame::group(ui.style())
+        .inner_margin(egui::Margin::symmetric(18, 16))
+        .show(ui, contents);
+}
+
+fn field_label(ui: &mut egui::Ui, label: &str) {
+    ui.label(egui::RichText::new(label).size(14.0).strong());
+    ui.add_space(5.0);
+}
+
 fn text_row(ui: &mut egui::Ui, label: &str, value: &mut String) {
-    ui.horizontal(|ui| {
-        ui.add_sized([150.0, 24.0], egui::Label::new(label));
-        let width = ui.available_width();
-        ui.add(egui::TextEdit::singleline(value).desired_width(width));
-    });
+    field_label(ui, label);
+    let width = ui.available_width();
+    ui.add_sized(
+        [width, 40.0],
+        egui::TextEdit::singleline(value).desired_width(width),
+    );
+    ui.add_space(12.0);
 }
 
 fn folder_row(ui: &mut egui::Ui, label: &str, value: &mut String, picker_title: &str) {
+    field_label(ui, label);
     ui.horizontal(|ui| {
-        ui.add_sized([150.0, 24.0], egui::Label::new(label));
-        let width = ui.available_width() - 92.0;
-        ui.add(egui::TextEdit::singleline(value).desired_width(width));
-        if ui.button("Gözat…").clicked() {
+        let button_width = 112.0;
+        let width = (ui.available_width() - button_width - ui.spacing().item_spacing.x).max(160.0);
+        ui.add_sized(
+            [width, 40.0],
+            egui::TextEdit::singleline(value).desired_width(width),
+        );
+        if ui
+            .add_sized([button_width, 40.0], egui::Button::new("Gözat…"))
+            .clicked()
+        {
             if let Some(path) = FileDialog::new().set_title(picker_title).pick_folder() {
                 *value = path.to_string_lossy().into_owned();
             }
         }
     });
+    ui.add_space(12.0);
 }
 
 fn file_row(
@@ -923,11 +1073,18 @@ fn file_row(
     filter_name: &str,
     extensions: &[&str],
 ) {
+    field_label(ui, label);
     ui.horizontal(|ui| {
-        ui.add_sized([150.0, 24.0], egui::Label::new(label));
-        let width = ui.available_width() - 92.0;
-        ui.add(egui::TextEdit::singleline(value).desired_width(width));
-        if ui.button("Gözat…").clicked() {
+        let button_width = 112.0;
+        let width = (ui.available_width() - button_width - ui.spacing().item_spacing.x).max(160.0);
+        ui.add_sized(
+            [width, 40.0],
+            egui::TextEdit::singleline(value).desired_width(width),
+        );
+        if ui
+            .add_sized([button_width, 40.0], egui::Button::new("Gözat…"))
+            .clicked()
+        {
             let picker = FileDialog::new()
                 .set_title(picker_title)
                 .add_filter(filter_name, extensions);
@@ -936,6 +1093,7 @@ fn file_row(
             }
         }
     });
+    ui.add_space(12.0);
 }
 
 fn validate_project_step(project: &SavedProject, step: usize) -> Result<(), String> {
