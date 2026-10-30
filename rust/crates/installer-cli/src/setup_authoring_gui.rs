@@ -975,17 +975,17 @@ fn build_distribution(project: SavedProject) -> Result<String, String> {
         ));
     }
 
-    let manifest_path = require_regular_file(
-        "İmzalı manifest",
-        &project.signed_manifest_path,
-    )?;
+    let manifest_path = require_regular_file("İmzalı manifest", &project.signed_manifest_path)?;
     let signature_path = require_regular_file("Detached imza", &project.signature_path)?;
     let trust_store_path = require_regular_file("Yayıncı trust store", &project.trust_store_path)?;
     let setup_stub_path = require_regular_file("Setup GUI stub", &project.setup_stub_path)?;
     let makensis_path = if project.makensis_path.trim().is_empty() {
         None
     } else {
-        Some(require_regular_file("NSIS makensis", &project.makensis_path)?)
+        Some(require_regular_file(
+            "NSIS makensis",
+            &project.makensis_path,
+        )?)
     };
 
     let saved_project_path = package_directory.join("project.tzproj");
@@ -1029,8 +1029,8 @@ fn build_distribution(project: SavedProject) -> Result<String, String> {
         .arg(&bundle_path)
         .arg("--theme-config")
         .arg(&theme_path);
-    let result = run_child(bundle_command, "İmzalı offline setup bundle oluşturma")
-        .and_then(|()| {
+    let result =
+        run_child(bundle_command, "İmzalı offline setup bundle oluşturma").and_then(|()| {
             let mut pair_command = Command::new(&executable);
             pair_command
                 .arg("build-distribution-pair")
