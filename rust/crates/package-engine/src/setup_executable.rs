@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/setup_executable.rs
 // Amac: Imzali Turkuaz setup bundle'ini Windows CLI stub'ina guvenli bicimde eklemek ve cikarmak
 // Modul - Rust Setup Executable
-// Version: 0.2.2
+// Version: 0.3.0
 // Aciklama: Authenticode sertifika tablosundan onceki 8 bayt hizalama dolgusunda footer'i guvenle bulur
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -14,11 +14,19 @@ use std::{
 
 use sha2::{Digest, Sha256};
 
+use crate::{
+    setup_bundle::read_setup_bundle_theme,
+    setup_theme::{SetupThemeConfig, MAXIMUM_SETUP_THEME_BYTES},
+};
+
 const FOOTER_MAGIC: [u8; 8] = *b"TZSETUP1";
-const FOOTER_SIZE_BYTES: u64 = 8 + 8 + 32;
+const FOOTER_V2_MAGIC: [u8; 8] = *b"TZSETUP2";
+const FOOTER_V1_SIZE_BYTES: u64 = 8 + 8 + 32;
+const FOOTER_V2_SIZE_BYTES: u64 = 8 + 8 + 8 + 32 + 32;
+const MAXIMUM_FOOTER_SIZE_BYTES: u64 = FOOTER_V2_SIZE_BYTES;
 const MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES: u64 = 7;
 const FOOTER_SCAN_BUFFER_BYTES: usize =
-    FOOTER_SIZE_BYTES as usize + MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES as usize;
+    MAXIMUM_FOOTER_SIZE_BYTES as usize + MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES as usize;
 const MAXIMUM_BUNDLE_BYTES: u64 = 33 * 1024 * 1024 * 1024;
 const COPY_BUFFER_BYTES: usize = 64 * 1024;
 
@@ -48,10 +56,25 @@ impl Error for SetupExecutableError {
     }
 }
 
+#[derive(Clone, Copy)]
+enum SetupFooter {
+    Legacy {
+        bundle_length: u64,
+        bundle_digest: [u8; 32],
+    },
+    Themed {
+        bundle_length: u64,
+        theme_length: u64,
+        bundle_digest: [u8; 32],
+        theme_digest: [u8; 32],
+    },
+}
+
+
 /// @dev-id TIZ-SETUP-EXE-010
-/// @purpose Append one bounded .tzsetup archive and an integrity footer to a Windows PE stub.
+/// @purpose Append one bounded .tzsetup archive, its validated theme, and an integrity footer to a Windows PE stub.
 /// @reason A portable self-extracting executable must carry its exact payload without changing archive trust rules.
-/// @contract Requires a regular MZ stub, a regular .tzsetup bundle, a new .exe output path, and never overwrites an existing output.
+/// @contract Requires a regular MZ stub, a valid bounded .tzsetup bundle, a new .exe output path, and never overwrites an existing output.
 /// @depends SHA-256, bounded streaming, filesystem create-new semantics, and the signed bundle verifier at install time.
 pub fn create_self_extracting_setup(
     stub_path: impl AsRef<Path>,
@@ -90,6 +113,11 @@ pub fn create_self_extracting_setup(
             "self-extracting setup output must use the .exe extension",
         ));
     }
+    let theme_config = read_setup_bundle_theme(bundle_path)
+        .map_err(|_| SetupExecutableError::InvalidSetup("setup bundle theme is invalid"))?;
+    let theme_bytes = theme_config
+        .to_json()
+        .map_err(|_| SetupExecutableError::InvalidSetup("setup bundle theme is invalid"))?;
     let bundle_metadata = regular_file_metadata(bundle_path)?;
     if bundle_metadata.len() == 0 || bundle_metadata.len() > MAXIMUM_BUNDLE_BYTES {
         return Err(SetupExecutableError::InvalidSetup(
@@ -129,20 +157,30 @@ pub fn create_self_extracting_setup(
                 "setup bundle changed while being opened",
             ));
         }
-        let digest = copy_and_hash(
+        let bundle_digest = copy_and_hash(
             &mut bundle,
             &mut output,
             bundle_metadata.len(),
             "setup bundle changed while being copied",
         )?;
         output
-            .write_all(&FOOTER_MAGIC)
+            .write_all(&theme_bytes)
+            .map_err(SetupExecutableError::Io)?;
+        let theme_digest: [u8; 32] = Sha256::digest(&theme_bytes).into();
+        output
+            .write_all(&FOOTER_V2_MAGIC)
             .map_err(SetupExecutableError::Io)?;
         output
             .write_all(&bundle_metadata.len().to_le_bytes())
             .map_err(SetupExecutableError::Io)?;
         output
-            .write_all(&digest)
+            .write_all(&(theme_bytes.len() as u64).to_le_bytes())
+            .map_err(SetupExecutableError::Io)?;
+        output
+            .write_all(&bundle_digest)
+            .map_err(SetupExecutableError::Io)?;
+        output
+            .write_all(&theme_digest)
             .map_err(SetupExecutableError::Io)?;
         output.sync_all().map_err(SetupExecutableError::Io)
     })();
@@ -152,11 +190,6 @@ pub fn create_self_extracting_setup(
     result
 }
 
-/// @dev-id TIZ-SETUP-EXE-011
-/// @purpose Recover a bounded appended .tzsetup payload from a self-extracting Windows executable.
-/// @reason The setup stub must locate its own payload without trusting a path or length supplied by that payload.
-/// @contract Requires a regular executable with the exact footer, bounded payload length, matching SHA-256, at most seven zero alignment bytes, and a new .tzsetup destination.
-/// @depends SHA-256, bounded streaming, fixed footer format, and downstream signature/trust verification.
 pub fn extract_embedded_setup_bundle(
     executable_path: impl AsRef<Path>,
     bundle_output_path: impl AsRef<Path>,
@@ -164,7 +197,7 @@ pub fn extract_embedded_setup_bundle(
     let executable_path = executable_path.as_ref();
     let bundle_output_path = bundle_output_path.as_ref();
     let executable_metadata = regular_file_metadata(executable_path)?;
-    if executable_metadata.len() <= FOOTER_SIZE_BYTES {
+    if executable_metadata.len() <= FOOTER_V1_SIZE_BYTES {
         return Err(SetupExecutableError::InvalidSetup(
             "self-extracting executable is too small to contain a bundle",
         ));
@@ -184,34 +217,22 @@ pub fn extract_embedded_setup_bundle(
     }
     let payload_end = setup_payload_end(&mut executable, executable_metadata.len())?;
     let footer_start = locate_setup_footer_start(&mut executable, payload_end)?;
-    executable
-        .seek(SeekFrom::Start(footer_start))
-        .map_err(SetupExecutableError::Io)?;
-
-    let mut magic = [0_u8; 8];
-    executable
-        .read_exact(&mut magic)
-        .map_err(SetupExecutableError::Io)?;
-    if magic != FOOTER_MAGIC {
-        return Err(SetupExecutableError::InvalidSetup(
-            "self-extracting setup footer is missing or unsupported",
-        ));
+    let footer = read_setup_footer(&mut executable, footer_start)?;
+    let (bundle_offset, bundle_length, bundle_digest) =
+        bundle_layout(footer_start, footer)?;
+    if let SetupFooter::Themed {
+        theme_digest,
+        theme_length,
+        ..
+    } = footer
+    {
+        read_embedded_theme_bytes(
+            &mut executable,
+            bundle_offset + bundle_length,
+            theme_length,
+            &theme_digest,
+        )?;
     }
-    let mut length_bytes = [0_u8; 8];
-    executable
-        .read_exact(&mut length_bytes)
-        .map_err(SetupExecutableError::Io)?;
-    let bundle_length = u64::from_le_bytes(length_bytes);
-    if bundle_length == 0 || bundle_length > MAXIMUM_BUNDLE_BYTES || bundle_length > footer_start {
-        return Err(SetupExecutableError::InvalidSetup(
-            "embedded bundle length is outside the supported limit",
-        ));
-    }
-    let mut expected_digest = [0_u8; 32];
-    executable
-        .read_exact(&mut expected_digest)
-        .map_err(SetupExecutableError::Io)?;
-    let bundle_offset = footer_start - bundle_length;
     executable
         .seek(SeekFrom::Start(bundle_offset))
         .map_err(SetupExecutableError::Io)?;
@@ -240,7 +261,7 @@ pub fn extract_embedded_setup_bundle(
             bundle_length,
             "embedded setup bundle ended before its declared size",
         )?;
-        if digest != expected_digest {
+        if digest != bundle_digest {
             return Err(SetupExecutableError::InvalidSetup(
                 "embedded setup bundle SHA-256 does not match its footer",
             ));
@@ -253,19 +274,172 @@ pub fn extract_embedded_setup_bundle(
     result
 }
 
+/// Return the validated theme embedded in a self-extracting setup.
+/// Legacy TZSETUP1 executables and unbundled GUI stubs have no embedded theme.
+pub fn read_embedded_setup_theme(
+    executable_path: impl AsRef<Path>,
+) -> Result<Option<SetupThemeConfig>, SetupExecutableError> {
+    let executable_path = executable_path.as_ref();
+    let metadata = regular_file_metadata(executable_path)?;
+    let mut executable = fs::File::open(executable_path).map_err(SetupExecutableError::Io)?;
+    let opened_metadata = executable.metadata().map_err(SetupExecutableError::Io)?;
+    if !opened_metadata.is_file() || opened_metadata.len() != metadata.len() {
+        return Err(SetupExecutableError::InvalidSetup(
+            "self-extracting executable changed while being opened",
+        ));
+    }
+    let payload_end = setup_payload_end(&mut executable, metadata.len())?;
+    let footer_start = locate_setup_footer_start(&mut executable, payload_end)?;
+    let footer = read_setup_footer(&mut executable, footer_start)?;
+    match footer {
+        SetupFooter::Legacy { .. } => Ok(None),
+        SetupFooter::Themed {
+            bundle_length,
+            theme_length,
+            theme_digest,
+            ..
+        } => {
+            let (bundle_offset, _, _) = bundle_layout(footer_start, footer)?;
+            let theme_offset = bundle_offset + bundle_length;
+            let theme_bytes =
+                read_embedded_theme_bytes(&mut executable, theme_offset, theme_length, &theme_digest)?;
+            SetupThemeConfig::from_json(&theme_bytes)
+                .map(Some)
+                .map_err(|_| SetupExecutableError::InvalidSetup("embedded setup theme is invalid"))
+        }
+    }
+}
+
+fn read_setup_footer(
+    executable: &mut fs::File,
+    footer_start: u64,
+) -> Result<SetupFooter, SetupExecutableError> {
+    executable
+        .seek(SeekFrom::Start(footer_start))
+        .map_err(SetupExecutableError::Io)?;
+    let mut magic = [0_u8; 8];
+    executable
+        .read_exact(&mut magic)
+        .map_err(SetupExecutableError::Io)?;
+    let mut length_bytes = [0_u8; 8];
+    executable
+        .read_exact(&mut length_bytes)
+        .map_err(SetupExecutableError::Io)?;
+    let bundle_length = u64::from_le_bytes(length_bytes);
+    if magic == FOOTER_MAGIC {
+        let mut bundle_digest = [0_u8; 32];
+        executable
+            .read_exact(&mut bundle_digest)
+            .map_err(SetupExecutableError::Io)?;
+        return Ok(SetupFooter::Legacy {
+            bundle_length,
+            bundle_digest,
+        });
+    }
+    if magic == FOOTER_V2_MAGIC {
+        let mut theme_length_bytes = [0_u8; 8];
+        executable
+            .read_exact(&mut theme_length_bytes)
+            .map_err(SetupExecutableError::Io)?;
+        let theme_length = u64::from_le_bytes(theme_length_bytes);
+        let mut bundle_digest = [0_u8; 32];
+        let mut theme_digest = [0_u8; 32];
+        executable
+            .read_exact(&mut bundle_digest)
+            .map_err(SetupExecutableError::Io)?;
+        executable
+            .read_exact(&mut theme_digest)
+            .map_err(SetupExecutableError::Io)?;
+        return Ok(SetupFooter::Themed {
+            bundle_length,
+            theme_length,
+            bundle_digest,
+            theme_digest,
+        });
+    }
+    Err(SetupExecutableError::InvalidSetup(
+        "self-extracting setup footer is missing or unsupported",
+    ))
+}
+
+fn bundle_layout(
+    footer_start: u64,
+    footer: SetupFooter,
+) -> Result<(u64, u64, [u8; 32]), SetupExecutableError> {
+    let (bundle_length, theme_length, bundle_digest) = match footer {
+        SetupFooter::Legacy {
+            bundle_length,
+            bundle_digest,
+        } => (bundle_length, 0, bundle_digest),
+        SetupFooter::Themed {
+            bundle_length,
+            theme_length,
+            bundle_digest,
+            ..
+        } => (bundle_length, theme_length, bundle_digest),
+    };
+    if bundle_length == 0 || bundle_length > MAXIMUM_BUNDLE_BYTES {
+        return Err(SetupExecutableError::InvalidSetup(
+            "embedded bundle length is outside the supported limit",
+        ));
+    }
+    if matches!(footer, SetupFooter::Themed { .. })
+        && (theme_length == 0 || theme_length > MAXIMUM_SETUP_THEME_BYTES as u64)
+    {
+        return Err(SetupExecutableError::InvalidSetup(
+            "embedded setup theme length is outside the supported limit",
+        ));
+    }
+    let payload_length = bundle_length.checked_add(theme_length).ok_or(
+        SetupExecutableError::InvalidSetup("embedded setup payload length overflows"),
+    )?;
+    let bundle_offset = footer_start.checked_sub(payload_length).ok_or(
+        SetupExecutableError::InvalidSetup("embedded setup payload overlaps its footer"),
+    )?;
+    Ok((bundle_offset, bundle_length, bundle_digest))
+}
+
+fn read_embedded_theme_bytes(
+    executable: &mut fs::File,
+    theme_offset: u64,
+    theme_length: u64,
+    expected_digest: &[u8; 32],
+) -> Result<Vec<u8>, SetupExecutableError> {
+    if theme_length == 0 || theme_length > MAXIMUM_SETUP_THEME_BYTES as u64 {
+        return Err(SetupExecutableError::InvalidSetup(
+            "embedded setup theme length is outside the supported limit",
+        ));
+    }
+    executable
+        .seek(SeekFrom::Start(theme_offset))
+        .map_err(SetupExecutableError::Io)?;
+    let mut bytes = vec![0; theme_length as usize];
+    executable
+        .read_exact(&mut bytes)
+        .map_err(SetupExecutableError::Io)?;
+    let digest: [u8; 32] = Sha256::digest(&bytes).into();
+    if &digest != expected_digest {
+        return Err(SetupExecutableError::InvalidSetup(
+            "embedded setup theme SHA-256 does not match its footer",
+        ));
+    }
+    SetupThemeConfig::from_json(&bytes)
+        .map_err(|_| SetupExecutableError::InvalidSetup("embedded setup theme is invalid"))?;
+    Ok(bytes)
+}
+
 fn locate_setup_footer_start(
     executable: &mut fs::File,
     payload_end: u64,
 ) -> Result<u64, SetupExecutableError> {
-    if payload_end < FOOTER_SIZE_BYTES {
+    if payload_end < FOOTER_V1_SIZE_BYTES {
         return Err(SetupExecutableError::InvalidSetup(
             "self-extracting executable has no space for a bundle footer",
         ));
     }
 
-    let maximum_padding =
-        MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES.min(payload_end - FOOTER_SIZE_BYTES);
-    let scan_start = payload_end - FOOTER_SIZE_BYTES - maximum_padding;
+    let scan_length_max = MAXIMUM_FOOTER_SIZE_BYTES + MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES;
+    let scan_start = payload_end.saturating_sub(scan_length_max);
     let scan_length = usize::try_from(payload_end - scan_start).map_err(|_| {
         SetupExecutableError::InvalidSetup("self-extracting setup footer offset is too large")
     })?;
@@ -277,20 +451,37 @@ fn locate_setup_footer_start(
         .read_exact(&mut trailing_bytes[..scan_length])
         .map_err(SetupExecutableError::Io)?;
 
-    for padding_length in 0..=maximum_padding {
+    for padding_length in 0..=MAX_AUTHENTICODE_ALIGNMENT_PADDING_BYTES {
+        if payload_end < padding_length {
+            continue;
+        }
         let footer_end = payload_end - padding_length;
-        let candidate_start = footer_end - FOOTER_SIZE_BYTES;
-        let candidate_index = usize::try_from(candidate_start - scan_start).map_err(|_| {
+        let footer_end_index = usize::try_from(footer_end - scan_start).map_err(|_| {
             SetupExecutableError::InvalidSetup("self-extracting setup footer offset is too large")
         })?;
-        let footer_end_index = candidate_index + FOOTER_SIZE_BYTES as usize;
-        let magic_end_index = candidate_index + FOOTER_MAGIC.len();
-        let padding_is_zero = trailing_bytes[footer_end_index..scan_length]
+        if trailing_bytes[footer_end_index..scan_length]
             .iter()
-            .all(|byte| *byte == 0);
-
-        if trailing_bytes[candidate_index..magic_end_index] == FOOTER_MAGIC[..] && padding_is_zero {
-            return Ok(candidate_start);
+            .any(|byte| *byte != 0)
+        {
+            continue;
+        }
+        for (magic, footer_size) in [
+            (FOOTER_V2_MAGIC, FOOTER_V2_SIZE_BYTES),
+            (FOOTER_MAGIC, FOOTER_V1_SIZE_BYTES),
+        ] {
+            if footer_end < footer_size {
+                continue;
+            }
+            let footer_start = footer_end - footer_size;
+            let start_index = usize::try_from(footer_start - scan_start).map_err(|_| {
+                SetupExecutableError::InvalidSetup(
+                    "self-extracting setup footer offset is too large",
+                )
+            })?;
+            let magic_end = start_index + magic.len();
+            if trailing_bytes[start_index..magic_end] == magic[..] {
+                return Ok(footer_start);
+            }
         }
     }
 

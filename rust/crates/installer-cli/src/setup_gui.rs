@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.1.8
+// Version: 0.2.0
 // Aciklama: GUI'den install, update, repair, rollback ve onayli uninstall islemlerini yonetir
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -17,18 +17,17 @@ use std::{
 
 use eframe::egui;
 use turkuaz_installer_domain::package_id::PackageId;
-
-const APP_TITLE: &str = concat!("Turkuaz Installer v", env!("CARGO_PKG_VERSION"));
+use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePalette, read_embedded_setup_theme};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-enum SetupTheme {
+enum AppearancePreference {
     #[default]
     System,
     Light,
     Dark,
 }
 
-impl SetupTheme {
+impl AppearancePreference {
     const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
 
     const fn label(self) -> &'static str {
@@ -114,7 +113,8 @@ struct SetupApp {
     target: String,
     data_root: String,
     operation: SetupOperation,
-    theme: SetupTheme,
+    appearance: AppearancePreference,
+    setup_theme: SetupThemeConfig,
     result_receiver: Option<Receiver<Result<String, String>>>,
     cancel_sender: Option<Sender<()>>,
     status: Option<(bool, String)>,
@@ -151,7 +151,8 @@ impl Default for SetupApp {
                 .to_string_lossy()
                 .into_owned(),
             operation: SetupOperation::Install,
-            theme: SetupTheme::System,
+            appearance: AppearancePreference::System,
+            setup_theme: SetupThemeConfig::default(),
             result_receiver: None,
             cancel_sender: None,
             status: None,
@@ -177,19 +178,28 @@ pub fn run_with_recovery_error(message: String) -> eframe::Result {
 }
 
 fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
+    let setup_theme = std::env::current_exe()
+        .ok()
+        .and_then(|path| read_embedded_setup_theme(path).ok().flatten())
+        .unwrap_or_default();
+    let window_title = format!("{} v{}", setup_theme.brand_name(), env!("CARGO_PKG_VERSION"));
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([900.0, 680.0])
             .with_min_inner_size([740.0, 560.0])
-            .with_title(APP_TITLE),
+            .with_title(window_title.clone()),
         ..Default::default()
     };
     eframe::run_native(
-        APP_TITLE,
+        &window_title,
         options,
         Box::new(move |creation_context| {
-            let mut app = SetupApp::default();
-            creation_context.egui_ctx.set_theme(app.theme.preference());
+            let mut app = SetupApp {
+                setup_theme,
+                ..SetupApp::default()
+            };
+            creation_context.egui_ctx.set_theme(app.appearance.preference());
+            apply_setup_palette(&creation_context.egui_ctx, &app.setup_theme);
             if let Some((succeeded, message)) = notice {
                 app.recovery_blocked = !succeeded;
                 app.status = Some((succeeded, message));
@@ -212,7 +222,7 @@ impl eframe::App for SetupApp {
         let mut next_requested = false;
         let mut back_requested = false;
         let mut close_requested = false;
-        let mut theme_changed = false;
+        let mut appearance_changed = false;
 
         egui::CentralPanel::default().show(context, |ui| {
             ui.add_space(4.0);
@@ -221,30 +231,30 @@ impl eframe::App for SetupApp {
                     egui::RichText::new("T")
                         .size(28.0)
                         .strong()
-                        .color(egui::Color32::from_rgb(18, 121, 132)),
+                        .color(egui_color(self.setup_theme.palette(context.style().visuals.dark_mode).accent)),
                 );
                 ui.vertical(|ui| {
-                    ui.heading("Turkuaz Installer");
-                    ui.label("Güvenli kurulum ve sürüm yönetimi");
+                    ui.heading(self.setup_theme.brand_name());
+                    ui.label(self.setup_theme.subtitle());
                 });
                 ui.with_layout(
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
-                        let previous_theme = self.theme;
-                        egui::ComboBox::from_id_salt("setup-theme")
-                            .selected_text(self.theme.label())
+                        let previous_appearance = self.appearance;
+                        egui::ComboBox::from_id_salt("setup-appearance")
+                            .selected_text(self.appearance.label())
                             .width(94.0)
                             .show_ui(ui, |ui| {
-                                for theme in SetupTheme::ALL {
+                                for appearance in AppearancePreference::ALL {
                                     ui.selectable_value(
-                                        &mut self.theme,
-                                        theme,
-                                        theme.label(),
+                                        &mut self.appearance,
+                                        appearance,
+                                        appearance.label(),
                                     );
                                 }
                             });
-                        theme_changed = previous_theme != self.theme;
-                        ui.label("Tema");
+                        appearance_changed = previous_appearance != self.appearance;
+                        ui.label("Görünüm");
                         ui.separator();
                         ui.label("Yerel kurulum sihirbazı");
                     },
@@ -266,7 +276,7 @@ impl eframe::App for SetupApp {
                         "○"
                     };
                     let color = if index <= self.step {
-                        egui::Color32::from_rgb(18, 121, 132)
+                        egui_color(self.setup_theme.palette(context.style().visuals.dark_mode).accent)
                     } else {
                         ui.visuals().weak_text_color()
                     };
@@ -472,7 +482,7 @@ impl eframe::App for SetupApp {
                                 } else {
                                     ui.group(|ui| {
                                         ui.colored_label(
-                                            egui::Color32::from_rgb(18, 121, 132),
+                                            egui_color(self.setup_theme.palette(context.style().visuals.dark_mode).accent),
                                             egui::RichText::new("Güvenlik denetimi").strong(),
                                         );
                                         ui.label(
@@ -564,9 +574,10 @@ impl eframe::App for SetupApp {
             });
         });
 
-        if theme_changed {
-            context.set_theme(self.theme.preference());
+        if appearance_changed {
+            context.set_theme(self.appearance.preference());
         }
+        apply_setup_palette(context, &self.setup_theme);
 
         if back_requested {
             self.retreat_step();
@@ -584,6 +595,54 @@ impl eframe::App for SetupApp {
             context.request_repaint_after(Duration::from_millis(120));
         }
     }
+}
+
+
+fn egui_color(color: [u8; 3]) -> egui::Color32 {
+    egui::Color32::from_rgb(color[0], color[1], color[2])
+}
+
+fn apply_setup_palette(context: &egui::Context, theme: &SetupThemeConfig) {
+    let dark = context.style().visuals.dark_mode;
+    let palette: SetupThemePalette = theme.palette(dark);
+    let accent = egui_color(palette.accent);
+    let text = egui_color(palette.text);
+    let button_text = if relative_luminance(palette.accent) > 0.179 {
+        egui::Color32::BLACK
+    } else {
+        egui::Color32::WHITE
+    };
+    context.style_mut(|style| {
+        let visuals = &mut style.visuals;
+        visuals.panel_fill = egui_color(palette.background);
+        visuals.window_fill = egui_color(palette.surface);
+        visuals.faint_bg_color = egui_color(palette.surface);
+        visuals.extreme_bg_color = egui_color(palette.surface);
+        visuals.code_bg_color = egui_color(palette.surface);
+        visuals.override_text_color = Some(text);
+        visuals.hyperlink_color = accent;
+        visuals.selection.bg_fill = accent;
+        visuals.widgets.noninteractive.bg_fill = egui_color(palette.surface);
+        visuals.widgets.noninteractive.fg_stroke.color = text;
+        visuals.widgets.inactive.bg_fill = egui_color(palette.surface);
+        visuals.widgets.inactive.fg_stroke.color = text;
+        visuals.widgets.hovered.bg_fill = accent;
+        visuals.widgets.hovered.fg_stroke.color = button_text;
+        visuals.widgets.active.bg_fill = accent;
+        visuals.widgets.active.fg_stroke.color = button_text;
+    });
+}
+
+fn relative_luminance(color: [u8; 3]) -> f32 {
+    let channel = |value: u8| {
+        let value = f32::from(value) / 255.0;
+        if value <= 0.04045 {
+            value / 12.92
+        } else {
+            ((value + 0.055) / 1.055).powf(2.4)
+        }
+    };
+    0.2126 * channel(color[0]) + 0.7152 * channel(color[1]) + 0.0722 * channel(color[2])
 }
 
 fn draw_folder_row(ui: &mut egui::Ui, label: &str, value: &mut String, title: &str) -> bool {

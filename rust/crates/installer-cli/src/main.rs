@@ -3,7 +3,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.17
+// Version: 0.2.18
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -41,7 +41,8 @@ use turkuaz_installer_operation_journal::{
 use turkuaz_installer_operation_lock::FileOperationLockOptions;
 use turkuaz_installer_package_engine::{
     PackageExtractionLimits, build_full_package_with_entry_point, create_self_extracting_setup,
-    extract_embedded_setup_bundle, extract_setup_bundle, write_setup_bundle,
+    extract_embedded_setup_bundle, extract_setup_bundle, write_setup_bundle_with_theme,
+    SetupThemeConfig, SetupThemePreset, MAXIMUM_SETUP_THEME_BYTES,
 };
 use url::Url;
 
@@ -323,13 +324,31 @@ async fn build_setup_bundle_command() -> Result<(), Box<dyn Error>> {
         "trust-store",
         "package",
         "output",
+        "theme",
+        "theme-config",
     ])?;
     if values.is_empty() {
         println!(
-            "Usage: turkuaz-installer build-setup-bundle --package-id ID --manifest FILE.yaml --signature FILE.p7s --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup"
+            "Usage: turkuaz-installer build-setup-bundle --package-id ID --manifest FILE.yaml --signature FILE.p7s --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup [--theme turkuaz|ocean|forest|sunset|midnight|high-contrast | --theme-config FILE.json]"
         );
         return Ok(());
     }
+    if values.contains_key("theme") && values.contains_key("theme-config") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Choose either --theme or --theme-config, not both.",
+        )
+        .into());
+    }
+    let theme_config = if let Some(path) = values.get("theme-config") {
+        let path = absolute_path(Path::new(path))?;
+        let (bytes, _) = read_bounded_local_file(&path, MAXIMUM_SETUP_THEME_BYTES)?;
+        SetupThemeConfig::from_json(&bytes)?
+    } else if let Some(preset) = values.get("theme") {
+        SetupThemeConfig::for_preset(preset.parse::<SetupThemePreset>()?)
+    } else {
+        SetupThemeConfig::default()
+    };
     let package_id = PackageId::parse(required(&values, "package-id")?)?;
     let manifest_path = absolute_path(Path::new(required(&values, "manifest")?))?;
     let signature_path = absolute_path(Path::new(required(&values, "signature")?))?;
@@ -353,9 +372,17 @@ async fn build_setup_bundle_command() -> Result<(), Box<dyn Error>> {
     )
     .await?;
     let artifact = verify_staged_artifact(&package_path, release.artifact()).await?;
-    write_setup_bundle(&manifest, &signature, &release, &artifact, &output_path)?;
+    write_setup_bundle_with_theme(
+        &manifest,
+        &signature,
+        &release,
+        &artifact,
+        &theme_config,
+        &output_path,
+    )?;
     println!(
-        "Signed offline setup bundle written: {}",
+        "Signed offline setup bundle written with the {} theme: {}",
+        theme_config.preset().label(),
         output_path.display()
     );
     Ok(())
@@ -1784,7 +1811,7 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
             println!(
                 "Usage:
   turkuaz-installer <install|update|repair|rollback> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
-  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer build-setup-bundle --package-id ID --manifest FILE --signature FILE --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup\n  turkuaz-installer build-self-extracting-setup --stub FILE.exe --bundle FILE.tzsetup --output FILE.exe\n  turkuaz-installer build-distribution-pair --package-id ID --stub FILE.exe --bundle FILE.tzsetup --trust-store FILE --output-dir DIR [--makensis PATH]\n  TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
+  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer build-setup-bundle --package-id ID --manifest FILE --signature FILE --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup [--theme PRESET | --theme-config FILE.json]\n  turkuaz-installer build-self-extracting-setup --stub FILE.exe --bundle FILE.tzsetup --output FILE.exe\n  turkuaz-installer build-distribution-pair --package-id ID --stub FILE.exe --bundle FILE.tzsetup --trust-store FILE --output-dir DIR [--makensis PATH]\n  TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
             );
             process::exit(0);
         }

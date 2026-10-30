@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 0.9.1
+// Version: 1.0.0
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -9,13 +9,20 @@ mod builder;
 mod format;
 mod setup_bundle;
 mod setup_executable;
+mod setup_theme;
 
 pub use builder::{PackageBuildError, build_full_package, build_full_package_with_entry_point};
 pub use setup_bundle::{
-    SetupBundleError, SetupBundleFiles, extract_setup_bundle, write_setup_bundle,
+    SetupBundleError, SetupBundleFiles, extract_setup_bundle, read_setup_bundle_theme,
+    write_setup_bundle, write_setup_bundle_with_theme,
 };
 pub use setup_executable::{
     SetupExecutableError, create_self_extracting_setup, extract_embedded_setup_bundle,
+    read_embedded_setup_theme,
+};
+pub use setup_theme::{
+    MAXIMUM_SETUP_THEME_BYTES, SetupThemeConfig, SetupThemeError, SetupThemePalette,
+    SetupThemePreset,
 };
 
 use std::{

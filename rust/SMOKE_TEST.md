@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.2.5
+Version: 0.2.6
 Aciklama: Derleme kontrolunden gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -21,7 +21,7 @@ Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde
 
 ## Pozitif akisi
 
-CLI artifact'i ile komut yardimini gorun. GUI artifact'ini acip ust cubuktaki Tema secicisinden Sistem, Acik ve Koyu seceneklerini deneyin; her secim gorunumu hemen degistirmelidir. Trust policy ve dizin secicilerini inceleyin. Bu ciplak stub'a bundle eklenmedigi icin kurulum baslatmayin. Tam kurulum akisini asagidaki dagitim cifti testinde kontrol edin:
+CLI artifact'i ile komut yardimini gorun. GUI artifact'ini acip ust cubuktaki Gorunum secicisinden Sistem, Acik ve Koyu seceneklerini deneyin; her secim uygulamanin acik/koyu gorunumunu hemen degistirmelidir. Trust policy ve dizin secicilerini inceleyin. Bu ciplak stub'a bundle eklenmedigi icin kurulum baslatmayin. Tam kurulum akisini asagidaki dagitim cifti testinde kontrol edin:
 
 ```powershell
 .\turkuaz-installer.exe --version
@@ -51,7 +51,7 @@ Ayni test paketi icin yayinlayici tarafindan imzalanmis daha yuksek bir SemVer r
 
 ## Dagitim cifti kabul akisi
 
-Gercek release bundle'i ile `build-distribution-pair` komutunu calistirin. Komut NSIS yedegi de basariyla olusmadan cikti klasorunu yayinlamamalidir. Olusan iki EXE'yi Authenticode ile imzalayin; sonra imza dogrulamasini kontrol edin. Birincil Turkuaz setup ve NSIS yedegini temiz Windows sanal makinelerinde ayri ayri baslatip ayni paketin ayni surumunu kurdugunu dogrulayin. Birincil Turkuaz setup `setup-gui` stub'ini kullanir; kurulum penceresi, islem secimi, indeterminate ilerleme durumu ve iptal secenegi gorunmelidir.
+Gercek release bundle'i olustururken `build-setup-bundle --theme ocean` ile hazir paletlerden birini secin. Ozel marka/renk denemesi icin `rust/examples/setup-theme.example.json` dosyasini kullanip `--theme-config rust/examples/setup-theme.example.json` verin; iki secenegi ayni komutta vermeyin. Olusan `.tzsetup` paketinden `build-distribution-pair` komutunu calistirin. Komut NSIS yedegi de basariyla olusmadan cikti klasorunu yayinlamamalidir. Olusan iki EXE'yi Authenticode ile imzalayin; sonra imza dogrulamasini kontrol edin. Birincil Turkuaz setup ve NSIS yedegini temiz Windows sanal makinelerinde ayri ayri baslatip ayni paketin ayni surumunu kurdugunu dogrulayin. Birincil Turkuaz setup `setup-gui` stub'ini kullanir; kurulum penceresinde temadaki marka adi, altyazi ve renkler; ayrica uygulama acik/koyu gorunum secicisi, islem secimi, belirsiz ilerleme durumu ve iptal secenegi gorunmelidir.
 
 ## Basari kanitlari ve hata raporu
 

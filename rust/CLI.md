@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.10
+Version: 0.4.11
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -180,7 +180,7 @@ The default CLI build is headless. An optional Windows `setup-gui` build provide
 
 ## Offline setup bundles
 
-Create a portable `.tzsetup` from an already signed release. The trust store is supplied locally and is never copied into the bundle:
+Create a portable `.tzsetup` from an already signed release. The trust store is supplied locally and is never copied into the bundle. If no theme option is given, the built-in Turkuaz palette is used. Choose `turkuaz`, `ocean`, `forest`, `sunset`, `midnight`, or `high-contrast` for a preset:
 
 ```sh
 cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-setup-bundle \
@@ -189,10 +189,11 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-setu
   --signature ./release.p7s \
   --trust-store ./manifest-trust.yaml \
   --package ./application.tzpkg \
-  --output ./TurkuazSetup.tzsetup
+  --output ./TurkuazSetup.tzsetup \
+  --theme ocean
 ```
 
-The command verifies the detached manifest signature against the package-specific trust policy, verifies the package's signed size and SHA-256 (and Authenticode when declared), then writes the exact verified inputs. It does not sign releases or produce a self-extracting Windows executable.
+The command verifies the detached manifest signature against the package-specific trust policy, verifies the package's signed size and SHA-256 (and Authenticode when declared), then writes the exact verified inputs and selected theme. The theme includes the setup name, subtitle, and light/dark colors. It is bounded, schema-checked, and stored with a digest in the `.tzsetup` archive. Use either `--theme PRESET` or `--theme-config FILE.json`, never both. The optional custom JSON schema is demonstrated in [setup-theme.example.json](examples/setup-theme.example.json); pass `--theme-config ./setup-theme.json` when building with that file. It does not sign releases or produce a self-extracting Windows executable.
 
 Install from removable media or a local path without network access:
 
@@ -206,7 +207,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- install-bu
   --operation install
 ```
 
-Use `--operation update` for a higher signed version, `repair` for the currently installed version, or `rollback` to restore the previous recorded deployment under the signed rollback policy. The installer rechecks the external trust policy, package digest, optional Authenticode signature, and package archive before activation. The bundle format accepts only its fixed, bounded entries and extracts them into temporary staging under the data root. After signature and artifact verification, the installer checks for a pending operation journal and runs recovery before starting the requested install/update/repair/rollback. If recovery cannot prove a safe state, the setup stops and reports the manual recovery command. Automated production signing/publishing are still pending.
+Use `--operation update` for a higher signed version, `repair` for the currently installed version, or `rollback` to restore the previous recorded deployment under the signed rollback policy. The installer rechecks the external trust policy, package digest, optional Authenticode signature, and package archive before activation. The new bundle format stores a validated `setup-theme.json` entry and SHA-256 digest beside the signed release; extraction also accepts existing four-entry version-1 bundles. Both formats accept only their fixed entries, and package files are extracted into temporary staging under the data root. After signature and artifact verification, the installer checks for a pending operation journal and runs recovery before starting the requested install/update/repair/rollback. If recovery cannot prove a safe state, the setup stops and reports the manual recovery command. Automated production signing/publishing are still pending.
 
 ## Self-extracting Windows setup
 
@@ -220,7 +221,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-self
   --output ./TurkuazSetup.exe
 ```
 
-The `.exe` stores the bundle after the stub with a fixed footer, bounded length, and SHA-256. The extractor recognizes a terminal PE Authenticode certificate table and locates the footer immediately before it, so signing the final setup does not hide the bundle. The stub can extract its own payload and invoke the same signed bundle workflow:
+The `.exe` stores the bundle and its validated theme after the stub with a versioned footer, bounded lengths, and SHA-256 digests. The setup window displays the configured name and subtitle and uses the selected colors for both light and dark appearance. The extractor recognizes a terminal PE Authenticode certificate table and locates the footer immediately before it, so signing the final setup does not hide the bundle. The stub can extract its own payload and invoke the same signed bundle workflow:
 
 ```sh
 TurkuazSetup.exe install-self \

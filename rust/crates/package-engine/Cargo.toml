@@ -1,13 +1,13 @@
 # Dosya Yolu: REPO_ROOT/rust/crates/package-engine/Cargo.toml
 # Amac: Rust installerin kendi paket uygulama motoru icin crate bagimliliklarini tanimlamak
 # Modul - Cargo Manifest
-# Version: 0.3.0
+# Version: 0.3.1
 # Aciklama: Dogrulanmis Turkuaz ZIP paketlerini guvenli staging icin baglar
 # Bagimli Oldugu Katman: Service | Tool
 
 [package]
 name = "turkuaz-installer-package-engine"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.85"
 publish = false

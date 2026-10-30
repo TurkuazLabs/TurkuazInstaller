@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/setup_bundle.rs
 // Amac: Imzali release girdileriyle tasinabilir .tzsetup paketini guvenli olusturup acmak
 // Modul - Rust Setup Bundle
-// Version: 0.1.1
+// Version: 0.2.0
 // Aciklama: Manifest, detached imza ve dogrulanmis tzpkg payloadini sabit isimli ZIP bundle'a koyar
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -19,11 +19,15 @@ use turkuaz_installer_artifact_validation::VerifiedArtifact;
 use turkuaz_installer_domain::release::PackageRelease;
 use zip::{CompressionMethod, ZipArchive, ZipWriter, result::ZipError, write::SimpleFileOptions};
 
-const BUNDLE_FORMAT_VERSION: u32 = 1;
+use crate::setup_theme::{SetupThemeConfig, MAXIMUM_SETUP_THEME_BYTES};
+
+const BUNDLE_FORMAT_VERSION: u32 = 2;
+const LEGACY_BUNDLE_FORMAT_VERSION: u32 = 1;
 const BUNDLE_METADATA_ENTRY: &str = "bundle.json";
 const RELEASE_MANIFEST_ENTRY: &str = "release.yaml";
 const RELEASE_SIGNATURE_ENTRY: &str = "release.p7s";
 const PACKAGE_ENTRY: &str = "application.tzpkg";
+const SETUP_THEME_ENTRY: &str = "setup-theme.json";
 const MAXIMUM_BUNDLE_METADATA_BYTES: u64 = 16 * 1024;
 const MAXIMUM_MANIFEST_BYTES: u64 = 1024 * 1024;
 const MAXIMUM_SIGNATURE_BYTES: u64 = 256 * 1024;
@@ -75,6 +79,10 @@ struct SetupBundleDocument {
     signature_sha256: String,
     artifact_size_bytes: u64,
     artifact_sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    theme_size_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    theme_sha256: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -83,6 +91,7 @@ pub struct SetupBundleFiles {
     manifest_path: PathBuf,
     signature_path: PathBuf,
     artifact_path: PathBuf,
+    theme_config: SetupThemeConfig,
 }
 
 impl SetupBundleFiles {
@@ -101,12 +110,16 @@ impl SetupBundleFiles {
     pub fn artifact_path(&self) -> &Path {
         &self.artifact_path
     }
+
+    pub fn theme_config(&self) -> &SetupThemeConfig {
+        &self.theme_config
+    }
 }
 
 /// @dev-id TIZ-PKG-BUNDLE-010
 /// @purpose Assemble a signed release and its already verified package into a portable .tzsetup archive.
 /// @reason Offline setup media must carry the exact manifest, signature, and bytes described by that manifest.
-/// @contract Requires a typed release, exact manifest/signature bytes, and VerifiedArtifact; output is never overwritten and out-of-band trust remains the installer's responsibility.
+/// @contract Requires a typed release, exact manifest/signature bytes, VerifiedArtifact, and a validated setup theme; output is never overwritten and out-of-band trust remains the installer's responsibility.
 /// @depends VerifiedArtifact validation, SHA-256, bounded bundle entries, and zip-rs.
 pub fn write_setup_bundle(
     manifest: &[u8],
@@ -115,6 +128,32 @@ pub fn write_setup_bundle(
     verified_artifact: &VerifiedArtifact,
     output_path: impl AsRef<Path>,
 ) -> Result<(), SetupBundleError> {
+    write_setup_bundle_with_theme(
+        manifest,
+        signature,
+        release,
+        verified_artifact,
+        &SetupThemeConfig::default(),
+        output_path,
+    )
+}
+
+/// @dev-id TIZ-PKG-BUNDLE-012
+/// @purpose Assemble a signed release and verified package with the selected setup appearance.
+/// @reason The setup's branding travels with the package archive and is validated before display.
+/// @contract Requires a validated bounded theme config; output is never overwritten.
+/// @depends TIZ-PKG-BUNDLE-010, setup-theme schema validation, and zip-rs.
+pub fn write_setup_bundle_with_theme(
+    manifest: &[u8],
+    signature: &[u8],
+    release: &PackageRelease,
+    verified_artifact: &VerifiedArtifact,
+    theme_config: &SetupThemeConfig,
+    output_path: impl AsRef<Path>,
+) -> Result<(), SetupBundleError> {
+    let theme_bytes = theme_config
+        .to_json()
+        .map_err(|_| SetupBundleError::InvalidBundle("setup theme configuration is invalid"))?;
     if manifest.is_empty() || manifest.len() as u64 > MAXIMUM_MANIFEST_BYTES {
         return Err(SetupBundleError::InvalidBundle(
             "manifest is empty or exceeds the configured size limit",
@@ -184,6 +223,8 @@ pub fn write_setup_bundle(
         signature_sha256: sha256_hex(signature),
         artifact_size_bytes: release.artifact().size_bytes(),
         artifact_sha256: release.artifact().digest().as_str().to_owned(),
+        theme_size_bytes: Some(theme_bytes.len() as u64),
+        theme_sha256: Some(sha256_hex(&theme_bytes)),
     };
     let metadata = serde_json::to_vec(&document).map_err(SetupBundleError::Json)?;
     if metadata.len() as u64 > MAXIMUM_BUNDLE_METADATA_BYTES {
@@ -203,6 +244,7 @@ pub fn write_setup_bundle(
             .compression_method(CompressionMethod::Deflated)
             .unix_permissions(0o600);
         write_entry(&mut archive, BUNDLE_METADATA_ENTRY, &metadata, options)?;
+        write_entry(&mut archive, SETUP_THEME_ENTRY, &theme_bytes, options)?;
         write_entry(&mut archive, RELEASE_MANIFEST_ENTRY, manifest, options)?;
         write_entry(&mut archive, RELEASE_SIGNATURE_ENTRY, signature, options)?;
         let package_options = SimpleFileOptions::default()
@@ -227,7 +269,7 @@ pub fn write_setup_bundle(
 /// @dev-id TIZ-PKG-BUNDLE-011
 /// @purpose Extract only the fixed, bounded entries in a Turkuaz .tzsetup archive.
 /// @reason Bundle paths are untrusted archive input and must never choose their own extraction destinations.
-/// @contract Accepts exactly the four version-1 entries, rejects duplicate/unsafe/special entries and bounded-size violations, and creates files beneath a new extraction directory.
+/// @contract Accepts four legacy entries or five version-2 entries, validates theme metadata and bounded sizes, and extracts package files beneath a new directory.
 /// @depends ZIP archive validation, bounded streaming, and caller-provided trusted staging root.
 pub fn extract_setup_bundle(
     bundle_path: impl AsRef<Path>,
@@ -255,47 +297,7 @@ pub fn extract_setup_bundle(
     let result = (|| {
         let file = fs::File::open(bundle_path).map_err(SetupBundleError::Io)?;
         let mut archive = ZipArchive::new(file).map_err(SetupBundleError::Archive)?;
-        if archive.len() != 4 {
-            return Err(SetupBundleError::InvalidBundle(
-                "setup bundle must contain exactly four entries",
-            ));
-        }
-
-        let allowed = [
-            BUNDLE_METADATA_ENTRY,
-            RELEASE_MANIFEST_ENTRY,
-            RELEASE_SIGNATURE_ENTRY,
-            PACKAGE_ENTRY,
-        ];
-        let mut indices = HashMap::new();
-        for index in 0..archive.len() {
-            let entry = archive.by_index(index).map_err(SetupBundleError::Archive)?;
-            let name = entry.name();
-            if !allowed.contains(&name) || entry.is_dir() {
-                return Err(SetupBundleError::InvalidBundle(
-                    "setup bundle contains an unknown entry or directory",
-                ));
-            }
-            if entry
-                .unix_mode()
-                .is_some_and(|mode| mode & 0o170000 == 0o120000)
-            {
-                return Err(SetupBundleError::InvalidBundle(
-                    "setup bundle contains a symbolic link",
-                ));
-            }
-            if indices.insert(name.to_owned(), index).is_some() {
-                return Err(SetupBundleError::InvalidBundle(
-                    "setup bundle contains duplicate entry names",
-                ));
-            }
-        }
-        if allowed.iter().any(|name| !indices.contains_key(*name)) {
-            return Err(SetupBundleError::InvalidBundle(
-                "setup bundle is missing a required entry",
-            ));
-        }
-
+        let indices = collect_entry_indices(&mut archive)?;
         let mut metadata_bytes = read_bounded_entry(
             &mut archive,
             indices[BUNDLE_METADATA_ENTRY],
@@ -304,22 +306,9 @@ pub fn extract_setup_bundle(
         let document: SetupBundleDocument =
             serde_json::from_slice(&metadata_bytes).map_err(SetupBundleError::Json)?;
         metadata_bytes.fill(0);
-        if document.format_version != BUNDLE_FORMAT_VERSION
-            || document.manifest_size_bytes == 0
-            || document.manifest_size_bytes > MAXIMUM_MANIFEST_BYTES
-            || document.signature_size_bytes == 0
-            || document.signature_size_bytes > MAXIMUM_SIGNATURE_BYTES
-            || document.artifact_size_bytes == 0
-            || document.artifact_size_bytes > MAXIMUM_PACKAGE_BYTES
-            || !is_sha256(&document.manifest_sha256)
-            || !is_sha256(&document.signature_sha256)
-            || !is_sha256(&document.artifact_sha256)
-        {
-            return Err(SetupBundleError::InvalidBundle(
-                "setup bundle metadata is outside the supported contract",
-            ));
-        }
+        validate_bundle_document(&document, archive.len(), indices.contains_key(SETUP_THEME_ENTRY))?;
 
+        let theme_config = read_theme_config_from_archive(&mut archive, &indices, &document)?;
         let manifest_path = extraction_directory.join(RELEASE_MANIFEST_ENTRY);
         let signature_path = extraction_directory.join(RELEASE_SIGNATURE_ENTRY);
         let artifact_path = extraction_directory.join(PACKAGE_ENTRY);
@@ -356,6 +345,7 @@ pub fn extract_setup_bundle(
             manifest_path,
             signature_path,
             artifact_path,
+            theme_config,
         })
     })();
 
@@ -363,6 +353,160 @@ pub fn extract_setup_bundle(
         let _ = fs::remove_dir_all(&extraction_directory);
     }
     result
+}
+
+/// Read and validate only the setup appearance stored in a .tzsetup archive.
+/// The release and package entries are verified by extract_setup_bundle before installation.
+pub fn read_setup_bundle_theme(
+    bundle_path: impl AsRef<Path>,
+) -> Result<SetupThemeConfig, SetupBundleError> {
+    let bundle_path = bundle_path.as_ref();
+    let metadata = fs::symlink_metadata(bundle_path).map_err(SetupBundleError::Io)?;
+    if !metadata.file_type().is_file() {
+        return Err(SetupBundleError::InvalidBundle(
+            "setup bundle must be a regular file, not a symlink",
+        ));
+    }
+
+    let file = fs::File::open(bundle_path).map_err(SetupBundleError::Io)?;
+    let mut archive = ZipArchive::new(file).map_err(SetupBundleError::Archive)?;
+    let indices = collect_entry_indices(&mut archive)?;
+    let mut metadata_bytes = read_bounded_entry(
+        &mut archive,
+        indices[BUNDLE_METADATA_ENTRY],
+        MAXIMUM_BUNDLE_METADATA_BYTES,
+    )?;
+    let document: SetupBundleDocument =
+        serde_json::from_slice(&metadata_bytes).map_err(SetupBundleError::Json)?;
+    metadata_bytes.fill(0);
+    validate_bundle_document(&document, archive.len(), indices.contains_key(SETUP_THEME_ENTRY))?;
+    read_theme_config_from_archive(&mut archive, &indices, &document)
+}
+
+fn collect_entry_indices(
+    archive: &mut ZipArchive<fs::File>,
+) -> Result<HashMap<String, usize>, SetupBundleError> {
+    if !(4..=5).contains(&archive.len()) {
+        return Err(SetupBundleError::InvalidBundle(
+            "setup bundle must contain four legacy entries or five themed entries",
+        ));
+    }
+    let allowed = [
+        BUNDLE_METADATA_ENTRY,
+        RELEASE_MANIFEST_ENTRY,
+        RELEASE_SIGNATURE_ENTRY,
+        PACKAGE_ENTRY,
+        SETUP_THEME_ENTRY,
+    ];
+    let mut indices = HashMap::new();
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index).map_err(SetupBundleError::Archive)?;
+        let name = entry.name().to_owned();
+        let is_directory = entry.is_dir();
+        let has_unsafe_type = entry.unix_mode().is_some_and(|mode| {
+            let file_type = mode & 0o170000;
+            file_type != 0 && file_type != 0o100000 && file_type != 0o040000
+        });
+        drop(entry);
+        if !allowed.contains(&name.as_str()) || is_directory {
+            return Err(SetupBundleError::InvalidBundle(
+                "setup bundle contains an unknown entry or directory",
+            ));
+        }
+        if has_unsafe_type {
+            return Err(SetupBundleError::InvalidBundle(
+                "setup bundle contains a symbolic link or special file",
+            ));
+        }
+        if indices.insert(name, index).is_some() {
+            return Err(SetupBundleError::InvalidBundle(
+                "setup bundle contains duplicate entry names",
+            ));
+        }
+    }
+    if [
+        BUNDLE_METADATA_ENTRY,
+        RELEASE_MANIFEST_ENTRY,
+        RELEASE_SIGNATURE_ENTRY,
+        PACKAGE_ENTRY,
+    ]
+    .iter()
+    .any(|name| !indices.contains_key(*name))
+    {
+        return Err(SetupBundleError::InvalidBundle(
+            "setup bundle is missing a required entry",
+        ));
+    }
+    let has_theme = indices.contains_key(SETUP_THEME_ENTRY);
+    if (archive.len() == 5) != has_theme {
+        return Err(SetupBundleError::InvalidBundle(
+            "setup bundle entry count does not match its contents",
+        ));
+    }
+    Ok(indices)
+}
+
+fn validate_bundle_document(
+    document: &SetupBundleDocument,
+    entry_count: usize,
+    has_theme: bool,
+) -> Result<(), SetupBundleError> {
+    let common_metadata_invalid = document.manifest_size_bytes == 0
+        || document.manifest_size_bytes > MAXIMUM_MANIFEST_BYTES
+        || document.signature_size_bytes == 0
+        || document.signature_size_bytes > MAXIMUM_SIGNATURE_BYTES
+        || document.artifact_size_bytes == 0
+        || document.artifact_size_bytes > MAXIMUM_PACKAGE_BYTES
+        || !is_sha256(&document.manifest_sha256)
+        || !is_sha256(&document.signature_sha256)
+        || !is_sha256(&document.artifact_sha256);
+    let theme_metadata_valid = document.theme_size_bytes.is_some_and(|size| {
+        size > 0 && size <= MAXIMUM_SETUP_THEME_BYTES as u64
+    }) && document
+        .theme_sha256
+        .as_deref()
+        .is_some_and(is_sha256);
+    let format_matches_entries = match document.format_version {
+        LEGACY_BUNDLE_FORMAT_VERSION => {
+            entry_count == 4
+                && !has_theme
+                && document.theme_size_bytes.is_none()
+                && document.theme_sha256.is_none()
+        }
+        BUNDLE_FORMAT_VERSION => entry_count == 5 && has_theme && theme_metadata_valid,
+        _ => false,
+    };
+    if common_metadata_invalid || !format_matches_entries {
+        return Err(SetupBundleError::InvalidBundle(
+            "setup bundle metadata is outside the supported contract",
+        ));
+    }
+    Ok(())
+}
+
+fn read_theme_config_from_archive(
+    archive: &mut ZipArchive<fs::File>,
+    indices: &HashMap<String, usize>,
+    document: &SetupBundleDocument,
+) -> Result<SetupThemeConfig, SetupBundleError> {
+    if document.format_version == LEGACY_BUNDLE_FORMAT_VERSION {
+        return Ok(SetupThemeConfig::default());
+    }
+    let theme_bytes = read_bounded_entry(
+        archive,
+        indices[SETUP_THEME_ENTRY],
+        MAXIMUM_SETUP_THEME_BYTES as u64,
+    )?;
+    let actual_theme_sha256 = sha256_hex(&theme_bytes);
+    if Some(theme_bytes.len() as u64) != document.theme_size_bytes
+        || document.theme_sha256.as_deref() != Some(actual_theme_sha256.as_str())
+    {
+        return Err(SetupBundleError::InvalidBundle(
+            "setup theme entry digest does not match its metadata",
+        ));
+    }
+    SetupThemeConfig::from_json(&theme_bytes)
+        .map_err(|_| SetupBundleError::InvalidBundle("setup theme configuration is invalid"))
 }
 
 fn write_entry(
