@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.11
+Version: 0.4.12
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -244,3 +244,13 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-dist
 ```
 
 The command requires `makensis` on `PATH` (or `--makensis PATH`). It stages both outputs and publishes the directory only after NSIS succeeds. Share `distribution/TurkuazSetup.exe`; `TurkuazInstallerBackup.exe` is the mandatory fallback and supports install, update, repair, and policy-authorized rollback. Sign both final executables with Authenticode after building. The GUI variant is compiled in Windows CI; real signed-package VM acceptance, automated production signing, and publishing remain pending.
+
+## Setup project authoring wizard (Windows)
+
+Build the Windows Setup Studio GUI:
+
+    cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --features setup-authoring-gui
+
+Run the resulting executable without arguments to open the project wizard. It gathers product identity, source files, an optional relative EXE entry point, the default install target, and the end-user setup theme. The builder supports built-in themes and custom brand name, subtitle, and accent color. A project can be saved as a .tzproj file and opened again later. See [SETUP_BUILDER.md](SETUP_BUILDER.md) for the full workflow.
+
+The build action writes application.tzpkg, a schema-checked unsigned release-manifest.draft.yaml, setup-theme.json, and project.tzproj into a new versioned output folder. The manifest draft uses a local file: artifact URI. It must be signed and checked against the publisher's external trust policy before building a distributable setup executable. Setup Studio does not store signing keys or trust policy files.

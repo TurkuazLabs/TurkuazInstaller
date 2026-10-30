@@ -1,9 +1,12 @@
-#![cfg_attr(all(windows, feature = "setup-gui"), windows_subsystem = "windows")]
+#![cfg_attr(
+    all(windows, any(feature = "setup-gui", feature = "setup-authoring-gui")),
+    windows_subsystem = "windows"
+)]
 
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.18
+// Version: 0.2.19
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -49,6 +52,9 @@ use url::Url;
 #[cfg(all(windows, feature = "setup-gui"))]
 mod setup_gui;
 
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
+mod setup_authoring_gui;
+
 #[tokio::main]
 async fn main() {
     if let Err(error) = run().await {
@@ -72,6 +78,12 @@ async fn run() -> Result<(), Box<dyn Error>> {
         return install_self_setup_command().await;
     }
     if std::env::args().nth(1).is_none() {
+        #[cfg(all(windows, feature = "setup-authoring-gui", not(feature = "setup-gui")))]
+        {
+            setup_authoring_gui::run()?;
+            return Ok(());
+        }
+
         let startup_recovery = recover_pending_journals_on_startup(&default_data_root()).await;
         #[cfg(all(windows, feature = "setup-gui"))]
         {
