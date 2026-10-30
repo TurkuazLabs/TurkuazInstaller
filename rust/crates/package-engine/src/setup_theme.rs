@@ -378,9 +378,7 @@ fn parse_color(value: &str) -> Result<[u8; 3], SetupThemeError> {
     let digits = value
         .strip_prefix('#')
         .filter(|digits| digits.len() == 6 && digits.bytes().all(|byte| byte.is_ascii_hexdigit()))
-        .ok_or(SetupThemeError::Invalid(
-            "colors must use #RRGGBB notation",
-        ))?;
+        .ok_or(SetupThemeError::Invalid("colors must use #RRGGBB notation"))?;
     let parse_channel = |start| {
         u8::from_str_radix(&digits[start..start + 2], 16)
             .map_err(|_| SetupThemeError::Invalid("color channel is invalid"))

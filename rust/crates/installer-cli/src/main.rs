@@ -40,9 +40,9 @@ use turkuaz_installer_operation_journal::{
 };
 use turkuaz_installer_operation_lock::FileOperationLockOptions;
 use turkuaz_installer_package_engine::{
-    PackageExtractionLimits, build_full_package_with_entry_point, create_self_extracting_setup,
+    MAXIMUM_SETUP_THEME_BYTES, PackageExtractionLimits, SetupThemeConfig, SetupThemePreset,
+    build_full_package_with_entry_point, create_self_extracting_setup,
     extract_embedded_setup_bundle, extract_setup_bundle, write_setup_bundle_with_theme,
-    SetupThemeConfig, SetupThemePreset, MAXIMUM_SETUP_THEME_BYTES,
 };
 use url::Url;
 

@@ -19,7 +19,7 @@ use turkuaz_installer_artifact_validation::VerifiedArtifact;
 use turkuaz_installer_domain::release::PackageRelease;
 use zip::{CompressionMethod, ZipArchive, ZipWriter, result::ZipError, write::SimpleFileOptions};
 
-use crate::setup_theme::{SetupThemeConfig, MAXIMUM_SETUP_THEME_BYTES};
+use crate::setup_theme::{MAXIMUM_SETUP_THEME_BYTES, SetupThemeConfig};
 
 const BUNDLE_FORMAT_VERSION: u32 = 2;
 const LEGACY_BUNDLE_FORMAT_VERSION: u32 = 1;
@@ -306,7 +306,11 @@ pub fn extract_setup_bundle(
         let document: SetupBundleDocument =
             serde_json::from_slice(&metadata_bytes).map_err(SetupBundleError::Json)?;
         metadata_bytes.fill(0);
-        validate_bundle_document(&document, archive.len(), indices.contains_key(SETUP_THEME_ENTRY))?;
+        validate_bundle_document(
+            &document,
+            archive.len(),
+            indices.contains_key(SETUP_THEME_ENTRY),
+        )?;
 
         let theme_config = read_theme_config_from_archive(&mut archive, &indices, &document)?;
         let manifest_path = extraction_directory.join(RELEASE_MANIFEST_ENTRY);
@@ -379,7 +383,11 @@ pub fn read_setup_bundle_theme(
     let document: SetupBundleDocument =
         serde_json::from_slice(&metadata_bytes).map_err(SetupBundleError::Json)?;
     metadata_bytes.fill(0);
-    validate_bundle_document(&document, archive.len(), indices.contains_key(SETUP_THEME_ENTRY))?;
+    validate_bundle_document(
+        &document,
+        archive.len(),
+        indices.contains_key(SETUP_THEME_ENTRY),
+    )?;
     read_theme_config_from_archive(&mut archive, &indices, &document)
 }
 
@@ -460,12 +468,10 @@ fn validate_bundle_document(
         || !is_sha256(&document.manifest_sha256)
         || !is_sha256(&document.signature_sha256)
         || !is_sha256(&document.artifact_sha256);
-    let theme_metadata_valid = document.theme_size_bytes.is_some_and(|size| {
-        size > 0 && size <= MAXIMUM_SETUP_THEME_BYTES as u64
-    }) && document
-        .theme_sha256
-        .as_deref()
-        .is_some_and(is_sha256);
+    let theme_metadata_valid = document
+        .theme_size_bytes
+        .is_some_and(|size| size > 0 && size <= MAXIMUM_SETUP_THEME_BYTES as u64)
+        && document.theme_sha256.as_deref().is_some_and(is_sha256);
     let format_matches_entries = match document.format_version {
         LEGACY_BUNDLE_FORMAT_VERSION => {
             entry_count == 4

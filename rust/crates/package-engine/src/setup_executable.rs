@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     setup_bundle::read_setup_bundle_theme,
-    setup_theme::{SetupThemeConfig, MAXIMUM_SETUP_THEME_BYTES},
+    setup_theme::{MAXIMUM_SETUP_THEME_BYTES, SetupThemeConfig},
 };
 
 const FOOTER_MAGIC: [u8; 8] = *b"TZSETUP1";
@@ -69,7 +69,6 @@ enum SetupFooter {
         theme_digest: [u8; 32],
     },
 }
-
 
 /// @dev-id TIZ-SETUP-EXE-010
 /// @purpose Append one bounded .tzsetup archive, its validated theme, and an integrity footer to a Windows PE stub.
@@ -190,6 +189,11 @@ pub fn create_self_extracting_setup(
     result
 }
 
+/// @dev-id TIZ-SETUP-EXE-011
+/// @purpose Recover a bounded appended .tzsetup payload from a self-extracting Windows executable.
+/// @reason The setup stub must locate its own payload without trusting a path or length supplied by that payload.
+/// @contract Requires a supported footer, matching hashes, bounded payloads, zero Authenticode alignment padding, and a new destination.
+/// @depends SHA-256, bounded streaming, versioned footer format, and downstream signature/trust verification.
 pub fn extract_embedded_setup_bundle(
     executable_path: impl AsRef<Path>,
     bundle_output_path: impl AsRef<Path>,
@@ -218,8 +222,7 @@ pub fn extract_embedded_setup_bundle(
     let payload_end = setup_payload_end(&mut executable, executable_metadata.len())?;
     let footer_start = locate_setup_footer_start(&mut executable, payload_end)?;
     let footer = read_setup_footer(&mut executable, footer_start)?;
-    let (bundle_offset, bundle_length, bundle_digest) =
-        bundle_layout(footer_start, footer)?;
+    let (bundle_offset, bundle_length, bundle_digest) = bundle_layout(footer_start, footer)?;
     if let SetupFooter::Themed {
         theme_digest,
         theme_length,
@@ -301,8 +304,12 @@ pub fn read_embedded_setup_theme(
         } => {
             let (bundle_offset, _, _) = bundle_layout(footer_start, footer)?;
             let theme_offset = bundle_offset + bundle_length;
-            let theme_bytes =
-                read_embedded_theme_bytes(&mut executable, theme_offset, theme_length, &theme_digest)?;
+            let theme_bytes = read_embedded_theme_bytes(
+                &mut executable,
+                theme_offset,
+                theme_length,
+                &theme_digest,
+            )?;
             SetupThemeConfig::from_json(&theme_bytes)
                 .map(Some)
                 .map_err(|_| SetupExecutableError::InvalidSetup("embedded setup theme is invalid"))
@@ -390,12 +397,16 @@ fn bundle_layout(
             "embedded setup theme length is outside the supported limit",
         ));
     }
-    let payload_length = bundle_length.checked_add(theme_length).ok_or(
-        SetupExecutableError::InvalidSetup("embedded setup payload length overflows"),
-    )?;
-    let bundle_offset = footer_start.checked_sub(payload_length).ok_or(
-        SetupExecutableError::InvalidSetup("embedded setup payload overlaps its footer"),
-    )?;
+    let payload_length = bundle_length
+        .checked_add(theme_length)
+        .ok_or(SetupExecutableError::InvalidSetup(
+            "embedded setup payload length overflows",
+        ))?;
+    let bundle_offset = footer_start
+        .checked_sub(payload_length)
+        .ok_or(SetupExecutableError::InvalidSetup(
+            "embedded setup payload overlaps its footer",
+        ))?;
     Ok((bundle_offset, bundle_length, bundle_digest))
 }
 

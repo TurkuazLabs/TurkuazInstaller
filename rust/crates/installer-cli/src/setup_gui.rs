@@ -17,7 +17,9 @@ use std::{
 
 use eframe::egui;
 use turkuaz_installer_domain::package_id::PackageId;
-use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePalette, read_embedded_setup_theme};
+use turkuaz_installer_package_engine::{
+    SetupThemeConfig, SetupThemePalette, read_embedded_setup_theme,
+};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum AppearancePreference {
@@ -182,7 +184,11 @@ fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
         .ok()
         .and_then(|path| read_embedded_setup_theme(path).ok().flatten())
         .unwrap_or_default();
-    let window_title = format!("{} v{}", setup_theme.brand_name(), env!("CARGO_PKG_VERSION"));
+    let window_title = format!(
+        "{} v{}",
+        setup_theme.brand_name(),
+        env!("CARGO_PKG_VERSION")
+    );
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([900.0, 680.0])
@@ -198,7 +204,9 @@ fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
                 setup_theme,
                 ..SetupApp::default()
             };
-            creation_context.egui_ctx.set_theme(app.appearance.preference());
+            creation_context
+                .egui_ctx
+                .set_theme(app.appearance.preference());
             apply_setup_palette(&creation_context.egui_ctx, &app.setup_theme);
             if let Some((succeeded, message)) = notice {
                 app.recovery_blocked = !succeeded;
@@ -596,7 +604,6 @@ impl eframe::App for SetupApp {
         }
     }
 }
-
 
 fn egui_color(color: [u8; 3]) -> egui::Color32 {
     egui::Color32::from_rgb(color[0], color[1], color[2])
