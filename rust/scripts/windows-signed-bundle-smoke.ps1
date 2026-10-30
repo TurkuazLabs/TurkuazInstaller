@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.8
+# Version: 0.2.9
 # Aciklama: Imzali lifecycle smoke'unu calistirir ve istenirse test dagitim ciftini saklar
 # Bagimli Oldugu Katman: QA | Tool
 param(
@@ -529,7 +529,7 @@ Bu arsiv yalnizca gelistirme testi icindir. Paket kimligi ci.smoke, paket surumu
 
 1. Arsivi ayri bir klasore cikartin.
 2. TurkuazSetup.exe dosyasini calistirin. CI test sertifikasi self-signed ve Windows guven magazasina eklenmemistir; Windows yayinci uyarisi gosterebilir. Bu production imzasi degildir.
-3. Kurulum sihirbazinda paket kimligini ci.smoke birakin. Kurulum dizinini `%LOCALAPPDATA%\TurkuazInstaller-Test\App`, veri dizinini `%LOCALAPPDATA%\TurkuazInstaller-Test\Data` secin.
+3. Sihirbazda `Kur` islemini secip `İleri`'ye basin. Paket kimligini ci.smoke birakin; yayin guven dosyasinin bu arsivdeki test YAML dosyasi oldugunu kontrol edin. Kurulum dizinini `%LOCALAPPDATA%\TurkuazInstaller-Test\App`, veri dizinini `%LOCALAPPDATA%\TurkuazInstaller-Test\Data` secin ve son kontrol ekraninda `Kur ve doğrula`'ya basin.
 4. Kurulumdan sonra ornek uygulamayi baslatmak icin PowerShell'de:
 
 ```powershell
@@ -541,9 +541,9 @@ $root = Join-Path $env:LOCALAPPDATA 'TurkuazInstaller-Test'
 
 Ayni App ve Data yollarini kullandiysaniz, GUI kaldirma akisini deneyin:
 
-1. TurkuazSetup.exe dosyasini yeniden calistirin.
+1. TurkuazSetup.exe dosyasini yeniden calistirin ve ilk adimda `Kaldır` islemini secin.
 2. Paket kimligini ci.smoke, kurulum ve veri klasorlerini ayni degerlerde birakin.
-3. Islem listesinden Kaldir'i secin, onay kutusunu isaretleyin ve Paketi kaldir'a basin.
+3. Son kontrol ekraninda kaldirma onay kutusunu isaretleyip `Paketi kaldır`'a basin.
 
 CLI ile kaldirmak icin alternatif komut:
 

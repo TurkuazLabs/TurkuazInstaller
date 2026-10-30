@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.1.6
+// Version: 0.1.7
 // Aciklama: GUI'den install, update, repair, rollback ve onayli uninstall islemlerini yonetir
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -57,9 +57,30 @@ impl SetupOperation {
             Self::Uninstall => "Kaldır",
         }
     }
+
+    const fn description(self) -> &'static str {
+        match self {
+            Self::Install => "İmzalı bir paketi bu bilgisayara kurun.",
+            Self::Update => "Kurulu paketi imzalı daha yeni bir sürüme taşıyın.",
+            Self::Repair => "Kurulu sürümü temiz bir dağıtımla yeniden kurun.",
+            Self::Rollback => "İmzalı yayın politikası izin veriyorsa önceki sürüme dönün.",
+            Self::Uninstall => "Yalnızca bu paketin yönettiği dosyaları kaldırın.",
+        }
+    }
+
+    const fn action_label(self) -> &'static str {
+        match self {
+            Self::Install => "Kur ve doğrula",
+            Self::Update => "Güncellemeyi başlat",
+            Self::Repair => "Onarımı başlat",
+            Self::Rollback => "Önceki sürüme dön",
+            Self::Uninstall => "Paketi kaldır",
+        }
+    }
 }
 
 struct SetupApp {
+    step: usize,
     package_id: String,
     trust_store: String,
     target: String,
@@ -86,6 +107,7 @@ impl Default for SetupApp {
             .unwrap_or_else(|| PathBuf::from("manifest-trust.yaml"));
 
         Self {
+            step: 0,
             package_id: String::new(),
             trust_store: trust_store.to_string_lossy().into_owned(),
             target: local_app_data
@@ -125,8 +147,8 @@ pub fn run_with_recovery_error(message: String) -> eframe::Result {
 fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([680.0, 560.0])
-            .with_min_inner_size([620.0, 500.0])
+            .with_inner_size([900.0, 680.0])
+            .with_min_inner_size([740.0, 560.0])
             .with_title(APP_TITLE),
         ..Default::default()
     };
@@ -154,167 +176,481 @@ impl eframe::App for SetupApp {
         }
 
         let mut start_requested = false;
+        let mut next_requested = false;
+        let mut back_requested = false;
+        let mut close_requested = false;
+
         egui::CentralPanel::default().show(context, |ui| {
-            ui.heading(APP_TITLE);
-            ui.label(if self.operation == SetupOperation::Uninstall {
-                "Seçili paketin yönetilen dosyaları ve durum kaydı kaldırılır."
-            } else {
-                "Kurulum paketi imza ve bütünlük kontrollerinden geçirilir."
-            });
-            ui.add_space(12.0);
-
-            ui.add_enabled_ui(!is_working && !self.recovery_blocked, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Paket kimliği");
-                    if ui.text_edit_singleline(&mut self.package_id).changed() {
-                        self.uninstall_confirmed = false;
-                    }
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("T")
+                        .size(28.0)
+                        .strong()
+                        .color(egui::Color32::from_rgb(18, 121, 132)),
+                );
+                ui.vertical(|ui| {
+                    ui.heading("Turkuaz Installer");
+                    ui.label("Güvenli kurulum ve sürüm yönetimi");
                 });
-                ui.label("Paket kimliğini yayımcıdan aldığınız yayın bilgileriyle eşleştirin.");
-                ui.add_space(10.0);
+                ui.with_layout(
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        ui.label("Yerel kurulum sihirbazı");
+                    },
+                );
+            });
 
-                if self.operation != SetupOperation::Uninstall {
-                    ui.horizontal(|ui| {
-                        ui.label("Yayımcı güven politikası");
-                        ui.text_edit_singleline(&mut self.trust_store);
-                        if ui.button("Dosya seç").clicked() {
-                            if let Some(path) = rfd::FileDialog::new()
-                                .add_filter("YAML", &["yaml", "yml"])
-                                .set_title("Yayımcı güven politikasını seçin")
-                                .pick_file()
-                            {
-                                self.trust_store = path.to_string_lossy().into_owned();
+            ui.add_space(6.0);
+            ui.separator();
+            ui.add_space(8.0);
+
+            const STEPS: [&str; 4] = ["İşlem", "Paket ve güven", "Konumlar", "Son kontrol"];
+            ui.horizontal_wrapped(|ui| {
+                for (index, label) in STEPS.iter().enumerate() {
+                    let marker = if index < self.step {
+                        "✓"
+                    } else if index == self.step {
+                        "●"
+                    } else {
+                        "○"
+                    };
+                    let color = if index <= self.step {
+                        egui::Color32::from_rgb(18, 121, 132)
+                    } else {
+                        ui.visuals().weak_text_color()
+                    };
+                    ui.colored_label(color, format!("{marker} {label}"));
+                    if index + 1 < STEPS.len() {
+                        ui.label("›");
+                    }
+                }
+            });
+
+            ui.add_space(8.0);
+            if self.recovery_blocked {
+                ui.group(|ui| {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(180, 55, 45),
+                        egui::RichText::new("Kurtarma gerekiyor").strong(),
+                    );
+                    ui.label(
+                        "Güvenli durum doğrulanana kadar yeni bir işlem başlatılamaz. Günlük ve kurulum dosyalarını silmeyin.",
+                    );
+                });
+                ui.add_space(8.0);
+            }
+
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    if is_working {
+                        ui.group(|ui| {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.vertical(|ui| {
+                                    ui.heading(format!(
+                                        "{} işlemi sürüyor",
+                                        self.operation.label()
+                                    ));
+                                    ui.label(if self.operation == SetupOperation::Uninstall {
+                                        "Paket kimliği, yönetilen dosyalar ve durum kaydı denetleniyor."
+                                    } else {
+                                        "Paket imzası, dosya bütünlüğü ve kurulum durumu denetleniyor."
+                                    });
+                                });
+                            });
+                            ui.add_space(8.0);
+                            ui.label(
+                                "İşlem iptal edilirse yükleyici çalışan süreci durdurur ve güvenli kurtarmayı dener.",
+                            );
+                            if self.cancel_requested {
+                                ui.label("İptal isteği gönderildi; işlem durumu uzlaştırılıyor.");
+                            }
+                        });
+                    } else if !self.recovery_blocked {
+                        match self.step {
+                            0 => {
+                                ui.heading("Hangi işlemi yapmak istiyorsunuz?");
+                                ui.label(
+                                    "Devam etmek için yapılacak işlemi seçin. İmzalı yayın politikası yine kontrol edilir.",
+                                );
+                                ui.add_space(8.0);
+
+                                for operation in SetupOperation::ALL {
+                                    ui.group(|ui| {
+                                        if ui
+                                            .selectable_label(
+                                                self.operation == operation,
+                                                egui::RichText::new(operation.label()).strong(),
+                                            )
+                                            .clicked()
+                                        {
+                                            self.operation = operation;
+                                            self.uninstall_confirmed = false;
+                                            self.status = None;
+                                        }
+                                        ui.small(operation.description());
+                                    });
+                                    ui.add_space(4.0);
+                                }
+                            }
+                            1 => {
+                                ui.heading(if self.operation == SetupOperation::Uninstall {
+                                    "Kaldırılacak paketi belirleyin"
+                                } else {
+                                    "Paket kimliğini ve yayıncı güvenini belirtin"
+                                });
+                                ui.label(
+                                    "Paket kimliği, yayıncının size verdiği yayın bilgileriyle aynı olmalıdır.",
+                                );
+                                ui.add_space(8.0);
+
+                                ui.group(|ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.add_sized(
+                                            [150.0, 28.0],
+                                            egui::Label::new("Paket kimliği"),
+                                        );
+                                        let package_id_width = ui.available_width();
+                                        if ui
+                                            .add_sized(
+                                                [package_id_width, 28.0],
+                                                egui::TextEdit::singleline(&mut self.package_id),
+                                            )
+                                            .changed()
+                                        {
+                                            self.uninstall_confirmed = false;
+                                            self.status = None;
+                                        }
+                                    });
+                                    ui.small("Örnek biçim: publisher.product");
+                                });
+
+                                if self.operation != SetupOperation::Uninstall {
+                                    ui.add_space(8.0);
+                                    ui.group(|ui| {
+                                        ui.heading("Yayıncı güven politikası");
+                                        ui.label(
+                                            "Yalnızca paketin yayıncısından aldığınız güven dosyasını seçin. Örnek dosyalar güvenilir değildir.",
+                                        );
+                                        if draw_trust_store_row(
+                                            ui,
+                                            &mut self.trust_store,
+                                            "YAML güven dosyasını seçin",
+                                        ) {
+                                            self.uninstall_confirmed = false;
+                                            self.status = None;
+                                        }
+                                    });
+                                }
+                            }
+                            2 => {
+                                ui.heading("Kurulum ve veri konumlarını seçin");
+                                ui.label(
+                                    "Kurulum klasörü uygulama dosyalarını, veri klasörü ise yükleyici durumunu tutar.",
+                                );
+                                ui.add_space(8.0);
+
+                                ui.group(|ui| {
+                                    if draw_folder_row(
+                                        ui,
+                                        "Kurulum klasörü",
+                                        &mut self.target,
+                                        "Kurulum klasörünü seçin",
+                                    ) {
+                                        self.uninstall_confirmed = false;
+                                        self.status = None;
+                                    }
+                                    ui.add_space(8.0);
+                                    if draw_folder_row(
+                                        ui,
+                                        "Veri klasörü",
+                                        &mut self.data_root,
+                                        "Yükleyici veri klasörünü seçin",
+                                    ) {
+                                        self.uninstall_confirmed = false;
+                                        self.status = None;
+                                    }
+                                });
+                            }
+                            _ => {
+                                ui.heading("İşlemi başlatmadan önce kontrol edin");
+                                ui.label(
+                                    "Aşağıdaki bilgiler bu işlemde kullanılacak. Başlatmadan önce paket ve yolları doğrulayın.",
+                                );
+                                ui.add_space(8.0);
+
+                                ui.group(|ui| {
+                                    ui.heading("İşlem özeti");
+                                    ui.separator();
+                                    setup_summary_row(ui, "İşlem", self.operation.label());
+                                    setup_summary_row(ui, "Paket kimliği", &self.package_id);
+                                    if self.operation != SetupOperation::Uninstall {
+                                        setup_summary_row(ui, "Güven politikası", &self.trust_store);
+                                    }
+                                    setup_summary_row(ui, "Kurulum klasörü", &self.target);
+                                    setup_summary_row(ui, "Veri klasörü", &self.data_root);
+                                });
+
+                                ui.add_space(8.0);
+                                if self.operation == SetupOperation::Uninstall {
+                                    ui.group(|ui| {
+                                        ui.colored_label(
+                                            egui::Color32::from_rgb(170, 92, 22),
+                                            egui::RichText::new("Kaldırma onayı").strong(),
+                                        );
+                                        ui.label(
+                                            "Yalnızca bu paketin yönettiği dosyalar ve durum kaydı kaldırılır. Belirtilen hedef dışındaki dosyalar korunur.",
+                                        );
+                                        if ui
+                                            .checkbox(
+                                                &mut self.uninstall_confirmed,
+                                                "Bu paketi ve gösterilen klasör yollarını kaldırmayı onaylıyorum.",
+                                            )
+                                            .changed()
+                                        {
+                                            self.status = None;
+                                        }
+                                    });
+                                } else {
+                                    ui.group(|ui| {
+                                        ui.colored_label(
+                                            egui::Color32::from_rgb(18, 121, 132),
+                                            egui::RichText::new("Güvenlik denetimi").strong(),
+                                        );
+                                        ui.label(
+                                            "İşlem başlamadan önce imzalı yayın, paket özeti ve mevcut kurulum durumu yükleyici tarafından doğrulanır.",
+                                        );
+                                    });
+                                }
                             }
                         }
-                    });
-                    ui.label("Yayımcının sağladığı gerçek güven dosyasını kullanın; örnek dosya güvenilir değildir.");
-                    ui.add_space(10.0);
-                }
+                    }
 
-                ui.horizontal(|ui| {
-                    ui.label("Kurulum klasörü");
-                    if ui.text_edit_singleline(&mut self.target).changed() {
-                        self.uninstall_confirmed = false;
-                    }
-                    if ui.button("Klasör seç").clicked() {
-                        let mut picker = rfd::FileDialog::new().set_title("Kurulum klasörünü seçin");
-                        if PathBuf::from(&self.target).is_dir() {
-                            picker = picker.set_directory(&self.target);
-                        }
-                        if let Some(path) = picker.pick_folder() {
-                            self.target = path.to_string_lossy().into_owned();
-                            self.uninstall_confirmed = false;
-                        }
-                    }
-                });
-                ui.add_space(10.0);
-
-                ui.horizontal(|ui| {
-                    ui.label("Veri klasörü");
-                    if ui.text_edit_singleline(&mut self.data_root).changed() {
-                        self.uninstall_confirmed = false;
-                    }
-                    if ui.button("Klasör seç").clicked() {
-                        let mut picker = rfd::FileDialog::new().set_title("Yükleyici veri klasörünü seçin");
-                        if PathBuf::from(&self.data_root).is_dir() {
-                            picker = picker.set_directory(&self.data_root);
-                        }
-                        if let Some(path) = picker.pick_folder() {
-                            self.data_root = path.to_string_lossy().into_owned();
-                            self.uninstall_confirmed = false;
-                        }
-                    }
-                });
-                ui.add_space(10.0);
-
-                let previous_operation = self.operation;
-                egui::ComboBox::from_label("İşlem")
-                    .selected_text(self.operation.label())
-                    .show_ui(ui, |ui| {
-                        for operation in SetupOperation::ALL {
-                            ui.selectable_value(
-                                &mut self.operation,
-                                operation,
-                                operation.label(),
+                    if let Some((succeeded, message)) = &self.status {
+                        ui.add_space(8.0);
+                        ui.group(|ui| {
+                            ui.colored_label(
+                                if *succeeded {
+                                    egui::Color32::from_rgb(35, 135, 75)
+                                } else {
+                                    egui::Color32::from_rgb(180, 45, 45)
+                                },
+                                egui::RichText::new(if *succeeded {
+                                    "İşlem tamamlandı"
+                                } else {
+                                    "İşlem tamamlanamadı"
+                                })
+                                .strong(),
                             );
-                        }
-                    });
-                if self.operation != previous_operation {
-                    self.uninstall_confirmed = false;
-                }
+                            ui.label(message);
+                        });
+                    }
+                });
 
-                if self.operation == SetupOperation::Uninstall {
-                    ui.label(format!("Paket: {}", self.package_id.trim()));
-                    ui.label(format!("Kurulum klasörü: {}", self.target.trim()));
-                    ui.label(format!("Veri klasörü: {}", self.data_root.trim()));
-                    ui.label("Yalnızca bu paketin yönetilen dosyaları ve durum kaydı kaldırılır; diğer dosyalar korunur.");
-                    ui.checkbox(
-                        &mut self.uninstall_confirmed,
-                        "Bu paket ve klasör yolları için kaldırmayı onaylıyorum.",
+            ui.add_space(8.0);
+            ui.separator();
+            ui.add_space(6.0);
+
+            ui.horizontal(|ui| {
+                if is_working {
+                    ui.label("Kurulum sürüyor");
+                    ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            if ui.button("İşlemi iptal et").clicked() {
+                                self.request_cancel();
+                            }
+                        },
+                    );
+                } else {
+                    if ui.button("Vazgeç").clicked() {
+                        close_requested = true;
+                    }
+                    ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            let completed_successfully = self
+                                .status
+                                .as_ref()
+                                .is_some_and(|(succeeded, _)| *succeeded);
+                            let primary_label = if self.step == 0 {
+                                "Devam et"
+                            } else if self.step < 3 {
+                                "İleri"
+                            } else if completed_successfully {
+                                "Tamamlandı"
+                            } else {
+                                self.operation.action_label()
+                            };
+                            let primary_enabled = !self.recovery_blocked
+                                && !completed_successfully
+                                && (self.step < 3
+                                    || self.operation != SetupOperation::Uninstall
+                                    || self.uninstall_confirmed);
+                            if ui
+                                .add_enabled(
+                                    primary_enabled,
+                                    egui::Button::new(primary_label),
+                                )
+                                .clicked()
+                            {
+                                if self.step < 3 {
+                                    next_requested = true;
+                                } else {
+                                    start_requested = true;
+                                }
+                            }
+                            if self.step > 0 && ui.button("Geri").clicked() {
+                                back_requested = true;
+                            }
+                        },
                     );
                 }
-                ui.add_space(14.0);
-
-                let action_label = if self.operation == SetupOperation::Uninstall {
-                    "Paketi kaldır".to_owned()
-                } else {
-                    format!("{} ve doğrula", self.operation.label())
-                };
-                let action_enabled = self.operation != SetupOperation::Uninstall
-                    || self.uninstall_confirmed;
-                if ui
-                    .add_enabled(action_enabled, egui::Button::new(action_label))
-                    .clicked()
-                {
-                    start_requested = true;
-                }
             });
-
-            ui.add_space(12.0);
-            if is_working {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(if self.operation == SetupOperation::Uninstall {
-                        "Paketin yönetilen dosyaları kaldırılıyor."
-                    } else {
-                        "Kurulum sürüyor; sürüm imzası ve paket bütünlüğü denetleniyor."
-                    });
-                });
-                ui.label("İptal sırasında çalışan işlem durdurulur ve kurtarma otomatik denenir; durum belirsiz kalırsa elle kurtarma gerekir.");
-                if ui.button("İşlemi iptal et").clicked() {
-                    self.request_cancel();
-                }
-                if self.cancel_requested {
-                    ui.label("İptal isteği gönderildi; çalışan işlem sonlandırılıyor.");
-                }
-                context.request_repaint_after(Duration::from_millis(100));
-            }
-
-            if self.recovery_blocked {
-                ui.label("Kurtarma başarıyla tamamlanmadan yeni işlem başlatılamaz. Yukarıdaki CLI komutunu konsolda çalıştırın; kurtarma yine başarısız olursa günlük ve deployment dosyalarını silmeyin.");
-            }
-
-            if let Some((succeeded, message)) = &self.status {
-                ui.add_space(8.0);
-                ui.separator();
-                ui.colored_label(
-                    if *succeeded {
-                        egui::Color32::from_rgb(30, 130, 70)
-                    } else {
-                        egui::Color32::from_rgb(180, 45, 45)
-                    },
-                    message,
-                );
-            }
         });
 
+        if back_requested {
+            self.retreat_step();
+        }
+        if next_requested {
+            self.advance_step();
+        }
         if start_requested {
             self.start_install();
+        }
+        if close_requested {
+            context.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+        if is_working {
+            context.request_repaint_after(Duration::from_millis(120));
         }
     }
 }
 
+fn draw_folder_row(ui: &mut egui::Ui, label: &str, value: &mut String, title: &str) -> bool {
+    let available_width = ui.available_width();
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.add_sized([138.0, 28.0], egui::Label::new(label));
+        let edit_width = (available_width - 232.0).max(150.0);
+        changed |= ui
+            .add_sized([edit_width, 28.0], egui::TextEdit::singleline(value))
+            .changed();
+
+        if ui
+            .add_sized([82.0, 28.0], egui::Button::new("Gözat"))
+            .clicked()
+        {
+            let mut picker = rfd::FileDialog::new().set_title(title);
+            let current = PathBuf::from(value.as_str());
+            if current.is_dir() {
+                picker = picker.set_directory(current);
+            }
+            if let Some(path) = picker.pick_folder() {
+                *value = path.to_string_lossy().into_owned();
+                changed = true;
+            }
+        }
+    });
+    changed
+}
+
+fn draw_trust_store_row(ui: &mut egui::Ui, value: &mut String, title: &str) -> bool {
+    let available_width = ui.available_width();
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.add_sized([138.0, 28.0], egui::Label::new("Dosya yolu"));
+        let edit_width = (available_width - 232.0).max(150.0);
+        changed |= ui
+            .add_sized([edit_width, 28.0], egui::TextEdit::singleline(value))
+            .changed();
+
+        if ui
+            .add_sized([82.0, 28.0], egui::Button::new("Dosya seç"))
+            .clicked()
+        {
+            let mut picker = rfd::FileDialog::new()
+                .add_filter("YAML", &["yaml", "yml"])
+                .set_title(title);
+            let current = PathBuf::from(value.as_str());
+            if let Some(parent) = current.parent().filter(|parent| parent.is_dir()) {
+                picker = picker.set_directory(parent);
+            }
+            if let Some(path) = picker.pick_file() {
+                *value = path.to_string_lossy().into_owned();
+                changed = true;
+            }
+        }
+    });
+    changed
+}
+
+fn setup_summary_row(ui: &mut egui::Ui, label: &str, value: &str) {
+    ui.horizontal_wrapped(|ui| {
+        ui.add_sized(
+            [145.0, 22.0],
+            egui::Label::new(egui::RichText::new(label).strong()),
+        );
+        ui.label(value);
+    });
+}
+
+
 impl SetupApp {
+    fn advance_step(&mut self) {
+        match self.step {
+            0 => {
+                self.status = None;
+                self.step = 1;
+            }
+            1 => {
+                if let Err(error) = PackageId::parse(self.package_id.trim()) {
+                    self.status = Some((false, format!("Paket kimliği geçersiz: {error}")));
+                    return;
+                }
+                if self.operation != SetupOperation::Uninstall {
+                    if self.trust_store.trim().is_empty() {
+                        self.status = Some((
+                            false,
+                            "Yayıncı güven politikası dosyası zorunludur.".to_owned(),
+                        ));
+                        return;
+                    }
+                    let trust_path = PathBuf::from(self.trust_store.trim());
+                    if !std::fs::symlink_metadata(trust_path)
+                        .is_ok_and(|metadata| metadata.file_type().is_file())
+                    {
+                        self.status = Some((
+                            false,
+                            "Güven politikası yolu normal bir dosyayı göstermelidir.".to_owned(),
+                        ));
+                        return;
+                    }
+                }
+                self.status = None;
+                self.step = 2;
+            }
+            2 => {
+                if self.target.trim().is_empty() || self.data_root.trim().is_empty() {
+                    self.status = Some((false, "Kurulum ve veri klasörleri zorunludur.".to_owned()));
+                    return;
+                }
+                self.status = None;
+                self.step = 3;
+            }
+            _ => {}
+        }
+    }
+
+    fn retreat_step(&mut self) {
+        if self.step > 0 {
+            self.step -= 1;
+            self.status = None;
+        }
+    }
+
     fn start_install(&mut self) {
         if self.recovery_blocked {
             return;
@@ -385,7 +721,10 @@ impl SetupApp {
             self.cancel_sender = None;
             self.cancel_requested = false;
             self.status = Some(match result {
-                Ok(message) => (true, message),
+                Ok(message) => (
+                    true,
+                    format!("{} işlemi tamamlandı.\n{message}", self.operation.label()),
+                ),
                 Err(message) => (false, message),
             });
         }
