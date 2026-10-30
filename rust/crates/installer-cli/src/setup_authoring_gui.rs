@@ -18,10 +18,7 @@ use std::{
 use eframe::egui;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
-use turkuaz_installer_domain::{
-    package_id::PackageId,
-    semantic_version::SemanticVersion,
-};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePreset};
 use url::Url;
 
@@ -79,8 +76,7 @@ impl Default for SavedProject {
         let program_files = std::env::var_os("ProgramFiles")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
-        let output_directory =
-            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let output_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
         Self {
             schema_version: PROJECT_SCHEMA_VERSION,
@@ -162,46 +158,46 @@ impl eframe::App for BuilderApp {
 
         egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new("T").size(28.0).strong().color(
-                    egui::Color32::from_rgb(18, 121, 132),
-                ));
+                ui.label(
+                    egui::RichText::new("T")
+                        .size(28.0)
+                        .strong()
+                        .color(egui::Color32::from_rgb(18, 121, 132)),
+                );
                 ui.vertical(|ui| {
                     ui.heading("Turkuaz Setup Studio");
                     ui.small(format!("Sürüm {}", env!("CARGO_PKG_VERSION")));
                 });
-                ui.with_layout(
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        let previous_appearance = self.appearance;
-                        egui::ComboBox::from_id_salt("builder-app-appearance")
-                            .selected_text(self.appearance.label())
-                            .width(92.0)
-                            .show_ui(ui, |ui| {
-                                for appearance in AppearancePreference::ALL {
-                                    ui.selectable_value(
-                                        &mut self.appearance,
-                                        appearance,
-                                        appearance.label(),
-                                    );
-                                }
-                            });
-                        appearance_changed = previous_appearance != self.appearance;
-                        ui.label("Uygulama görünümü");
-                        ui.separator();
-                        if ui
-                            .add_enabled(!is_building, egui::Button::new("Projeyi kaydet"))
-                            .clicked()
-                        {
-                            save_requested = true;
-                        }
-                        if ui
-                            .add_enabled(!is_building, egui::Button::new("Proje aç"))
-                            .clicked()
-                        {
-                            open_requested = true;
-                        }
-                    },
-                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let previous_appearance = self.appearance;
+                    egui::ComboBox::from_id_salt("builder-app-appearance")
+                        .selected_text(self.appearance.label())
+                        .width(92.0)
+                        .show_ui(ui, |ui| {
+                            for appearance in AppearancePreference::ALL {
+                                ui.selectable_value(
+                                    &mut self.appearance,
+                                    appearance,
+                                    appearance.label(),
+                                );
+                            }
+                        });
+                    appearance_changed = previous_appearance != self.appearance;
+                    ui.label("Uygulama görünümü");
+                    ui.separator();
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Projeyi kaydet"))
+                        .clicked()
+                    {
+                        save_requested = true;
+                    }
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Proje aç"))
+                        .clicked()
+                    {
+                        open_requested = true;
+                    }
+                });
             });
         });
 
@@ -228,39 +224,39 @@ impl eframe::App for BuilderApp {
                     ui.label(format!("Adım {} / 4", self.active_step + 1));
                 }
 
-                ui.with_layout(
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        let build_clicked = ui
-                            .add_enabled(
-                                !is_building && self.active_step == 3,
-                                egui::Button::new("Kurulum paketini hazırla")
-                                    .fill(egui::Color32::from_rgb(18, 121, 132)),
-                            )
-                            .clicked();
-                        if build_clicked {
-                            self.start_build();
-                        }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let build_clicked = ui
+                        .add_enabled(
+                            !is_building && self.active_step == 3,
+                            egui::Button::new("Kurulum paketini hazırla")
+                                .fill(egui::Color32::from_rgb(18, 121, 132)),
+                        )
+                        .clicked();
+                    if build_clicked {
+                        self.start_build();
+                    }
 
-                        let next_clicked = ui
-                            .add_enabled(
-                                !is_building && self.active_step < 3,
-                                egui::Button::new("Sonraki"),
-                            )
-                            .clicked();
-                        if next_clicked {
-                            self.advance_step();
-                        }
+                    let next_clicked = ui
+                        .add_enabled(
+                            !is_building && self.active_step < 3,
+                            egui::Button::new("Sonraki"),
+                        )
+                        .clicked();
+                    if next_clicked {
+                        self.advance_step();
+                    }
 
-                        let previous_clicked = ui
-                            .add_enabled(!is_building && self.active_step > 0, egui::Button::new("Geri"))
-                            .clicked();
-                        if previous_clicked {
-                            self.active_step -= 1;
-                            self.status = None;
-                        }
-                    },
-                );
+                    let previous_clicked = ui
+                        .add_enabled(
+                            !is_building && self.active_step > 0,
+                            egui::Button::new("Geri"),
+                        )
+                        .clicked();
+                    if previous_clicked {
+                        self.active_step -= 1;
+                        self.status = None;
+                    }
+                });
             });
         });
 
@@ -383,7 +379,11 @@ impl BuilderApp {
                 ui.add_space(12.0);
 
                 ui.group(|ui| {
-                    text_row(ui, "Varsayılan kurulum klasörü", &mut self.project.install_target);
+                    text_row(
+                        ui,
+                        "Varsayılan kurulum klasörü",
+                        &mut self.project.install_target,
+                    );
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
                         ui.add_sized([150.0, 24.0], egui::Label::new("Setup teması"));
@@ -411,7 +411,9 @@ impl BuilderApp {
                 });
                 ui.add_space(8.0);
                 ui.small("Vurgu rengi isteğe bağlıdır; HEX biçimi kullanın, örnek: #127984.");
-                ui.small("Seçilen kurulum teması setup-theme.json olarak paketleme klasörüne yazılır.");
+                ui.small(
+                    "Seçilen kurulum teması setup-theme.json olarak paketleme klasörüne yazılır.",
+                );
             }
             _ => {
                 ui.heading("Çıktı ve derleme");
@@ -538,8 +540,7 @@ impl BuilderApp {
         if let Some(path) = picker.pick_file() {
             match path.strip_prefix(PathBuf::from(self.project.source_directory.trim())) {
                 Ok(relative) if !relative.as_os_str().is_empty() => {
-                    self.project.entry_point =
-                        relative.to_string_lossy().replace('\\', "/");
+                    self.project.entry_point = relative.to_string_lossy().replace('\\', "/");
                     self.status = None;
                 }
                 _ => {
@@ -563,10 +564,7 @@ impl BuilderApp {
                     self.project = project;
                     self.project_path = Some(path.clone());
                     self.active_step = 0;
-                    self.status = Some((
-                        true,
-                        format!("Proje açıldı: {}", path.display()),
-                    ));
+                    self.status = Some((true, format!("Proje açıldı: {}", path.display())));
                 }
                 Err(error) => self.status = Some((false, error)),
             }
@@ -577,10 +575,7 @@ impl BuilderApp {
         if let Some(path) = &self.project_path {
             match write_project(path, &self.project) {
                 Ok(()) => {
-                    self.status = Some((
-                        true,
-                        format!("Proje kaydedildi: {}", path.display()),
-                    ));
+                    self.status = Some((true, format!("Proje kaydedildi: {}", path.display())));
                 }
                 Err(error) => self.status = Some((false, error)),
             }
@@ -598,10 +593,7 @@ impl BuilderApp {
             match write_project(&path, &self.project) {
                 Ok(()) => {
                     self.project_path = Some(path.clone());
-                    self.status = Some((
-                        true,
-                        format!("Proje kaydedildi: {}", path.display()),
-                    ));
+                    self.status = Some((true, format!("Proje kaydedildi: {}", path.display())));
                 }
                 Err(error) => self.status = Some((false, error)),
             }
@@ -662,10 +654,7 @@ fn folder_row(ui: &mut egui::Ui, label: &str, value: &mut String, picker_title: 
         let width = ui.available_width() - 92.0;
         ui.add(egui::TextEdit::singleline(value).desired_width(width));
         if ui.button("Gözat…").clicked() {
-            if let Some(path) = FileDialog::new()
-                .set_title(picker_title)
-                .pick_folder()
-            {
+            if let Some(path) = FileDialog::new().set_title(picker_title).pick_folder() {
                 *value = path.to_string_lossy().into_owned();
             }
         }
@@ -678,7 +667,10 @@ fn validate_project_step(project: &SavedProject, step: usize) -> Result<(), Stri
             || project.product_name.chars().count() > 128
             || project.product_name.chars().any(char::is_control)
         {
-            return Err("Uygulama adı boş olamaz, 128 karakteri aşamaz ve kontrol karakteri içeremez.".to_owned());
+            return Err(
+                "Uygulama adı boş olamaz, 128 karakteri aşamaz ve kontrol karakteri içeremez."
+                    .to_owned(),
+            );
         }
         PackageId::parse(&project.package_id)
             .map_err(|error| format!("Paket kimliği geçersiz: {error}"))?;
@@ -700,9 +692,14 @@ fn validate_project_step(project: &SavedProject, step: usize) -> Result<(), Stri
         if !entry_point.is_empty() {
             let path = Path::new(entry_point);
             if path.is_absolute()
-                || path.components().any(|component| !matches!(component, Component::Normal(_)))
+                || path
+                    .components()
+                    .any(|component| !matches!(component, Component::Normal(_)))
             {
-                return Err("Başlangıç dosyası kaynak klasörüne göre güvenli bir göreli yol olmalıdır.".to_owned());
+                return Err(
+                    "Başlangıç dosyası kaynak klasörüne göre güvenli bir göreli yol olmalıdır."
+                        .to_owned(),
+                );
             }
         }
     }
@@ -711,7 +708,9 @@ fn validate_project_step(project: &SavedProject, step: usize) -> Result<(), Stri
         if project.install_target.trim().is_empty()
             || project.install_target.chars().any(char::is_control)
         {
-            return Err("Varsayılan kurulum klasörü zorunludur ve kontrol karakteri içeremez.".to_owned());
+            return Err(
+                "Varsayılan kurulum klasörü zorunludur ve kontrol karakteri içeremez.".to_owned(),
+            );
         }
         theme_config_from_project(project)?;
     }
@@ -766,8 +765,8 @@ fn theme_config_from_project(project: &SavedProject) -> Result<SetupThemeConfig,
 }
 
 fn read_project(path: &Path) -> Result<SavedProject, String> {
-    let metadata = fs::symlink_metadata(path)
-        .map_err(|error| format!("Proje dosyası açılamadı: {error}"))?;
+    let metadata =
+        fs::symlink_metadata(path).map_err(|error| format!("Proje dosyası açılamadı: {error}"))?;
     if metadata.file_type().is_symlink()
         || !metadata.is_file()
         || metadata.len() == 0
@@ -844,7 +843,12 @@ fn build_project(project: SavedProject) -> Result<String, String> {
 
     let final_directory = output_parent.join(format!("{package_id}-{version}"));
     match fs::symlink_metadata(&final_directory) {
-        Ok(_) => return Err(format!("Çıktı klasörü zaten var: {}", final_directory.display())),
+        Ok(_) => {
+            return Err(format!(
+                "Çıktı klasörü zaten var: {}",
+                final_directory.display()
+            ));
+        }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(format!("Çıktı klasörü denetlenemedi: {error}")),
     }
@@ -853,8 +857,10 @@ fn build_project(project: SavedProject) -> Result<String, String> {
         .duration_since(UNIX_EPOCH)
         .map_err(|error| format!("Sistem saati okunamadı: {error}"))?
         .as_nanos();
-    let staging_directory =
-        output_parent.join(format!(".turkuaz-setup-build-{}-{nonce}", std::process::id()));
+    let staging_directory = output_parent.join(format!(
+        ".turkuaz-setup-build-{}-{nonce}",
+        std::process::id()
+    ));
     fs::create_dir(&staging_directory)
         .map_err(|error| format!("Geçici çıktı klasörü oluşturulamadı: {error}"))?;
 
@@ -935,7 +941,10 @@ fn build_into_staging(
 
     let theme = theme_config_from_project(project)?;
     let theme_path = staging_directory.join("setup-theme.json");
-    write_new_file(&theme_path, &theme.to_json().map_err(|error| error.to_string())?)?;
+    write_new_file(
+        &theme_path,
+        &theme.to_json().map_err(|error| error.to_string())?,
+    )?;
 
     let project_path = staging_directory.join("project.tzproj");
     let mut saved_project = project.clone();
