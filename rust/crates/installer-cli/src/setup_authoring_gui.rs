@@ -69,6 +69,16 @@ struct SavedProject {
     brand_name: String,
     subtitle: String,
     accent_color: String,
+    #[serde(default)]
+    signed_manifest_path: String,
+    #[serde(default)]
+    signature_path: String,
+    #[serde(default)]
+    trust_store_path: String,
+    #[serde(default)]
+    setup_stub_path: String,
+    #[serde(default)]
+    makensis_path: String,
 }
 
 impl Default for SavedProject {
@@ -95,6 +105,11 @@ impl Default for SavedProject {
             brand_name: "Uygulamam Kurulumu".to_owned(),
             subtitle: "Kurulum sihirbazına hoş geldiniz".to_owned(),
             accent_color: String::new(),
+            signed_manifest_path: String::new(),
+            signature_path: String::new(),
+            trust_store_path: String::new(),
+            setup_stub_path: String::new(),
+            makensis_path: String::new(),
         }
     }
 }
@@ -225,10 +240,20 @@ impl eframe::App for BuilderApp {
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let distribution_clicked = ui
+                        .add_enabled(
+                            !is_building && self.active_step == 3,
+                            egui::Button::new("İmzalı setup üret"),
+                        )
+                        .clicked();
+                    if distribution_clicked {
+                        self.start_distribution();
+                    }
+
                     let build_clicked = ui
                         .add_enabled(
                             !is_building && self.active_step == 3,
-                            egui::Button::new("Kurulum paketini hazırla")
+                            egui::Button::new("Uygulama paketini hazırla")
                                 .fill(egui::Color32::from_rgb(18, 121, 132)),
                         )
                         .clicked();
@@ -417,7 +442,7 @@ impl BuilderApp {
             }
             _ => {
                 ui.heading("Çıktı ve derleme");
-                ui.label("Proje dosyalarını kaydetmek ve uygulama paketini üretmek için bir klasör seçin.");
+                ui.label("Önce uygulama paketini hazırlayın. İmzalı yayın dosyalarınız hazır olduğunda aynı ekrandan dağıtım çiftini üretebilirsiniz.");
                 ui.add_space(12.0);
 
                 ui.group(|ui| {
@@ -431,7 +456,7 @@ impl BuilderApp {
                 ui.add_space(12.0);
 
                 ui.group(|ui| {
-                    ui.heading("Üretilecek dosyalar");
+                    ui.heading("Uygulama paketi");
                     ui.separator();
                     ui.label("• application.tzpkg — uygulama payload paketi");
                     ui.label("• release-manifest.draft.yaml — imzasız yayın taslağı");
@@ -441,13 +466,61 @@ impl BuilderApp {
                 ui.add_space(12.0);
 
                 ui.group(|ui| {
+                    ui.heading("İmzalı kurulum çıktısı");
+                    ui.label("İmzalı manifesti, detached imzayı, yayıncı trust store dosyasını ve Windows setup GUI stub dosyasını seçin.");
+                    file_row(
+                        ui,
+                        "İmzalı manifest",
+                        &mut self.project.signed_manifest_path,
+                        "İmzalı yayın manifestini seçin",
+                        "YAML manifest",
+                        &["yaml", "yml"],
+                    );
+                    file_row(
+                        ui,
+                        "Detached imza",
+                        &mut self.project.signature_path,
+                        "Manifest imza dosyasını seçin",
+                        "İmza",
+                        &["p7s", "sig", "der"],
+                    );
+                    file_row(
+                        ui,
+                        "Yayıncı trust store",
+                        &mut self.project.trust_store_path,
+                        "Yayıncı trust store dosyasını seçin",
+                        "YAML trust store",
+                        &["yaml", "yml"],
+                    );
+                    file_row(
+                        ui,
+                        "Setup GUI stub",
+                        &mut self.project.setup_stub_path,
+                        "Turkuaz setup GUI stub dosyasını seçin",
+                        "Windows uygulaması",
+                        &["exe"],
+                    );
+                    file_row(
+                        ui,
+                        "NSIS yolu (isteğe bağlı)",
+                        &mut self.project.makensis_path,
+                        "NSIS makensis.exe dosyasını seçin",
+                        "Windows uygulaması",
+                        &["exe"],
+                    );
+                    ui.small("NSIS PATH üzerinde değilse makensis.exe yolunu seçin. İki çıktı birlikte hazırlanır: TurkuazSetup.exe ve zorunlu NSIS yedeği.");
+                });
+                ui.add_space(12.0);
+
+                ui.group(|ui| {
                     ui.colored_label(
                         egui::Color32::from_rgb(170, 92, 22),
-                        egui::RichText::new("Yayın imzası gerekir").strong(),
+                        egui::RichText::new("Yayın imzası ve güven politikası gerekir").strong(),
                     );
                     ui.label(
-                        "Üretilen manifest taslaktır. Dağıtılabilir setup.exe için yayıncının imzalı manifesti ve dış trust store gerekir.",
+                        "Önce uygulama paketini hazırlayıp release-manifest.draft.yaml dosyasını yayın koşullarınıza göre imzalayın. Ardından imzalı manifest ve gerçek yayıncı trust store ile “İmzalı setup üret” seçeneğini kullanın.",
                     );
+                    ui.label("Üretilen iki EXE de dağıtımdan önce Authenticode ile imzalanmalıdır. İmzalama anahtarı Setup Studio projesine eklenmez.");
                     ui.hyperlink_to(
                         "Yayın imzalama akışını görüntüle",
                         "https://github.com/TurkuazLabs/TurkuazInstaller/blob/rewrite/rust-community/rust/RELEASE_SIGNING.md",
@@ -618,6 +691,24 @@ impl BuilderApp {
         });
     }
 
+    fn start_distribution(&mut self) {
+        for step in [0, 2, 3] {
+            if let Err(error) = validate_project_step(&self.project, step) {
+                self.active_step = step;
+                self.status = Some((false, error));
+                return;
+            }
+        }
+
+        let project = self.project.clone();
+        let (sender, receiver) = mpsc::channel();
+        self.build_receiver = Some(receiver);
+        self.status = None;
+        thread::spawn(move || {
+            let _ = sender.send(build_distribution(project));
+        });
+    }
+
     fn poll_build(&mut self) {
         let result = match self.build_receiver.as_ref() {
             Some(receiver) => match receiver.try_recv() {
@@ -655,6 +746,29 @@ fn folder_row(ui: &mut egui::Ui, label: &str, value: &mut String, picker_title: 
         ui.add(egui::TextEdit::singleline(value).desired_width(width));
         if ui.button("Gözat…").clicked() {
             if let Some(path) = FileDialog::new().set_title(picker_title).pick_folder() {
+                *value = path.to_string_lossy().into_owned();
+            }
+        }
+    });
+}
+
+fn file_row(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut String,
+    picker_title: &str,
+    filter_name: &str,
+    extensions: &[&str],
+) {
+    ui.horizontal(|ui| {
+        ui.add_sized([150.0, 24.0], egui::Label::new(label));
+        let width = ui.available_width() - 92.0;
+        ui.add(egui::TextEdit::singleline(value).desired_width(width));
+        if ui.button("Gözat…").clicked() {
+            let picker = FileDialog::new()
+                .set_title(picker_title)
+                .add_filter(filter_name, extensions);
+            if let Some(path) = picker.pick_file() {
                 *value = path.to_string_lossy().into_owned();
             }
         }
@@ -827,6 +941,141 @@ fn resolve_path(value: &str) -> Result<PathBuf, String> {
             .map(|current| current.join(path))
             .map_err(|error| format!("Çalışma klasörü okunamadı: {error}"))
     }
+}
+
+fn build_distribution(project: SavedProject) -> Result<String, String> {
+    for step in [0, 2, 3] {
+        validate_project_step(&project, step)?;
+    }
+
+    let package_id = PackageId::parse(&project.package_id).map_err(|error| error.to_string())?;
+    let output_parent = resolve_path(&project.output_directory)?;
+    let package_directory = output_parent.join(format!(
+        "{}-{}",
+        package_id,
+        SemanticVersion::parse(&project.version).map_err(|error| error.to_string())?
+    ));
+    let directory_metadata = fs::symlink_metadata(&package_directory)
+        .map_err(|error| format!("Paket çıktı klasörü açılamadı: {error}"))?;
+    if directory_metadata.file_type().is_symlink() || !directory_metadata.is_dir() {
+        return Err("Paket çıktı yolu normal bir klasör olmalıdır.".to_owned());
+    }
+    let package_path = package_directory.join("application.tzpkg");
+    let package_metadata = fs::symlink_metadata(&package_path)
+        .map_err(|error| format!("Önce uygulama paketini hazırlayın: {error}"))?;
+    if package_metadata.file_type().is_symlink() || !package_metadata.is_file() {
+        return Err("Uygulama paketi normal bir dosya olmalıdır.".to_owned());
+    }
+
+    let distribution_directory = package_directory.join("distribution");
+    if fs::symlink_metadata(&distribution_directory).is_ok() {
+        return Err(format!(
+            "Dağıtım klasörü zaten var: {}",
+            distribution_directory.display()
+        ));
+    }
+
+    let manifest_path = require_regular_file(
+        "İmzalı manifest",
+        &project.signed_manifest_path,
+    )?;
+    let signature_path = require_regular_file("Detached imza", &project.signature_path)?;
+    let trust_store_path = require_regular_file("Yayıncı trust store", &project.trust_store_path)?;
+    let setup_stub_path = require_regular_file("Setup GUI stub", &project.setup_stub_path)?;
+    let makensis_path = if project.makensis_path.trim().is_empty() {
+        None
+    } else {
+        Some(require_regular_file("NSIS makensis", &project.makensis_path)?)
+    };
+
+    let saved_project_path = package_directory.join("project.tzproj");
+    let saved_project_metadata = fs::symlink_metadata(&saved_project_path)
+        .map_err(|error| format!("Proje dosyası açılamadı: {error}"))?;
+    if saved_project_metadata.file_type().is_symlink() || !saved_project_metadata.is_file() {
+        return Err("Kaydedilmiş proje dosyası normal bir dosya olmalıdır.".to_owned());
+    }
+    write_project(&saved_project_path, &project)?;
+
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("Setup Studio uygulama yolu okunamadı: {error}"))?;
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("Sistem saati okunamadı: {error}"))?
+        .as_nanos();
+    let temporary_directory = package_directory.join(format!(
+        ".turkuaz-release-build-{}-{nonce}",
+        std::process::id()
+    ));
+    fs::create_dir(&temporary_directory)
+        .map_err(|error| format!("Geçici yayın klasörü oluşturulamadı: {error}"))?;
+    let _temporary_guard = TemporaryDirectoryGuard(temporary_directory.clone());
+
+    let bundle_path = temporary_directory.join("release.tzsetup");
+    let theme_path = package_directory.join("setup-theme.json");
+    let mut bundle_command = Command::new(&executable);
+    bundle_command
+        .arg("build-setup-bundle")
+        .arg("--package-id")
+        .arg(package_id.to_string())
+        .arg("--manifest")
+        .arg(&manifest_path)
+        .arg("--signature")
+        .arg(&signature_path)
+        .arg("--trust-store")
+        .arg(&trust_store_path)
+        .arg("--package")
+        .arg(&package_path)
+        .arg("--output")
+        .arg(&bundle_path)
+        .arg("--theme-config")
+        .arg(&theme_path);
+    let result = run_child(bundle_command, "İmzalı offline setup bundle oluşturma")
+        .and_then(|()| {
+            let mut pair_command = Command::new(&executable);
+            pair_command
+                .arg("build-distribution-pair")
+                .arg("--package-id")
+                .arg(package_id.to_string())
+                .arg("--stub")
+                .arg(&setup_stub_path)
+                .arg("--bundle")
+                .arg(&bundle_path)
+                .arg("--trust-store")
+                .arg(&trust_store_path)
+                .arg("--output-dir")
+                .arg(&distribution_directory);
+            if let Some(path) = &makensis_path {
+                pair_command.arg("--makensis").arg(path);
+            }
+            run_child(pair_command, "Turkuaz setup ve NSIS yedeği derleme")
+        });
+    result?;
+
+    Ok(format!(
+        "İmzalı dağıtım çifti hazırlandı.\nTurkuaz setup: {}\nNSIS yedeği: {}\nHer iki EXE dosyasını dağıtımdan önce Authenticode ile imzalayın.",
+        distribution_directory.join("TurkuazSetup.exe").display(),
+        distribution_directory
+            .join("TurkuazInstallerBackup.exe")
+            .display()
+    ))
+}
+
+struct TemporaryDirectoryGuard(PathBuf);
+
+impl Drop for TemporaryDirectoryGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+fn require_regular_file(label: &str, value: &str) -> Result<PathBuf, String> {
+    let path = resolve_path(value)?;
+    let metadata = fs::symlink_metadata(&path)
+        .map_err(|error| format!("{label} dosyası okunamadı: {error}"))?;
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        return Err(format!("{label}, normal bir dosya olmalıdır."));
+    }
+    Ok(path)
 }
 
 fn build_project(project: SavedProject) -> Result<String, String> {
