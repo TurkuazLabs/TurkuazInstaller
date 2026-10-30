@@ -89,6 +89,7 @@ struct SetupApp {
     result_receiver: Option<Receiver<Result<String, String>>>,
     cancel_sender: Option<Sender<()>>,
     status: Option<(bool, String)>,
+    operation_completed: bool,
     cancel_requested: bool,
     recovery_blocked: bool,
     uninstall_confirmed: bool,
@@ -124,6 +125,7 @@ impl Default for SetupApp {
             result_receiver: None,
             cancel_sender: None,
             status: None,
+            operation_completed: false,
             cancel_requested: false,
             recovery_blocked: false,
             uninstall_confirmed: false,
@@ -289,6 +291,7 @@ impl eframe::App for SetupApp {
                                             self.operation = operation;
                                             self.uninstall_confirmed = false;
                                             self.status = None;
+                                            self.operation_completed = false;
                                         }
                                         ui.small(operation.description());
                                     });
@@ -322,6 +325,7 @@ impl eframe::App for SetupApp {
                                         {
                                             self.uninstall_confirmed = false;
                                             self.status = None;
+                                            self.operation_completed = false;
                                         }
                                     });
                                     ui.small("Örnek biçim: publisher.product");
@@ -341,6 +345,7 @@ impl eframe::App for SetupApp {
                                         ) {
                                             self.uninstall_confirmed = false;
                                             self.status = None;
+                                            self.operation_completed = false;
                                         }
                                     });
                                 }
@@ -361,6 +366,7 @@ impl eframe::App for SetupApp {
                                     ) {
                                         self.uninstall_confirmed = false;
                                         self.status = None;
+                                        self.operation_completed = false;
                                     }
                                     ui.add_space(8.0);
                                     if draw_folder_row(
@@ -371,6 +377,7 @@ impl eframe::App for SetupApp {
                                     ) {
                                         self.uninstall_confirmed = false;
                                         self.status = None;
+                                        self.operation_completed = false;
                                     }
                                 });
                             }
@@ -411,6 +418,7 @@ impl eframe::App for SetupApp {
                                             .changed()
                                         {
                                             self.status = None;
+                                            self.operation_completed = false;
                                         }
                                     });
                                 } else {
@@ -471,10 +479,7 @@ impl eframe::App for SetupApp {
                     ui.with_layout(
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            let completed_successfully = self
-                                .status
-                                .as_ref()
-                                .is_some_and(|(succeeded, _)| *succeeded);
+                            let completed_successfully = self.operation_completed;
                             let primary_label = if self.step == 0 {
                                 "Devam et"
                             } else if self.step < 3 {
@@ -602,6 +607,7 @@ impl SetupApp {
         match self.step {
             0 => {
                 self.status = None;
+                self.operation_completed = false;
                 self.step = 1;
             }
             1 => {
@@ -629,6 +635,7 @@ impl SetupApp {
                     }
                 }
                 self.status = None;
+                self.operation_completed = false;
                 self.step = 2;
             }
             2 => {
@@ -638,6 +645,7 @@ impl SetupApp {
                     return;
                 }
                 self.status = None;
+                self.operation_completed = false;
                 self.step = 3;
             }
             _ => {}
@@ -648,6 +656,7 @@ impl SetupApp {
         if self.step > 0 {
             self.step -= 1;
             self.status = None;
+            self.operation_completed = false;
         }
     }
 
@@ -683,6 +692,7 @@ impl SetupApp {
         self.cancel_sender = Some(cancel_sender);
         self.cancel_requested = false;
         self.status = None;
+        self.operation_completed = false;
         self.uninstall_confirmed = false;
 
         thread::spawn(move || {
@@ -720,6 +730,7 @@ impl SetupApp {
             self.result_receiver = None;
             self.cancel_sender = None;
             self.cancel_requested = false;
+            self.operation_completed = result.is_ok();
             self.status = Some(match result {
                 Ok(message) => (
                     true,
