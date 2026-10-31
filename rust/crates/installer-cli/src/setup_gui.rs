@@ -252,8 +252,9 @@ fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
         .map_err(|error| error.to_string())
         .and_then(|path| web_setup::read_web_setup(&path).map_err(|error| error.to_string()));
     let setup_theme = match &web_result {
-        Ok(Some(config)) => SetupThemeConfig::from_json(config.theme_json.as_bytes())
-            .unwrap_or_default(),
+        Ok(Some(config)) => {
+            SetupThemeConfig::from_json(config.theme_json.as_bytes()).unwrap_or_default()
+        }
         _ => std::env::current_exe()
             .ok()
             .and_then(|path| read_embedded_setup_theme(path).ok().flatten())
@@ -291,7 +292,10 @@ fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
                 }
                 Err(error) => {
                     app.recovery_blocked = true;
-                    app.status = Some((false, format!("WebSetup yapılandırması doğrulanamadı: {error}")));
+                    app.status = Some((
+                        false,
+                        format!("WebSetup yapılandırması doğrulanamadı: {error}"),
+                    ));
                 }
                 Ok(None) => {}
             }
