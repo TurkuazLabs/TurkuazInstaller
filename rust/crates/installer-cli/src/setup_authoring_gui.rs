@@ -459,7 +459,11 @@ impl BuilderApp {
         ui.add_space(14.0);
 
         studio_card(ui, |ui| {
-            ui.label(egui::RichText::new("Nereden başlamalıyım?").size(20.0).strong());
+            ui.label(
+                egui::RichText::new("Nereden başlamalıyım?")
+                    .size(20.0)
+                    .strong(),
+            );
             ui.label(
                 "Önce ürün adını ve dosyalarını belirleyin. Sonra setup tasarımını düzenleyin.",
             );
@@ -854,7 +858,11 @@ impl BuilderApp {
 
     fn draw_preview(&mut self, ui: &mut egui::Ui) {
         ui.add_space(7.0);
-        ui.label(egui::RichText::new("Kurulum ekranı önizlemesi").size(19.0).strong());
+        ui.label(
+            egui::RichText::new("Kurulum ekranı önizlemesi")
+                .size(19.0)
+                .strong(),
+        );
         ui.label(
             egui::RichText::new("Bu görünüm, oluşturacağınız setup dosyası içindir.")
                 .size(13.0)
@@ -917,9 +925,11 @@ impl BuilderApp {
                     });
                 ui.add_space(10.0);
                 ui.label(
-                    egui::RichText::new("Tema düzenlemek için soldaki 03 • Setup tasarımı bölümünü açın.")
-                        .size(13.0)
-                        .weak(),
+                    egui::RichText::new(
+                        "Tema düzenlemek için soldaki 03 • Setup tasarımı bölümünü açın.",
+                    )
+                    .size(13.0)
+                    .weak(),
                 );
             }
             Err(error) => {
