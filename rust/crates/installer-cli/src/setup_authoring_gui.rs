@@ -512,7 +512,6 @@ impl eframe::App for BuilderApp {
             egui::CentralPanel::default().show(context, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| self.draw_workspace(ui));
             });
-
         } else {
             egui::CentralPanel::default().show(context, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| self.draw_welcome(ui));
@@ -568,8 +567,9 @@ impl BuilderApp {
         };
         let mut proceed = false;
         let mut cancel = false;
-        egui::Modal::new(egui::Id::new("setup-studio-new-project-confirmation"))
-            .show(context, |ui| {
+        egui::Modal::new(egui::Id::new("setup-studio-new-project-confirmation")).show(
+            context,
+            |ui| {
                 ui.set_min_width(460.0);
                 ui.heading("Yeni proje oluşturulsun mu?");
                 ui.label("Şu an açık proje kapanacak. Kaydedilmemiş değişiklikler kaybolabilir.");
@@ -582,7 +582,8 @@ impl BuilderApp {
                         proceed = true;
                     }
                 });
-            });
+            },
+        );
         if cancel {
             self.pending_new_kind = None;
         } else if proceed {
@@ -604,16 +605,18 @@ impl BuilderApp {
                 .text_style(egui::TextStyle::Name("PageTitle".into()))
                 .strong(),
         );
-        ui.label("Bir proje şablonu seçin. Ardından dört adımlı kurulum projesi sihirbazı açılacak.");
+        ui.label(
+            "Bir proje şablonu seçin. Ardından dört adımlı kurulum projesi sihirbazı açılacak.",
+        );
         ui.add_space(23.0);
         ui.heading("Yeni proje");
         ui.add_space(8.0);
         let mut selected = None;
         ui.columns(2, |columns| {
-            for (ui, (kind, number)) in columns.iter_mut().zip([
-                (InstallerKind::Offline, "01"),
-                (InstallerKind::Web, "02"),
-            ]) {
+            for (ui, (kind, number)) in columns
+                .iter_mut()
+                .zip([(InstallerKind::Offline, "01"), (InstallerKind::Web, "02")])
+            {
                 studio_card(ui, |ui| {
                     ui.colored_label(
                         palette.accent,
@@ -829,7 +832,9 @@ impl BuilderApp {
                     };
                     if installer_ready {
                         ui.label(match self.project.installer_kind {
-                            InstallerKind::Offline => "Normal Setup bulundu: distribution/TurkuazSetup.exe",
+                            InstallerKind::Offline => {
+                                "Normal Setup bulundu: distribution/TurkuazSetup.exe"
+                            }
                             InstallerKind::Web => "Web Installer bulundu: web/TurkuazWebSetup.exe",
                         });
                         ui.small("Üretilen EXE test çıktısıdır; gerçek yayından önce Authenticode ve Windows kabulü gerekir.");
@@ -931,11 +936,7 @@ impl BuilderApp {
     }
 
     fn show_editor_modal(&mut self, context: &egui::Context, is_building: bool) {
-        const TITLES: [&str; 3] = [
-            "Ürün bilgileri",
-            "Uygulama dosyaları",
-            "Setup tasarımı",
-        ];
+        const TITLES: [&str; 3] = ["Ürün bilgileri", "Uygulama dosyaları", "Setup tasarımı"];
         let title = if self.active_step == 3 {
             self.project.installer_kind.release_title()
         } else {
@@ -1138,88 +1139,88 @@ impl BuilderApp {
                 ui.add_space(12.0);
 
                 if self.project.installer_kind == InstallerKind::Offline {
-                studio_card(ui, |ui| {
-                    ui.heading("İmzalı kurulum çıktısı");
-                    ui.label("İmzalı manifesti, detached imzayı, yayıncı trust store dosyasını ve Windows setup GUI stub dosyasını seçin.");
-                    file_row(
-                        ui,
-                        "İmzalı manifest",
-                        &mut self.project.signed_manifest_path,
-                        "İmzalı yayın manifestini seçin",
-                        "YAML manifest",
-                        &["yaml", "yml"],
-                    );
-                    file_row(
-                        ui,
-                        "Detached imza",
-                        &mut self.project.signature_path,
-                        "Manifest imza dosyasını seçin",
-                        "İmza",
-                        &["p7s", "sig", "der"],
-                    );
-                    file_row(
-                        ui,
-                        "Yayıncı trust store",
-                        &mut self.project.trust_store_path,
-                        "Yayıncı trust store dosyasını seçin",
-                        "YAML trust store",
-                        &["yaml", "yml"],
-                    );
-                    file_row(
-                        ui,
-                        "Setup GUI stub",
-                        &mut self.project.setup_stub_path,
-                        "Turkuaz setup GUI stub dosyasını seçin",
-                        "Windows uygulaması",
-                        &["exe"],
-                    );
-                    file_row(
-                        ui,
-                        "NSIS yolu (isteğe bağlı)",
-                        &mut self.project.makensis_path,
-                        "NSIS makensis.exe dosyasını seçin",
-                        "Windows uygulaması",
-                        &["exe"],
-                    );
-                    ui.small("NSIS PATH üzerinde değilse makensis.exe yolunu seçin. İki çıktı birlikte hazırlanır: TurkuazSetup.exe ve zorunlu NSIS yedeği.");
-                    ui.small("Dağıtım klasöründeki manifest-trust.yaml dosyasını setup dosyalarının yanında tutun.");
-                });
-                ui.add_space(12.0);
+                    studio_card(ui, |ui| {
+                        ui.heading("İmzalı kurulum çıktısı");
+                        ui.label("İmzalı manifesti, detached imzayı, yayıncı trust store dosyasını ve Windows setup GUI stub dosyasını seçin.");
+                        file_row(
+                            ui,
+                            "İmzalı manifest",
+                            &mut self.project.signed_manifest_path,
+                            "İmzalı yayın manifestini seçin",
+                            "YAML manifest",
+                            &["yaml", "yml"],
+                        );
+                        file_row(
+                            ui,
+                            "Detached imza",
+                            &mut self.project.signature_path,
+                            "Manifest imza dosyasını seçin",
+                            "İmza",
+                            &["p7s", "sig", "der"],
+                        );
+                        file_row(
+                            ui,
+                            "Yayıncı trust store",
+                            &mut self.project.trust_store_path,
+                            "Yayıncı trust store dosyasını seçin",
+                            "YAML trust store",
+                            &["yaml", "yml"],
+                        );
+                        file_row(
+                            ui,
+                            "Setup GUI stub",
+                            &mut self.project.setup_stub_path,
+                            "Turkuaz setup GUI stub dosyasını seçin",
+                            "Windows uygulaması",
+                            &["exe"],
+                        );
+                        file_row(
+                            ui,
+                            "NSIS yolu (isteğe bağlı)",
+                            &mut self.project.makensis_path,
+                            "NSIS makensis.exe dosyasını seçin",
+                            "Windows uygulaması",
+                            &["exe"],
+                        );
+                        ui.small("NSIS PATH üzerinde değilse makensis.exe yolunu seçin. İki çıktı birlikte hazırlanır: TurkuazSetup.exe ve zorunlu NSIS yedeği.");
+                        ui.small("Dağıtım klasöründeki manifest-trust.yaml dosyasını setup dosyalarının yanında tutun.");
+                    });
+                    ui.add_space(12.0);
                 }
 
                 if self.project.installer_kind == InstallerKind::Web {
-                studio_card(ui, |ui| {
-                    ui.heading("Çevrimiçi WebSetup.exe");
-                    ui.label("Küçük WebSetup EXE dosyası uygulama paketini içine almaz. İmzalı HTTPS yayından indirir ve aynı güvenlik motoruyla kurar.");
-                    file_row(
-                        ui,
-                        "Yayıncı güven politikası",
-                        &mut self.project.trust_store_path,
-                        "Gerçek yayıncı trust store dosyasını seçin",
-                        "YAML güven politikası",
-                        &["yaml", "yml"],
-                    );
-                    file_row(
-                        ui,
-                        "WebSetup GUI stub",
-                        &mut self.project.setup_stub_path,
-                        "Turkuaz GUI setup stub dosyasını seçin",
-                        "Windows uygulaması",
-                        &["exe"],
-                    );
-                    text_row(
-                        ui,
-                        "İmzalı yayın manifesti HTTPS adresi",
-                        &mut self.project.web_manifest_url,
-                    );
-                    text_row(
-                        ui,
-                        "Detached imza HTTPS adresi (.p7s)",
-                        &mut self.project.web_signature_url,
-                    );
-                    ui.small("2 WebSetup oluştur düğmesi, yayıncı güven politikasını ve bu adresleri EXE içine ekler. Dosyayı yayınlamadan önce Authenticode ile imzalamalısınız.");
-                });
-                ui.add_space(12.0);
+                    studio_card(ui, |ui| {
+                        ui.heading("Çevrimiçi WebSetup.exe");
+                        ui.label("Küçük WebSetup EXE dosyası uygulama paketini içine almaz. İmzalı HTTPS yayından indirir ve aynı güvenlik motoruyla kurar.");
+                        file_row(
+                            ui,
+                            "Yayıncı güven politikası",
+                            &mut self.project.trust_store_path,
+                            "Gerçek yayıncı trust store dosyasını seçin",
+                            "YAML güven politikası",
+                            &["yaml", "yml"],
+                        );
+                        file_row(
+                            ui,
+                            "WebSetup GUI stub",
+                            &mut self.project.setup_stub_path,
+                            "Turkuaz GUI setup stub dosyasını seçin",
+                            "Windows uygulaması",
+                            &["exe"],
+                        );
+                        text_row(
+                            ui,
+                            "İmzalı yayın manifesti HTTPS adresi",
+                            &mut self.project.web_manifest_url,
+                        );
+                        text_row(
+                            ui,
+                            "Detached imza HTTPS adresi (.p7s)",
+                            &mut self.project.web_signature_url,
+                        );
+                        ui.small("2 WebSetup oluştur düğmesi, yayıncı güven politikasını ve bu adresleri EXE içine ekler. Dosyayı yayınlamadan önce Authenticode ile imzalamalısınız.");
+                    });
+                    ui.add_space(12.0);
                 }
 
                 studio_card(ui, |ui| {
@@ -1442,7 +1443,11 @@ impl BuilderApp {
 
     fn start_web_build(&mut self) {
         if self.project.installer_kind != InstallerKind::Web {
-            self.status = Some((false, "Bu proje Normal Setup türünde. Yeni bir Web Installer projesi oluşturun.".to_owned()));
+            self.status = Some((
+                false,
+                "Bu proje Normal Setup türünde. Yeni bir Web Installer projesi oluşturun."
+                    .to_owned(),
+            ));
             return;
         }
         for step in [0, 2, 3] {
@@ -1469,7 +1474,11 @@ impl BuilderApp {
 
     fn start_distribution(&mut self) {
         if self.project.installer_kind != InstallerKind::Offline {
-            self.status = Some((false, "Bu proje Web Installer türünde. Normal Setup için ayrı proje oluşturun.".to_owned()));
+            self.status = Some((
+                false,
+                "Bu proje Web Installer türünde. Normal Setup için ayrı proje oluşturun."
+                    .to_owned(),
+            ));
             return;
         }
         for step in [0, 2, 3] {
@@ -2207,8 +2216,7 @@ mod tests {
         web.installer_kind = InstallerKind::Web;
         web.web_manifest_url = "https://updates.example.test/stable.yaml".to_owned();
         let bytes = serde_json::to_vec(&web).expect("serialize web project");
-        let saved: SavedProject =
-            serde_json::from_slice(&bytes).expect("load web project");
+        let saved: SavedProject = serde_json::from_slice(&bytes).expect("load web project");
         assert_eq!(saved.installer_kind, InstallerKind::Web);
         assert_eq!(saved.web_manifest_url, web.web_manifest_url);
         assert_eq!(saved.schema_version, PROJECT_SCHEMA_VERSION);
