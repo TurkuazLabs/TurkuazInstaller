@@ -616,7 +616,10 @@ fn web_setup_info_command() -> Result<(), Box<dyn Error>> {
     }
     let path = absolute_path(Path::new(required(&values, "file")?))?;
     let config = web_setup::read_web_setup(&path)?.ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidData, "EXE has no WebSetup configuration.")
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "EXE has no WebSetup configuration.",
+        )
     })?;
     println!("WebSetup package: {}", config.package_id);
     println!("Signed release URL: {}", config.manifest_url);
