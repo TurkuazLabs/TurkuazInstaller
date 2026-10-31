@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.5.0
+// Version: 0.5.1
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -65,7 +65,7 @@ enum InstallerKind {
 impl InstallerKind {
     const fn label(self) -> &'static str {
         match self {
-            Self::Offline => "Normal Setup",
+            Self::Offline => "Tam Kurulum",
             Self::Web => "Web Installer",
         }
     }
@@ -408,7 +408,7 @@ impl eframe::App for BuilderApp {
                                 web_build_requested = true;
                             }
                         } else if ui
-                            .add_enabled(!is_building, egui::Button::new("2  Normal Setup oluştur"))
+                            .add_enabled(!is_building, egui::Button::new("2  Tam Kurulum oluştur"))
                             .clicked()
                         {
                             self.start_distribution();
@@ -833,7 +833,7 @@ impl BuilderApp {
                     if installer_ready {
                         ui.label(match self.project.installer_kind {
                             InstallerKind::Offline => {
-                                "Normal Setup bulundu: distribution/TurkuazSetup.exe"
+                                "Tam Kurulum bulundu: distribution/TurkuazSetup.exe"
                             }
                             InstallerKind::Web => "Web Installer bulundu: web/TurkuazWebSetup.exe",
                         });
@@ -1113,7 +1113,7 @@ impl BuilderApp {
             }
             _ => {
                 ui.label(match self.project.installer_kind {
-                    InstallerKind::Offline => "Önce uygulama paketini hazırlayın. İmzalı manifest, detached imza ve yayıncı güven dosyası hazır olunca Normal Setup oluşturabilirsiniz.",
+                    InstallerKind::Offline => "Önce uygulama paketini hazırlayın. İmzalı manifest, detached imza ve yayıncı güven dosyası hazır olunca Tam Kurulum oluşturabilirsiniz.",
                     InstallerKind::Web => "Önce uygulama paketini hazırlayın ve imzalı HTTPS yayını sunucunuza yükleyin. WebSetup küçük bir EXE üretir, uygulama paketini internetten indirir.",
                 });
                 ui.add_space(12.0);
@@ -1229,7 +1229,7 @@ impl BuilderApp {
                         egui::RichText::new("Yayın imzası ve güven politikası gerekir").strong(),
                     );
                     ui.label(match self.project.installer_kind {
-                        InstallerKind::Offline => "Önce release-manifest.draft.yaml dosyasını imzalayın; ardından imzalı manifest ve yayıncı güven dosyasıyla Normal Setup oluşturun.",
+                        InstallerKind::Offline => "Önce release-manifest.draft.yaml dosyasını imzalayın; ardından imzalı manifest ve yayıncı güven dosyasıyla Tam Kurulum oluşturun.",
                         InstallerKind::Web => "Önce imzalı release manifestini, detached imzayı ve paketi HTTPS sunucusuna yükleyin; WebSetup EXE'yi yayınlamadan önce imzalayın.",
                     });
                     ui.label("Dağıtım EXE dosyaları Authenticode ile imzalanmalıdır. Gizli imzalama anahtarı Setup Studio projesine eklenmez.");
@@ -1445,7 +1445,7 @@ impl BuilderApp {
         if self.project.installer_kind != InstallerKind::Web {
             self.status = Some((
                 false,
-                "Bu proje Normal Setup türünde. Yeni bir Web Installer projesi oluşturun."
+                "Bu proje Tam Kurulum türünde. Yeni bir Web Installer projesi oluşturun."
                     .to_owned(),
             ));
             return;
@@ -1476,7 +1476,7 @@ impl BuilderApp {
         if self.project.installer_kind != InstallerKind::Offline {
             self.status = Some((
                 false,
-                "Bu proje Web Installer türünde. Normal Setup için ayrı proje oluşturun."
+                "Bu proje Web Installer türünde. Tam Kurulum için ayrı proje oluşturun."
                     .to_owned(),
             ));
             return;
