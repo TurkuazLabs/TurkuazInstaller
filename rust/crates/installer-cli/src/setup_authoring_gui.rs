@@ -1567,8 +1567,7 @@ fn validate_web_project(project: &SavedProject) -> Result<(), String> {
         ("Manifest HTTPS", &project.web_manifest_url),
         ("İmza HTTPS", &project.web_signature_url),
     ] {
-        let url = Url::parse(value.trim())
-            .map_err(|_| format!("{name} bağlantısı geçersiz."))?;
+        let url = Url::parse(value.trim()).map_err(|_| format!("{name} bağlantısı geçersiz."))?;
         if url.scheme() != "https"
             || url.host_str().is_none()
             || !url.username().is_empty()
@@ -1576,7 +1575,9 @@ fn validate_web_project(project: &SavedProject) -> Result<(), String> {
             || url.fragment().is_some()
             || url.query().is_some()
         {
-            return Err(format!("{name} kullanıcı bilgisi içermeyen HTTPS URL olmalıdır."));
+            return Err(format!(
+                "{name} kullanıcı bilgisi içermeyen HTTPS URL olmalıdır."
+            ));
         }
     }
     Ok(())
