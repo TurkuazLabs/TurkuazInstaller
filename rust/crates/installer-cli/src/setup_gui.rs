@@ -1155,6 +1155,7 @@ fn run_installer_worker(
     let recovery_package_id = package_id.clone();
     let recovery_target = target.clone();
     let recovery_data_root = data_root.clone();
+    let is_uninstall = operation == "uninstall";
     let temporary_web_trust = match web_configuration.as_ref() {
         Some(config) if !is_uninstall => match stage_web_trust_policy(config) {
             Ok(value) => Some(value),
