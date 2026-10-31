@@ -1945,30 +1945,91 @@ fn resolve_path(value: &str) -> Result<PathBuf, String> {
     }
 }
 
-// BRK-WEB-SETUP-STUDIO: do not allow HTTP or credential-bearing publication URLs.
-fn validate_web_project(project: &SavedProject) -> Result<(), String> {
-    for (name, value) in [
-        ("Yayın dosyası HTTPS", &project.web_manifest_url),
-        ("İmza HTTPS", &project.web_signature_url),
-    ] {
-        let url = Url::parse(value.trim()).map_err(|_| format!("{name} bağlantısı geçersiz."))?;
-        if url.scheme() != "https"
-            || url.host_str().is_none()
-            || !url.username().is_empty()
-            || url.password().is_some()
-            || url.fragment().is_some()
-            || url.query().is_some()
-        {
-            return Err(format!(
-                "{name} kullanıcı bilgisi içermeyen HTTPS URL olmalıdır."
-            ));
-        }
+// BRK-WEB-SOURCE-002: signed HTTPS release URLs are resolved without embedding
+// tokens, granting access to private repositories or bypassing signature checks.
+fn validate_release_component(value: &str, label: &str, allow_plus: bool) -> Result<(), String> {
+    if value.is_empty()
+        || value.len() > 128
+        || value == "."
+        || value == ".."
+        || !value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric()
+                || matches!(byte, b'.' | b'_' | b'-')
+                || (allow_plus && byte == b'+')
+        })
+    {
+        return Err(format!(
+            "{label} yalnızca harf, rakam, nokta, tire ve alt çizgi içermelidir."
+        ));
     }
     Ok(())
 }
 
+fn validate_https_release_address(label: &str, value: &str) -> Result<(), String> {
+    if value.len() > 2048 {
+        return Err(format!("{label} bağlantısı çok uzun."));
+    }
+    let url = Url::parse(value.trim()).map_err(|_| format!("{label} bağlantısı geçersiz."))?;
+    if url.scheme() != "https"
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+        || url.query().is_some()
+    {
+        return Err(format!(
+            "{label} kullanıcı bilgisi veya erişim anahtarı içermeyen HTTPS URL olmalıdır."
+        ));
+    }
+    Ok(())
+}
+
+fn resolve_web_release_urls(project: &SavedProject) -> Result<(String, String), String> {
+    let (manifest, signature) = match project.web_release_source {
+        WebReleaseSource::Https => (
+            project.web_manifest_url.trim().to_owned(),
+            project.web_signature_url.trim().to_owned(),
+        ),
+        WebReleaseSource::GithubReleases => {
+            let repository = project.github_repository.trim();
+            let mut components = repository.split('/');
+            let owner = components.next().unwrap_or_default();
+            let name = components.next().unwrap_or_default();
+            if components.next().is_some() {
+                return Err("GitHub deposu sahip/depo biçiminde olmalıdır.".to_owned());
+            }
+            validate_release_component(owner, "GitHub sahibi", false)?;
+            validate_release_component(name, "GitHub depo adı", false)?;
+            let tag = project.github_release_tag.trim();
+            validate_release_component(tag, "GitHub yayın etiketi", true)?;
+            let manifest_asset = project.github_manifest_asset.trim();
+            let signature_asset = project.github_signature_asset.trim();
+            validate_release_component(manifest_asset, "Yayın dosyası adı", false)?;
+            validate_release_component(signature_asset, "İmza dosyası adı", false)?;
+            if manifest_asset == signature_asset {
+                return Err("Yayın dosyası ve imza dosyası farklı olmalıdır.".to_owned());
+            }
+            let release_base = format!("https://github.com/{owner}/{name}/releases/download/{tag}");
+            (
+                format!("{release_base}/{manifest_asset}"),
+                format!("{release_base}/{signature_asset}"),
+            )
+        }
+    };
+    validate_https_release_address("Yayın dosyası", &manifest)?;
+    validate_https_release_address("Yayın imzası", &signature)?;
+    if manifest == signature {
+        return Err("Yayın dosyası ve imzasının adresleri farklı olmalıdır.".to_owned());
+    }
+    Ok((manifest, signature))
+}
+
+fn validate_web_project(project: &SavedProject) -> Result<(), String> {
+    resolve_web_release_urls(project).map(|_| ())
+}
+
 fn build_web_distribution(project: SavedProject) -> Result<String, String> {
-    validate_web_project(&project)?;
+    let (manifest_url, signature_url) = resolve_web_release_urls(&project)?;
     let target_dir = package_output_directory(&project)?;
     if !regular_directory_exists(&target_dir) {
         return Err("Önce 1 Uygulama paketini hazırla işlemini tamamlayın.".to_owned());
@@ -1992,9 +2053,9 @@ fn build_web_distribution(project: SavedProject) -> Result<String, String> {
             .arg("--package-id")
             .arg(&project.package_id)
             .arg("--manifest-url")
-            .arg(&project.web_manifest_url)
+            .arg(&manifest_url)
             .arg("--signature-url")
-            .arg(&project.web_signature_url)
+            .arg(&signature_url)
             .arg("--trust-store")
             .arg(trust)
             .arg("--target")
