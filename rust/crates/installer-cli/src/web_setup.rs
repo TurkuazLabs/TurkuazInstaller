@@ -70,7 +70,8 @@ impl WebSetupConfig {
 
     fn to_bytes(&self) -> io::Result<Vec<u8>> {
         self.validate()?;
-        let bytes = serde_json::to_vec(self)?;
+        let bytes = serde_json::to_vec(self)
+            .map_err(|_| invalid("WebSetup configuration could not be serialized."))?;
         if bytes.is_empty() || bytes.len() > MAXIMUM_CONFIG_BYTES {
             return Err(invalid("WebSetup configuration exceeds the size limit."));
         }
@@ -183,7 +184,8 @@ pub fn read_web_setup(path: &Path) -> io::Result<Option<WebSetupConfig>> {
         if digest != expected_digest {
             return Err(invalid("Embedded WebSetup configuration SHA-256 mismatch."));
         }
-        let config: WebSetupConfig = serde_json::from_slice(&bytes)?;
+        let config: WebSetupConfig = serde_json::from_slice(&bytes)
+            .map_err(|_| invalid("Embedded WebSetup JSON is invalid."))?;
         config.validate()?;
         return Ok(Some(config));
     }
