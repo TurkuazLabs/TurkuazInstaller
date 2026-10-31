@@ -467,6 +467,56 @@ impl eframe::App for SetupApp {
                                 if self.operation != SetupOperation::Uninstall {
                                     ui.add_space(8.0);
                                     ui.group(|ui| {
+                                        ui.heading("Kurulum kaynağı");
+                                        ui.label(
+                                            "Çevrimdışı: setup içindeki paket. Çevrimiçi: HTTPS üzerinden doğrulanmış paket indir.",
+                                        );
+                                        ui.horizontal_wrapped(|ui| {
+                                            for source in [InstallSource::Offline, InstallSource::Online] {
+                                                if ui
+                                                    .selectable_value(
+                                                        &mut self.install_source,
+                                                        source,
+                                                        source.label(),
+                                                    )
+                                                    .changed()
+                                                {
+                                                    self.status = None;
+                                                    self.operation_completed = false;
+                                                }
+                                            }
+                                        });
+                                        if self.install_source == InstallSource::Online {
+                                            ui.add_space(8.0);
+                                            ui.label("İmzalı manifest HTTPS adresi");
+                                            if ui
+                                                .add(
+                                                    egui::TextEdit::singleline(&mut self.manifest_url)
+                                                        .hint_text("https://example.com/stable.yaml")
+                                                        .desired_width(ui.available_width()),
+                                                )
+                                                .changed()
+                                            {
+                                                self.status = None;
+                                            }
+                                            ui.label("Manifest imzası HTTPS adresi (.p7s)");
+                                            if ui
+                                                .add(
+                                                    egui::TextEdit::singleline(&mut self.signature_url)
+                                                        .hint_text("https://example.com/stable.yaml.p7s")
+                                                        .desired_width(ui.available_width()),
+                                                )
+                                                .changed()
+                                            {
+                                                self.status = None;
+                                            }
+                                            ui.small(
+                                                "İmzalı manifest ve yayıncı güven politikası doğrulanmadan paket kurulmaz.",
+                                            );
+                                        }
+                                    });
+                                    ui.add_space(8.0);
+                                    ui.group(|ui| {
                                         ui.heading("Yayıncı güven politikası");
                                         ui.label(
                                             "Yalnızca paketin yayıncısından aldığınız güven dosyasını seçin. Örnek dosyalar güvenilir değildir.",
@@ -527,7 +577,12 @@ impl eframe::App for SetupApp {
                                     setup_summary_row(ui, "İşlem", self.operation.label());
                                     setup_summary_row(ui, "Paket kimliği", &self.package_id);
                                     if self.operation != SetupOperation::Uninstall {
+                                        setup_summary_row(ui, "Kurulum kaynağı", self.install_source.label());
                                         setup_summary_row(ui, "Güven politikası", &self.trust_store);
+                                        if self.install_source == InstallSource::Online {
+                                            setup_summary_row(ui, "Manifest HTTPS", &self.manifest_url);
+                                            setup_summary_row(ui, "İmza HTTPS", &self.signature_url);
+                                        }
                                     }
                                     setup_summary_row(ui, "Kurulum klasörü", &self.target);
                                     setup_summary_row(ui, "Veri klasörü", &self.data_root);
@@ -818,6 +873,14 @@ impl SetupApp {
                         ));
                         return;
                     }
+                    if let Err(error) = validate_online_source(
+                        self.install_source,
+                        &self.manifest_url,
+                        &self.signature_url,
+                    ) {
+                        self.status = Some((false, error));
+                        return;
+                    }
                 }
                 self.status = None;
                 self.operation_completed = false;
@@ -866,6 +929,20 @@ impl SetupApp {
             return;
         }
 
+        if self.operation != SetupOperation::Uninstall {
+            if let Err(error) = validate_online_source(
+                self.install_source,
+                &self.manifest_url,
+                &self.signature_url,
+            ) {
+                self.status = Some((false, error));
+                return;
+            }
+        }
+
+        let source = self.install_source;
+        let manifest_url = self.manifest_url.trim().to_owned();
+        let signature_url = self.signature_url.trim().to_owned();
         let package_id = self.package_id.trim().to_owned();
         let trust_store = self.trust_store.trim().to_owned();
         let target = self.target.trim().to_owned();
@@ -884,6 +961,9 @@ impl SetupApp {
             run_installer_worker(
                 package_id,
                 trust_store,
+                source,
+                manifest_url,
+                signature_url,
                 target,
                 data_root,
                 operation,
