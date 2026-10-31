@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.19
+// Version: 0.2.20
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -52,6 +52,8 @@ use url::Url;
 #[cfg(all(windows, feature = "setup-gui"))]
 mod setup_gui;
 
+mod web_setup;
+
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod setup_authoring_gui;
 
@@ -67,6 +69,12 @@ async fn run() -> Result<(), Box<dyn Error>> {
     if matches!(std::env::args().nth(1).as_deref(), Some("--version" | "-V")) {
         println!("Turkuaz Installer v{}", env!("CARGO_PKG_VERSION"));
         return Ok(());
+    }
+    if std::env::args().nth(1).as_deref() == Some("build-web-setup") {
+        return build_web_setup_command();
+    }
+    if std::env::args().nth(1).as_deref() == Some("web-setup-info") {
+        return web_setup_info_command();
     }
     if std::env::args().nth(1).as_deref() == Some("build-distribution-pair") {
         return build_distribution_pair_command().await;
@@ -551,6 +559,68 @@ impl Drop for DistributionStagingGuard {
             let _ = std::fs::remove_dir_all(&self.0);
         }
     }
+}
+
+/// Create a preconfigured HTTPS bootstrap executable. The public signer policy is
+/// embedded for verification; no keys, secrets, or package payload are embedded.
+fn build_web_setup_command() -> Result<(), Box<dyn Error>> {
+    let values = parse_setup_bundle_options(&[
+        "stub",
+        "package-id",
+        "manifest-url",
+        "signature-url",
+        "trust-store",
+        "target",
+        "theme-config",
+        "output",
+    ])?;
+    if values.is_empty() {
+        println!(
+            "Usage: turkuaz-installer build-web-setup --stub GUI.exe --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE.yaml --target DIR --output WebSetup.exe [--theme-config FILE.json]"
+        );
+        return Ok(());
+    }
+    let trust_path = absolute_path(Path::new(required(&values, "trust-store")?))?;
+    let (trust_bytes, _) = read_bounded_local_file(&trust_path, 1024 * 1024)?;
+    let trust_policy = String::from_utf8(trust_bytes)?;
+    let theme = if let Some(path) = values.get("theme-config") {
+        let path = absolute_path(Path::new(path))?;
+        let (bytes, _) = read_bounded_local_file(&path, MAXIMUM_SETUP_THEME_BYTES)?;
+        SetupThemeConfig::from_json(&bytes)?
+    } else {
+        SetupThemeConfig::default()
+    };
+    let theme_json = String::from_utf8(theme.to_json()?)?;
+    let config = web_setup::WebSetupConfig {
+        schema_version: 1,
+        package_id: required(&values, "package-id")?.to_owned(),
+        manifest_url: required(&values, "manifest-url")?.to_owned(),
+        signature_url: required(&values, "signature-url")?.to_owned(),
+        install_target: required(&values, "target")?.to_owned(),
+        trust_policy,
+        theme_json,
+    };
+    let stub = absolute_path(Path::new(required(&values, "stub")?))?;
+    let output = absolute_path(Path::new(required(&values, "output")?))?;
+    web_setup::create_web_setup(&stub, &config, &output)?;
+    println!("WebSetup written: {}", output.display());
+    println!("The output EXE requires publisher Authenticode signing before release.");
+    Ok(())
+}
+
+fn web_setup_info_command() -> Result<(), Box<dyn Error>> {
+    let values = parse_setup_bundle_options(&["file"])?;
+    if values.is_empty() {
+        println!("Usage: turkuaz-installer web-setup-info --file WebSetup.exe");
+        return Ok(());
+    }
+    let path = absolute_path(Path::new(required(&values, "file")?))?;
+    let config = web_setup::read_web_setup(&path)?.ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidData, "EXE has no WebSetup configuration.")
+    })?;
+    println!("WebSetup package: {}", config.package_id);
+    println!("Signed release URL: {}", config.manifest_url);
+    Ok(())
 }
 
 fn build_self_extracting_setup_command() -> Result<(), Box<dyn Error>> {
@@ -1823,7 +1893,7 @@ fn parse_arguments() -> Result<(InstallerOperationType, HashMap<String, String>)
             println!(
                 "Usage:
   turkuaz-installer <install|update|repair|rollback> --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --data-root DIR
-  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer build-setup-bundle --package-id ID --manifest FILE --signature FILE --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup [--theme PRESET | --theme-config FILE.json]\n  turkuaz-installer build-self-extracting-setup --stub FILE.exe --bundle FILE.tzsetup --output FILE.exe\n  turkuaz-installer build-distribution-pair --package-id ID --stub FILE.exe --bundle FILE.tzsetup --trust-store FILE --output-dir DIR [--makensis PATH]\n  TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
+  turkuaz-installer verify --package-id ID --target DIR --data-root DIR\n  turkuaz-installer list --data-root DIR\n  turkuaz-installer launch --package-id ID --target DIR --data-root DIR --executable RELATIVE_PATH [-- APP_ARGS...]\n  turkuaz-installer recover --package-id ID --target DIR --data-root DIR\n  turkuaz-installer uninstall --package-id ID --target DIR --data-root DIR --confirm-uninstall YES\n  turkuaz-installer build-package --package-id ID --version SEMVER --source DIR --output FILE.tzpkg\n  turkuaz-installer build-setup-bundle --package-id ID --manifest FILE --signature FILE --trust-store FILE --package FILE.tzpkg --output FILE.tzsetup [--theme PRESET | --theme-config FILE.json]\n  turkuaz-installer build-self-extracting-setup --stub FILE.exe --bundle FILE.tzsetup --output FILE.exe\n  turkuaz-installer build-web-setup --stub GUI.exe --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store FILE --target DIR --output WebSetup.exe [--theme-config FILE.json]\n  turkuaz-installer web-setup-info --file WebSetup.exe\n  turkuaz-installer build-distribution-pair --package-id ID --stub FILE.exe --bundle FILE.tzsetup --trust-store FILE --output-dir DIR [--makensis PATH]\n  TurkuazSetup.exe install-self --package-id ID --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer install-bundle --package-id ID --bundle FILE.tzsetup --trust-store FILE --target DIR --data-root DIR --operation install|update|repair|rollback\n  turkuaz-installer describe-package --package-id ID --version SEMVER --channel stable|beta --package FILE.tzpkg --uri HTTPS_URL --target TARGET --output MANIFEST.yaml"
             );
             process::exit(0);
         }
