@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.3.1
+Version: 0.4.0
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -35,6 +35,18 @@ Ana ekranda solda numarali proje adimlari, ortada tek sutunlu ve kaydirilabilir 
 Uygulama paketi ve imzali dagitim cifti ana ekrandaki eylemlerden baslatilir. Gerekli bilgiler eksikse ilgili modal editor otomatik acilir.
 
 Projeler .tzproj uzantisiyla kaydedilip Setup Studio icinde tekrar acilabilir. Her uygulama paketi derlemesi, 04 Yayin ve cikti bolumunde secilen cikti ust klasoru altinda yeni bir {package-id}-{version} klasoru olusturur; var olan klasorun ustune yazmaz. Uygulama dosyalari bolumundeki kaynak klasoru cikti konumu degildir. Ana ekrandaki Olusturulan dosyalar paneli hedef klasoru ve gercekten mevcut application.tzpkg ile distribution/TurkuazSetup.exe dosyalarinin durumunu ayri gosterir. Cikti klasorunu ac dugmesi Windows Dosya Gezgini ile mevcut klasoru acar; EXE dosyasini calistirmaz. Ilk adim yalnizca .tzpkg dosyasi olusturur, kurulum EXE'si degildir. Imzali dagitim ciftini hazirlama adimi ayni klasordeki package ve theme dosyalarini kullanir ve yeni bir distribution alt klasoru olusturur.
+
+## WebSetup EXE cikarmak
+
+04 Yayin ve cikti bolumunde **Imzali yayin manifesti HTTPS adresi** ve **Detached imza HTTPS adresi** girilir. Yayinci trust store (public policy) ve Windows setup GUI stub'i secilmis olmalidir. Once **1 Uygulama paketini hazirla**, sonra **3 WebSetup olustur** kullanilir. Studio, ayni versiyonlu proje klasorunun `web/TurkuazWebSetup.exe` dosyasina bir Windows WebSetup stub'i uretir.
+
+WebSetup dosyasi .tzpkg uygulama verisini tasimaz. Icinde paket kimligi, imzali manifest ve imza HTTPS adresleri, hedef kurulum klasoru, secili setup temasi ve **public** yayinci trust store yer alir. Yayin private key'i, imzalama parolasi, kimlik dogrulama bilgisi veya paket verisi EXE icine eklenmez. Bu nedenle EXE genellikle full installer'dan kucuktur. Tek dosyadir; kullanicidan manuel manifest URL'si veya ayri trust-store dosyasi istemez.
+
+Kurulum sihirbazi, gomulu yayini kullanip mevcut CLI HTTPS indirme ve detached CMS, SHA-256 ve istege bagli Authenticode dogrulamasindan gecirir. URL'ler HTTPS olmali; HTTP, credentials, fragment reddedilir. Gomulu ayar ve theme bounded JSON ile SHA-256 footer kullanir; bu digest yayinci imzasi **degildir**. **WebSetup.exe dagitimdan once Authenticode ile imzalanmalidir.** EXE ve imzali release ayni yayinciya ait olmali; guven zinciri VM testinde kontrol edilir.
+
+Windows CI, imzasiz bir WebSetup test EXE'si olusturup config'i geri okur ve byte degistirilmis config'i reddeder. CI ornegi `.test` URL'si tasir, bu nedenle gercek bir sunucudan indirme yapmaz. Manuel temiz Windows VM'de gercek imzali HTTPS yayin test edilmedikce production hazir sayilmaz.
+
+Komut satiri ayni output'u `build-web-setup --stub GUI.exe --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store trust.yaml --target DIR --theme-config setup-theme.json --output WebSetup.exe` ile uretebilir. `web-setup-info --file WebSetup.exe` config'i ozetler (trust policy'yi yazdirmaz).
 
 ## Derleme ciktisi
 
