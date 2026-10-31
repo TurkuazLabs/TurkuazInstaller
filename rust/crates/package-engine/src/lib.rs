@@ -18,7 +18,7 @@ pub use setup_bundle::{
 };
 pub use setup_executable::{
     SetupExecutableError, create_self_extracting_setup, extract_embedded_setup_bundle,
-    read_embedded_setup_theme,
+    pe_unsigned_payload_end, read_embedded_setup_theme,
 };
 pub use setup_theme::{
     MAXIMUM_SETUP_THEME_BYTES, SetupThemeConfig, SetupThemeError, SetupThemePalette,
