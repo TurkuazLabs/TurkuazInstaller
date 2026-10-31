@@ -1652,8 +1652,8 @@ impl BuilderApp {
         };
         if let Some((request, result)) = outcome {
             self.source_check_receiver = None;
-            let still_current = source_check_request(&self.project)
-                .is_ok_and(|current| current == request);
+            let still_current =
+                source_check_request(&self.project).is_ok_and(|current| current == request);
             if !still_current {
                 self.source_check_result = None;
                 self.status = Some((
@@ -2144,10 +2144,7 @@ fn source_check_request(project: &SavedProject) -> Result<SourceCheckRequest, St
     PackageId::parse(&project.package_id)
         .map_err(|error| format!("Uygulama kimliği geçersiz: {error}"))?;
     let (manifest_url, signature_url) = resolve_web_release_urls(project)?;
-    let trust_file = require_regular_file(
-        "Yayıncı güven dosyası",
-        &project.trust_store_path,
-    )?;
+    let trust_file = require_regular_file("Yayıncı güven dosyası", &project.trust_store_path)?;
     Ok(SourceCheckRequest {
         package_id: project.package_id.trim().to_owned(),
         manifest_url,
@@ -2157,8 +2154,8 @@ fn source_check_request(project: &SavedProject) -> Result<SourceCheckRequest, St
 }
 
 fn run_source_check(request: &SourceCheckRequest) -> Result<String, String> {
-    let executable = std::env::current_exe()
-        .map_err(|error| format!("Kurulum motoru bulunamadı: {error}"))?;
+    let executable =
+        std::env::current_exe().map_err(|error| format!("Kurulum motoru bulunamadı: {error}"))?;
     let mut command = Command::new(executable);
     command
         .arg("check-release-source")
