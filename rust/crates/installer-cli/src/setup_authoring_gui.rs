@@ -469,7 +469,7 @@ impl eframe::App for BuilderApp {
                     let sections: [&str; 4] = [
                         "01   Ürün bilgileri",
                         "02   Uygulama dosyaları",
-                        "03   Setup tasarımı",
+                        "03   Kurulum tasarımı",
                         match self.project.installer_kind {
                             InstallerKind::Offline => "04   Çevrimdışı dağıtım",
                             InstallerKind::Web => "04   Çevrimiçi yayın",
@@ -692,7 +692,7 @@ impl BuilderApp {
                     .strong(),
             );
             ui.label(
-                "Önce ürün adını ve dosyalarını belirleyin. Sonra setup tasarımını düzenleyin.",
+                "Önce ürün adını ve dosyalarını belirleyin. Sonra kurulum ekranının görünümünü düzenleyin.",
             );
             ui.add_space(10.0);
             ui.horizontal_wrapped(|ui| {
@@ -736,9 +736,9 @@ impl BuilderApp {
         let signing_summary = match self.project.installer_kind {
             InstallerKind::Offline => {
                 if self.project.signed_manifest_path.trim().is_empty() {
-                    "İmzalı yayın bilgilerini, yayıncı güven dosyasını ve çıktı klasörünü belirleyin.".to_owned()
+                    "İmzalı yayın dosyasını, yayıncı güven dosyasını ve çıktı klasörünü belirleyin.".to_owned()
                 } else {
-                    "İmzalı manifest seçildi; diğer dağıtım girdilerini kontrol edin.".to_owned()
+                    "İmzalı yayın dosyası seçildi; diğer dağıtım ayarlarını kontrol edin.".to_owned()
                 }
             }
             InstallerKind::Web => {
@@ -835,7 +835,7 @@ impl BuilderApp {
                             InstallerKind::Offline => {
                                 "Tam Kurulum bulundu: distribution/TurkuazSetup.exe"
                             }
-                            InstallerKind::Web => "Web Installer bulundu: web/TurkuazWebSetup.exe",
+                            InstallerKind::Web => "Çevrimiçi Kurulum bulundu: web/TurkuazWebSetup.exe",
                         });
                         ui.small("Üretilen EXE test çıktısıdır; gerçek yayından önce Authenticode ve Windows kabulü gerekir.");
                     } else if package_ready {
@@ -1114,7 +1114,7 @@ impl BuilderApp {
             _ => {
                 ui.label(match self.project.installer_kind {
                     InstallerKind::Offline => "Önce uygulama paketini hazırlayın. İmzalı yayın bilgileri, yayın imzası ve yayıncı güven dosyası hazır olunca Tam Kurulum oluşturabilirsiniz.",
-                    InstallerKind::Web => "Önce uygulama paketini hazırlayın ve imzalı HTTPS yayını sunucunuza yükleyin. WebSetup küçük bir EXE üretir, uygulama paketini internetten indirir.",
+                    InstallerKind::Web => "Önce uygulama paketini hazırlayın, ardından imzalı yayın dosyalarını ve paketi HTTPS sunucunuza yükleyin. Çevrimiçi yükleyici uygulamayı buradan indirir.",
                 });
                 ui.add_space(12.0);
 
@@ -1133,7 +1133,7 @@ impl BuilderApp {
                     ui.separator();
                     ui.label("• application.tzpkg — kurulacak uygulama dosyaları");
                     ui.label("• release-manifest.draft.yaml — henüz imzalanmamış yayın bilgileri");
-                    ui.label("• setup-theme.json — son kullanıcı setup teması");
+                    ui.label("• setup-theme.json — son kullanıcının göreceği kurulum teması");
                     ui.label("• project.tzproj — tekrar açılabilir proje");
                 });
                 ui.add_space(12.0);
@@ -1146,7 +1146,7 @@ impl BuilderApp {
                             ui,
                             "İmzalı yayın dosyası",
                             &mut self.project.signed_manifest_path,
-                            "İmzalı yayın manifestini seçin",
+                            "İmzalı yayın dosyasını seçin",
                             "YAML yayın dosyası",
                             &["yaml", "yml"],
                         );
@@ -1190,8 +1190,8 @@ impl BuilderApp {
 
                 if self.project.installer_kind == InstallerKind::Web {
                     studio_card(ui, |ui| {
-                        ui.heading("Çevrimiçi WebSetup.exe");
-                        ui.label("Küçük WebSetup EXE dosyası uygulama paketini içine almaz. İmzalı HTTPS yayından indirir ve aynı güvenlik motoruyla kurar.");
+                        ui.heading("Çevrimiçi Kurulum dosyası");
+                        ui.label("Küçük kurulum dosyası uygulamanın tamamını içermez. Gerekli dosyaları imzalı HTTPS yayınından indirir.");
                         file_row(
                             ui,
                             "Yayıncı güven dosyası",
@@ -1229,7 +1229,7 @@ impl BuilderApp {
                         egui::RichText::new("Güvenli dağıtım için dijital imza gerekir").strong(),
                     );
                     ui.label(match self.project.installer_kind {
-                        InstallerKind::Offline => "Önce release-manifest.draft.yaml dosyasını imzalayın; ardından imzalı manifest ve yayıncı güven dosyasıyla Tam Kurulum oluşturun.",
+                        InstallerKind::Offline => "Önce release-manifest.draft.yaml yayın taslağını dijital olarak imzalayın. Ardından imzalı yayın dosyası ve yayıncı güven dosyasıyla Tam Kurulum oluşturun.",
                         InstallerKind::Web => "Önce imzalı yayın bilgilerini, imza dosyasını ve uygulama paketini HTTPS sunucusuna yükleyin; çevrimiçi yükleyiciyi yayınlamadan önce dijital olarak imzalayın.",
                     });
                     ui.label("Kurulum EXE dosyaları dağıtımdan önce dijital olarak (Authenticode) imzalanmalıdır. Gizli imzalama anahtarı projeye eklenmez.");
@@ -1445,7 +1445,7 @@ impl BuilderApp {
         if self.project.installer_kind != InstallerKind::Web {
             self.status = Some((
                 false,
-                "Bu proje Tam Kurulum türünde. Yeni bir Web Installer projesi oluşturun."
+                "Bu proje Tam Kurulum türünde. Yeni bir Çevrimiçi Kurulum projesi oluşturun."
                     .to_owned(),
             ));
             return;
@@ -1476,7 +1476,7 @@ impl BuilderApp {
         if self.project.installer_kind != InstallerKind::Offline {
             self.status = Some((
                 false,
-                "Bu proje Web Installer türünde. Tam Kurulum için ayrı proje oluşturun."
+                "Bu proje Çevrimiçi Kurulum türünde. Tam Kurulum için ayrı proje oluşturun."
                     .to_owned(),
             ));
             return;
@@ -1503,7 +1503,7 @@ impl BuilderApp {
             self.dialog_open = true;
             self.status = Some((
                 false,
-                "Dağıtım üretmek için imzalı manifest, imza, trust store ve setup stub seçin."
+                "Tam Kurulum oluşturmak için imzalı yayın dosyası, imza dosyası, yayıncı güven dosyası ve kurulum motorunu seçin."
                     .to_owned(),
             ));
             return;
@@ -1545,7 +1545,7 @@ impl BuilderApp {
 // not treated as proof that a file still exists.
 fn package_output_directory(project: &SavedProject) -> Result<PathBuf, String> {
     let package_id = PackageId::parse(&project.package_id)
-        .map_err(|error| format!("Paket kimliği geçersiz: {error}"))?;
+        .map_err(|error| format!("Uygulama kimliği geçersiz: {error}"))?;
     let version = SemanticVersion::parse(&project.version)
         .map_err(|error| format!("Sürüm geçersiz: {error}"))?;
     let parent = resolve_path(&project.output_directory)?;
@@ -1674,7 +1674,7 @@ fn validate_project_step(project: &SavedProject, step: usize) -> Result<(), Stri
             );
         }
         PackageId::parse(&project.package_id)
-            .map_err(|error| format!("Paket kimliği geçersiz: {error}"))?;
+            .map_err(|error| format!("Uygulama kimliği geçersiz: {error}"))?;
         SemanticVersion::parse(&project.version)
             .map_err(|error| format!("Sürüm geçersiz: {error}"))?;
         if !matches!(project.channel.as_str(), "stable" | "beta") {
@@ -1833,7 +1833,7 @@ fn resolve_path(value: &str) -> Result<PathBuf, String> {
 // BRK-WEB-SETUP-STUDIO: do not allow HTTP or credential-bearing publication URLs.
 fn validate_web_project(project: &SavedProject) -> Result<(), String> {
     for (name, value) in [
-        ("Manifest HTTPS", &project.web_manifest_url),
+        ("Yayın dosyası HTTPS", &project.web_manifest_url),
         ("İmza HTTPS", &project.web_signature_url),
     ] {
         let url = Url::parse(value.trim()).map_err(|_| format!("{name} bağlantısı geçersiz."))?;
@@ -1895,7 +1895,7 @@ fn build_web_distribution(project: SavedProject) -> Result<String, String> {
         return Err(error);
     }
     Ok(format!(
-        "WebSetup hazırlandı: {}. EXE dosyasını dağıtımdan önce Authenticode ile imzalayın.",
+        "Çevrimiçi yükleyici hazır: {}. Dağıtmadan önce EXE dosyasını dijital olarak (Authenticode) imzalayın.",
         output.display()
     ))
 }
@@ -2091,7 +2091,7 @@ fn build_project(project: SavedProject) -> Result<String, String> {
     }
 
     Ok(format!(
-        "Paket hazırlama tamamlandı.\nÇıktı klasörü: {}\nİçinde application.tzpkg, release-manifest.draft.yaml, setup-theme.json ve project.tzproj bulunur.\nDağıtılabilir setup.exe üretmek için manifesti imzalayıp gerçek yayıncı trust store ile paketlemeye devam edin.",
+        "Uygulama paketi hazır.\nÇıktı klasörü: {}\nDosyalar: application.tzpkg, release-manifest.draft.yaml, setup-theme.json ve project.tzproj.\nKurulum EXE dosyası üretmeden önce yayın taslağını imzalayın ve yayıncı güven dosyasını seçin.",
         final_directory.display()
     ))
 }
