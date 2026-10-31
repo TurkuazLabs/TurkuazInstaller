@@ -778,13 +778,27 @@ impl BuilderApp {
                         .to_owned()
                 }
             }
-            InstallerKind::Web => {
-                if self.project.web_manifest_url.trim().is_empty() {
-                    "İmzalı yayın dosyasının ve imzasının HTTPS adreslerini, ayrıca yayıncı güven dosyasını belirleyin.".to_owned()
-                } else {
-                    self.project.web_manifest_url.clone()
+            InstallerKind::Web => match self.project.web_release_source {
+                WebReleaseSource::GithubReleases => {
+                    if self.project.github_repository.trim().is_empty() {
+                        "GitHub deposunu, yayın etiketini ve dosya adlarını belirleyin."
+                            .to_owned()
+                    } else {
+                        format!(
+                            "GitHub Releases · {} · {}",
+                            self.project.github_repository, self.project.github_release_tag
+                        )
+                    }
                 }
-            }
+                WebReleaseSource::Https => {
+                    if self.project.web_manifest_url.trim().is_empty() {
+                        "İmzalı yayın dosyasının ve imzasının HTTPS adreslerini belirleyin."
+                            .to_owned()
+                    } else {
+                        self.project.web_manifest_url.clone()
+                    }
+                }
+            },
         };
         let sections = [
             (
@@ -1253,16 +1267,72 @@ impl BuilderApp {
                             "Windows uygulaması",
                             &["exe"],
                         );
-                        text_row(
-                            ui,
-                            "İmzalı yayın dosyasının HTTPS adresi",
-                            &mut self.project.web_manifest_url,
-                        );
-                        text_row(
-                            ui,
-                            "Yayın imzasının HTTPS adresi (.p7s)",
-                            &mut self.project.web_signature_url,
-                        );
+                        ui.add_space(8.0);
+                        field_label(ui, "Yayın kaynağı");
+                        egui::ComboBox::from_id_salt("web-release-provider")
+                            .width(ui.available_width())
+                            .selected_text(self.project.web_release_source.label())
+                            .show_ui(ui, |ui| {
+                                for source in [
+                                    WebReleaseSource::GithubReleases,
+                                    WebReleaseSource::Https,
+                                ] {
+                                    ui.selectable_value(
+                                        &mut self.project.web_release_source,
+                                        source,
+                                        source.label(),
+                                    );
+                                }
+                            });
+                        ui.add_space(8.0);
+                        match self.project.web_release_source {
+                            WebReleaseSource::GithubReleases => {
+                                text_row(
+                                    ui,
+                                    "Herkese açık GitHub deposu (sahip/depo)",
+                                    &mut self.project.github_repository,
+                                );
+                                text_row(
+                                    ui,
+                                    "Yayın etiketi (örnek: v1.0.0)",
+                                    &mut self.project.github_release_tag,
+                                );
+                                text_row(
+                                    ui,
+                                    "İmzalı yayın dosyasının adı",
+                                    &mut self.project.github_manifest_asset,
+                                );
+                                text_row(
+                                    ui,
+                                    "Yayın imza dosyasının adı (.p7s)",
+                                    &mut self.project.github_signature_asset,
+                                );
+                                ui.small(
+                                    "Dosyaları GitHub Releases'e ayrıca yükleyin. Stable/Beta seçimi bu etiketi otomatik değiştirmez. Özel depolar için erişim anahtarı EXE'ye eklenmez.",
+                                );
+                                if let Ok((manifest, signature)) =
+                                    resolve_web_release_urls(&self.project)
+                                {
+                                    ui.small(format!("Yayın adresi: {manifest}"));
+                                    ui.small(format!("İmza adresi: {signature}"));
+                                }
+                            }
+                            WebReleaseSource::Https => {
+                                text_row(
+                                    ui,
+                                    "İmzalı yayın dosyasının HTTPS adresi",
+                                    &mut self.project.web_manifest_url,
+                                );
+                                text_row(
+                                    ui,
+                                    "Yayın imzasının HTTPS adresi (.p7s)",
+                                    &mut self.project.web_signature_url,
+                                );
+                                ui.small(
+                                    "Kendi sunucunuz veya CDN adresini kullanabilirsiniz. Erişim anahtarı içeren bağlantılar desteklenmez.",
+                                );
+                            }
+                        }
                         ui.small("Çevrimiçi yükleyici oluştur düğmesi, yayıncı güven dosyasını ve bu adresleri EXE içine ekler. Yayınlamadan önce EXE'yi dijital olarak imzalayın.");
                     });
                     ui.add_space(12.0);
