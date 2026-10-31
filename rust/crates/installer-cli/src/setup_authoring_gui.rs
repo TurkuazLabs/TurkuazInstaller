@@ -325,7 +325,10 @@ impl eframe::App for BuilderApp {
                         } else {
                             egui::Color32::from_rgb(180, 45, 45)
                         },
-                        message.lines().next().unwrap_or("İşlem sonucu ana ekranda."),
+                        message
+                            .lines()
+                            .next()
+                            .unwrap_or("İşlem sonucu ana ekranda."),
                     );
                 } else if is_building {
                     ui.spinner();
@@ -564,16 +567,20 @@ impl BuilderApp {
                     .strong(),
             );
             ui.label(
-                egui::RichText::new("Uygulama dosyalarınızın bulunduğu kaynak klasörü ile çıktı klasörü farklıdır.")
-                    .size(13.0)
-                    .weak(),
+                egui::RichText::new(
+                    "Uygulama dosyalarınızın bulunduğu kaynak klasörü ile çıktı klasörü farklıdır.",
+                )
+                .size(13.0)
+                .weak(),
             );
             ui.add_space(8.0);
 
             match output {
                 Ok(ref package_directory) => {
                     ui.label(egui::RichText::new("Dosyaların kaydedileceği yer:").strong());
-                    ui.label(egui::RichText::new(package_directory.display().to_string()).monospace());
+                    ui.label(
+                        egui::RichText::new(package_directory.display().to_string()).monospace(),
+                    );
                     ui.add_space(7.0);
 
                     let package_ready =
@@ -586,7 +593,9 @@ impl BuilderApp {
                         ui.label("İmzalı yayının güvenlik kontrolleri ve gerçek Windows kurulum testi ayrıca yapılmalıdır.");
                     } else if package_ready {
                         ui.label("Uygulama paketi bulundu: application.tzpkg");
-                        ui.label("Henüz TurkuazSetup.exe yok. İmzalı yayın girdileriyle 2. adıma geçin.");
+                        ui.label(
+                            "Henüz TurkuazSetup.exe yok. İmzalı yayın girdileriyle 2. adıma geçin.",
+                        );
                     } else if is_building {
                         ui.horizontal(|ui| {
                             ui.spinner();
@@ -1789,6 +1798,17 @@ fn color(rgb: [u8; 3]) -> egui::Color32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn output_directory_is_derived_from_package_identity_and_version() {
+        let project = SavedProject::default();
+        let actual = package_output_directory(&project).expect("valid default project");
+        assert!(actual.ends_with("ornek.uygulamam-1.0.0"));
+
+        let mut invalid = project;
+        invalid.version = "wrong version".to_owned();
+        assert!(package_output_directory(&invalid).is_err());
+    }
 
     #[test]
     fn studio_palettes_keep_separate_light_and_dark_surfaces() {
