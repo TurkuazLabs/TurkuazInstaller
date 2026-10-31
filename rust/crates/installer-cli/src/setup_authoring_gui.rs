@@ -261,6 +261,2711 @@ impl eframe::App for BuilderApp {
         let mut save_requested = false;
 
         egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
+            ui.add_space(5.0);
+            ui.horizontal(|ui| {
+                let palette = studio_palette(ui.visuals().dark_mode);
+                ui.label(
+                    egui::RichText::new("T")
+                        .size(35.0)
+                        .strong()
+                        .color(palette.accent),
+                );
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new("Turkuaz Setup Studio").size(21.0).strong());
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Kurulum paketi oluşturma  •  v{}",
+                            env!("CARGO_PKG_VERSION")
+                        ))
+                        .size(12.0)
+                        .weak(),
+                    );
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let previous_appearance = self.appearance;
+                    egui::ComboBox::from_id_salt("builder-app-appearance")
+                        .selected_text(self.appearance.label())
+                        .width(86.0)
+                        .show_ui(ui, |ui| {
+                            for appearance in AppearancePreference::ALL {
+                                ui.selectable_value(
+                                    &mut self.appearance,
+                                    appearance,
+                                    appearance.label(),
+                                );
+                            }
+                        });
+                    appearance_changed = previous_appearance != self.appearance;
+                    ui.label("Görünüm");
+                    ui.separator();
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Kaydet"))
+                        .clicked()
+                    {
+                        save_requested = true;
+                    }
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Proje aç"))
+                        .clicked()
+                    {
+                        open_requested = true;
+                    }
+                });
+            });
+            ui.add_space(5.0);
+        });
+
+// Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
+// Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
+// Modul - Rust GUI Module
+// Version: 0.3.0
+// Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
+// Bagimli Oldugu Katman: View | Application
+
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path::{Component, Path, PathBuf},
+    process::{Command, Output},
+    sync::mpsc::{self, Receiver, TryRecvError},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use eframe::egui;
+use rfd::FileDialog;
+use serde::{Deserialize, Serialize};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
+use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePreset};
+use url::Url;
+
+const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
+const PROJECT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum AppearancePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl AppearancePreference {
+    const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::System => "Sistem",
+            Self::Light => "Açık",
+            Self::Dark => "Koyu",
+        }
+    }
+
+    const fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::System => egui::ThemePreference::System,
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SavedProject {
+    schema_version: u32,
+    product_name: String,
+    package_id: String,
+    version: String,
+    channel: String,
+    source_directory: String,
+    entry_point: String,
+    install_target: String,
+    output_directory: String,
+    theme_preset: String,
+    brand_name: String,
+    subtitle: String,
+    accent_color: String,
+    #[serde(default)]
+    signed_manifest_path: String,
+    #[serde(default)]
+    signature_path: String,
+    #[serde(default)]
+    trust_store_path: String,
+    #[serde(default)]
+    setup_stub_path: String,
+    #[serde(default)]
+    makensis_path: String,
+}
+
+impl Default for SavedProject {
+    fn default() -> Self {
+        let program_files = std::env::var_os("ProgramFiles")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
+        let output_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        Self {
+            schema_version: PROJECT_SCHEMA_VERSION,
+            product_name: "Uygulamam".to_owned(),
+            package_id: "ornek.uygulamam".to_owned(),
+            version: "1.0.0".to_owned(),
+            channel: "stable".to_owned(),
+            source_directory: String::new(),
+            entry_point: String::new(),
+            install_target: program_files
+                .join("Uygulamam")
+                .to_string_lossy()
+                .into_owned(),
+            output_directory: output_directory.to_string_lossy().into_owned(),
+            theme_preset: "turkuaz".to_owned(),
+            brand_name: "Uygulamam Kurulumu".to_owned(),
+            subtitle: "Kurulum sihirbazına hoş geldiniz".to_owned(),
+            accent_color: String::new(),
+            signed_manifest_path: String::new(),
+            signature_path: String::new(),
+            trust_store_path: String::new(),
+            setup_stub_path: String::new(),
+            makensis_path: String::new(),
+        }
+    }
+}
+
+struct BuilderApp {
+    project: SavedProject,
+    active_step: usize,
+    dialog_open: bool,
+    appearance: AppearancePreference,
+    preview_dark: bool,
+    status: Option<(bool, String)>,
+    build_receiver: Option<Receiver<Result<String, String>>>,
+    project_path: Option<PathBuf>,
+}
+
+impl Default for BuilderApp {
+    fn default() -> Self {
+        Self {
+            project: SavedProject::default(),
+            active_step: 0,
+            dialog_open: false,
+            appearance: AppearancePreference::System,
+            preview_dark: false,
+            status: None,
+            build_receiver: None,
+            project_path: None,
+        }
+    }
+}
+
+// BRK-SETUP-STUDIO-THEME: independent chrome palette, not the generated installer theme.
+#[derive(Clone, Copy)]
+struct StudioPalette {
+    accent: egui::Color32,
+    canvas: egui::Color32,
+    surface: egui::Color32,
+    input: egui::Color32,
+    border: egui::Color32,
+    hover: egui::Color32,
+}
+
+fn studio_palette(dark: bool) -> StudioPalette {
+    let rgb = egui::Color32::from_rgb;
+    if dark {
+        StudioPalette {
+            accent: rgb(61, 203, 198),
+            canvas: rgb(16, 24, 35),
+            surface: rgb(28, 39, 54),
+            input: rgb(36, 50, 66),
+            border: rgb(60, 77, 91),
+            hover: rgb(44, 65, 78),
+        }
+    } else {
+        StudioPalette {
+            accent: rgb(10, 126, 135),
+            canvas: rgb(242, 246, 249),
+            surface: rgb(255, 255, 255),
+            input: rgb(233, 241, 246),
+            border: rgb(211, 223, 233),
+            hover: rgb(222, 239, 242),
+        }
+    }
+}
+
+fn configure_studio_style(context: &egui::Context) {
+    // Register named text styles in both themes before the first frame.
+    // A missing style panics when Windows or the user switches appearance.
+    context.all_styles_mut(|style| {
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(24.0));
+        style.text_styles.insert(
+            egui::TextStyle::Name("PageTitle".into()),
+            egui::FontId::proportional(29.0),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Name("ProductName".into()),
+            egui::FontId::proportional(27.0),
+        );
+        style.spacing.item_spacing = egui::vec2(12.0, 9.0);
+        style.spacing.button_padding = egui::vec2(14.0, 8.0);
+        style.spacing.interact_size = egui::vec2(40.0, 36.0);
+        style.spacing.window_margin = egui::Margin::same(20);
+        style.spacing.menu_margin = egui::Margin::same(10);
+        style.visuals.window_corner_radius = egui::CornerRadius::same(14);
+        style.visuals.menu_corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.open.corner_radius = egui::CornerRadius::same(10);
+
+        let palette = studio_palette(style.visuals.dark_mode);
+        style.visuals.panel_fill = palette.canvas;
+        style.visuals.window_fill = palette.surface;
+        style.visuals.extreme_bg_color = palette.input;
+        style.visuals.faint_bg_color = palette.input;
+        style.visuals.window_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.hovered.bg_fill = palette.hover;
+        style.visuals.widgets.active.bg_fill = palette.hover;
+        style.visuals.selection.bg_fill = palette.accent;
+    });
+}
+
+pub fn run() -> eframe::Result {
+    let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1360.0, 860.0])
+            .with_min_inner_size([1024.0, 700.0])
+            .with_title(title.clone()),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        &title,
+        options,
+        Box::new(|creation_context| {
+            let context = &creation_context.egui_ctx;
+            context.set_theme(AppearancePreference::System.preference());
+            configure_studio_style(context);
+            Ok(Box::new(BuilderApp::default()))
+        }),
+    )
+}
+
+impl eframe::App for BuilderApp {
+    fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_build();
+
+        let is_building = self.build_receiver.is_some();
+        if is_building && context.input(|input| input.viewport().close_requested()) {
+            context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+
+        let mut appearance_changed = false;
+        let mut open_requested = false;
+        let mut save_requested = false;
+
+        egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("T")
+                        .size(32.0)
+                        .strong()
+                        .color(egui::Color32::from_rgb(18, 121, 132)),
+                );
+                ui.vertical(|ui| {
+                    ui.label(
+                        egui::RichText::new("Turkuaz Setup Studio")
+                            .text_style(egui::TextStyle::Name("ProductName".into()))
+                            .strong(),
+                    );
+                    ui.label(egui::RichText::new("Kurulum projeleri için çalışma alanı").weak());
+                    ui.small(format!("v{}", env!("CARGO_PKG_VERSION")));
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let previous_appearance = self.appearance;
+                    egui::ComboBox::from_id_salt("builder-app-appearance")
+                        .selected_text(self.appearance.label())
+                        .width(92.0)
+                        .show_ui(ui, |ui| {
+                            for appearance in AppearancePreference::ALL {
+                                ui.selectable_value(
+                                    &mut self.appearance,
+                                    appearance,
+                                    appearance.label(),
+                                );
+                            }
+                        });
+                    appearance_changed = previous_appearance != self.appearance;
+                    ui.label("Uygulama görünümü");
+                    ui.separator();
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Projeyi kaydet"))
+                        .clicked()
+                    {
+                        save_requested = true;
+                    }
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Proje aç"))
+                        .clicked()
+                    {
+                        open_requested = true;
+                    }
+                });
+            });
+        });
+
+        if appearance_changed {
+            context.set_theme(self.appearance.preference());
+            configure_studio_style(context);
+        }
+
+        egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
+            ui.add_space(4.0);
+            ui.separator();
+            ui.horizontal(|ui| {
+                let palette = studio_palette(ui.visuals().dark_mode);
+                if let Some((succeeded, message)) = &self.status {
+                    ui.colored_label(
+                        if *succeeded {
+                            palette.accent
+                        } else {
+                            egui::Color32::from_rgb(196, 76, 65)
+                        },
+                        message,
+                    );
+                } else if is_building {
+                    ui.spinner();
+                    ui.label("Paket dosyaları hazırlanıyor…");
+                } else {
+                    ui.label(
+                        egui::RichText::new("Önce paketi hazırlayın, ardından imzalı setup oluşturun.")
+                            .size(13.0)
+                            .weak(),
+                    );
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("2  İmzalı setup oluştur"))
+                        .clicked()
+                    {
+                        self.start_distribution();
+                    }
+                    if ui
+                        .add_enabled(
+                            !is_building,
+                            egui::Button::new("1  Uygulama paketini hazırla")
+                                .fill(egui::Color32::from_rgb(10, 126, 135)),
+                        )
+                        .clicked()
+                    {
+                        self.start_build();
+                    }
+                });
+            });
+            ui.add_space(5.0);
+        });
+
+        egui::SidePanel::left("setup-builder-menu")
+            .resizable(false)
+            .default_width(220.0)
+            .show(context, |ui| {
+                let palette = studio_palette(ui.visuals().dark_mode);
+                ui.colored_label(
+                    palette.accent,
+                    egui::RichText::new("PROJE ADIMLARI").size(12.0).strong(),
+                );
+                ui.add_space(9.0);
+                if navigation_item(ui, !self.dialog_open, "Genel bakış").clicked() {
+                    self.dialog_open = false;
+                    self.status = None;
+                }
+                ui.add_space(8.0);
+                for (index, label) in [
+                    "01   Ürün bilgileri",
+                    "02   Uygulama dosyaları",
+                    "03   Setup tasarımı",
+                    "04   Yayın ve çıktı",
+                ]
+                .iter()
+                .enumerate()
+                {
+                    if navigation_item(ui, self.dialog_open && self.active_step == index, label)
+                        .clicked()
+                        && !is_building
+                    {
+                        self.open_editor(index);
+                    }
+                    ui.add_space(4.0);
+                }
+                ui.add_space(16.0);
+                ui.separator();
+                ui.label(egui::RichText::new("ÇALIŞTIĞINIZ PROJE").size(12.0).weak());
+                ui.add_space(5.0);
+                ui.label(
+                    egui::RichText::new(&self.project.product_name)
+                        .size(17.0)
+                        .strong(),
+                );
+                ui.small(format!(
+                    "v{}  •  {}",
+                    self.project.version, self.project.channel
+                ));
+                if self.project.source_directory.trim().is_empty() {
+                    ui.add_space(9.0);
+                    ui.colored_label(palette.accent, "Sıradaki: Uygulama dosyalarını seç");
+                }
+            });
+
+        egui::SidePanel::right("setup-builder-preview")
+            .resizable(false)
+            .default_width(310.0)
+            .show(context, |ui| self.draw_preview(ui));
+
+        egui::CentralPanel::default().show(context, |ui| {
+            self.draw_workspace(ui);
+        });
+
+// Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
+// Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
+// Modul - Rust GUI Module
+// Version: 0.3.0
+// Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
+// Bagimli Oldugu Katman: View | Application
+
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path::{Component, Path, PathBuf},
+    process::{Command, Output},
+    sync::mpsc::{self, Receiver, TryRecvError},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use eframe::egui;
+use rfd::FileDialog;
+use serde::{Deserialize, Serialize};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
+use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePreset};
+use url::Url;
+
+const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
+const PROJECT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum AppearancePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl AppearancePreference {
+    const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::System => "Sistem",
+            Self::Light => "Açık",
+            Self::Dark => "Koyu",
+        }
+    }
+
+    const fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::System => egui::ThemePreference::System,
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SavedProject {
+    schema_version: u32,
+    product_name: String,
+    package_id: String,
+    version: String,
+    channel: String,
+    source_directory: String,
+    entry_point: String,
+    install_target: String,
+    output_directory: String,
+    theme_preset: String,
+    brand_name: String,
+    subtitle: String,
+    accent_color: String,
+    #[serde(default)]
+    signed_manifest_path: String,
+    #[serde(default)]
+    signature_path: String,
+    #[serde(default)]
+    trust_store_path: String,
+    #[serde(default)]
+    setup_stub_path: String,
+    #[serde(default)]
+    makensis_path: String,
+}
+
+impl Default for SavedProject {
+    fn default() -> Self {
+        let program_files = std::env::var_os("ProgramFiles")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
+        let output_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        Self {
+            schema_version: PROJECT_SCHEMA_VERSION,
+            product_name: "Uygulamam".to_owned(),
+            package_id: "ornek.uygulamam".to_owned(),
+            version: "1.0.0".to_owned(),
+            channel: "stable".to_owned(),
+            source_directory: String::new(),
+            entry_point: String::new(),
+            install_target: program_files
+                .join("Uygulamam")
+                .to_string_lossy()
+                .into_owned(),
+            output_directory: output_directory.to_string_lossy().into_owned(),
+            theme_preset: "turkuaz".to_owned(),
+            brand_name: "Uygulamam Kurulumu".to_owned(),
+            subtitle: "Kurulum sihirbazına hoş geldiniz".to_owned(),
+            accent_color: String::new(),
+            signed_manifest_path: String::new(),
+            signature_path: String::new(),
+            trust_store_path: String::new(),
+            setup_stub_path: String::new(),
+            makensis_path: String::new(),
+        }
+    }
+}
+
+struct BuilderApp {
+    project: SavedProject,
+    active_step: usize,
+    dialog_open: bool,
+    appearance: AppearancePreference,
+    preview_dark: bool,
+    status: Option<(bool, String)>,
+    build_receiver: Option<Receiver<Result<String, String>>>,
+    project_path: Option<PathBuf>,
+}
+
+impl Default for BuilderApp {
+    fn default() -> Self {
+        Self {
+            project: SavedProject::default(),
+            active_step: 0,
+            dialog_open: false,
+            appearance: AppearancePreference::System,
+            preview_dark: false,
+            status: None,
+            build_receiver: None,
+            project_path: None,
+        }
+    }
+}
+
+// BRK-SETUP-STUDIO-THEME: independent chrome palette, not the generated installer theme.
+#[derive(Clone, Copy)]
+struct StudioPalette {
+    accent: egui::Color32,
+    canvas: egui::Color32,
+    surface: egui::Color32,
+    input: egui::Color32,
+    border: egui::Color32,
+    hover: egui::Color32,
+}
+
+fn studio_palette(dark: bool) -> StudioPalette {
+    let rgb = egui::Color32::from_rgb;
+    if dark {
+        StudioPalette {
+            accent: rgb(61, 203, 198),
+            canvas: rgb(16, 24, 35),
+            surface: rgb(28, 39, 54),
+            input: rgb(36, 50, 66),
+            border: rgb(60, 77, 91),
+            hover: rgb(44, 65, 78),
+        }
+    } else {
+        StudioPalette {
+            accent: rgb(10, 126, 135),
+            canvas: rgb(242, 246, 249),
+            surface: rgb(255, 255, 255),
+            input: rgb(233, 241, 246),
+            border: rgb(211, 223, 233),
+            hover: rgb(222, 239, 242),
+        }
+    }
+}
+
+fn configure_studio_style(context: &egui::Context) {
+    // Register named text styles in both themes before the first frame.
+    // A missing style panics when Windows or the user switches appearance.
+    context.all_styles_mut(|style| {
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(24.0));
+        style.text_styles.insert(
+            egui::TextStyle::Name("PageTitle".into()),
+            egui::FontId::proportional(29.0),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Name("ProductName".into()),
+            egui::FontId::proportional(27.0),
+        );
+        style.spacing.item_spacing = egui::vec2(12.0, 9.0);
+        style.spacing.button_padding = egui::vec2(14.0, 8.0);
+        style.spacing.interact_size = egui::vec2(40.0, 36.0);
+        style.spacing.window_margin = egui::Margin::same(20);
+        style.spacing.menu_margin = egui::Margin::same(10);
+        style.visuals.window_corner_radius = egui::CornerRadius::same(14);
+        style.visuals.menu_corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.open.corner_radius = egui::CornerRadius::same(10);
+
+        let palette = studio_palette(style.visuals.dark_mode);
+        style.visuals.panel_fill = palette.canvas;
+        style.visuals.window_fill = palette.surface;
+        style.visuals.extreme_bg_color = palette.input;
+        style.visuals.faint_bg_color = palette.input;
+        style.visuals.window_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.hovered.bg_fill = palette.hover;
+        style.visuals.widgets.active.bg_fill = palette.hover;
+        style.visuals.selection.bg_fill = palette.accent;
+    });
+}
+
+pub fn run() -> eframe::Result {
+    let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1360.0, 860.0])
+            .with_min_inner_size([1024.0, 700.0])
+            .with_title(title.clone()),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        &title,
+        options,
+        Box::new(|creation_context| {
+            let context = &creation_context.egui_ctx;
+            context.set_theme(AppearancePreference::System.preference());
+            configure_studio_style(context);
+            Ok(Box::new(BuilderApp::default()))
+        }),
+    )
+}
+
+impl eframe::App for BuilderApp {
+    fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_build();
+
+        let is_building = self.build_receiver.is_some();
+        if is_building && context.input(|input| input.viewport().close_requested()) {
+            context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+
+        let mut appearance_changed = false;
+        let mut open_requested = false;
+        let mut save_requested = false;
+
+        egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
+            ui.add_space(5.0);
+            ui.horizontal(|ui| {
+                let palette = studio_palette(ui.visuals().dark_mode);
+                ui.label(
+                    egui::RichText::new("T")
+                        .size(35.0)
+                        .strong()
+                        .color(palette.accent),
+                );
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new("Turkuaz Setup Studio").size(21.0).strong());
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Kurulum paketi oluşturma  •  v{}",
+                            env!("CARGO_PKG_VERSION")
+                        ))
+                        .size(12.0)
+                        .weak(),
+                    );
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let previous_appearance = self.appearance;
+                    egui::ComboBox::from_id_salt("builder-app-appearance")
+                        .selected_text(self.appearance.label())
+                        .width(86.0)
+                        .show_ui(ui, |ui| {
+                            for appearance in AppearancePreference::ALL {
+                                ui.selectable_value(
+                                    &mut self.appearance,
+                                    appearance,
+                                    appearance.label(),
+                                );
+                            }
+                        });
+                    appearance_changed = previous_appearance != self.appearance;
+                    ui.label("Görünüm");
+                    ui.separator();
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Kaydet"))
+                        .clicked()
+                    {
+                        save_requested = true;
+                    }
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Proje aç"))
+                        .clicked()
+                    {
+                        open_requested = true;
+                    }
+                });
+            });
+            ui.add_space(5.0);
+        });
+
+// Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
+// Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
+// Modul - Rust GUI Module
+// Version: 0.3.0
+// Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
+// Bagimli Oldugu Katman: View | Application
+
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path::{Component, Path, PathBuf},
+    process::{Command, Output},
+    sync::mpsc::{self, Receiver, TryRecvError},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use eframe::egui;
+use rfd::FileDialog;
+use serde::{Deserialize, Serialize};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
+use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePreset};
+use url::Url;
+
+const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
+const PROJECT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum AppearancePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl AppearancePreference {
+    const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::System => "Sistem",
+            Self::Light => "Açık",
+            Self::Dark => "Koyu",
+        }
+    }
+
+    const fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::System => egui::ThemePreference::System,
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SavedProject {
+    schema_version: u32,
+    product_name: String,
+    package_id: String,
+    version: String,
+    channel: String,
+    source_directory: String,
+    entry_point: String,
+    install_target: String,
+    output_directory: String,
+    theme_preset: String,
+    brand_name: String,
+    subtitle: String,
+    accent_color: String,
+    #[serde(default)]
+    signed_manifest_path: String,
+    #[serde(default)]
+    signature_path: String,
+    #[serde(default)]
+    trust_store_path: String,
+    #[serde(default)]
+    setup_stub_path: String,
+    #[serde(default)]
+    makensis_path: String,
+}
+
+impl Default for SavedProject {
+    fn default() -> Self {
+        let program_files = std::env::var_os("ProgramFiles")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
+        let output_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        Self {
+            schema_version: PROJECT_SCHEMA_VERSION,
+            product_name: "Uygulamam".to_owned(),
+            package_id: "ornek.uygulamam".to_owned(),
+            version: "1.0.0".to_owned(),
+            channel: "stable".to_owned(),
+            source_directory: String::new(),
+            entry_point: String::new(),
+            install_target: program_files
+                .join("Uygulamam")
+                .to_string_lossy()
+                .into_owned(),
+            output_directory: output_directory.to_string_lossy().into_owned(),
+            theme_preset: "turkuaz".to_owned(),
+            brand_name: "Uygulamam Kurulumu".to_owned(),
+            subtitle: "Kurulum sihirbazına hoş geldiniz".to_owned(),
+            accent_color: String::new(),
+            signed_manifest_path: String::new(),
+            signature_path: String::new(),
+            trust_store_path: String::new(),
+            setup_stub_path: String::new(),
+            makensis_path: String::new(),
+        }
+    }
+}
+
+struct BuilderApp {
+    project: SavedProject,
+    active_step: usize,
+    dialog_open: bool,
+    appearance: AppearancePreference,
+    preview_dark: bool,
+    status: Option<(bool, String)>,
+    build_receiver: Option<Receiver<Result<String, String>>>,
+    project_path: Option<PathBuf>,
+}
+
+impl Default for BuilderApp {
+    fn default() -> Self {
+        Self {
+            project: SavedProject::default(),
+            active_step: 0,
+            dialog_open: false,
+            appearance: AppearancePreference::System,
+            preview_dark: false,
+            status: None,
+            build_receiver: None,
+            project_path: None,
+        }
+    }
+}
+
+// BRK-SETUP-STUDIO-THEME: independent chrome palette, not the generated installer theme.
+#[derive(Clone, Copy)]
+struct StudioPalette {
+    accent: egui::Color32,
+    canvas: egui::Color32,
+    surface: egui::Color32,
+    input: egui::Color32,
+    border: egui::Color32,
+    hover: egui::Color32,
+}
+
+fn studio_palette(dark: bool) -> StudioPalette {
+    let rgb = egui::Color32::from_rgb;
+    if dark {
+        StudioPalette {
+            accent: rgb(61, 203, 198),
+            canvas: rgb(16, 24, 35),
+            surface: rgb(28, 39, 54),
+            input: rgb(36, 50, 66),
+            border: rgb(60, 77, 91),
+            hover: rgb(44, 65, 78),
+        }
+    } else {
+        StudioPalette {
+            accent: rgb(10, 126, 135),
+            canvas: rgb(242, 246, 249),
+            surface: rgb(255, 255, 255),
+            input: rgb(233, 241, 246),
+            border: rgb(211, 223, 233),
+            hover: rgb(222, 239, 242),
+        }
+    }
+}
+
+fn configure_studio_style(context: &egui::Context) {
+    // Register named text styles in both themes before the first frame.
+    // A missing style panics when Windows or the user switches appearance.
+    context.all_styles_mut(|style| {
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(24.0));
+        style.text_styles.insert(
+            egui::TextStyle::Name("PageTitle".into()),
+            egui::FontId::proportional(29.0),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Name("ProductName".into()),
+            egui::FontId::proportional(27.0),
+        );
+        style.spacing.item_spacing = egui::vec2(12.0, 9.0);
+        style.spacing.button_padding = egui::vec2(14.0, 8.0);
+        style.spacing.interact_size = egui::vec2(40.0, 36.0);
+        style.spacing.window_margin = egui::Margin::same(20);
+        style.spacing.menu_margin = egui::Margin::same(10);
+        style.visuals.window_corner_radius = egui::CornerRadius::same(14);
+        style.visuals.menu_corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.open.corner_radius = egui::CornerRadius::same(10);
+
+        let palette = studio_palette(style.visuals.dark_mode);
+        style.visuals.panel_fill = palette.canvas;
+        style.visuals.window_fill = palette.surface;
+        style.visuals.extreme_bg_color = palette.input;
+        style.visuals.faint_bg_color = palette.input;
+        style.visuals.window_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.hovered.bg_fill = palette.hover;
+        style.visuals.widgets.active.bg_fill = palette.hover;
+        style.visuals.selection.bg_fill = palette.accent;
+    });
+}
+
+pub fn run() -> eframe::Result {
+    let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1360.0, 860.0])
+            .with_min_inner_size([1024.0, 700.0])
+            .with_title(title.clone()),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        &title,
+        options,
+        Box::new(|creation_context| {
+            let context = &creation_context.egui_ctx;
+            context.set_theme(AppearancePreference::System.preference());
+            configure_studio_style(context);
+            Ok(Box::new(BuilderApp::default()))
+        }),
+    )
+}
+
+impl eframe::App for BuilderApp {
+    fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_build();
+
+        let is_building = self.build_receiver.is_some();
+        if is_building && context.input(|input| input.viewport().close_requested()) {
+            context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+
+        let mut appearance_changed = false;
+        let mut open_requested = false;
+        let mut save_requested = false;
+
+        egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("T")
+                        .size(32.0)
+                        .strong()
+                        .color(egui::Color32::from_rgb(18, 121, 132)),
+                );
+                ui.vertical(|ui| {
+                    ui.label(
+                        egui::RichText::new("Turkuaz Setup Studio")
+                            .text_style(egui::TextStyle::Name("ProductName".into()))
+                            .strong(),
+                    );
+                    ui.label(egui::RichText::new("Kurulum projeleri için çalışma alanı").weak());
+                    ui.small(format!("v{}", env!("CARGO_PKG_VERSION")));
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let previous_appearance = self.appearance;
+                    egui::ComboBox::from_id_salt("builder-app-appearance")
+                        .selected_text(self.appearance.label())
+                        .width(92.0)
+                        .show_ui(ui, |ui| {
+                            for appearance in AppearancePreference::ALL {
+                                ui.selectable_value(
+                                    &mut self.appearance,
+                                    appearance,
+                                    appearance.label(),
+                                );
+                            }
+                        });
+                    appearance_changed = previous_appearance != self.appearance;
+                    ui.label("Uygulama görünümü");
+                    ui.separator();
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Projeyi kaydet"))
+                        .clicked()
+                    {
+                        save_requested = true;
+                    }
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Proje aç"))
+                        .clicked()
+                    {
+                        open_requested = true;
+                    }
+                });
+            });
+        });
+
+        if appearance_changed {
+            context.set_theme(self.appearance.preference());
+            configure_studio_style(context);
+        }
+
+        egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
+            ui.separator();
+            ui.horizontal(|ui| {
+                if let Some((succeeded, message)) = &self.status {
+                    ui.colored_label(
+                        if *succeeded {
+                            egui::Color32::from_rgb(35, 135, 75)
+                        } else {
+                            egui::Color32::from_rgb(180, 45, 45)
+                        },
+                        message,
+                    );
+                } else if is_building {
+                    ui.spinner();
+                    ui.label("Paket ve kurulum dosyaları hazırlanıyor…");
+                } else {
+                    ui.label("Bir bölümü düzenleyin veya derlemeyi başlatın.");
+                }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let distribution_clicked = ui
+                        .add_enabled(!is_building, egui::Button::new("İmzalı dağıtım çifti üret"))
+                        .clicked();
+                    if distribution_clicked {
+                        self.start_distribution();
+                    }
+
+                    let build_clicked = ui
+                        .add_enabled(
+                            !is_building,
+                            egui::Button::new("Uygulama paketini hazırla")
+                                .fill(egui::Color32::from_rgb(18, 121, 132)),
+                        )
+                        .clicked();
+                    if build_clicked {
+                        self.start_build();
+                    }
+                });
+            });
+        });
+
+        egui::SidePanel::left("setup-builder-menu")
+            .resizable(false)
+            .default_width(232.0)
+            .show(context, |ui| {
+                ui.label(egui::RichText::new("Çalışma alanı").size(19.0).strong());
+                ui.label(
+                    egui::RichText::new("Bölüm seçince düzenleme penceresi açılır.")
+                        .size(14.0)
+                        .weak(),
+                );
+                ui.add_space(12.0);
+
+                if navigation_item(ui, !self.dialog_open, "Genel bakış").clicked() {
+                    self.dialog_open = false;
+                    self.status = None;
+                }
+
+                ui.add_space(8.0);
+                ui.separator();
+                ui.label(
+                    egui::RichText::new("PROJE BÖLÜMLERİ")
+                        .size(12.0)
+                        .strong()
+                        .weak(),
+                );
+
+                const SECTIONS: [&str; 4] = [
+                    "Ürün bilgileri",
+                    "Uygulama dosyaları",
+                    "Setup tasarımı",
+                    "Yayın ve çıktı",
+                ];
+                for (index, label) in SECTIONS.iter().enumerate() {
+                    if navigation_item(ui, self.dialog_open && self.active_step == index, label)
+                        .clicked()
+                        && !is_building
+                    {
+                        self.open_editor(index);
+                    }
+                }
+
+                ui.add_space(14.0);
+                ui.separator();
+                ui.label(
+                    egui::RichText::new(&self.project.product_name)
+                        .size(18.0)
+                        .strong(),
+                );
+                ui.label(
+                    egui::RichText::new(&self.project.package_id)
+                        .size(13.0)
+                        .monospace()
+                        .weak(),
+                );
+                ui.label(
+                    egui::RichText::new(format!("v{}", self.project.version))
+                        .size(13.0)
+                        .weak(),
+                );
+            });
+
+        egui::SidePanel::right("setup-builder-preview")
+            .resizable(false)
+            .default_width(320.0)
+            .show(context, |ui| self.draw_preview(ui));
+
+        egui::CentralPanel::default().show(context, |ui| {
+            self.draw_workspace(ui);
+        });
+
+        if self.dialog_open && !is_building {
+            self.show_editor_modal(context, false);
+        }
+
+        if open_requested {
+            self.open_project();
+        }
+        if save_requested {
+            self.save_project();
+        }
+        if is_building {
+            context.request_repaint_after(Duration::from_millis(120));
+        }
+    }
+}
+
+impl BuilderApp {
+    fn draw_workspace(&mut self, ui: &mut egui::Ui) {
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                let palette = studio_palette(ui.visuals().dark_mode);
+                ui.add_space(6.0);
+                ui.colored_label(
+                    palette.accent,
+                    egui::RichText::new("KURULUM PROJESİ").size(12.0).strong(),
+                );
+                ui.label(
+                    egui::RichText::new("Uygulamanız için setup hazırlayın")
+                        .text_style(egui::TextStyle::Name("PageTitle".into()))
+                        .strong(),
+                );
+                ui.label("Dört adımda bilgileri tamamlayın. Sağdaki ekran, kullanıcıların göreceği kurulumu gösterir.");
+                ui.add_space(14.0);
+
+                studio_card(ui, |ui| {
+                    ui.label(
+                        egui::RichText::new("Nereden başlamalıyım?")
+                            .size(20.0)
+                            .strong(),
+                    );
+                    ui.add_space(4.0);
+                    ui.label("Önce uygulama adını ve dosyalarını seçin. Ardından setup görünümünü düzenleyin.");
+                    ui.add_space(12.0);
+                    ui.horizontal_wrapped(|ui| {
+                        if ui
+                            .add(
+                                egui::Button::new("Projeyi oluşturmaya başla")
+                                    .fill(egui::Color32::from_rgb(10, 126, 135)),
+                            )
+                            .clicked()
+                        {
+                            self.open_editor(0);
+                        }
+                        if ui.button("Uygulama klasörünü seç").clicked() {
+                            self.open_editor(1);
+                        }
+                    });
+                });
+                ui.add_space(18.0);
+                ui.label(egui::RichText::new("Proje ayarları").size(21.0).strong());
+                ui.label(
+                    egui::RichText::new("Bir bölümü düzenlemek için sağındaki düğmeye tıklayın.")
+                        .size(14.0)
+                        .weak(),
+                );
+                ui.add_space(9.0);
+
+                let theme_name = SetupThemePreset::ALL
+                    .into_iter()
+                    .find(|preset| preset.as_str() == self.project.theme_preset)
+                    .map(SetupThemePreset::label)
+                    .unwrap_or("Turkuaz");
+                let source_summary = if self.project.source_directory.trim().is_empty() {
+                    "Henüz klasör seçilmedi. Kurulacak program dosyalarını belirleyin.".to_owned()
+                } else {
+                    self.project.source_directory.clone()
+                };
+                let release_summary = if self.project.signed_manifest_path.trim().is_empty() {
+                    "Paket klasörü ve imzalı yayın dosyalarını burada belirleyin.".to_owned()
+                } else {
+                    "Manifest yolu belirlendi; diğer yayın dosyalarını da kontrol edin.".to_owned()
+                };
+                let sections = [
+                    (
+                        "Ürün bilgileri",
+                        format!(
+                            "{} • v{} • {}",
+                            self.project.product_name,
+                            self.project.version,
+                            self.project.channel
+                        ),
+                        "Uygulama adı, paket kimliği ve sürüm",
+                    ),
+                    (
+                        "Uygulama dosyaları",
+                        source_summary,
+                        "Kurulacak klasör ve açılacak EXE",
+                    ),
+                    (
+                        "Setup tasarımı",
+                        format!("{} teması • {}", theme_name, self.project.brand_name),
+                        "Son kullanıcının göreceği kurulum ekranı",
+                    ),
+                    (
+                        "Yayın ve çıktı",
+                        release_summary,
+                        "Paket çıkışı, imza ve dağıtım dosyaları",
+                    ),
+                ];
+                for (index, (title, summary, hint)) in sections.iter().enumerate() {
+                    if self.draw_section_row(ui, index, title, summary, hint) {
+                        self.open_editor(index);
+                    }
+                    ui.add_space(7.0);
+                }
+                ui.add_space(7.0);
+                ui.label(
+                    egui::RichText::new("Paket hazırlama işlemi, kurulum dosyasını imzalamaz.")
+                        .size(13.0)
+                        .weak(),
+                );
+                ui.label(
+                    egui::RichText::new("Dağıtılabilir EXE için imzalı manifest ve yayıncı güven dosyası gerekir.")
+                        .size(13.0)
+                        .weak(),
+                );
+                ui.add_space(12.0);
+            });
+    }
+
+    fn draw_section_row(
+        &self,
+        ui: &mut egui::Ui,
+        index: usize,
+        title: &str,
+        summary: &str,
+        hint: &str,
+    ) -> bool {
+        let mut clicked = false;
+        studio_card(ui, |ui| {
+            let palette = studio_palette(ui.visuals().dark_mode);
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(format!("{:02}", index + 1))
+                        .size(22.0)
+                        .strong()
+                        .color(palette.accent),
+                );
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new(title).size(18.0).strong());
+                    ui.label(egui::RichText::new(hint).size(13.0).weak());
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    clicked = ui.button("Düzenle").clicked();
+                });
+            });
+            ui.add_space(5.0);
+            ui.label(egui::RichText::new(summary).size(14.0));
+        });
+        clicked
+    }
+
+// Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
+// Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
+// Modul - Rust GUI Module
+// Version: 0.3.0
+// Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
+// Bagimli Oldugu Katman: View | Application
+
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path::{Component, Path, PathBuf},
+    process::{Command, Output},
+    sync::mpsc::{self, Receiver, TryRecvError},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use eframe::egui;
+use rfd::FileDialog;
+use serde::{Deserialize, Serialize};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
+use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePreset};
+use url::Url;
+
+const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
+const PROJECT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum AppearancePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl AppearancePreference {
+    const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::System => "Sistem",
+            Self::Light => "Açık",
+            Self::Dark => "Koyu",
+        }
+    }
+
+    const fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::System => egui::ThemePreference::System,
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SavedProject {
+    schema_version: u32,
+    product_name: String,
+    package_id: String,
+    version: String,
+    channel: String,
+    source_directory: String,
+    entry_point: String,
+    install_target: String,
+    output_directory: String,
+    theme_preset: String,
+    brand_name: String,
+    subtitle: String,
+    accent_color: String,
+    #[serde(default)]
+    signed_manifest_path: String,
+    #[serde(default)]
+    signature_path: String,
+    #[serde(default)]
+    trust_store_path: String,
+    #[serde(default)]
+    setup_stub_path: String,
+    #[serde(default)]
+    makensis_path: String,
+}
+
+impl Default for SavedProject {
+    fn default() -> Self {
+        let program_files = std::env::var_os("ProgramFiles")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
+        let output_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        Self {
+            schema_version: PROJECT_SCHEMA_VERSION,
+            product_name: "Uygulamam".to_owned(),
+            package_id: "ornek.uygulamam".to_owned(),
+            version: "1.0.0".to_owned(),
+            channel: "stable".to_owned(),
+            source_directory: String::new(),
+            entry_point: String::new(),
+            install_target: program_files
+                .join("Uygulamam")
+                .to_string_lossy()
+                .into_owned(),
+            output_directory: output_directory.to_string_lossy().into_owned(),
+            theme_preset: "turkuaz".to_owned(),
+            brand_name: "Uygulamam Kurulumu".to_owned(),
+            subtitle: "Kurulum sihirbazına hoş geldiniz".to_owned(),
+            accent_color: String::new(),
+            signed_manifest_path: String::new(),
+            signature_path: String::new(),
+            trust_store_path: String::new(),
+            setup_stub_path: String::new(),
+            makensis_path: String::new(),
+        }
+    }
+}
+
+struct BuilderApp {
+    project: SavedProject,
+    active_step: usize,
+    dialog_open: bool,
+    appearance: AppearancePreference,
+    preview_dark: bool,
+    status: Option<(bool, String)>,
+    build_receiver: Option<Receiver<Result<String, String>>>,
+    project_path: Option<PathBuf>,
+}
+
+impl Default for BuilderApp {
+    fn default() -> Self {
+        Self {
+            project: SavedProject::default(),
+            active_step: 0,
+            dialog_open: false,
+            appearance: AppearancePreference::System,
+            preview_dark: false,
+            status: None,
+            build_receiver: None,
+            project_path: None,
+        }
+    }
+}
+
+// BRK-SETUP-STUDIO-THEME: independent chrome palette, not the generated installer theme.
+#[derive(Clone, Copy)]
+struct StudioPalette {
+    accent: egui::Color32,
+    canvas: egui::Color32,
+    surface: egui::Color32,
+    input: egui::Color32,
+    border: egui::Color32,
+    hover: egui::Color32,
+}
+
+fn studio_palette(dark: bool) -> StudioPalette {
+    let rgb = egui::Color32::from_rgb;
+    if dark {
+        StudioPalette {
+            accent: rgb(61, 203, 198),
+            canvas: rgb(16, 24, 35),
+            surface: rgb(28, 39, 54),
+            input: rgb(36, 50, 66),
+            border: rgb(60, 77, 91),
+            hover: rgb(44, 65, 78),
+        }
+    } else {
+        StudioPalette {
+            accent: rgb(10, 126, 135),
+            canvas: rgb(242, 246, 249),
+            surface: rgb(255, 255, 255),
+            input: rgb(233, 241, 246),
+            border: rgb(211, 223, 233),
+            hover: rgb(222, 239, 242),
+        }
+    }
+}
+
+fn configure_studio_style(context: &egui::Context) {
+    // Register named text styles in both themes before the first frame.
+    // A missing style panics when Windows or the user switches appearance.
+    context.all_styles_mut(|style| {
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(24.0));
+        style.text_styles.insert(
+            egui::TextStyle::Name("PageTitle".into()),
+            egui::FontId::proportional(29.0),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Name("ProductName".into()),
+            egui::FontId::proportional(27.0),
+        );
+        style.spacing.item_spacing = egui::vec2(12.0, 9.0);
+        style.spacing.button_padding = egui::vec2(14.0, 8.0);
+        style.spacing.interact_size = egui::vec2(40.0, 36.0);
+        style.spacing.window_margin = egui::Margin::same(20);
+        style.spacing.menu_margin = egui::Margin::same(10);
+        style.visuals.window_corner_radius = egui::CornerRadius::same(14);
+        style.visuals.menu_corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.open.corner_radius = egui::CornerRadius::same(10);
+
+        let palette = studio_palette(style.visuals.dark_mode);
+        style.visuals.panel_fill = palette.canvas;
+        style.visuals.window_fill = palette.surface;
+        style.visuals.extreme_bg_color = palette.input;
+        style.visuals.faint_bg_color = palette.input;
+        style.visuals.window_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.hovered.bg_fill = palette.hover;
+        style.visuals.widgets.active.bg_fill = palette.hover;
+        style.visuals.selection.bg_fill = palette.accent;
+    });
+}
+
+pub fn run() -> eframe::Result {
+    let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1360.0, 860.0])
+            .with_min_inner_size([1024.0, 700.0])
+            .with_title(title.clone()),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        &title,
+        options,
+        Box::new(|creation_context| {
+            let context = &creation_context.egui_ctx;
+            context.set_theme(AppearancePreference::System.preference());
+            configure_studio_style(context);
+            Ok(Box::new(BuilderApp::default()))
+        }),
+    )
+}
+
+impl eframe::App for BuilderApp {
+    fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_build();
+
+        let is_building = self.build_receiver.is_some();
+        if is_building && context.input(|input| input.viewport().close_requested()) {
+            context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+
+        let mut appearance_changed = false;
+        let mut open_requested = false;
+        let mut save_requested = false;
+
+        egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
+            ui.add_space(5.0);
+            ui.horizontal(|ui| {
+                let palette = studio_palette(ui.visuals().dark_mode);
+                ui.label(
+                    egui::RichText::new("T")
+                        .size(35.0)
+                        .strong()
+                        .color(palette.accent),
+                );
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new("Turkuaz Setup Studio").size(21.0).strong());
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Kurulum paketi oluşturma  •  v{}",
+                            env!("CARGO_PKG_VERSION")
+                        ))
+                        .size(12.0)
+                        .weak(),
+                    );
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let previous_appearance = self.appearance;
+                    egui::ComboBox::from_id_salt("builder-app-appearance")
+                        .selected_text(self.appearance.label())
+                        .width(86.0)
+                        .show_ui(ui, |ui| {
+                            for appearance in AppearancePreference::ALL {
+                                ui.selectable_value(
+                                    &mut self.appearance,
+                                    appearance,
+                                    appearance.label(),
+                                );
+                            }
+                        });
+                    appearance_changed = previous_appearance != self.appearance;
+                    ui.label("Görünüm");
+                    ui.separator();
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Kaydet"))
+                        .clicked()
+                    {
+                        save_requested = true;
+                    }
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Proje aç"))
+                        .clicked()
+                    {
+                        open_requested = true;
+                    }
+                });
+            });
+            ui.add_space(5.0);
+        });
+
+// Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
+// Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
+// Modul - Rust GUI Module
+// Version: 0.3.0
+// Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
+// Bagimli Oldugu Katman: View | Application
+
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path::{Component, Path, PathBuf},
+    process::{Command, Output},
+    sync::mpsc::{self, Receiver, TryRecvError},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use eframe::egui;
+use rfd::FileDialog;
+use serde::{Deserialize, Serialize};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
+use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePreset};
+use url::Url;
+
+const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
+const PROJECT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum AppearancePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl AppearancePreference {
+    const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::System => "Sistem",
+            Self::Light => "Açık",
+            Self::Dark => "Koyu",
+        }
+    }
+
+    const fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::System => egui::ThemePreference::System,
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SavedProject {
+    schema_version: u32,
+    product_name: String,
+    package_id: String,
+    version: String,
+    channel: String,
+    source_directory: String,
+    entry_point: String,
+    install_target: String,
+    output_directory: String,
+    theme_preset: String,
+    brand_name: String,
+    subtitle: String,
+    accent_color: String,
+    #[serde(default)]
+    signed_manifest_path: String,
+    #[serde(default)]
+    signature_path: String,
+    #[serde(default)]
+    trust_store_path: String,
+    #[serde(default)]
+    setup_stub_path: String,
+    #[serde(default)]
+    makensis_path: String,
+}
+
+impl Default for SavedProject {
+    fn default() -> Self {
+        let program_files = std::env::var_os("ProgramFiles")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
+        let output_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        Self {
+            schema_version: PROJECT_SCHEMA_VERSION,
+            product_name: "Uygulamam".to_owned(),
+            package_id: "ornek.uygulamam".to_owned(),
+            version: "1.0.0".to_owned(),
+            channel: "stable".to_owned(),
+            source_directory: String::new(),
+            entry_point: String::new(),
+            install_target: program_files
+                .join("Uygulamam")
+                .to_string_lossy()
+                .into_owned(),
+            output_directory: output_directory.to_string_lossy().into_owned(),
+            theme_preset: "turkuaz".to_owned(),
+            brand_name: "Uygulamam Kurulumu".to_owned(),
+            subtitle: "Kurulum sihirbazına hoş geldiniz".to_owned(),
+            accent_color: String::new(),
+            signed_manifest_path: String::new(),
+            signature_path: String::new(),
+            trust_store_path: String::new(),
+            setup_stub_path: String::new(),
+            makensis_path: String::new(),
+        }
+    }
+}
+
+struct BuilderApp {
+    project: SavedProject,
+    active_step: usize,
+    dialog_open: bool,
+    appearance: AppearancePreference,
+    preview_dark: bool,
+    status: Option<(bool, String)>,
+    build_receiver: Option<Receiver<Result<String, String>>>,
+    project_path: Option<PathBuf>,
+}
+
+impl Default for BuilderApp {
+    fn default() -> Self {
+        Self {
+            project: SavedProject::default(),
+            active_step: 0,
+            dialog_open: false,
+            appearance: AppearancePreference::System,
+            preview_dark: false,
+            status: None,
+            build_receiver: None,
+            project_path: None,
+        }
+    }
+}
+
+// BRK-SETUP-STUDIO-THEME: independent chrome palette, not the generated installer theme.
+#[derive(Clone, Copy)]
+struct StudioPalette {
+    accent: egui::Color32,
+    canvas: egui::Color32,
+    surface: egui::Color32,
+    input: egui::Color32,
+    border: egui::Color32,
+    hover: egui::Color32,
+}
+
+fn studio_palette(dark: bool) -> StudioPalette {
+    let rgb = egui::Color32::from_rgb;
+    if dark {
+        StudioPalette {
+            accent: rgb(61, 203, 198),
+            canvas: rgb(16, 24, 35),
+            surface: rgb(28, 39, 54),
+            input: rgb(36, 50, 66),
+            border: rgb(60, 77, 91),
+            hover: rgb(44, 65, 78),
+        }
+    } else {
+        StudioPalette {
+            accent: rgb(10, 126, 135),
+            canvas: rgb(242, 246, 249),
+            surface: rgb(255, 255, 255),
+            input: rgb(233, 241, 246),
+            border: rgb(211, 223, 233),
+            hover: rgb(222, 239, 242),
+        }
+    }
+}
+
+fn configure_studio_style(context: &egui::Context) {
+    // Register named text styles in both themes before the first frame.
+    // A missing style panics when Windows or the user switches appearance.
+    context.all_styles_mut(|style| {
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(24.0));
+        style.text_styles.insert(
+            egui::TextStyle::Name("PageTitle".into()),
+            egui::FontId::proportional(29.0),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Name("ProductName".into()),
+            egui::FontId::proportional(27.0),
+        );
+        style.spacing.item_spacing = egui::vec2(12.0, 9.0);
+        style.spacing.button_padding = egui::vec2(14.0, 8.0);
+        style.spacing.interact_size = egui::vec2(40.0, 36.0);
+        style.spacing.window_margin = egui::Margin::same(20);
+        style.spacing.menu_margin = egui::Margin::same(10);
+        style.visuals.window_corner_radius = egui::CornerRadius::same(14);
+        style.visuals.menu_corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.open.corner_radius = egui::CornerRadius::same(10);
+
+        let palette = studio_palette(style.visuals.dark_mode);
+        style.visuals.panel_fill = palette.canvas;
+        style.visuals.window_fill = palette.surface;
+        style.visuals.extreme_bg_color = palette.input;
+        style.visuals.faint_bg_color = palette.input;
+        style.visuals.window_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.hovered.bg_fill = palette.hover;
+        style.visuals.widgets.active.bg_fill = palette.hover;
+        style.visuals.selection.bg_fill = palette.accent;
+    });
+}
+
+pub fn run() -> eframe::Result {
+    let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1360.0, 860.0])
+            .with_min_inner_size([1024.0, 700.0])
+            .with_title(title.clone()),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        &title,
+        options,
+        Box::new(|creation_context| {
+            let context = &creation_context.egui_ctx;
+            context.set_theme(AppearancePreference::System.preference());
+            configure_studio_style(context);
+            Ok(Box::new(BuilderApp::default()))
+        }),
+    )
+}
+
+impl eframe::App for BuilderApp {
+    fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_build();
+
+        let is_building = self.build_receiver.is_some();
+        if is_building && context.input(|input| input.viewport().close_requested()) {
+            context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+
+        let mut appearance_changed = false;
+        let mut open_requested = false;
+        let mut save_requested = false;
+
+        egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("T")
+                        .size(32.0)
+                        .strong()
+                        .color(egui::Color32::from_rgb(18, 121, 132)),
+                );
+                ui.vertical(|ui| {
+                    ui.label(
+                        egui::RichText::new("Turkuaz Setup Studio")
+                            .text_style(egui::TextStyle::Name("ProductName".into()))
+                            .strong(),
+                    );
+                    ui.label(egui::RichText::new("Kurulum projeleri için çalışma alanı").weak());
+                    ui.small(format!("v{}", env!("CARGO_PKG_VERSION")));
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let previous_appearance = self.appearance;
+                    egui::ComboBox::from_id_salt("builder-app-appearance")
+                        .selected_text(self.appearance.label())
+                        .width(92.0)
+                        .show_ui(ui, |ui| {
+                            for appearance in AppearancePreference::ALL {
+                                ui.selectable_value(
+                                    &mut self.appearance,
+                                    appearance,
+                                    appearance.label(),
+                                );
+                            }
+                        });
+                    appearance_changed = previous_appearance != self.appearance;
+                    ui.label("Uygulama görünümü");
+                    ui.separator();
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Projeyi kaydet"))
+                        .clicked()
+                    {
+                        save_requested = true;
+                    }
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Proje aç"))
+                        .clicked()
+                    {
+                        open_requested = true;
+                    }
+                });
+            });
+        });
+
+        if appearance_changed {
+            context.set_theme(self.appearance.preference());
+            configure_studio_style(context);
+        }
+
+        egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
+            ui.add_space(4.0);
+            ui.separator();
+            ui.horizontal(|ui| {
+                let palette = studio_palette(ui.visuals().dark_mode);
+                if let Some((succeeded, message)) = &self.status {
+                    ui.colored_label(
+                        if *succeeded {
+                            palette.accent
+                        } else {
+                            egui::Color32::from_rgb(196, 76, 65)
+                        },
+                        message,
+                    );
+                } else if is_building {
+                    ui.spinner();
+                    ui.label("Paket dosyaları hazırlanıyor…");
+                } else {
+                    ui.label(
+                        egui::RichText::new("Önce paketi hazırlayın, ardından imzalı setup oluşturun.")
+                            .size(13.0)
+                            .weak(),
+                    );
+                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("2  İmzalı setup oluştur"))
+                        .clicked()
+                    {
+                        self.start_distribution();
+                    }
+                    if ui
+                        .add_enabled(
+                            !is_building,
+                            egui::Button::new("1  Uygulama paketini hazırla")
+                                .fill(egui::Color32::from_rgb(10, 126, 135)),
+                        )
+                        .clicked()
+                    {
+                        self.start_build();
+                    }
+                });
+            });
+            ui.add_space(5.0);
+        });
+
+        egui::SidePanel::left("setup-builder-menu")
+            .resizable(false)
+            .default_width(220.0)
+            .show(context, |ui| {
+                let palette = studio_palette(ui.visuals().dark_mode);
+                ui.colored_label(
+                    palette.accent,
+                    egui::RichText::new("PROJE ADIMLARI").size(12.0).strong(),
+                );
+                ui.add_space(9.0);
+                if navigation_item(ui, !self.dialog_open, "Genel bakış").clicked() {
+                    self.dialog_open = false;
+                    self.status = None;
+                }
+                ui.add_space(8.0);
+                for (index, label) in [
+                    "01   Ürün bilgileri",
+                    "02   Uygulama dosyaları",
+                    "03   Setup tasarımı",
+                    "04   Yayın ve çıktı",
+                ]
+                .iter()
+                .enumerate()
+                {
+                    if navigation_item(ui, self.dialog_open && self.active_step == index, label)
+                        .clicked()
+                        && !is_building
+                    {
+                        self.open_editor(index);
+                    }
+                    ui.add_space(4.0);
+                }
+                ui.add_space(16.0);
+                ui.separator();
+                ui.label(egui::RichText::new("ÇALIŞTIĞINIZ PROJE").size(12.0).weak());
+                ui.add_space(5.0);
+                ui.label(
+                    egui::RichText::new(&self.project.product_name)
+                        .size(17.0)
+                        .strong(),
+                );
+                ui.small(format!(
+                    "v{}  •  {}",
+                    self.project.version, self.project.channel
+                ));
+                if self.project.source_directory.trim().is_empty() {
+                    ui.add_space(9.0);
+                    ui.colored_label(palette.accent, "Sıradaki: Uygulama dosyalarını seç");
+                }
+            });
+
+        egui::SidePanel::right("setup-builder-preview")
+            .resizable(false)
+            .default_width(310.0)
+            .show(context, |ui| self.draw_preview(ui));
+
+        egui::CentralPanel::default().show(context, |ui| {
+            self.draw_workspace(ui);
+        });
+
+// Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
+// Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
+// Modul - Rust GUI Module
+// Version: 0.3.0
+// Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
+// Bagimli Oldugu Katman: View | Application
+
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path::{Component, Path, PathBuf},
+    process::{Command, Output},
+    sync::mpsc::{self, Receiver, TryRecvError},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use eframe::egui;
+use rfd::FileDialog;
+use serde::{Deserialize, Serialize};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
+use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePreset};
+use url::Url;
+
+const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
+const PROJECT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum AppearancePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl AppearancePreference {
+    const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::System => "Sistem",
+            Self::Light => "Açık",
+            Self::Dark => "Koyu",
+        }
+    }
+
+    const fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::System => egui::ThemePreference::System,
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SavedProject {
+    schema_version: u32,
+    product_name: String,
+    package_id: String,
+    version: String,
+    channel: String,
+    source_directory: String,
+    entry_point: String,
+    install_target: String,
+    output_directory: String,
+    theme_preset: String,
+    brand_name: String,
+    subtitle: String,
+    accent_color: String,
+    #[serde(default)]
+    signed_manifest_path: String,
+    #[serde(default)]
+    signature_path: String,
+    #[serde(default)]
+    trust_store_path: String,
+    #[serde(default)]
+    setup_stub_path: String,
+    #[serde(default)]
+    makensis_path: String,
+}
+
+impl Default for SavedProject {
+    fn default() -> Self {
+        let program_files = std::env::var_os("ProgramFiles")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
+        let output_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        Self {
+            schema_version: PROJECT_SCHEMA_VERSION,
+            product_name: "Uygulamam".to_owned(),
+            package_id: "ornek.uygulamam".to_owned(),
+            version: "1.0.0".to_owned(),
+            channel: "stable".to_owned(),
+            source_directory: String::new(),
+            entry_point: String::new(),
+            install_target: program_files
+                .join("Uygulamam")
+                .to_string_lossy()
+                .into_owned(),
+            output_directory: output_directory.to_string_lossy().into_owned(),
+            theme_preset: "turkuaz".to_owned(),
+            brand_name: "Uygulamam Kurulumu".to_owned(),
+            subtitle: "Kurulum sihirbazına hoş geldiniz".to_owned(),
+            accent_color: String::new(),
+            signed_manifest_path: String::new(),
+            signature_path: String::new(),
+            trust_store_path: String::new(),
+            setup_stub_path: String::new(),
+            makensis_path: String::new(),
+        }
+    }
+}
+
+struct BuilderApp {
+    project: SavedProject,
+    active_step: usize,
+    dialog_open: bool,
+    appearance: AppearancePreference,
+    preview_dark: bool,
+    status: Option<(bool, String)>,
+    build_receiver: Option<Receiver<Result<String, String>>>,
+    project_path: Option<PathBuf>,
+}
+
+impl Default for BuilderApp {
+    fn default() -> Self {
+        Self {
+            project: SavedProject::default(),
+            active_step: 0,
+            dialog_open: false,
+            appearance: AppearancePreference::System,
+            preview_dark: false,
+            status: None,
+            build_receiver: None,
+            project_path: None,
+        }
+    }
+}
+
+// BRK-SETUP-STUDIO-THEME: independent chrome palette, not the generated installer theme.
+#[derive(Clone, Copy)]
+struct StudioPalette {
+    accent: egui::Color32,
+    canvas: egui::Color32,
+    surface: egui::Color32,
+    input: egui::Color32,
+    border: egui::Color32,
+    hover: egui::Color32,
+}
+
+fn studio_palette(dark: bool) -> StudioPalette {
+    let rgb = egui::Color32::from_rgb;
+    if dark {
+        StudioPalette {
+            accent: rgb(61, 203, 198),
+            canvas: rgb(16, 24, 35),
+            surface: rgb(28, 39, 54),
+            input: rgb(36, 50, 66),
+            border: rgb(60, 77, 91),
+            hover: rgb(44, 65, 78),
+        }
+    } else {
+        StudioPalette {
+            accent: rgb(10, 126, 135),
+            canvas: rgb(242, 246, 249),
+            surface: rgb(255, 255, 255),
+            input: rgb(233, 241, 246),
+            border: rgb(211, 223, 233),
+            hover: rgb(222, 239, 242),
+        }
+    }
+}
+
+fn configure_studio_style(context: &egui::Context) {
+    // Register named text styles in both themes before the first frame.
+    // A missing style panics when Windows or the user switches appearance.
+    context.all_styles_mut(|style| {
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(24.0));
+        style.text_styles.insert(
+            egui::TextStyle::Name("PageTitle".into()),
+            egui::FontId::proportional(29.0),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Name("ProductName".into()),
+            egui::FontId::proportional(27.0),
+        );
+        style.spacing.item_spacing = egui::vec2(12.0, 9.0);
+        style.spacing.button_padding = egui::vec2(14.0, 8.0);
+        style.spacing.interact_size = egui::vec2(40.0, 36.0);
+        style.spacing.window_margin = egui::Margin::same(20);
+        style.spacing.menu_margin = egui::Margin::same(10);
+        style.visuals.window_corner_radius = egui::CornerRadius::same(14);
+        style.visuals.menu_corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.open.corner_radius = egui::CornerRadius::same(10);
+
+        let palette = studio_palette(style.visuals.dark_mode);
+        style.visuals.panel_fill = palette.canvas;
+        style.visuals.window_fill = palette.surface;
+        style.visuals.extreme_bg_color = palette.input;
+        style.visuals.faint_bg_color = palette.input;
+        style.visuals.window_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.hovered.bg_fill = palette.hover;
+        style.visuals.widgets.active.bg_fill = palette.hover;
+        style.visuals.selection.bg_fill = palette.accent;
+    });
+}
+
+pub fn run() -> eframe::Result {
+    let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1360.0, 860.0])
+            .with_min_inner_size([1024.0, 700.0])
+            .with_title(title.clone()),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        &title,
+        options,
+        Box::new(|creation_context| {
+            let context = &creation_context.egui_ctx;
+            context.set_theme(AppearancePreference::System.preference());
+            configure_studio_style(context);
+            Ok(Box::new(BuilderApp::default()))
+        }),
+    )
+}
+
+impl eframe::App for BuilderApp {
+    fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_build();
+
+        let is_building = self.build_receiver.is_some();
+        if is_building && context.input(|input| input.viewport().close_requested()) {
+            context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+
+        let mut appearance_changed = false;
+        let mut open_requested = false;
+        let mut save_requested = false;
+
+        egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
+            ui.add_space(5.0);
+            ui.horizontal(|ui| {
+                let palette = studio_palette(ui.visuals().dark_mode);
+                ui.label(
+                    egui::RichText::new("T")
+                        .size(35.0)
+                        .strong()
+                        .color(palette.accent),
+                );
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new("Turkuaz Setup Studio").size(21.0).strong());
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "Kurulum paketi oluşturma  •  v{}",
+                            env!("CARGO_PKG_VERSION")
+                        ))
+                        .size(12.0)
+                        .weak(),
+                    );
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let previous_appearance = self.appearance;
+                    egui::ComboBox::from_id_salt("builder-app-appearance")
+                        .selected_text(self.appearance.label())
+                        .width(86.0)
+                        .show_ui(ui, |ui| {
+                            for appearance in AppearancePreference::ALL {
+                                ui.selectable_value(
+                                    &mut self.appearance,
+                                    appearance,
+                                    appearance.label(),
+                                );
+                            }
+                        });
+                    appearance_changed = previous_appearance != self.appearance;
+                    ui.label("Görünüm");
+                    ui.separator();
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Kaydet"))
+                        .clicked()
+                    {
+                        save_requested = true;
+                    }
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Proje aç"))
+                        .clicked()
+                    {
+                        open_requested = true;
+                    }
+                });
+            });
+            ui.add_space(5.0);
+        });
+
+// Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
+// Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
+// Modul - Rust GUI Module
+// Version: 0.3.0
+// Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
+// Bagimli Oldugu Katman: View | Application
+
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path::{Component, Path, PathBuf},
+    process::{Command, Output},
+    sync::mpsc::{self, Receiver, TryRecvError},
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use eframe::egui;
+use rfd::FileDialog;
+use serde::{Deserialize, Serialize};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
+use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePreset};
+use url::Url;
+
+const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
+const PROJECT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum AppearancePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl AppearancePreference {
+    const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::System => "Sistem",
+            Self::Light => "Açık",
+            Self::Dark => "Koyu",
+        }
+    }
+
+    const fn preference(self) -> egui::ThemePreference {
+        match self {
+            Self::System => egui::ThemePreference::System,
+            Self::Light => egui::ThemePreference::Light,
+            Self::Dark => egui::ThemePreference::Dark,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SavedProject {
+    schema_version: u32,
+    product_name: String,
+    package_id: String,
+    version: String,
+    channel: String,
+    source_directory: String,
+    entry_point: String,
+    install_target: String,
+    output_directory: String,
+    theme_preset: String,
+    brand_name: String,
+    subtitle: String,
+    accent_color: String,
+    #[serde(default)]
+    signed_manifest_path: String,
+    #[serde(default)]
+    signature_path: String,
+    #[serde(default)]
+    trust_store_path: String,
+    #[serde(default)]
+    setup_stub_path: String,
+    #[serde(default)]
+    makensis_path: String,
+}
+
+impl Default for SavedProject {
+    fn default() -> Self {
+        let program_files = std::env::var_os("ProgramFiles")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
+        let output_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+        Self {
+            schema_version: PROJECT_SCHEMA_VERSION,
+            product_name: "Uygulamam".to_owned(),
+            package_id: "ornek.uygulamam".to_owned(),
+            version: "1.0.0".to_owned(),
+            channel: "stable".to_owned(),
+            source_directory: String::new(),
+            entry_point: String::new(),
+            install_target: program_files
+                .join("Uygulamam")
+                .to_string_lossy()
+                .into_owned(),
+            output_directory: output_directory.to_string_lossy().into_owned(),
+            theme_preset: "turkuaz".to_owned(),
+            brand_name: "Uygulamam Kurulumu".to_owned(),
+            subtitle: "Kurulum sihirbazına hoş geldiniz".to_owned(),
+            accent_color: String::new(),
+            signed_manifest_path: String::new(),
+            signature_path: String::new(),
+            trust_store_path: String::new(),
+            setup_stub_path: String::new(),
+            makensis_path: String::new(),
+        }
+    }
+}
+
+struct BuilderApp {
+    project: SavedProject,
+    active_step: usize,
+    dialog_open: bool,
+    appearance: AppearancePreference,
+    preview_dark: bool,
+    status: Option<(bool, String)>,
+    build_receiver: Option<Receiver<Result<String, String>>>,
+    project_path: Option<PathBuf>,
+}
+
+impl Default for BuilderApp {
+    fn default() -> Self {
+        Self {
+            project: SavedProject::default(),
+            active_step: 0,
+            dialog_open: false,
+            appearance: AppearancePreference::System,
+            preview_dark: false,
+            status: None,
+            build_receiver: None,
+            project_path: None,
+        }
+    }
+}
+
+// BRK-SETUP-STUDIO-THEME: independent chrome palette, not the generated installer theme.
+#[derive(Clone, Copy)]
+struct StudioPalette {
+    accent: egui::Color32,
+    canvas: egui::Color32,
+    surface: egui::Color32,
+    input: egui::Color32,
+    border: egui::Color32,
+    hover: egui::Color32,
+}
+
+fn studio_palette(dark: bool) -> StudioPalette {
+    let rgb = egui::Color32::from_rgb;
+    if dark {
+        StudioPalette {
+            accent: rgb(61, 203, 198),
+            canvas: rgb(16, 24, 35),
+            surface: rgb(28, 39, 54),
+            input: rgb(36, 50, 66),
+            border: rgb(60, 77, 91),
+            hover: rgb(44, 65, 78),
+        }
+    } else {
+        StudioPalette {
+            accent: rgb(10, 126, 135),
+            canvas: rgb(242, 246, 249),
+            surface: rgb(255, 255, 255),
+            input: rgb(233, 241, 246),
+            border: rgb(211, 223, 233),
+            hover: rgb(222, 239, 242),
+        }
+    }
+}
+
+fn configure_studio_style(context: &egui::Context) {
+    // Register named text styles in both themes before the first frame.
+    // A missing style panics when Windows or the user switches appearance.
+    context.all_styles_mut(|style| {
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(24.0));
+        style.text_styles.insert(
+            egui::TextStyle::Name("PageTitle".into()),
+            egui::FontId::proportional(29.0),
+        );
+        style.text_styles.insert(
+            egui::TextStyle::Name("ProductName".into()),
+            egui::FontId::proportional(27.0),
+        );
+        style.spacing.item_spacing = egui::vec2(12.0, 9.0);
+        style.spacing.button_padding = egui::vec2(14.0, 8.0);
+        style.spacing.interact_size = egui::vec2(40.0, 36.0);
+        style.spacing.window_margin = egui::Margin::same(20);
+        style.spacing.menu_margin = egui::Margin::same(10);
+        style.visuals.window_corner_radius = egui::CornerRadius::same(14);
+        style.visuals.menu_corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(10);
+        style.visuals.widgets.open.corner_radius = egui::CornerRadius::same(10);
+
+        let palette = studio_palette(style.visuals.dark_mode);
+        style.visuals.panel_fill = palette.canvas;
+        style.visuals.window_fill = palette.surface;
+        style.visuals.extreme_bg_color = palette.input;
+        style.visuals.faint_bg_color = palette.input;
+        style.visuals.window_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.hovered.bg_fill = palette.hover;
+        style.visuals.widgets.active.bg_fill = palette.hover;
+        style.visuals.selection.bg_fill = palette.accent;
+    });
+}
+
+pub fn run() -> eframe::Result {
+    let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([1360.0, 860.0])
+            .with_min_inner_size([1024.0, 700.0])
+            .with_title(title.clone()),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        &title,
+        options,
+        Box::new(|creation_context| {
+            let context = &creation_context.egui_ctx;
+            context.set_theme(AppearancePreference::System.preference());
+            configure_studio_style(context);
+            Ok(Box::new(BuilderApp::default()))
+        }),
+    )
+}
+
+impl eframe::App for BuilderApp {
+    fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_build();
+
+        let is_building = self.build_receiver.is_some();
+        if is_building && context.input(|input| input.viewport().close_requested()) {
+            context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        }
+
+        let mut appearance_changed = false;
+        let mut open_requested = false;
+        let mut save_requested = false;
+
+        egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new("T")
