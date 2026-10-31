@@ -274,7 +274,7 @@ impl eframe::App for BuilderApp {
                             .text_style(egui::TextStyle::Name("ProductName".into()))
                             .strong(),
                     );
-                    ui.label(egui::RichText::new("Kurulum projeleri için çalışma alanı").weak());
+                    ui.label(egui::RichText::new("Windows kurulum paketi geliştirme").weak());
                     ui.small(format!("v{}", env!("CARGO_PKG_VERSION")));
                 });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -292,7 +292,7 @@ impl eframe::App for BuilderApp {
                             }
                         });
                     appearance_changed = previous_appearance != self.appearance;
-                    ui.label("Uygulama görünümü");
+                    ui.label("Görünüm");
                     ui.separator();
                     if ui
                         .add_enabled(!is_building, egui::Button::new("Projeyi kaydet"))
@@ -331,12 +331,12 @@ impl eframe::App for BuilderApp {
                     ui.spinner();
                     ui.label("Paket ve kurulum dosyaları hazırlanıyor…");
                 } else {
-                    ui.label("Bir bölümü düzenleyin veya derlemeyi başlatın.");
+                    ui.label("Önce uygulama paketini, sonra imzalı setup dosyasını oluşturun.");
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let distribution_clicked = ui
-                        .add_enabled(!is_building, egui::Button::new("İmzalı dağıtım çifti üret"))
+                        .add_enabled(!is_building, egui::Button::new("2  İmzalı setup oluştur"))
                         .clicked();
                     if distribution_clicked {
                         self.start_distribution();
@@ -345,7 +345,7 @@ impl eframe::App for BuilderApp {
                     let build_clicked = ui
                         .add_enabled(
                             !is_building,
-                            egui::Button::new("Uygulama paketini hazırla")
+                            egui::Button::new("1  Uygulama paketini hazırla")
                                 .fill(egui::Color32::from_rgb(18, 121, 132)),
                         )
                         .clicked();
@@ -358,9 +358,9 @@ impl eframe::App for BuilderApp {
 
         egui::SidePanel::left("setup-builder-menu")
             .resizable(false)
-            .default_width(232.0)
+            .default_width(220.0)
             .show(context, |ui| {
-                ui.label(egui::RichText::new("Çalışma alanı").size(19.0).strong());
+                ui.label(egui::RichText::new("Proje adımları").size(19.0).strong());
                 ui.label(
                     egui::RichText::new("Bölüm seçince düzenleme penceresi açılır.")
                         .size(14.0)
@@ -383,10 +383,10 @@ impl eframe::App for BuilderApp {
                 );
 
                 const SECTIONS: [&str; 4] = [
-                    "Ürün bilgileri",
-                    "Uygulama dosyaları",
-                    "Setup tasarımı",
-                    "Yayın ve çıktı",
+                    "01   Ürün bilgileri",
+                    "02   Uygulama dosyaları",
+                    "03   Setup tasarımı",
+                    "04   Yayın ve çıktı",
                 ];
                 for (index, label) in SECTIONS.iter().enumerate() {
                     if navigation_item(ui, self.dialog_open && self.active_step == index, label)
@@ -419,7 +419,7 @@ impl eframe::App for BuilderApp {
 
         egui::SidePanel::right("setup-builder-preview")
             .resizable(false)
-            .default_width(320.0)
+            .default_width(310.0)
             .show(context, |ui| self.draw_preview(ui));
 
         egui::CentralPanel::default().show(context, |ui| {
