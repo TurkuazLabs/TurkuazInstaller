@@ -498,11 +498,15 @@ impl eframe::App for SetupApp {
                                     ui.add_space(8.0);
                                     ui.group(|ui| {
                                         ui.heading("Kurulum kaynağı");
+                                        if self.web_configuration.is_some() {
+                                            ui.label("Çevrimiçi adresler ve yayıncı güven politikası WebSetup EXE içine gömülüdür.");
+                                        }
                                         ui.label(
                                             "Çevrimdışı: setup içindeki paket. Çevrimiçi: HTTPS üzerinden doğrulanmış paket indir.",
                                         );
-                                        ui.horizontal_wrapped(|ui| {
-                                            for source in [InstallSource::Offline, InstallSource::Online] {
+                                        ui.add_enabled_ui(self.web_configuration.is_none(), |ui| {
+                                            ui.horizontal_wrapped(|ui| {
+                                                for source in [InstallSource::Offline, InstallSource::Online] {
                                                 if ui
                                                     .selectable_value(
                                                         &mut self.install_source,
@@ -514,13 +518,15 @@ impl eframe::App for SetupApp {
                                                     self.status = None;
                                                     self.operation_completed = false;
                                                 }
-                                            }
+                                                }
+                                            });
                                         });
                                         if self.install_source == InstallSource::Online {
                                             ui.add_space(8.0);
                                             ui.label("İmzalı manifest HTTPS adresi");
                                             if ui
-                                                .add(
+                                                .add_enabled(
+                                                    self.web_configuration.is_none(),
                                                     egui::TextEdit::singleline(&mut self.manifest_url)
                                                         .hint_text("https://example.com/stable.yaml")
                                                         .desired_width(ui.available_width()),
@@ -531,7 +537,8 @@ impl eframe::App for SetupApp {
                                             }
                                             ui.label("Manifest imzası HTTPS adresi (.p7s)");
                                             if ui
-                                                .add(
+                                                .add_enabled(
+                                                    self.web_configuration.is_none(),
                                                     egui::TextEdit::singleline(&mut self.signature_url)
                                                         .hint_text("https://example.com/stable.yaml.p7s")
                                                         .desired_width(ui.available_width()),
@@ -551,7 +558,9 @@ impl eframe::App for SetupApp {
                                         ui.label(
                                             "Yalnızca paketin yayıncısından aldığınız güven dosyasını seçin. Örnek dosyalar güvenilir değildir.",
                                         );
-                                        if draw_trust_store_row(
+                                        if self.web_configuration.is_some() {
+                                            ui.label("Yayıncı güven politikası WebSetup.exe içinde mevcut; dosya seçmeniz gerekmez.");
+                                        } else if draw_trust_store_row(
                                             ui,
                                             &mut self.trust_store,
                                             "YAML güven dosyasını seçin",
@@ -608,7 +617,15 @@ impl eframe::App for SetupApp {
                                     setup_summary_row(ui, "Paket kimliği", &self.package_id);
                                     if self.operation != SetupOperation::Uninstall {
                                         setup_summary_row(ui, "Kurulum kaynağı", self.install_source.label());
-                                        setup_summary_row(ui, "Güven politikası", &self.trust_store);
+                                        setup_summary_row(
+                                            ui,
+                                            "Güven politikası",
+                                            if self.web_configuration.is_some() {
+                                                "WebSetup.exe içinde"
+                                            } else {
+                                                &self.trust_store
+                                            },
+                                        );
                                         if self.install_source == InstallSource::Online {
                                             setup_summary_row(ui, "Manifest HTTPS", &self.manifest_url);
                                             setup_summary_row(ui, "İmza HTTPS", &self.signature_url);
@@ -886,7 +903,7 @@ impl SetupApp {
                     return;
                 }
                 if self.operation != SetupOperation::Uninstall {
-                    if self.trust_store.trim().is_empty() {
+                    if self.web_configuration.is_none() && self.trust_store.trim().is_empty() {
                         self.status = Some((
                             false,
                             "Yayıncı güven politikası dosyası zorunludur.".to_owned(),
@@ -894,8 +911,9 @@ impl SetupApp {
                         return;
                     }
                     let trust_path = PathBuf::from(self.trust_store.trim());
-                    if !std::fs::symlink_metadata(trust_path)
-                        .is_ok_and(|metadata| metadata.file_type().is_file())
+                    if self.web_configuration.is_none()
+                        && !std::fs::symlink_metadata(trust_path)
+                            .is_ok_and(|metadata| metadata.file_type().is_file())
                     {
                         self.status = Some((
                             false,
@@ -946,7 +964,9 @@ impl SetupApp {
             self.status = Some((false, format!("Paket kimliği geçersiz: {error}")));
             return;
         }
-        if (self.operation != SetupOperation::Uninstall && self.trust_store.trim().is_empty())
+        if (self.operation != SetupOperation::Uninstall
+            && self.web_configuration.is_none()
+            && self.trust_store.trim().is_empty())
             || self.target.trim().is_empty()
             || self.data_root.trim().is_empty()
         {
@@ -968,6 +988,7 @@ impl SetupApp {
             }
         }
 
+        let web_configuration = self.web_configuration.clone();
         let source = self.install_source;
         let manifest_url = self.manifest_url.trim().to_owned();
         let signature_url = self.signature_url.trim().to_owned();
@@ -992,6 +1013,7 @@ impl SetupApp {
                 source,
                 manifest_url,
                 signature_url,
+                web_configuration,
                 target,
                 data_root,
                 operation,
@@ -1079,6 +1101,7 @@ fn run_installer_worker(
     source: InstallSource,
     manifest_url: String,
     signature_url: String,
+    web_configuration: Option<WebSetupConfig>,
     target: String,
     data_root: String,
     operation: String,
