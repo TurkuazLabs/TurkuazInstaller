@@ -52,14 +52,18 @@ impl WebSetupConfig {
                 || url.fragment().is_some()
                 || url.query().is_some()
             {
-                return Err(invalid("WebSetup release URLs must be credential-free HTTPS."));
+                return Err(invalid(
+                    "WebSetup release URLs must be credential-free HTTPS.",
+                ));
             }
         }
         if self.install_target.trim().is_empty()
             || self.install_target.chars().any(char::is_control)
             || self.trust_policy.trim().is_empty()
         {
-            return Err(invalid("WebSetup target or publisher trust policy is missing."));
+            return Err(invalid(
+                "WebSetup target or publisher trust policy is missing.",
+            ));
         }
         if self.trust_policy.len() > 1024 * 1024 {
             return Err(invalid("WebSetup publisher trust policy exceeds 1 MiB."));
@@ -108,7 +112,9 @@ pub fn create_web_setup(
     let unsigned_end = pe_unsigned_payload_end(stub_path)
         .map_err(|_| invalid("WebSetup stub does not have a supported PE layout."))?;
     if unsigned_end != metadata.len() {
-        return Err(invalid("WebSetup stub must be unsigned before attaching configuration."));
+        return Err(invalid(
+            "WebSetup stub must be unsigned before attaching configuration.",
+        ));
     }
     if !output_path
         .extension()
@@ -174,7 +180,9 @@ pub fn read_web_setup(path: &Path) -> io::Result<Option<WebSetupConfig>> {
         file.read_exact(&mut length)?;
         let length = u64::from_le_bytes(length);
         if length == 0 || length > MAXIMUM_CONFIG_BYTES as u64 || length > footer_start {
-            return Err(invalid("Embedded WebSetup configuration length is invalid."));
+            return Err(invalid(
+                "Embedded WebSetup configuration length is invalid.",
+            ));
         }
         let mut expected_digest = [0_u8; 32];
         file.read_exact(&mut expected_digest)?;
@@ -205,8 +213,7 @@ mod tests {
             signature_url: "https://example.test/stable.yaml.p7s".to_owned(),
             install_target: "C:\\Program Files\\Example".to_owned(),
             trust_policy: "schemaVersion: 1".to_owned(),
-            theme_json: String::from_utf8(SetupThemeConfig::default().to_json().unwrap())
-                .unwrap(),
+            theme_json: String::from_utf8(SetupThemeConfig::default().to_json().unwrap()).unwrap(),
         }
     }
 
