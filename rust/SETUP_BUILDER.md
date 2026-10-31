@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.2.0
+Version: 0.3.0
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -25,7 +25,7 @@ Argumansiz acildiginda Setup Studio penceresini gosterir. Windows CI, ayni dosya
 
 ## Proje calisma alani
 
-Ana ekranda soldaki proje menusu bolumleri acar, merkez alan proje ozetini gosterir ve sagdaki onizleme son kullanici setup temasini surekli gorunur tutar. Menu veya ozet kartindan bir bolum secildiginde form, arka plani kilitleyen modal pencerede acilir. Modal icindeki onceki/sonraki bolum dugmeleriyle ilerlenebilir.
+Ana ekranda solda numarali proje adimlari, ortada tek sutunlu ve kaydirilabilir duzenleme bolumleri, sagda son kullanici setup onizlemesi yer alir. Ust kisimdaki Proje ac ve Kaydet eylemleri, alt kisimdaki once paket hazirla ve sonra imzali setup olustur eylemlerinden ayri tutulur. Ilk acilista Projeye basla veya Uygulama dosyalarini sec eylemleri yeni kullaniciyi yonlendirir. Bir bolum secildiginde arka plani kilitleyen modal editor acilir. Modal icindeki onceki/sonraki bolum dugmeleriyle ilerlenebilir. Studio arayuzu Sistem/Acik/Koyu ayariyla kendi paletini degistirir; sagdaki onizlemenin Acik/Koyu secimi ise yalnizca olusturulacak setup temasinin onizlemesini etkiler. Bu iki gorunum ayari birbirine karistirilmaz.
 
 - Urun bilgileri: uygulama adi, paket kimligi, SemVer surumu ve stable/beta kanali.
 - Uygulama dosyalari: kaynak klasoru ve istege bagli goreli EXE yolu.
