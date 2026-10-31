@@ -610,10 +610,10 @@ impl BuilderApp {
         ui.add_space(8.0);
         let mut selected = None;
         ui.columns(2, |columns| {
-            for (ui, kind, number) in [
-                (&mut columns[0], InstallerKind::Offline, "01"),
-                (&mut columns[1], InstallerKind::Web, "02"),
-            ] {
+            for (ui, (kind, number)) in columns.iter_mut().zip([
+                (InstallerKind::Offline, "01"),
+                (InstallerKind::Web, "02"),
+            ]) {
                 studio_card(ui, |ui| {
                     ui.colored_label(
                         palette.accent,
@@ -676,7 +676,10 @@ impl BuilderApp {
                 .text_style(egui::TextStyle::Name("PageTitle".into()))
                 .strong(),
         );
-        ui.label("Dört basit adımda kurulum projenizi hazırlayın.");
+        ui.label(format!(
+            "{} projesi · Dört adımda kurulum projenizi hazırlayın.",
+            self.project.installer_kind.label()
+        ));
         ui.add_space(14.0);
 
         studio_card(ui, |ui| {
@@ -727,10 +730,21 @@ impl BuilderApp {
         } else {
             self.project.source_directory.clone()
         };
-        let signing_summary = if self.project.signed_manifest_path.trim().is_empty() {
-            "Paket çıktısı ve imzalı dağıtım girdilerini belirleyin.".to_owned()
-        } else {
-            "Manifest seçildi. Diğer yayın girdilerini kontrol edin.".to_owned()
+        let signing_summary = match self.project.installer_kind {
+            InstallerKind::Offline => {
+                if self.project.signed_manifest_path.trim().is_empty() {
+                    "İmzalı manifest, güven politikası ve paket çıktısını belirleyin.".to_owned()
+                } else {
+                    "İmzalı manifest seçildi; diğer dağıtım girdilerini kontrol edin.".to_owned()
+                }
+            }
+            InstallerKind::Web => {
+                if self.project.web_manifest_url.trim().is_empty() {
+                    "HTTPS manifest, imza ve yayıncı güven dosyasını belirleyin.".to_owned()
+                } else {
+                    self.project.web_manifest_url.clone()
+                }
+            }
         };
         let sections = [
             (
@@ -752,9 +766,9 @@ impl BuilderApp {
                 "Son kullanıcının göreceği kurulum ekranı",
             ),
             (
-                "Yayın ve çıktı",
+                self.project.installer_kind.release_title(),
                 signing_summary,
-                "Çıktı klasörü, imza ve çevrimiçi/çevrimdışı dağıtım",
+                "Çıktı klasörü ve seçilen yükleyiciye ait yayın ayarları",
             ),
         ];
         for (index, (title, summary, description)) in sections.iter().enumerate() {
@@ -809,17 +823,22 @@ impl BuilderApp {
                     );
                     let setup_ready =
                         regular_file_exists(&distribution_directory.join("TurkuazSetup.exe"));
-                    if web_ready {
-                        ui.label("Web Installer bulundu: web/TurkuazWebSetup.exe");
-                    }
-                    if setup_ready {
-                        ui.label("Kurulum dosyası bulundu: distribution/TurkuazSetup.exe");
-                        ui.label("İmzalı yayının güvenlik kontrolleri ve gerçek Windows kurulum testi ayrıca yapılmalıdır.");
+                    let installer_ready = match self.project.installer_kind {
+                        InstallerKind::Offline => setup_ready,
+                        InstallerKind::Web => web_ready,
+                    };
+                    if installer_ready {
+                        ui.label(match self.project.installer_kind {
+                            InstallerKind::Offline => "Normal Setup bulundu: distribution/TurkuazSetup.exe",
+                            InstallerKind::Web => "Web Installer bulundu: web/TurkuazWebSetup.exe",
+                        });
+                        ui.small("Üretilen EXE test çıktısıdır; gerçek yayından önce Authenticode ve Windows kabulü gerekir.");
                     } else if package_ready {
                         ui.label("Uygulama paketi bulundu: application.tzpkg");
-                        ui.label(
-                            "Henüz TurkuazSetup.exe yok. İmzalı yayın girdileriyle 2. adıma geçin.",
-                        );
+                        ui.label(format!(
+                            "Henüz {} EXE dosyası yok. 04. adımı tamamlayıp ikinci üretim düğmesine basın.",
+                            self.project.installer_kind.label()
+                        ));
                     } else if is_building {
                         ui.horizontal(|ui| {
                             ui.spinner();
@@ -912,13 +931,16 @@ impl BuilderApp {
     }
 
     fn show_editor_modal(&mut self, context: &egui::Context, is_building: bool) {
-        const TITLES: [&str; 4] = [
+        const TITLES: [&str; 3] = [
             "Ürün bilgileri",
             "Uygulama dosyaları",
             "Setup tasarımı",
-            "Yayın ve çıktı",
         ];
-        let title = TITLES[self.active_step];
+        let title = if self.active_step == 3 {
+            self.project.installer_kind.release_title()
+        } else {
+            TITLES[self.active_step]
+        };
         let mut close_requested = false;
         let mut next_requested = false;
         let mut previous_requested = false;
@@ -937,9 +959,10 @@ impl BuilderApp {
                 });
             });
             ui.label(
-                egui::RichText::new(
-                    "Düzenlemeler proje özetine ve setup önizlemesine anında yansır.",
-                )
+                egui::RichText::new(format!(
+                    "{} projesi · Düzenlemeler çalışma alanına ve setup önizlemesine yansır.",
+                    self.project.installer_kind.label()
+                ))
                 .size(15.0)
                 .weak(),
             );
@@ -1394,6 +1417,10 @@ impl BuilderApp {
     }
 
     fn start_web_build(&mut self) {
+        if self.project.installer_kind != InstallerKind::Web {
+            self.status = Some((false, "Bu proje Normal Setup türünde. Yeni bir Web Installer projesi oluşturun.".to_owned()));
+            return;
+        }
         for step in [0, 2, 3] {
             if let Err(error) = validate_project_step(&self.project, step) {
                 self.open_editor(step);
@@ -1417,6 +1444,10 @@ impl BuilderApp {
     }
 
     fn start_distribution(&mut self) {
+        if self.project.installer_kind != InstallerKind::Offline {
+            self.status = Some((false, "Bu proje Web Installer türünde. Normal Setup için ayrı proje oluşturun.".to_owned()));
+            return;
+        }
         for step in [0, 2, 3] {
             if let Err(error) = validate_project_step(&self.project, step) {
                 self.active_step = step;
