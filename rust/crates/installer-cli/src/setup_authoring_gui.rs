@@ -2203,6 +2203,8 @@ mod tests {
     #[test]
     fn saved_project_kind_preserves_legacy_offline_and_web_projects() {
         let legacy = SavedProject::default();
+        assert_eq!(InstallerKind::Offline.label(), "Tam Kurulum");
+        assert_eq!(InstallerKind::Web.label(), "Çevrimiçi Kurulum");
         let mut value = serde_json::to_value(&legacy).expect("serialize project");
         value
             .as_object_mut()
