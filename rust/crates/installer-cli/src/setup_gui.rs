@@ -17,10 +17,10 @@ use std::{
 
 use eframe::egui;
 use turkuaz_installer_domain::package_id::PackageId;
-use url::Url;
 use turkuaz_installer_package_engine::{
     SetupThemeConfig, SetupThemePalette, read_embedded_setup_theme,
 };
+use url::Url;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum AppearancePreference {
@@ -151,8 +151,7 @@ fn validate_online_source(
     if source == InstallSource::Online {
         validate_https_release_url(manifest_url)
             .map_err(|error| format!("Manifest URL: {error}"))?;
-        validate_https_release_url(signature_url)
-            .map_err(|error| format!("İmza URL: {error}"))?;
+        validate_https_release_url(signature_url).map_err(|error| format!("İmza URL: {error}"))?;
     }
     Ok(())
 }
@@ -930,11 +929,9 @@ impl SetupApp {
         }
 
         if self.operation != SetupOperation::Uninstall {
-            if let Err(error) = validate_online_source(
-                self.install_source,
-                &self.manifest_url,
-                &self.signature_url,
-            ) {
+            if let Err(error) =
+                validate_online_source(self.install_source, &self.manifest_url, &self.signature_url)
+            {
                 self.status = Some((false, error));
                 return;
             }
@@ -1238,7 +1235,10 @@ mod web_installer_tests {
     #[test]
     fn source_selects_existing_signed_online_cli_and_offline_self_extractor() {
         for operation in ["install", "update", "repair", "rollback"] {
-            assert_eq!(backend_subcommand(InstallSource::Online, operation), operation);
+            assert_eq!(
+                backend_subcommand(InstallSource::Online, operation),
+                operation
+            );
             assert_eq!(
                 backend_subcommand(InstallSource::Offline, operation),
                 "install-self"
@@ -1252,12 +1252,14 @@ mod web_installer_tests {
 
     #[test]
     fn online_release_requires_https_without_embedded_credentials() {
-        assert!(validate_online_source(
-            InstallSource::Online,
-            "https://updates.example.test/channel.yaml",
-            "https://updates.example.test/channel.yaml.p7s",
-        )
-        .is_ok());
+        assert!(
+            validate_online_source(
+                InstallSource::Online,
+                "https://updates.example.test/channel.yaml",
+                "https://updates.example.test/channel.yaml.p7s",
+            )
+            .is_ok()
+        );
 
         for invalid in [
             "",
@@ -1266,12 +1268,14 @@ mod web_installer_tests {
             "https://user:password@updates.example.test/channel.yaml",
             "https://updates.example.test/channel.yaml#fragment",
         ] {
-            assert!(validate_online_source(
-                InstallSource::Online,
-                invalid,
-                "https://updates.example.test/channel.yaml.p7s",
-            )
-            .is_err());
+            assert!(
+                validate_online_source(
+                    InstallSource::Online,
+                    invalid,
+                    "https://updates.example.test/channel.yaml.p7s",
+                )
+                .is_err()
+            );
         }
         assert!(validate_online_source(InstallSource::Offline, "", "").is_ok());
     }
