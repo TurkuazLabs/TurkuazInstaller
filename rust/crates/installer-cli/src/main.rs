@@ -628,8 +628,12 @@ async fn check_release_source_command() -> Result<(), Box<dyn Error>> {
 
     let (manifest, manifest_length) =
         read_bounded_https(&http_client, &manifest_url, MAXIMUM_MANIFEST_BYTES).await?;
-    let (signature, signature_length) =
-        read_bounded_https(&http_client, &signature_url, MAXIMUM_DETACHED_SIGNATURE_BYTES).await?;
+    let (signature, signature_length) = read_bounded_https(
+        &http_client,
+        &signature_url,
+        MAXIMUM_DETACHED_SIGNATURE_BYTES,
+    )
+    .await?;
     let trust_store = YamlManifestTrustPolicyRepository::new(trust_path)?;
     let release = read_verified_release(
         &mut io::Cursor::new(manifest),
