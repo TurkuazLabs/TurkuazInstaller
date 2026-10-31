@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.0
+// Version: 0.6.1
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -190,6 +190,18 @@ impl Default for SavedProject {
     }
 }
 
+// BRK-WEB-RELEASE-CHECK-002: compare request details when async results return.
+// Changing projects or source URLs invalidates previous test status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SourceCheckRequest {
+    package_id: String,
+    manifest_url: String,
+    signature_url: String,
+    trust_file: PathBuf,
+}
+
+type SourceCheckResponse = (SourceCheckRequest, Result<String, String>);
+
 struct BuilderApp {
     project: SavedProject,
     workspace_open: bool,
@@ -201,6 +213,8 @@ struct BuilderApp {
     preview_dark: bool,
     status: Option<(bool, String)>,
     build_receiver: Option<Receiver<Result<String, String>>>,
+    source_check_receiver: Option<Receiver<SourceCheckResponse>>,
+    source_check_result: Option<(SourceCheckRequest, bool, String)>,
     project_path: Option<PathBuf>,
 }
 
@@ -217,6 +231,8 @@ impl Default for BuilderApp {
             preview_dark: false,
             status: None,
             build_receiver: None,
+            source_check_receiver: None,
+            source_check_result: None,
             project_path: None,
         }
     }
@@ -332,6 +348,7 @@ pub fn run() -> eframe::Result {
 impl eframe::App for BuilderApp {
     fn update(&mut self, context: &egui::Context, _frame: &mut eframe::Frame) {
         self.poll_build();
+        self.poll_source_check();
 
         let is_building = self.build_receiver.is_some();
         if is_building && context.input(|input| input.viewport().close_requested()) {
@@ -569,7 +586,7 @@ impl eframe::App for BuilderApp {
         if web_build_requested {
             self.start_web_build();
         }
-        if is_building {
+        if is_building || self.source_check_receiver.is_some() {
             context.request_repaint_after(Duration::from_millis(120));
         }
     }
@@ -580,6 +597,7 @@ impl BuilderApp {
         let mut project = SavedProject::default();
         project.installer_kind = kind;
         self.project = project;
+        self.source_check_result = None;
         self.project_path = None;
         self.status = None;
         self.has_project = true;
@@ -1334,6 +1352,38 @@ impl BuilderApp {
                                 );
                             }
                         }
+                        ui.add_space(9.0);
+                        ui.horizontal(|ui| {
+                            if ui
+                                .add_enabled(
+                                    self.source_check_receiver.is_none()
+                                        && self.build_receiver.is_none(),
+                                    egui::Button::new("Bağlantıyı Test Et"),
+                                )
+                                .clicked()
+                            {
+                                self.start_source_check();
+                            }
+                            if self.source_check_receiver.is_some() {
+                                ui.spinner();
+                                ui.label("İmzalı yayın doğrulanıyor…");
+                            }
+                        });
+                        if let Some((checked, succeeded, message)) = &self.source_check_result {
+                            if source_check_request(&self.project).ok().as_ref() == Some(checked) {
+                                ui.colored_label(
+                                    if *succeeded {
+                                        egui::Color32::from_rgb(35, 135, 75)
+                                    } else {
+                                        egui::Color32::from_rgb(180, 45, 45)
+                                    },
+                                    message,
+                                );
+                            } else {
+                                ui.small("Yayın ayarları değişti; bağlantıyı yeniden test edin.");
+                            }
+                        }
+                        ui.small("İmzalı yayın dosyası ve imzası indirilip doğrulanır. Uygulama paketi yalnızca HEAD isteğiyle kontrol edilir; kurulum veya paket indirme yapılmaz.");
                         ui.small("Çevrimiçi yükleyici oluştur düğmesi, yayıncı güven dosyasını ve bu adresleri EXE içine ekler. Yayınlamadan önce EXE'yi dijital olarak imzalayın.");
                     });
                     ui.add_space(12.0);
@@ -1495,6 +1545,7 @@ impl BuilderApp {
             match read_project(&path) {
                 Ok(project) => {
                     self.project = project;
+                    self.source_check_result = None;
                     self.has_project = true;
                     self.workspace_open = true;
                     self.pending_new_kind = None;
@@ -1555,6 +1606,67 @@ impl BuilderApp {
         thread::spawn(move || {
             let _ = sender.send(build_project(project));
         });
+    }
+
+    fn start_source_check(&mut self) {
+        if self.project.installer_kind != InstallerKind::Web
+            || self.source_check_receiver.is_some()
+            || self.build_receiver.is_some()
+        {
+            return;
+        }
+        let request = match source_check_request(&self.project) {
+            Ok(request) => request,
+            Err(error) => {
+                self.source_check_result = None;
+                self.status = Some((false, error));
+                return;
+            }
+        };
+        let (sender, receiver) = mpsc::channel();
+        self.source_check_receiver = Some(receiver);
+        self.source_check_result = None;
+        self.status = None;
+        thread::spawn(move || {
+            let result = run_source_check(&request);
+            let _ = sender.send((request, result));
+        });
+    }
+
+    fn poll_source_check(&mut self) {
+        let outcome = match self.source_check_receiver.as_ref() {
+            Some(receiver) => match receiver.try_recv() {
+                Ok(value) => Some(value),
+                Err(TryRecvError::Empty) => None,
+                Err(TryRecvError::Disconnected) => Some((
+                    SourceCheckRequest {
+                        package_id: String::new(),
+                        manifest_url: String::new(),
+                        signature_url: String::new(),
+                        trust_file: PathBuf::new(),
+                    },
+                    Err("Bağlantı testi beklenmedik şekilde sonlandı.".to_owned()),
+                )),
+            },
+            None => None,
+        };
+        if let Some((request, result)) = outcome {
+            self.source_check_receiver = None;
+            let still_current = source_check_request(&self.project)
+                .is_ok_and(|current| current == request);
+            if !still_current {
+                self.source_check_result = None;
+                self.status = Some((
+                    false,
+                    "Yayın ayarları değişti; bağlantıyı yeniden test edin.".to_owned(),
+                ));
+                return;
+            }
+            self.source_check_result = Some(match result {
+                Ok(message) => (request, true, message),
+                Err(message) => (request, false, message),
+            });
+        }
     }
 
     fn start_web_build(&mut self) {
@@ -2023,6 +2135,60 @@ fn resolve_web_release_urls(project: &SavedProject) -> Result<(String, String), 
         return Err("Yayın dosyası ve imzasının adresleri farklı olmalıdır.".to_owned());
     }
     Ok((manifest, signature))
+}
+
+fn source_check_request(project: &SavedProject) -> Result<SourceCheckRequest, String> {
+    if project.installer_kind != InstallerKind::Web {
+        return Err("Bağlantı testi yalnızca Çevrimiçi Kurulum içindir.".to_owned());
+    }
+    PackageId::parse(&project.package_id)
+        .map_err(|error| format!("Uygulama kimliği geçersiz: {error}"))?;
+    let (manifest_url, signature_url) = resolve_web_release_urls(project)?;
+    let trust_file = require_regular_file(
+        "Yayıncı güven dosyası",
+        &project.trust_store_path,
+    )?;
+    Ok(SourceCheckRequest {
+        package_id: project.package_id.trim().to_owned(),
+        manifest_url,
+        signature_url,
+        trust_file,
+    })
+}
+
+fn run_source_check(request: &SourceCheckRequest) -> Result<String, String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("Kurulum motoru bulunamadı: {error}"))?;
+    let mut command = Command::new(executable);
+    command
+        .arg("check-release-source")
+        .arg("--package-id")
+        .arg(&request.package_id)
+        .arg("--manifest-url")
+        .arg(&request.manifest_url)
+        .arg("--signature-url")
+        .arg(&request.signature_url)
+        .arg("--trust-store")
+        .arg(&request.trust_file);
+    let output = command
+        .output()
+        .map_err(|error| format!("Bağlantı testi başlatılamadı: {error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let last = stderr
+            .lines()
+            .rev()
+            .find(|line| !line.trim().is_empty())
+            .unwrap_or("Yayın veya imza doğrulanamadı.");
+        return Err(format!("Bağlantı testi başarısız: {last}"));
+    }
+    if !String::from_utf8_lossy(&output.stdout).contains("SIGNED_RELEASE_SOURCE_OK") {
+        return Err("Bağlantı testi beklenen doğrulama sonucunu üretmedi.".to_owned());
+    }
+    Ok(
+        "İmzalı yayın dosyası ve imzası doğrulandı. Paket bağlantısı HEAD isteğine yanıt verdi; paket indirilmedi."
+            .to_owned(),
+    )
 }
 
 fn validate_web_project(project: &SavedProject) -> Result<(), String> {
