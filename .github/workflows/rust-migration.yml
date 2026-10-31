@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.17
+# Version: 0.2.18
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -147,6 +147,12 @@ jobs:
 
       - name: Test setup authoring GUI theme safety
         run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_typography_is_available_for_both_appearances
+
+      - name: Test IDE welcome and saved project mode compatibility
+        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui saved_project_kind_preserves_legacy_offline_and_web_projects
+
+      - name: Test modal wizard opening for chosen installer type
+        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui welcome_selection_opens_mode_specific_modal_without_replacing_old_project_silently
 
       - name: Stamp setup authoring GUI artifact
         shell: pwsh
