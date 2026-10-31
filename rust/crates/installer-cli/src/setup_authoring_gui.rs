@@ -1248,7 +1248,7 @@ impl BuilderApp {
 
                 if self.project.installer_kind == InstallerKind::Web {
                     studio_card(ui, |ui| {
-                        ui.heading("Çevrimiçi Kurulum dosyası");
+                        ui.heading("Çevrimiçi Kurulum (Web Installer)");
                         ui.label("Küçük kurulum dosyası uygulamanın tamamını içermez. Gerekli dosyaları imzalı HTTPS yayınından indirir.");
                         file_row(
                             ui,
@@ -1306,7 +1306,10 @@ impl BuilderApp {
                                     &mut self.project.github_signature_asset,
                                 );
                                 ui.small(
-                                    "Dosyaları GitHub Releases'e ayrıca yükleyin. Stable/Beta seçimi bu etiketi otomatik değiştirmez. Özel depolar için erişim anahtarı EXE'ye eklenmez.",
+                                    "Yayın dosyasını, imzasını ve uygulama paketini GitHub Releases'e ayrıca yükleyin. İmzalı YAML içindeki paket adresi de erişilebilir HTTPS bağlantısı olmalıdır. Stable/Beta seçimi etiketi otomatik değiştirmez.",
+                                );
+                                ui.small(
+                                    "Bu ilk sürüm herkese açık depoları destekler; erişim anahtarı kurulum EXE'sine eklenmez.",
                                 );
                                 if let Ok((manifest, signature)) =
                                     resolve_web_release_urls(&self.project)
