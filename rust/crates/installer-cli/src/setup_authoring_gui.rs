@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.5.2
+// Version: 0.6.0
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -87,6 +87,24 @@ impl InstallerKind {
     }
 }
 
+// BRK-WEB-SOURCE-001: keep provider choice separate from signed release verification.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WebReleaseSource {
+    GithubReleases,
+    #[default]
+    Https,
+}
+
+impl WebReleaseSource {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::GithubReleases => "GitHub Releases",
+            Self::Https => "Özel HTTPS sunucusu",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SavedProject {
@@ -119,6 +137,16 @@ struct SavedProject {
     web_manifest_url: String,
     #[serde(default)]
     web_signature_url: String,
+    #[serde(default)]
+    web_release_source: WebReleaseSource,
+    #[serde(default)]
+    github_repository: String,
+    #[serde(default)]
+    github_release_tag: String,
+    #[serde(default)]
+    github_manifest_asset: String,
+    #[serde(default)]
+    github_signature_asset: String,
 }
 
 impl Default for SavedProject {
@@ -153,6 +181,11 @@ impl Default for SavedProject {
             makensis_path: String::new(),
             web_manifest_url: String::new(),
             web_signature_url: String::new(),
+            web_release_source: WebReleaseSource::Https,
+            github_repository: String::new(),
+            github_release_tag: String::new(),
+            github_manifest_asset: "release-manifest.yaml".to_owned(),
+            github_signature_asset: "release-manifest.yaml.p7s".to_owned(),
         }
     }
 }
