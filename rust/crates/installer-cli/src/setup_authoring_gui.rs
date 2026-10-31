@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.3.1
+// Version: 0.4.0
 // Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
 // Bagimli Oldugu Katman: View | Application
 
@@ -79,6 +79,10 @@ struct SavedProject {
     setup_stub_path: String,
     #[serde(default)]
     makensis_path: String,
+    #[serde(default)]
+    web_manifest_url: String,
+    #[serde(default)]
+    web_signature_url: String,
 }
 
 impl Default for SavedProject {
@@ -110,6 +114,8 @@ impl Default for SavedProject {
             trust_store_path: String::new(),
             setup_stub_path: String::new(),
             makensis_path: String::new(),
+            web_manifest_url: String::new(),
+            web_signature_url: String::new(),
         }
     }
 }
@@ -259,6 +265,7 @@ impl eframe::App for BuilderApp {
         let mut appearance_changed = false;
         let mut open_requested = false;
         let mut save_requested = false;
+        let mut web_build_requested = false;
 
         egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
             ui.horizontal(|ui| {
@@ -338,6 +345,12 @@ impl eframe::App for BuilderApp {
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("3  WebSetup oluştur"))
+                        .clicked()
+                    {
+                        web_build_requested = true;
+                    }
                     let distribution_clicked = ui
                         .add_enabled(!is_building, egui::Button::new("2  İmzalı setup oluştur"))
                         .clicked();
@@ -439,6 +452,9 @@ impl eframe::App for BuilderApp {
         if save_requested {
             self.save_project();
         }
+        if web_build_requested {
+            self.start_web_build();
+        }
         if is_building {
             context.request_repaint_after(Duration::from_millis(120));
         }
@@ -536,7 +552,7 @@ impl BuilderApp {
             (
                 "Yayın ve çıktı",
                 signing_summary,
-                "Çıktı klasörü, imza ve dağıtım dosyaları",
+                "Çıktı klasörü, imza ve çevrimiçi/çevrimdışı dağıtım",
             ),
         ];
         for (index, (title, summary, description)) in sections.iter().enumerate() {
@@ -586,8 +602,14 @@ impl BuilderApp {
                     let package_ready =
                         regular_file_exists(&package_directory.join("application.tzpkg"));
                     let distribution_directory = package_directory.join("distribution");
+                    let web_ready = regular_file_exists(
+                        &package_directory.join("web").join("TurkuazWebSetup.exe"),
+                    );
                     let setup_ready =
                         regular_file_exists(&distribution_directory.join("TurkuazSetup.exe"));
+                    if web_ready {
+                        ui.label("Web Installer bulundu: web/TurkuazWebSetup.exe");
+                    }
                     if setup_ready {
                         ui.label("Kurulum dosyası bulundu: distribution/TurkuazSetup.exe");
                         ui.label("İmzalı yayının güvenlik kontrolleri ve gerçek Windows kurulum testi ayrıca yapılmalıdır.");
@@ -936,6 +958,23 @@ impl BuilderApp {
                 ui.add_space(12.0);
 
                 studio_card(ui, |ui| {
+                    ui.heading("Çevrimiçi WebSetup.exe");
+                    ui.label("Küçük WebSetup EXE dosyası uygulama paketini içine almaz. İmzalı HTTPS yayından indirir ve aynı güvenlik motoruyla kurar.");
+                    text_row(
+                        ui,
+                        "İmzalı yayın manifesti HTTPS adresi",
+                        &mut self.project.web_manifest_url,
+                    );
+                    text_row(
+                        ui,
+                        "Detached imza HTTPS adresi (.p7s)",
+                        &mut self.project.web_signature_url,
+                    );
+                    ui.small("3 WebSetup oluştur düğmesi, yayıncı güven politikasını ve bu adresleri EXE içine ekler. Dosyayı yayınlamadan önce Authenticode ile imzalamalısınız.");
+                });
+                ui.add_space(12.0);
+
+                studio_card(ui, |ui| {
                     ui.colored_label(
                         egui::Color32::from_rgb(170, 92, 22),
                         egui::RichText::new("Yayın imzası ve güven politikası gerekir").strong(),
@@ -1146,6 +1185,29 @@ impl BuilderApp {
         self.status = None;
         thread::spawn(move || {
             let _ = sender.send(build_project(project));
+        });
+    }
+
+    fn start_web_build(&mut self) {
+        for step in [0, 2, 3] {
+            if let Err(error) = validate_project_step(&self.project, step) {
+                self.open_editor(step);
+                self.status = Some((false, error));
+                return;
+            }
+        }
+        if let Err(error) = validate_web_project(&self.project) {
+            self.open_editor(3);
+            self.status = Some((false, error));
+            return;
+        }
+        let project = self.project.clone();
+        let (sender, receiver) = mpsc::channel();
+        self.build_receiver = Some(receiver);
+        self.dialog_open = false;
+        self.status = None;
+        thread::spawn(move || {
+            let _ = sender.send(build_web_distribution(project));
         });
     }
 
@@ -1497,6 +1559,74 @@ fn resolve_path(value: &str) -> Result<PathBuf, String> {
             .map(|current| current.join(path))
             .map_err(|error| format!("Çalışma klasörü okunamadı: {error}"))
     }
+}
+
+// BRK-WEB-SETUP-STUDIO: do not allow HTTP or credential-bearing publication URLs.
+fn validate_web_project(project: &SavedProject) -> Result<(), String> {
+    for (name, value) in [
+        ("Manifest HTTPS", &project.web_manifest_url),
+        ("İmza HTTPS", &project.web_signature_url),
+    ] {
+        let url = Url::parse(value.trim())
+            .map_err(|_| format!("{name} bağlantısı geçersiz."))?;
+        if url.scheme() != "https"
+            || url.host_str().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.fragment().is_some()
+        {
+            return Err(format!("{name} kullanıcı bilgisi içermeyen HTTPS URL olmalıdır."));
+        }
+    }
+    Ok(())
+}
+
+fn build_web_distribution(project: SavedProject) -> Result<String, String> {
+    validate_web_project(&project)?;
+    let target_dir = package_output_directory(&project)?;
+    if !regular_directory_exists(&target_dir) {
+        return Err("Önce 1 Uygulama paketini hazırla işlemini tamamlayın.".to_owned());
+    }
+    let theme = target_dir.join("setup-theme.json");
+    let _ = require_regular_file("Setup tema ayarı", &theme.to_string_lossy())?;
+    let trust = require_regular_file("Yayıncı güven politikası", &project.trust_store_path)?;
+    let stub = require_regular_file("Setup GUI stub", &project.setup_stub_path)?;
+    let web_dir = target_dir.join("web");
+    fs::create_dir(&web_dir)
+        .map_err(|error| format!("WebSetup çıktı klasörü oluşturulamadı: {error}"))?;
+    let output = web_dir.join("TurkuazWebSetup.exe");
+    let result = (|| {
+        let executable = std::env::current_exe()
+            .map_err(|error| format!("Setup Studio uygulaması bulunamadı: {error}"))?;
+        let mut command = Command::new(executable);
+        command
+            .arg("build-web-setup")
+            .arg("--stub")
+            .arg(stub)
+            .arg("--package-id")
+            .arg(&project.package_id)
+            .arg("--manifest-url")
+            .arg(&project.web_manifest_url)
+            .arg("--signature-url")
+            .arg(&project.web_signature_url)
+            .arg("--trust-store")
+            .arg(trust)
+            .arg("--target")
+            .arg(&project.install_target)
+            .arg("--theme-config")
+            .arg(theme)
+            .arg("--output")
+            .arg(&output);
+        run_child(command, "Çevrimiçi WebSetup üretimi")
+    })();
+    if let Err(error) = result {
+        let _ = fs::remove_dir_all(&web_dir);
+        return Err(error);
+    }
+    Ok(format!(
+        "WebSetup hazırlandı: {}. EXE dosyasını dağıtımdan önce Authenticode ile imzalayın.",
+        output.display()
+    ))
 }
 
 fn build_distribution(project: SavedProject) -> Result<String, String> {
