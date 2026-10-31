@@ -1,18 +1,19 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.3.0
+// Version: 0.3.1
 // Aciklama: GUI'den install, update, repair, rollback ve onayli uninstall islemlerini yonetir
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
-    io::{self, Read},
+    fs,
+    io::{self, Read, Write},
     path::PathBuf,
     process::{Command, Stdio},
     sync::mpsc::{self, Receiver, Sender, TryRecvError},
     thread,
     thread::JoinHandle,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use eframe::egui;
@@ -21,6 +22,8 @@ use turkuaz_installer_package_engine::{
     SetupThemeConfig, SetupThemePalette, read_embedded_setup_theme,
 };
 use url::Url;
+
+use crate::web_setup::{self, WebSetupConfig};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum AppearancePreference {
@@ -171,6 +174,7 @@ struct SetupApp {
     install_source: InstallSource,
     manifest_url: String,
     signature_url: String,
+    web_configuration: Option<WebSetupConfig>,
     target: String,
     data_root: String,
     operation: SetupOperation,
@@ -204,6 +208,7 @@ impl Default for SetupApp {
             install_source: InstallSource::Offline,
             manifest_url: String::new(),
             signature_url: String::new(),
+            web_configuration: None,
             target: local_app_data
                 .join("Programs")
                 .join("TurkuazLabs")
@@ -242,10 +247,18 @@ pub fn run_with_recovery_error(message: String) -> eframe::Result {
 }
 
 fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
-    let setup_theme = std::env::current_exe()
-        .ok()
-        .and_then(|path| read_embedded_setup_theme(path).ok().flatten())
-        .unwrap_or_default();
+    // A corrupt embedded config must block startup rather than fallback to offline.
+    let web_result = std::env::current_exe()
+        .map_err(|error| error.to_string())
+        .and_then(|path| web_setup::read_web_setup(&path).map_err(|error| error.to_string()));
+    let setup_theme = match &web_result {
+        Ok(Some(config)) => SetupThemeConfig::from_json(config.theme_json.as_bytes())
+            .unwrap_or_default(),
+        _ => std::env::current_exe()
+            .ok()
+            .and_then(|path| read_embedded_setup_theme(path).ok().flatten())
+            .unwrap_or_default(),
+    };
     let window_title = format!(
         "{} v{}",
         setup_theme.brand_name(),
@@ -266,13 +279,31 @@ fn run_with_startup_notice(notice: Option<(bool, String)>) -> eframe::Result {
                 setup_theme,
                 ..SetupApp::default()
             };
+            match web_result {
+                Ok(Some(config)) => {
+                    app.package_id = config.package_id.clone();
+                    app.manifest_url = config.manifest_url.clone();
+                    app.signature_url = config.signature_url.clone();
+                    app.target = config.install_target.clone();
+                    app.install_source = InstallSource::Online;
+                    app.trust_store.clear();
+                    app.web_configuration = Some(config);
+                }
+                Err(error) => {
+                    app.recovery_blocked = true;
+                    app.status = Some((false, format!("WebSetup yapılandırması doğrulanamadı: {error}")));
+                }
+                Ok(None) => {}
+            }
             creation_context
                 .egui_ctx
                 .set_theme(app.appearance.preference());
             apply_setup_palette(&creation_context.egui_ctx, &app.setup_theme);
             if let Some((succeeded, message)) = notice {
-                app.recovery_blocked = !succeeded;
-                app.status = Some((succeeded, message));
+                if !app.recovery_blocked {
+                    app.recovery_blocked = !succeeded;
+                    app.status = Some((succeeded, message));
+                }
             }
             Ok(Box::new(app))
         }),
