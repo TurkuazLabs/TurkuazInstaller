@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.3.0
+// Version: 0.3.1
 // Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
 // Bagimli Oldugu Katman: View | Application
 
@@ -325,7 +325,7 @@ impl eframe::App for BuilderApp {
                         } else {
                             egui::Color32::from_rgb(180, 45, 45)
                         },
-                        message,
+                        message.lines().next().unwrap_or("İşlem sonucu ana ekranda."),
                     );
                 } else if is_building {
                     ui.spinner();
@@ -485,6 +485,9 @@ impl BuilderApp {
         });
         ui.add_space(16.0);
 
+        self.draw_output_status(ui);
+        ui.add_space(16.0);
+
         ui.label(egui::RichText::new("Proje ayarları").size(21.0).strong());
         ui.label(
             egui::RichText::new("Düzenle düğmesiyle istediğiniz bölüme geçebilirsiniz.")
@@ -546,6 +549,99 @@ impl BuilderApp {
             .weak(),
         );
         ui.add_space(10.0);
+    }
+
+    fn draw_output_status(&mut self, ui: &mut egui::Ui) {
+        let output = package_output_directory(&self.project);
+        let is_building = self.build_receiver.is_some();
+        let recent_status = self.status.clone();
+        let mut folder_to_open = None;
+
+        studio_card(ui, |ui| {
+            ui.label(
+                egui::RichText::new("Oluşturulan dosyalar")
+                    .size(20.0)
+                    .strong(),
+            );
+            ui.label(
+                egui::RichText::new("Uygulama dosyalarınızın bulunduğu kaynak klasörü ile çıktı klasörü farklıdır.")
+                    .size(13.0)
+                    .weak(),
+            );
+            ui.add_space(8.0);
+
+            match output {
+                Ok(ref package_directory) => {
+                    ui.label(egui::RichText::new("Dosyaların kaydedileceği yer:").strong());
+                    ui.label(egui::RichText::new(package_directory.display().to_string()).monospace());
+                    ui.add_space(7.0);
+
+                    let package_ready =
+                        regular_file_exists(&package_directory.join("application.tzpkg"));
+                    let distribution_directory = package_directory.join("distribution");
+                    let setup_ready =
+                        regular_file_exists(&distribution_directory.join("TurkuazSetup.exe"));
+                    if setup_ready {
+                        ui.label("Kurulum dosyası bulundu: distribution/TurkuazSetup.exe");
+                        ui.label("İmzalı yayının güvenlik kontrolleri ve gerçek Windows kurulum testi ayrıca yapılmalıdır.");
+                    } else if package_ready {
+                        ui.label("Uygulama paketi bulundu: application.tzpkg");
+                        ui.label("Henüz TurkuazSetup.exe yok. İmzalı yayın girdileriyle 2. adıma geçin.");
+                    } else if is_building {
+                        ui.horizontal(|ui| {
+                            ui.spinner();
+                            ui.label("Paket/kurulum çıktısı hazırlanıyor…");
+                        });
+                    } else {
+                        ui.label("Bu konumda henüz bir uygulama paketi bulunamadı.");
+                        ui.label("Alttaki 1. düğme ile uygulama paketini oluşturun.");
+                    }
+
+                    ui.add_space(8.0);
+                    let open_directory = if regular_directory_exists(package_directory) {
+                        Some(package_directory.clone())
+                    } else {
+                        resolve_path(&self.project.output_directory)
+                            .ok()
+                            .filter(|path| regular_directory_exists(path))
+                    };
+                    if ui
+                        .add_enabled(
+                            open_directory.is_some() && !is_building,
+                            egui::Button::new("Çıktı klasörünü aç"),
+                        )
+                        .clicked()
+                    {
+                        folder_to_open = open_directory;
+                    }
+                }
+                Err(error) => {
+                    ui.colored_label(egui::Color32::from_rgb(180, 45, 45), error);
+                    if ui.button("Çıktı konumunu düzenle").clicked() {
+                        self.open_editor(3);
+                    }
+                }
+            }
+
+            if let Some((succeeded, message)) = recent_status {
+                ui.add_space(10.0);
+                ui.separator();
+                ui.colored_label(
+                    if succeeded {
+                        studio_palette(ui.visuals().dark_mode).accent
+                    } else {
+                        egui::Color32::from_rgb(180, 45, 45)
+                    },
+                    message,
+                );
+            }
+        });
+
+        if let Some(path) = folder_to_open {
+            if let Err(error) = open_output_directory(&path) {
+                self.status = Some((false, error));
+            }
+        }
     }
 
     fn draw_section_card(
@@ -1103,6 +1199,42 @@ impl BuilderApp {
             });
         }
     }
+}
+
+// Visible output state is derived from actual files; an earlier status message is
+// not treated as proof that a file still exists.
+fn package_output_directory(project: &SavedProject) -> Result<PathBuf, String> {
+    let package_id = PackageId::parse(&project.package_id)
+        .map_err(|error| format!("Paket kimliği geçersiz: {error}"))?;
+    let version = SemanticVersion::parse(&project.version)
+        .map_err(|error| format!("Sürüm geçersiz: {error}"))?;
+    let parent = resolve_path(&project.output_directory)?;
+    Ok(parent.join(format!("{package_id}-{version}")))
+}
+
+fn regular_file_exists(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .is_ok_and(|metadata| metadata.is_file() && !metadata.file_type().is_symlink())
+}
+
+fn regular_directory_exists(path: &Path) -> bool {
+    fs::symlink_metadata(path)
+        .is_ok_and(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
+}
+
+fn open_output_directory(directory: &Path) -> Result<(), String> {
+    if !regular_directory_exists(directory) {
+        return Err("Çıktı klasörü bulunamadı veya güvenli bir klasör değil.".to_owned());
+    }
+
+    let explorer = std::env::var_os("SystemRoot")
+        .map(|root| PathBuf::from(root).join("explorer.exe"))
+        .unwrap_or_else(|| PathBuf::from("explorer.exe"));
+    Command::new(explorer)
+        .arg(directory)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("Windows Dosya Gezgini açılamadı: {error}"))
 }
 
 fn navigation_item(ui: &mut egui::Ui, selected: bool, label: &str) -> egui::Response {
