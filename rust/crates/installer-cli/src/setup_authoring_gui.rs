@@ -781,8 +781,7 @@ impl BuilderApp {
             InstallerKind::Web => match self.project.web_release_source {
                 WebReleaseSource::GithubReleases => {
                     if self.project.github_repository.trim().is_empty() {
-                        "GitHub deposunu, yayın etiketini ve dosya adlarını belirleyin."
-                            .to_owned()
+                        "GitHub deposunu, yayın etiketini ve dosya adlarını belirleyin.".to_owned()
                     } else {
                         format!(
                             "GitHub Releases · {} · {}",
@@ -1273,10 +1272,9 @@ impl BuilderApp {
                             .width(ui.available_width())
                             .selected_text(self.project.web_release_source.label())
                             .show_ui(ui, |ui| {
-                                for source in [
-                                    WebReleaseSource::GithubReleases,
-                                    WebReleaseSource::Https,
-                                ] {
+                                for source in
+                                    [WebReleaseSource::GithubReleases, WebReleaseSource::Https]
+                                {
                                     ui.selectable_value(
                                         &mut self.project.web_release_source,
                                         source,
@@ -2436,11 +2434,17 @@ mod tests {
             "https://github.com/example-org/desktop-app/releases/download/v1.2.3-beta.1/release-manifest.yaml".to_owned(),
             "https://github.com/example-org/desktop-app/releases/download/v1.2.3-beta.1/release-manifest.yaml.p7s".to_owned(),
         );
-        assert_eq!(resolve_web_release_urls(&github).expect("github URLs"), expected);
+        assert_eq!(
+            resolve_web_release_urls(&github).expect("github URLs"),
+            expected
+        );
         let encoded = serde_json::to_vec(&github).expect("encode github project");
         let decoded: SavedProject = serde_json::from_slice(&encoded).expect("decode github");
         assert_eq!(decoded.web_release_source, WebReleaseSource::GithubReleases);
-        assert_eq!(resolve_web_release_urls(&decoded).expect("restored urls"), expected);
+        assert_eq!(
+            resolve_web_release_urls(&decoded).expect("restored urls"),
+            expected
+        );
     }
 
     #[test]
@@ -2471,10 +2475,12 @@ mod tests {
         assert!(resolve_web_release_urls(&project).is_err());
 
         project.web_release_source = WebReleaseSource::Https;
-        project.web_manifest_url = "https://user:secret@updates.example.test/stable.yaml".to_owned();
+        project.web_manifest_url =
+            "https://user:secret@updates.example.test/stable.yaml".to_owned();
         project.web_signature_url = "https://updates.example.test/stable.yaml.p7s".to_owned();
         assert!(resolve_web_release_urls(&project).is_err());
-        project.web_manifest_url = "https://updates.example.test/stable.yaml?token=secret".to_owned();
+        project.web_manifest_url =
+            "https://updates.example.test/stable.yaml?token=secret".to_owned();
         assert!(resolve_web_release_urls(&project).is_err());
         project.web_manifest_url = "https://updates.example.test/stable.yaml".to_owned();
         assert!(resolve_web_release_urls(&project).is_ok());
