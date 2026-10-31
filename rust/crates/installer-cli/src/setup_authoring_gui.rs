@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.2.1
+// Version: 0.3.0
 // Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
 // Bagimli Oldugu Katman: View | Application
 
@@ -119,6 +119,7 @@ struct BuilderApp {
     active_step: usize,
     dialog_open: bool,
     appearance: AppearancePreference,
+    preview_dark: bool,
     status: Option<(bool, String)>,
     build_receiver: Option<Receiver<Result<String, String>>>,
     project_path: Option<PathBuf>,
@@ -131,9 +132,44 @@ impl Default for BuilderApp {
             active_step: 0,
             dialog_open: false,
             appearance: AppearancePreference::System,
+            preview_dark: false,
             status: None,
             build_receiver: None,
             project_path: None,
+        }
+    }
+}
+
+// BRK-SETUP-STUDIO-THEME: independent chrome palette, not the generated installer theme.
+#[derive(Clone, Copy)]
+struct StudioPalette {
+    accent: egui::Color32,
+    canvas: egui::Color32,
+    surface: egui::Color32,
+    input: egui::Color32,
+    border: egui::Color32,
+    hover: egui::Color32,
+}
+
+fn studio_palette(dark: bool) -> StudioPalette {
+    let rgb = egui::Color32::from_rgb;
+    if dark {
+        StudioPalette {
+            accent: rgb(61, 203, 198),
+            canvas: rgb(16, 24, 35),
+            surface: rgb(28, 39, 54),
+            input: rgb(36, 50, 66),
+            border: rgb(60, 77, 91),
+            hover: rgb(44, 65, 78),
+        }
+    } else {
+        StudioPalette {
+            accent: rgb(10, 126, 135),
+            canvas: rgb(242, 246, 249),
+            surface: rgb(255, 255, 255),
+            input: rgb(233, 241, 246),
+            border: rgb(211, 223, 233),
+            hover: rgb(222, 239, 242),
         }
     }
 }
@@ -174,6 +210,18 @@ fn configure_studio_style(context: &egui::Context) {
         style.visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(10);
         style.visuals.widgets.active.corner_radius = egui::CornerRadius::same(10);
         style.visuals.widgets.open.corner_radius = egui::CornerRadius::same(10);
+
+        let palette = studio_palette(style.visuals.dark_mode);
+        style.visuals.panel_fill = palette.canvas;
+        style.visuals.window_fill = palette.surface;
+        style.visuals.extreme_bg_color = palette.input;
+        style.visuals.faint_bg_color = palette.input;
+        style.visuals.window_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, palette.border);
+        style.visuals.widgets.hovered.bg_fill = palette.hover;
+        style.visuals.widgets.active.bg_fill = palette.hover;
+        style.visuals.selection.bg_fill = palette.accent;
     });
 }
 
@@ -181,8 +229,8 @@ pub fn run() -> eframe::Result {
     let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1280.0, 840.0])
-            .with_min_inner_size([1000.0, 700.0])
+            .with_inner_size([1360.0, 860.0])
+            .with_min_inner_size([1024.0, 700.0])
             .with_title(title.clone()),
         ..Default::default()
     };
@@ -774,22 +822,25 @@ impl BuilderApp {
         }
     }
 
-    fn draw_preview(&self, ui: &mut egui::Ui) {
+    fn draw_preview(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(7.0);
+        ui.label(egui::RichText::new("Kurulum ekranı önizlemesi").size(19.0).strong());
         ui.label(
-            egui::RichText::new("Kurulum önizlemesi")
-                .size(20.0)
-                .strong(),
-        );
-        ui.label(
-            egui::RichText::new("Son kullanıcının göreceği setup temasını gösterir.")
-                .size(14.0)
+            egui::RichText::new("Bu görünüm, oluşturacağınız setup dosyası içindir.")
+                .size(13.0)
                 .weak(),
         );
+        ui.add_space(12.0);
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("Önizleme:").size(13.0));
+            ui.selectable_value(&mut self.preview_dark, false, "Açık");
+            ui.selectable_value(&mut self.preview_dark, true, "Koyu");
+        });
         ui.add_space(10.0);
 
         match self.theme_config() {
             Ok(theme) => {
-                let palette = theme.palette(false);
+                let palette = theme.palette(self.preview_dark);
                 let background = color(palette.background);
                 let surface = color(palette.surface);
                 let text = color(palette.text);
@@ -835,16 +886,11 @@ impl BuilderApp {
                             });
                     });
                 ui.add_space(10.0);
-                ui.label(format!(
-                    "Palet: zemin #{:02X}{:02X}{:02X}, yüzey #{:02X}{:02X}{:02X}",
-                    palette.background[0],
-                    palette.background[1],
-                    palette.background[2],
-                    palette.surface[0],
-                    palette.surface[1],
-                    palette.surface[2],
-                ));
-                ui.small("Önizleme açık görünüm paletini kullanır.");
+                ui.label(
+                    egui::RichText::new("Tema düzenlemek için soldaki 03 • Setup tasarımı bölümünü açın.")
+                        .size(13.0)
+                        .weak(),
+                );
             }
             Err(error) => {
                 ui.colored_label(egui::Color32::from_rgb(180, 45, 45), "Tema ayarı geçersiz.");
@@ -1029,8 +1075,11 @@ fn navigation_item(ui: &mut egui::Ui, selected: bool, label: &str) -> egui::Resp
 }
 
 fn studio_card(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) {
+    let palette = studio_palette(ui.visuals().dark_mode);
     egui::Frame::group(ui.style())
         .inner_margin(egui::Margin::symmetric(18, 16))
+        .fill(palette.surface)
+        .stroke(egui::Stroke::new(1.0, palette.border))
         .show(ui, contents);
 }
 
@@ -1568,6 +1617,15 @@ fn color(rgb: [u8; 3]) -> egui::Color32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn studio_palettes_keep_separate_light_and_dark_surfaces() {
+        let light = studio_palette(false);
+        let dark = studio_palette(true);
+        assert_ne!(light.canvas, dark.canvas);
+        assert_ne!(light.surface, dark.surface);
+        assert_ne!(light.accent, dark.accent);
+    }
 
     #[test]
     fn studio_typography_is_available_for_both_appearances() {
