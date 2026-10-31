@@ -908,10 +908,7 @@ impl SetupApp {
                 }
                 if self.operation != SetupOperation::Uninstall {
                     if self.web_configuration.is_none() && self.trust_store.trim().is_empty() {
-                        self.status = Some((
-                            false,
-                            "Yayıncı güven dosyası zorunludur.".to_owned(),
-                        ));
+                        self.status = Some((false, "Yayıncı güven dosyası zorunludur.".to_owned()));
                         return;
                     }
                     let trust_path = PathBuf::from(self.trust_store.trim());
@@ -1213,9 +1210,8 @@ fn run_installer_worker(
         _ => {
             let _ = child.kill();
             let _ = child.wait();
-            let _ = result_sender.send(Err(
-                "Kurulum motorunun durum bilgisi okunamadı.".to_owned()
-            ));
+            let _ =
+                result_sender.send(Err("Kurulum motorunun durum bilgisi okunamadı.".to_owned()));
             return;
         }
     };
