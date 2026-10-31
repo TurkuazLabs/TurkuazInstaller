@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.21
+// Version: 0.2.22
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -680,26 +680,6 @@ async fn check_release_source_command() -> Result<(), Box<dyn Error>> {
         package_id
     );
     Ok(())
-}
-
-#[cfg(test)]
-mod web_release_source_tests {
-    use super::*;
-
-    #[test]
-    fn check_release_source_rejects_unsafe_urls_without_network_io() {
-        assert!(validate_release_probe_url("https://updates.example.test/stable.yaml").is_ok());
-        for invalid in [
-            "",
-            "http://updates.example.test/stable.yaml",
-            "file:///tmp/stable.yaml",
-            "https://user:password@updates.example.test/stable.yaml",
-            "https://updates.example.test/stable.yaml?token=secret",
-            "https://updates.example.test/stable.yaml#fragment",
-        ] {
-            assert!(validate_release_probe_url(invalid).is_err());
-        }
-    }
 }
 
 /// Create a preconfigured HTTPS bootstrap executable. The public signer policy is
@@ -2189,6 +2169,26 @@ impl Drop for DownloadedArtifactGuard {
         if let Some(download_directory) = self.0.parent() {
             let _ = std::fs::remove_file(&self.0);
             let _ = std::fs::remove_dir(download_directory);
+        }
+    }
+}
+
+#[cfg(test)]
+mod web_release_source_tests {
+    use super::*;
+
+    #[test]
+    fn check_release_source_rejects_unsafe_urls_without_network_io() {
+        assert!(validate_release_probe_url("https://updates.example.test/stable.yaml").is_ok());
+        for invalid in [
+            "",
+            "http://updates.example.test/stable.yaml",
+            "file:///tmp/stable.yaml",
+            "https://user:password@updates.example.test/stable.yaml",
+            "https://updates.example.test/stable.yaml?token=secret",
+            "https://updates.example.test/stable.yaml#fragment",
+        ] {
+            assert!(validate_release_probe_url(invalid).is_err());
         }
     }
 }
