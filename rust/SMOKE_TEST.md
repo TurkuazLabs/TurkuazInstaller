@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.2.7
+Version: 0.2.8
 Aciklama: Derleme kontrolunden gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -24,6 +24,12 @@ Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde
 Windows setup-gui stub uygulamasini acin ve Kur isleminden sonra Paket ve guven adimina gecin. Kurulum kaynagi olarak Cevrimici (HTTPS indirme) secin; gercek imzali release manifestinin HTTPS URL'sini, detached CMS imzasinin HTTPS URL'sini ve sadece yayincidan gelen trust policy dosyasini girin. Hedef ve veri dizinlerini test klasorleri olarak secin. Son kontrol ekraninda kaynak ve iki HTTPS URL gorunmelidir. Kurulum baslatildiginda ayni executable, CLI `install` komutunu child process olarak cagirir; URL ve guven hatalarinda kurulum durmalidir. Cevrimdisi secenek ise mevcut `install-self` offline bundle yolunu kullanmaya devam eder.
 
 Olumsuz kontroller: `http:`, `file:`, bos adres, kullanici adi/parola iceren URL ve fragment reddedilmelidir. Test URL'leri ornektir; `example.test` uzerinde gercek release bulunmaz. Bu akis tek-EXE web installer export'u, gercek download progress gosterimi veya temiz Windows VM kabulunun tamamlandigini kanitlamaz.
+
+## Tek dosya WebSetup kabul plani
+
+Studio'da 1 Paket hazirla islemi sonrasinda 04 Yayin ve cikti bolumune gercek imzali HTTPS manifest ve detached CMS signature URL'lerini girin. Gercek yayinci trust YAML ve Windows setup GUI stub secin. 3 WebSetup olustur dugmesi proje klasorundeki web/TurkuazWebSetup.exe dosyasini uretmelidir. Bu EXE Authenticode imzalanip temiz Windows VM'de baslatildiginda yayin URL'leri ve paket kimligi otomatik dolmali, trust store dosyasi secimi gerekmemelidir. Sihirbaz, manifest ve artifact icin ayni signed-HTTPS verification motorunu kullanmalidir.
+
+Negatif testler: manifest/signature icin HTTP ve credential URL'lerini reddet; imzayi, digest'i, policy eslesmesini, kesintili indirmeyi ve hatali interneti reddet; kurulum sonrasi launch/verify/uninstall ve iptal kurtarma durumunu kontrol et. CI'nin uretecegi imzasiz WebSetup EXE yalniz marker, payload-size ve SHA-256 config testidir, gercek CDN ya da production sertifikasi testi degildir. Private key hicbir ornege konulmaz.
 
 ## Pozitif akisi
 
