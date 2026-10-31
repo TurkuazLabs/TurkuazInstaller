@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.3.1
+// Version: 0.3.2
 // Aciklama: GUI'den install, update, repair, rollback ve onayli uninstall islemlerini yonetir
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -123,8 +123,8 @@ enum InstallSource {
 impl InstallSource {
     const fn label(self) -> &'static str {
         match self {
-            Self::Offline => "Çevrimdışı (paketli setup)",
-            Self::Online => "Çevrimiçi (HTTPS indirme)",
+            Self::Offline => "Tam Kurulum (paket içinden)",
+            Self::Online => "Çevrimiçi Kurulum (internet üzerinden)",
         }
     }
 }
@@ -364,7 +364,7 @@ impl eframe::App for SetupApp {
                         ui.label(if self.install_source == InstallSource::Online {
                             "Çevrimiçi kurulum"
                         } else {
-                            "Yerel kurulum sihirbazı"
+                            "Tam Kurulum"
                         });
                     },
                 );
@@ -374,7 +374,7 @@ impl eframe::App for SetupApp {
             ui.separator();
             ui.add_space(8.0);
 
-            const STEPS: [&str; 4] = ["İşlem", "Paket ve güven", "Konumlar", "Son kontrol"];
+            const STEPS: [&str; 4] = ["İşlem", "Paket ve doğrulama", "Konumlar", "Son kontrol"];
             ui.horizontal_wrapped(|ui| {
                 for (index, label) in STEPS.iter().enumerate() {
                     let marker = if index < self.step {
@@ -423,7 +423,7 @@ impl eframe::App for SetupApp {
                                         self.operation.label()
                                     ));
                                     ui.label(if self.operation == SetupOperation::Uninstall {
-                                        "Paket kimliği, yönetilen dosyalar ve durum kaydı denetleniyor."
+                                        "Uygulama kimliği, kurulu dosyalar ve kurulum durumu denetleniyor."
                                     } else {
                                         "Paket imzası, dosya bütünlüğü ve kurulum durumu denetleniyor."
                                     });
@@ -469,10 +469,10 @@ impl eframe::App for SetupApp {
                                 ui.heading(if self.operation == SetupOperation::Uninstall {
                                     "Kaldırılacak paketi belirleyin"
                                 } else {
-                                    "Paket kimliğini ve yayıncı güvenini belirtin"
+                                    "Uygulama kimliğini ve yayıncı güvenini belirtin"
                                 });
                                 ui.label(
-                                    "Paket kimliği, yayıncının size verdiği yayın bilgileriyle aynı olmalıdır.",
+                                    "Uygulama kimliği, yayıncının sağladığı bilgilerle eşleşmelidir.",
                                 );
                                 ui.add_space(8.0);
 
@@ -480,7 +480,7 @@ impl eframe::App for SetupApp {
                                     ui.horizontal(|ui| {
                                         ui.add_sized(
                                             [150.0, 28.0],
-                                            egui::Label::new("Paket kimliği"),
+                                            egui::Label::new("Uygulama kimliği"),
                                         );
                                         let package_id_width = ui.available_width();
                                         if ui
@@ -495,18 +495,18 @@ impl eframe::App for SetupApp {
                                             self.operation_completed = false;
                                         }
                                     });
-                                    ui.small("Örnek biçim: publisher.product");
+                                    ui.small("Örnek biçim: firma.uygulama");
                                 });
 
                                 if self.operation != SetupOperation::Uninstall {
                                     ui.add_space(8.0);
                                     ui.group(|ui| {
-                                        ui.heading("Kurulum kaynağı");
+                                        ui.heading("Kurulum dosyalarının kaynağı");
                                         if self.web_configuration.is_some() {
-                                            ui.label("Çevrimiçi adresler ve yayıncı güven politikası WebSetup EXE içine gömülüdür.");
+                                            ui.label("İndirme adresleri ve yayıncı doğrulama bilgileri bu kurulum dosyasına eklenmiştir.");
                                         }
                                         ui.label(
-                                            "Çevrimdışı: setup içindeki paket. Çevrimiçi: HTTPS üzerinden doğrulanmış paket indir.",
+                                            "Tam Kurulum: dosyalar paketin içinde. Çevrimiçi Kurulum: dosyalar güvenli internet bağlantısıyla indirilir.",
                                         );
                                         ui.add_enabled_ui(self.web_configuration.is_none(), |ui| {
                                             ui.horizontal_wrapped(|ui| {
@@ -527,7 +527,7 @@ impl eframe::App for SetupApp {
                                         });
                                         if self.install_source == InstallSource::Online {
                                             ui.add_space(8.0);
-                                            ui.label("İmzalı manifest HTTPS adresi");
+                                            ui.label("İmzalı yayın dosyasının HTTPS adresi");
                                             if ui
                                                 .add_enabled(
                                                     self.web_configuration.is_none(),
@@ -539,7 +539,7 @@ impl eframe::App for SetupApp {
                                             {
                                                 self.status = None;
                                             }
-                                            ui.label("Manifest imzası HTTPS adresi (.p7s)");
+                                            ui.label("Yayın imzasının HTTPS adresi (.p7s)");
                                             if ui
                                                 .add_enabled(
                                                     self.web_configuration.is_none(),
@@ -552,18 +552,18 @@ impl eframe::App for SetupApp {
                                                 self.status = None;
                                             }
                                             ui.small(
-                                                "İmzalı manifest ve yayıncı güven politikası doğrulanmadan paket kurulmaz.",
+                                                "İmzalı yayın bilgileri ve yayıncı doğrulaması başarılı olmadan kurulum başlamaz.",
                                             );
                                         }
                                     });
                                     ui.add_space(8.0);
                                     ui.group(|ui| {
-                                        ui.heading("Yayıncı güven politikası");
+                                        ui.heading("Yayıncı güven dosyası");
                                         ui.label(
-                                            "Yalnızca paketin yayıncısından aldığınız güven dosyasını seçin. Örnek dosyalar güvenilir değildir.",
+                                            "Yalnızca uygulamanın gerçek yayıncısından aldığınız güven dosyasını seçin. Örnek dosyalar güvenilir değildir.",
                                         );
                                         if self.web_configuration.is_some() {
-                                            ui.label("Yayıncı güven politikası WebSetup.exe içinde mevcut; dosya seçmeniz gerekmez.");
+                                            ui.label("Yayıncı güven dosyası bu yükleyiciye eklenmiştir; ayrıca dosya seçmeniz gerekmez.");
                                         } else if draw_trust_store_row(
                                             ui,
                                             &mut self.trust_store,
@@ -618,9 +618,9 @@ impl eframe::App for SetupApp {
                                     ui.heading("İşlem özeti");
                                     ui.separator();
                                     setup_summary_row(ui, "İşlem", self.operation.label());
-                                    setup_summary_row(ui, "Paket kimliği", &self.package_id);
+                                    setup_summary_row(ui, "Uygulama kimliği", &self.package_id);
                                     if self.operation != SetupOperation::Uninstall {
-                                        setup_summary_row(ui, "Kurulum kaynağı", self.install_source.label());
+                                        setup_summary_row(ui, "Kurulum dosyalarının kaynağı", self.install_source.label());
                                         setup_summary_row(
                                             ui,
                                             "Güven politikası",
@@ -631,8 +631,8 @@ impl eframe::App for SetupApp {
                                             },
                                         );
                                         if self.install_source == InstallSource::Online {
-                                            setup_summary_row(ui, "Manifest HTTPS", &self.manifest_url);
-                                            setup_summary_row(ui, "İmza HTTPS", &self.signature_url);
+                                            setup_summary_row(ui, "Yayın dosyası HTTPS", &self.manifest_url);
+                                            setup_summary_row(ui, "Yayın imzası HTTPS", &self.signature_url);
                                         }
                                     }
                                     setup_summary_row(ui, "Kurulum klasörü", &self.target);
@@ -903,14 +903,14 @@ impl SetupApp {
             }
             1 => {
                 if let Err(error) = PackageId::parse(self.package_id.trim()) {
-                    self.status = Some((false, format!("Paket kimliği geçersiz: {error}")));
+                    self.status = Some((false, format!("Uygulama kimliği geçersiz: {error}")));
                     return;
                 }
                 if self.operation != SetupOperation::Uninstall {
                     if self.web_configuration.is_none() && self.trust_store.trim().is_empty() {
                         self.status = Some((
                             false,
-                            "Yayıncı güven politikası dosyası zorunludur.".to_owned(),
+                            "Yayıncı güven dosyası zorunludur.".to_owned(),
                         ));
                         return;
                     }
@@ -965,7 +965,7 @@ impl SetupApp {
             return;
         }
         if let Err(error) = PackageId::parse(self.package_id.trim()) {
-            self.status = Some((false, format!("Paket kimliği geçersiz: {error}")));
+            self.status = Some((false, format!("Uygulama kimliği geçersiz: {error}")));
             return;
         }
         if (self.operation != SetupOperation::Uninstall
@@ -1146,7 +1146,7 @@ fn run_installer_worker(
         Ok(path) => path,
         Err(error) => {
             let _ = result_sender.send(Err(format!(
-                "Setup executable path could not be read: {error}"
+                "Kurulum programının dosya yolu okunamadı: {error}"
             )));
             return;
         }
@@ -1161,7 +1161,7 @@ fn run_installer_worker(
             Ok(value) => Some(value),
             Err(error) => {
                 let _ = result_sender.send(Err(format!(
-                    "WebSetup yayıncı güven politikası hazırlanamadı: {error}"
+                    "Çevrimiçi yükleyicinin yayıncı güven dosyası hazırlanamadı: {error}"
                 )));
                 return;
             }
@@ -1203,7 +1203,7 @@ fn run_installer_worker(
     {
         Ok(child) => child,
         Err(error) => {
-            let _ = result_sender.send(Err(format!("Setup backend could not start: {error}")));
+            let _ = result_sender.send(Err(format!("Kurulum motoru başlatılamadı: {error}")));
             return;
         }
     };
@@ -1214,7 +1214,7 @@ fn run_installer_worker(
             let _ = child.kill();
             let _ = child.wait();
             let _ = result_sender.send(Err(
-                "Setup backend output streams could not be captured.".to_owned()
+                "Kurulum motorunun durum bilgisi okunamadı.".to_owned()
             ));
             return;
         }
