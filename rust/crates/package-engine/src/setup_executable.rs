@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/setup_executable.rs
 // Amac: Imzali Turkuaz setup bundle'ini Windows CLI stub'ina guvenli bicimde eklemek ve cikarmak
 // Modul - Rust Setup Executable
-// Version: 0.3.0
+// Version: 0.3.1
 // Aciklama: Authenticode sertifika tablosundan onceki 8 bayt hizalama dolgusunda footer'i guvenle bulur
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -501,6 +501,17 @@ fn locate_setup_footer_start(
     Err(SetupExecutableError::InvalidSetup(
         "self-extracting setup footer is missing or unsupported",
     ))
+}
+
+/// Locate the end of unsigned PE image/overlay, excluding a terminal Authenticode
+/// certificate table. Other setup formats can reuse this strict PE layout check.
+pub fn pe_unsigned_payload_end(
+    executable_path: impl AsRef<Path>,
+) -> Result<u64, SetupExecutableError> {
+    let path = executable_path.as_ref();
+    let metadata = regular_file_metadata(path)?;
+    let mut file = fs::File::open(path).map_err(SetupExecutableError::Io)?;
+    setup_payload_end(&mut file, metadata.len())
 }
 
 fn setup_payload_end(
