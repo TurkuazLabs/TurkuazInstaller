@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.14
+# Version: 0.2.15
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -114,6 +114,9 @@ jobs:
 
       - name: Build setup authoring GUI
         run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui
+
+      - name: Test setup authoring GUI theme safety
+        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_typography_is_available_for_both_appearances
 
       - name: Stamp setup authoring GUI artifact
         shell: pwsh
