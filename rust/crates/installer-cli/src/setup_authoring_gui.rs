@@ -466,7 +466,7 @@ impl eframe::App for BuilderApp {
                             .weak(),
                     );
 
-                    const SECTIONS: [&str; 4] = [
+                    let sections: [&str; 4] = [
                         "01   Ürün bilgileri",
                         "02   Uygulama dosyaları",
                         "03   Setup tasarımı",
@@ -475,7 +475,7 @@ impl eframe::App for BuilderApp {
                             InstallerKind::Web => "04   Çevrimiçi yayın",
                         },
                     ];
-                    for (index, label) in SECTIONS.iter().enumerate() {
+                    for (index, label) in sections.iter().enumerate() {
                         if navigation_item(ui, self.dialog_open && self.active_step == index, label)
                             .clicked()
                             && !is_building
