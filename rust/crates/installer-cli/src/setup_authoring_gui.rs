@@ -139,7 +139,9 @@ impl Default for BuilderApp {
 }
 
 fn configure_studio_style(context: &egui::Context) {
-    context.style_mut(|style| {
+    // Register named text styles in both themes before the first frame.
+    // A missing style panics when Windows or the user switches appearance.
+    context.all_styles_mut(|style| {
         style
             .text_styles
             .insert(egui::TextStyle::Small, egui::FontId::proportional(13.0));
@@ -1561,4 +1563,23 @@ fn write_new_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
 
 fn color(rgb: [u8; 3]) -> egui::Color32 {
     egui::Color32::from_rgb(rgb[0], rgb[1], rgb[2])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn studio_typography_is_available_for_both_appearances() {
+        let context = egui::Context::default();
+        configure_studio_style(&context);
+
+        for theme in [egui::Theme::Light, egui::Theme::Dark] {
+            let style = context.style_of(theme);
+            let title = egui::TextStyle::Name("PageTitle".into()).resolve(&style);
+            let product = egui::TextStyle::Name("ProductName".into()).resolve(&style);
+            assert_eq!(title.size, 29.0);
+            assert_eq!(product.size, 27.0);
+        }
+    }
 }
