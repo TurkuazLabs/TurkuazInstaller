@@ -2656,6 +2656,36 @@ mod tests {
     }
 
     #[test]
+    fn source_check_uses_selected_release_and_requires_trust_file() {
+        let mut project = SavedProject::default();
+        assert!(source_check_request(&project).is_err());
+        project.installer_kind = InstallerKind::Web;
+        project.web_release_source = WebReleaseSource::GithubReleases;
+        project.github_repository = "public-owner/desktop-client".to_owned();
+        project.github_release_tag = "v1.2.3".to_owned();
+        assert!(source_check_request(&project).is_err());
+
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let file = std::env::temp_dir().join(format!(
+            "turkuaz-check-trust-{}-{stamp}.yaml",
+            std::process::id()
+        ));
+        fs::write(&file, b"schemaVersion: 1\n").expect("write test trust");
+        project.trust_store_path = file.to_string_lossy().into_owned();
+        let request = source_check_request(&project).expect("check request");
+        assert_eq!(
+            request.manifest_url,
+            "https://github.com/public-owner/desktop-client/releases/download/v1.2.3/release-manifest.yaml"
+        );
+        assert_eq!(request.package_id, "ornek.uygulamam");
+        assert_eq!(request.trust_file, file);
+        fs::remove_file(&file).expect("clean test trust");
+    }
+
+    #[test]
     fn welcome_selection_opens_mode_specific_modal_without_replacing_old_project_silently() {
         let mut app = BuilderApp::default();
         assert!(!app.workspace_open);
