@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.9
+# Version: 0.2.10
 # Aciklama: Imzali lifecycle smoke'unu calistirir ve istenirse test dagitim ciftini saklar
 # Bagimli Oldugu Katman: QA | Tool
 param(
@@ -466,6 +466,35 @@ fn main() {
 
     Invoke-AuthenticodeSignCheck -Label 'primary setup' -SetupPath $primarySetup
     Invoke-AuthenticodeSignCheck -Label 'NSIS backup' -SetupPath $backupSetup
+
+    # BRK-WEB-SETUP-SIGNED-ACCEPTANCE: Authenticode appends a PE certificate table.
+    # Verify signed WebSetup config survives the signing overlay and remains readable.
+    # This fixture uses non-resolving example.test URLs and never installs anything.
+    $webSetupPath = Join-Path $script:WorkDirectory 'TurkuazWebSetup-signed-test.exe'
+    $webManifestUrl = 'https://updates.example.test/ci-smoke.yaml'
+    $webSignatureUrl = 'https://updates.example.test/ci-smoke.yaml.p7s'
+    Invoke-Installer -Step 'create unsigned WebSetup with pinned public trust' -Arguments @(
+        'build-web-setup',
+        '--stub', $script:GuiStubPath,
+        '--package-id', $script:PackageId,
+        '--manifest-url', $webManifestUrl,
+        '--signature-url', $webSignatureUrl,
+        '--trust-store', $script:TrustStorePath,
+        '--target', $script:TargetPath,
+        '--output', $webSetupPath
+    ) | Out-Null
+    if (!(Test-Path -LiteralPath $webSetupPath -PathType Leaf)) {
+        throw 'WebSetup build command did not produce an EXE.'
+    }
+    Invoke-AuthenticodeSignCheck -Label 'WebSetup (test-only)' -SetupPath $webSetupPath
+    $webSetupDetails = Invoke-Installer -Step 'read Authenticode-signed WebSetup metadata' -Arguments @(
+        'web-setup-info', '--file', $webSetupPath
+    )
+    if ($webSetupDetails -notmatch 'WebSetup package: ci\.smoke' -or
+        !$webSetupDetails.Contains($webManifestUrl)) {
+        throw 'Signed WebSetup does not preserve its embedded HTTPS release configuration.'
+    }
+    Write-Host '    Signed WebSetup configuration read-back succeeded (no HTTPS download).'
 
     Invoke-SignedSetupInstall -SetupPath $primarySetup
     $listOutput = Invoke-Installer -Step 'confirm install-self package state' -Arguments @(
