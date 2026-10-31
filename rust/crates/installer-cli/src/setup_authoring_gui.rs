@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.4.0
-// Aciklama: Proje paneli, modal editorler ve surekli setup onizlemesi sunar
+// Version: 0.5.0
+// Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
 use std::{
@@ -53,10 +53,44 @@ impl AppearancePreference {
     }
 }
 
+// BRK-SETUP-PROJECT-TYPE: persist output mode; old .tzproj files remain offline.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum InstallerKind {
+    #[default]
+    Offline,
+    Web,
+}
+
+impl InstallerKind {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Offline => "Normal Setup",
+            Self::Web => "Web Installer",
+        }
+    }
+
+    const fn description(self) -> &'static str {
+        match self {
+            Self::Offline => "Uygulama dosyalarını içeren, internet gerektirmeyen kurulum.",
+            Self::Web => "Küçük EXE ile imzalı HTTPS yayından uygulamayı indiren kurulum.",
+        }
+    }
+
+    const fn release_title(self) -> &'static str {
+        match self {
+            Self::Offline => "Çevrimdışı dağıtım",
+            Self::Web => "Çevrimiçi yayın",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SavedProject {
     schema_version: u32,
+    #[serde(default)]
+    installer_kind: InstallerKind,
     product_name: String,
     package_id: String,
     version: String,
@@ -94,6 +128,7 @@ impl Default for SavedProject {
 
         Self {
             schema_version: PROJECT_SCHEMA_VERSION,
+            installer_kind: InstallerKind::Offline,
             product_name: "Uygulamam".to_owned(),
             package_id: "ornek.uygulamam".to_owned(),
             version: "1.0.0".to_owned(),
@@ -122,6 +157,9 @@ impl Default for SavedProject {
 
 struct BuilderApp {
     project: SavedProject,
+    workspace_open: bool,
+    has_project: bool,
+    pending_new_kind: Option<InstallerKind>,
     active_step: usize,
     dialog_open: bool,
     appearance: AppearancePreference,
@@ -135,6 +173,9 @@ impl Default for BuilderApp {
     fn default() -> Self {
         Self {
             project: SavedProject::default(),
+            workspace_open: false,
+            has_project: false,
+            pending_new_kind: None,
             active_step: 0,
             dialog_open: false,
             appearance: AppearancePreference::System,
