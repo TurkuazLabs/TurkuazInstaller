@@ -343,10 +343,20 @@ impl eframe::App for BuilderApp {
                     ui.label("Görünüm");
                     ui.separator();
                     if ui
-                        .add_enabled(!is_building, egui::Button::new("Projeyi kaydet"))
+                        .add_enabled(
+                            !is_building && self.workspace_open,
+                            egui::Button::new("Projeyi kaydet"),
+                        )
                         .clicked()
                     {
                         save_requested = true;
+                    }
+                    if ui
+                        .add_enabled(!is_building, egui::Button::new("Yeni proje"))
+                        .clicked()
+                    {
+                        self.workspace_open = false;
+                        self.dialog_open = false;
                     }
                     if ui
                         .add_enabled(!is_building, egui::Button::new("Proje aç"))
@@ -363,6 +373,7 @@ impl eframe::App for BuilderApp {
             configure_studio_style(context);
         }
 
+        if self.workspace_open {
         egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
             ui.separator();
             ui.horizontal(|ui| {
@@ -382,20 +393,24 @@ impl eframe::App for BuilderApp {
                     ui.spinner();
                     ui.label("Paket ve kurulum dosyaları hazırlanıyor…");
                 } else {
-                    ui.label("Önce uygulama paketini, sonra imzalı setup dosyasını oluşturun.");
+                    ui.label(format!(
+                        "{} projesi · Önce uygulama paketini, sonra kurulum EXE dosyasını oluşturun.",
+                        self.project.installer_kind.label(),
+                    ));
                 }
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui
-                        .add_enabled(!is_building, egui::Button::new("3  WebSetup oluştur"))
+                    if self.project.installer_kind == InstallerKind::Web {
+                        if ui
+                            .add_enabled(!is_building, egui::Button::new("2  WebSetup oluştur"))
+                            .clicked()
+                        {
+                            web_build_requested = true;
+                        }
+                    } else if ui
+                        .add_enabled(!is_building, egui::Button::new("2  Normal Setup oluştur"))
                         .clicked()
                     {
-                        web_build_requested = true;
-                    }
-                    let distribution_clicked = ui
-                        .add_enabled(!is_building, egui::Button::new("2  İmzalı setup oluştur"))
-                        .clicked();
-                    if distribution_clicked {
                         self.start_distribution();
                     }
 
@@ -429,6 +444,18 @@ impl eframe::App for BuilderApp {
                     self.dialog_open = false;
                     self.status = None;
                 }
+                if navigation_item(ui, false, "Başlangıca dön / Yeni proje").clicked()
+                    && !is_building
+                {
+                    self.dialog_open = false;
+                    self.workspace_open = false;
+                }
+                ui.label(
+                    egui::RichText::new(self.project.installer_kind.label())
+                        .size(13.0)
+                        .strong()
+                        .color(studio_palette(ui.visuals().dark_mode).accent),
+                );
 
                 ui.add_space(8.0);
                 ui.separator();
@@ -443,7 +470,10 @@ impl eframe::App for BuilderApp {
                     "01   Ürün bilgileri",
                     "02   Uygulama dosyaları",
                     "03   Setup tasarımı",
-                    "04   Yayın ve çıktı",
+                    match self.project.installer_kind {
+                        InstallerKind::Offline => "04   Çevrimdışı dağıtım",
+                        InstallerKind::Web => "04   Çevrimiçi yayın",
+                    },
                 ];
                 for (index, label) in SECTIONS.iter().enumerate() {
                     if navigation_item(ui, self.dialog_open && self.active_step == index, label)
@@ -483,8 +513,17 @@ impl eframe::App for BuilderApp {
             egui::ScrollArea::vertical().show(ui, |ui| self.draw_workspace(ui));
         });
 
+        } else {
+            egui::CentralPanel::default().show(context, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| self.draw_welcome(ui));
+            });
+        }
+
         if self.dialog_open && !is_building {
             self.show_editor_modal(context, false);
+        }
+        if self.pending_new_kind.is_some() {
+            self.confirm_new_project(context);
         }
 
         if open_requested {
@@ -503,6 +542,128 @@ impl eframe::App for BuilderApp {
 }
 
 impl BuilderApp {
+    fn create_new_project(&mut self, kind: InstallerKind) {
+        let mut project = SavedProject::default();
+        project.installer_kind = kind;
+        self.project = project;
+        self.project_path = None;
+        self.status = None;
+        self.has_project = true;
+        self.workspace_open = true;
+        self.pending_new_kind = None;
+        self.open_editor(0);
+    }
+
+    fn request_new_project(&mut self, kind: InstallerKind) {
+        if self.has_project {
+            self.pending_new_kind = Some(kind);
+        } else {
+            self.create_new_project(kind);
+        }
+    }
+
+    fn confirm_new_project(&mut self, context: &egui::Context) {
+        let Some(kind) = self.pending_new_kind else {
+            return;
+        };
+        let mut proceed = false;
+        let mut cancel = false;
+        egui::Modal::new(egui::Id::new("setup-studio-new-project-confirmation"))
+            .show(context, |ui| {
+                ui.set_min_width(460.0);
+                ui.heading("Yeni proje oluşturulsun mu?");
+                ui.label("Şu an açık proje kapanacak. Kaydedilmemiş değişiklikler kaybolabilir.");
+                ui.label(format!("Seçilen proje türü: {}", kind.label()));
+                ui.horizontal(|ui| {
+                    if ui.button("Vazgeç").clicked() {
+                        cancel = true;
+                    }
+                    if ui.button("Yeni projeyi oluştur").clicked() {
+                        proceed = true;
+                    }
+                });
+            });
+        if cancel {
+            self.pending_new_kind = None;
+        } else if proceed {
+            self.create_new_project(kind);
+        }
+    }
+
+    fn draw_welcome(&mut self, ui: &mut egui::Ui) {
+        let palette = studio_palette(ui.visuals().dark_mode);
+        ui.add_space(30.0);
+        ui.colored_label(
+            palette.accent,
+            egui::RichText::new("TURKUAZ SETUP STUDIO / BAŞLANGIÇ")
+                .size(13.0)
+                .strong(),
+        );
+        ui.label(
+            egui::RichText::new("Ne oluşturmak istiyorsunuz?")
+                .text_style(egui::TextStyle::Name("PageTitle".into()))
+                .strong(),
+        );
+        ui.label("Bir proje şablonu seçin. Ardından dört adımlı kurulum projesi sihirbazı açılacak.");
+        ui.add_space(23.0);
+        ui.heading("Yeni proje");
+        ui.add_space(8.0);
+        let mut selected = None;
+        ui.columns(2, |columns| {
+            for (ui, kind, number) in [
+                (&mut columns[0], InstallerKind::Offline, "01"),
+                (&mut columns[1], InstallerKind::Web, "02"),
+            ] {
+                studio_card(ui, |ui| {
+                    ui.colored_label(
+                        palette.accent,
+                        egui::RichText::new(number).size(23.0).strong(),
+                    );
+                    ui.add_space(5.0);
+                    ui.label(egui::RichText::new(kind.label()).size(22.0).strong());
+                    ui.add_space(4.0);
+                    ui.label(kind.description());
+                    ui.add_space(15.0);
+                    let width = ui.available_width();
+                    if ui
+                        .add_sized(
+                            [width, 44.0],
+                            egui::Button::new(format!("{} projesi oluştur", kind.label())),
+                        )
+                        .clicked()
+                    {
+                        selected = Some(kind);
+                    }
+                });
+            }
+        });
+        ui.add_space(22.0);
+        ui.separator();
+        ui.label(egui::RichText::new("Mevcut projeler").size(19.0).strong());
+        ui.label("Daha önce kaydettiğiniz .tzproj dosyalarıyla çalışmaya devam edin.");
+        ui.horizontal_wrapped(|ui| {
+            if ui.button("Kaydedilmiş proje aç…").clicked() {
+                self.open_project();
+            }
+            if self.has_project && ui.button("Açık projeye dön").clicked() {
+                self.workspace_open = true;
+            }
+        });
+        if let Some((success, message)) = &self.status {
+            ui.colored_label(
+                if *success {
+                    palette.accent
+                } else {
+                    egui::Color32::from_rgb(185, 67, 58)
+                },
+                message,
+            );
+        }
+        if let Some(kind) = selected {
+            self.request_new_project(kind);
+        }
+    }
+
     fn draw_workspace(&mut self, ui: &mut egui::Ui) {
         let palette = studio_palette(ui.visuals().dark_mode);
         ui.add_space(6.0);
@@ -1170,6 +1331,9 @@ impl BuilderApp {
             match read_project(&path) {
                 Ok(project) => {
                     self.project = project;
+                    self.has_project = true;
+                    self.workspace_open = true;
+                    self.pending_new_kind = None;
                     self.project_path = Some(path.clone());
                     self.active_step = 0;
                     self.dialog_open = false;
