@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.2.8
+Version: 0.2.9
 Aciklama: Derleme kontrolunden gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -30,6 +30,12 @@ Olumsuz kontroller: `http:`, `file:`, bos adres, kullanici adi/parola iceren URL
 Studio'da 1 Paket hazirla islemi sonrasinda 04 Yayin ve cikti bolumune gercek imzali HTTPS manifest ve detached CMS signature URL'lerini girin. Gercek yayinci trust YAML ve Windows setup GUI stub secin. 3 WebSetup olustur dugmesi proje klasorundeki web/TurkuazWebSetup.exe dosyasini uretmelidir. Bu EXE Authenticode imzalanip temiz Windows VM'de baslatildiginda yayin URL'leri ve paket kimligi otomatik dolmali, trust store dosyasi secimi gerekmemelidir. Sihirbaz, manifest ve artifact icin ayni signed-HTTPS verification motorunu kullanmalidir.
 
 Negatif testler: manifest/signature icin HTTP ve credential URL'lerini reddet; imzayi, digest'i, policy eslesmesini, kesintili indirmeyi ve hatali interneti reddet; kurulum sonrasi launch/verify/uninstall ve iptal kurtarma durumunu kontrol et. CI'nin uretecegi imzasiz WebSetup EXE yalniz marker, payload-size ve SHA-256 config testidir, gercek CDN ya da production sertifikasi testi degildir. Private key hicbir ornege konulmaz.
+
+## CI: Authenticode imzali WebSetup geri okuma
+
+Windows signed bundle smoke script'i, gecici CI sertifikasi ve gercek yayinci pin'ine dayali test guven dosyasi ile bir `TurkuazWebSetup-signed-test.exe` hazirlar. Bu EXE, **Authenticode** ile imzalanir ve `web-setup-info` ile paket kimligi + manifest HTTPS adresinin imza eklendikten sonra da dogru okunabildigi kontrol edilir. Kullanilan `example.test` yayin URL'leri calisan CDN degildir ve bu smoke adimi ağa baglanmaz, kurulum baslatmaz veya test WebSetup EXE dosyasini kullaniciya dagitmaz. Signed WebSetup PE overlay + certificate table kabulunu test eder.
+
+Bu kabul, gercek HTTPS yayindan CMS imzasi dogrulama / artifact GET/SHA-256 / temiz Windows ortaminda son kullanici kurulumunun yerini almaz. Bu gercek sunucu adimlari hala aciktir.
 
 ## Pozitif akisi
 
