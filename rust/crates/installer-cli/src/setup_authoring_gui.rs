@@ -423,7 +423,7 @@ impl eframe::App for BuilderApp {
             .show(context, |ui| self.draw_preview(ui));
 
         egui::CentralPanel::default().show(context, |ui| {
-            self.draw_workspace(ui);
+            egui::ScrollArea::vertical().show(ui, |ui| self.draw_workspace(ui));
         });
 
         if self.dialog_open && !is_building {
@@ -444,48 +444,50 @@ impl eframe::App for BuilderApp {
 
 impl BuilderApp {
     fn draw_workspace(&mut self, ui: &mut egui::Ui) {
+        let palette = studio_palette(ui.visuals().dark_mode);
+        ui.add_space(6.0);
+        ui.colored_label(
+            palette.accent,
+            egui::RichText::new("KURULUM PROJESİ").size(12.0).strong(),
+        );
         ui.label(
-            egui::RichText::new("Proje çalışma alanı")
+            egui::RichText::new("Uygulamanız için setup hazırlayın")
                 .text_style(egui::TextStyle::Name("PageTitle".into()))
                 .strong(),
         );
-        ui.label("Proje ayarlarını bölümlere göre düzenleyin. Kurulum önizlemesi sağ tarafta sürekli görünür.");
+        ui.label("Dört basit adımda kurulum projenizi hazırlayın.");
         ui.add_space(14.0);
 
         studio_card(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.vertical(|ui| {
-                    ui.label(
-                        egui::RichText::new(&self.project.product_name)
-                            .text_style(egui::TextStyle::Name("ProductName".into()))
-                            .strong(),
-                    );
-                    ui.label(format!(
-                        "{}  •  v{}  •  {}",
-                        self.project.package_id,
-                        self.project.version,
-                        if self.project.channel == "beta" {
-                            "Beta"
-                        } else {
-                            "Stable"
-                        }
-                    ));
-                });
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let label = if self.project_path.is_some() {
-                        "Kayıtlı proje"
-                    } else {
-                        "Yeni proje"
-                    };
-                    ui.label(
-                        egui::RichText::new(label)
-                            .color(egui::Color32::from_rgb(18, 121, 132))
-                            .strong(),
-                    );
-                });
+            ui.label(egui::RichText::new("Nereden başlamalıyım?").size(20.0).strong());
+            ui.label(
+                "Önce ürün adını ve dosyalarını belirleyin. Sonra setup tasarımını düzenleyin.",
+            );
+            ui.add_space(10.0);
+            ui.horizontal_wrapped(|ui| {
+                if ui
+                    .add(
+                        egui::Button::new("Projeye başla")
+                            .fill(egui::Color32::from_rgb(10, 126, 135)),
+                    )
+                    .clicked()
+                {
+                    self.open_editor(0);
+                }
+                if ui.button("Uygulama dosyalarını seç").clicked() {
+                    self.open_editor(1);
+                }
             });
         });
-        ui.add_space(12.0);
+        ui.add_space(16.0);
+
+        ui.label(egui::RichText::new("Proje ayarları").size(21.0).strong());
+        ui.label(
+            egui::RichText::new("Düzenle düğmesiyle istediğiniz bölüme geçebilirsiniz.")
+                .size(14.0)
+                .weak(),
+        );
+        ui.add_space(8.0);
 
         let theme_label = SetupThemePreset::ALL
             .into_iter()
@@ -493,59 +495,87 @@ impl BuilderApp {
             .map(SetupThemePreset::label)
             .unwrap_or("Turkuaz");
         let source_summary = if self.project.source_directory.trim().is_empty() {
-            "Kaynak klasörü seçilmedi".to_owned()
+            "Henüz kaynak klasörü seçilmedi.".to_owned()
         } else {
             self.project.source_directory.clone()
         };
         let signing_summary = if self.project.signed_manifest_path.trim().is_empty() {
-            "İmzalı yayın dosyaları henüz seçilmedi".to_owned()
+            "Paket çıktısı ve imzalı dağıtım girdilerini belirleyin.".to_owned()
         } else {
-            "İmzalı manifest ve yayıncı güven ayarları tanımlandı".to_owned()
+            "Manifest seçildi. Diğer yayın girdilerini kontrol edin.".to_owned()
         };
         let sections = [
             (
                 "Ürün bilgileri",
                 format!(
-                    "{}  •  {}  •  v{}",
-                    self.project.product_name, self.project.package_id, self.project.version
+                    "{}  •  v{}  •  {}",
+                    self.project.product_name, self.project.version, self.project.channel
                 ),
+                "Uygulama adı, kimliği ve sürümü",
             ),
-            ("Uygulama dosyaları", source_summary),
+            (
+                "Uygulama dosyaları",
+                source_summary,
+                "Kurulacak klasör ve başlangıç EXE dosyası",
+            ),
             (
                 "Setup tasarımı",
                 format!("{} teması  •  {}", theme_label, self.project.brand_name),
+                "Son kullanıcının göreceği kurulum ekranı",
             ),
-            ("Yayın ve çıktı", signing_summary),
+            (
+                "Yayın ve çıktı",
+                signing_summary,
+                "Çıktı klasörü, imza ve dağıtım dosyaları",
+            ),
         ];
-
-        ui.columns(2, |columns| {
-            for (index, (title, summary)) in sections.iter().enumerate() {
-                self.draw_section_card(&mut columns[index % 2], index, title, summary);
-            }
-        });
-
-        ui.add_space(8.0);
-        studio_card(ui, |ui| {
-            ui.label(egui::RichText::new("Sonraki adım").size(19.0).strong());
-            ui.label("Önce uygulama paketini oluşturun. İmzalı yayın dosyalarınız hazırsa aynı projeden setup ve NSIS dağıtım çiftini üretebilirsiniz.");
-        });
+        for (index, (title, summary, description)) in sections.iter().enumerate() {
+            self.draw_section_card(ui, index, title, summary, description);
+            ui.add_space(7.0);
+        }
+        ui.add_space(5.0);
+        ui.label(
+            egui::RichText::new(
+                "Paket hazırlama imzalama değildir; EXE dağıtımı için imzalı yayın girdileri gerekir.",
+            )
+            .size(13.0)
+            .weak(),
+        );
+        ui.add_space(10.0);
     }
 
-    fn draw_section_card(&mut self, ui: &mut egui::Ui, index: usize, title: &str, summary: &str) {
+    fn draw_section_card(
+        &mut self,
+        ui: &mut egui::Ui,
+        index: usize,
+        title: &str,
+        summary: &str,
+        description: &str,
+    ) {
+        let mut edit = false;
         studio_card(ui, |ui| {
-            ui.set_min_height(142.0);
-            ui.label(egui::RichText::new(title).size(19.0).strong());
-            ui.add_space(4.0);
-            ui.label(egui::RichText::new(summary).size(15.0));
-            ui.add_space(8.0);
-            if ui
-                .add_sized([112.0, 38.0], egui::Button::new("Düzenle"))
-                .clicked()
-            {
-                self.open_editor(index);
-            }
+            ui.horizontal(|ui| {
+                let palette = studio_palette(ui.visuals().dark_mode);
+                ui.colored_label(
+                    palette.accent,
+                    egui::RichText::new(format!("{:02}", index + 1))
+                        .size(22.0)
+                        .strong(),
+                );
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new(title).size(18.0).strong());
+                    ui.label(egui::RichText::new(description).size(13.0).weak());
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    edit = ui.button("Düzenle").clicked();
+                });
+            });
+            ui.add_space(5.0);
+            ui.label(egui::RichText::new(summary).size(14.0));
         });
-        ui.add_space(10.0);
+        if edit {
+            self.open_editor(index);
+        }
     }
 
     fn show_editor_modal(&mut self, context: &egui::Context, is_building: bool) {
