@@ -1095,6 +1095,36 @@ fn finish_output_reader(reader: JoinHandle<io::Result<Vec<u8>>>) -> Vec<u8> {
     reader.join().ok().and_then(Result::ok).unwrap_or_default()
 }
 
+struct TemporaryWebTrustPolicy(PathBuf);
+
+impl Drop for TemporaryWebTrustPolicy {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
+// Public publisher trust policy is staged just for the existing signed-release CLI
+// contract. It is removed on completion/cancellation, never stored in the project.
+fn stage_web_trust_policy(config: &WebSetupConfig) -> io::Result<TemporaryWebTrustPolicy> {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| io::Error::other("System time is not available."))?
+        .as_nanos();
+    let directory = std::env::temp_dir();
+    let path = directory.join(format!(
+        ".turkuaz-web-trust-{}-{timestamp}.yaml",
+        std::process::id()
+    ));
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)?;
+    let guard = TemporaryWebTrustPolicy(path);
+    file.write_all(config.trust_policy.as_bytes())?;
+    file.sync_all()?;
+    Ok(guard)
+}
+
 fn run_installer_worker(
     package_id: String,
     trust_store: String,
@@ -1121,7 +1151,23 @@ fn run_installer_worker(
     let recovery_package_id = package_id.clone();
     let recovery_target = target.clone();
     let recovery_data_root = data_root.clone();
-    let is_uninstall = operation == "uninstall";
+    let temporary_web_trust = match web_configuration.as_ref() {
+        Some(config) if !is_uninstall => match stage_web_trust_policy(config) {
+            Ok(value) => Some(value),
+            Err(error) => {
+                let _ = result_sender.send(Err(format!(
+                    "WebSetup yayıncı güven politikası hazırlanamadı: {error}"
+                )));
+                return;
+            }
+        },
+        _ => None,
+    };
+    let trust_store = temporary_web_trust
+        .as_ref()
+        .map(|guard| guard.0.to_string_lossy().into_owned())
+        .unwrap_or(trust_store);
+
     let mut backend = Command::new(executable);
     backend
         .arg(backend_subcommand(source, &operation))
