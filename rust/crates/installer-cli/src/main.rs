@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.20
+// Version: 0.2.21
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -75,6 +75,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     if std::env::args().nth(1).as_deref() == Some("web-setup-info") {
         return web_setup_info_command();
+    }
+    if std::env::args().nth(1).as_deref() == Some("check-release-source") {
+        return check_release_source_command().await;
     }
     if std::env::args().nth(1).as_deref() == Some("build-distribution-pair") {
         return build_distribution_pair_command().await;
@@ -557,6 +560,138 @@ impl Drop for DistributionStagingGuard {
     fn drop(&mut self) {
         if !self.0.as_os_str().is_empty() {
             let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+}
+
+// BRK-WEB-RELEASE-CHECK-001
+// @purpose Verify a public signed HTTPS release feed and its package endpoint
+// without installing or writing any artifact to the local machine.
+// @contract Downloads only size-bounded manifest and CMS signature; package uses HEAD.
+fn validate_release_probe_url(value: &str) -> Result<Url, io::Error> {
+    if value.len() > 2048 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Release URL exceeds the maximum length.",
+        ));
+    }
+    let url = parse_https_url(value)?;
+    if !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Release URLs must not contain credentials, query parameters or fragments.",
+        ));
+    }
+    Ok(url)
+}
+
+async fn check_release_source_command() -> Result<(), Box<dyn Error>> {
+    let values = parse_setup_bundle_options(&[
+        "package-id",
+        "manifest-url",
+        "signature-url",
+        "trust-store",
+    ])?;
+    if values.is_empty() {
+        println!(
+            "Usage: turkuaz-installer check-release-source --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store POLICY.yaml"
+        );
+        return Ok(());
+    }
+    let package_id = PackageId::parse(required(&values, "package-id")?)?;
+    let manifest_url = validate_release_probe_url(required(&values, "manifest-url")?)?;
+    let signature_url = validate_release_probe_url(required(&values, "signature-url")?)?;
+    if manifest_url == signature_url {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Manifest and detached signature must use different URLs.",
+        )
+        .into());
+    }
+    let trust_path = absolute_path(Path::new(required(&values, "trust-store")?))?;
+    let _ = read_bounded_local_file(&trust_path, 1024 * 1024)?;
+
+    let http_client = Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .redirect(Policy::custom(|attempt| {
+            if attempt.url().scheme() == "https" && attempt.previous().len() < 10 {
+                attempt.follow()
+            } else {
+                attempt.stop()
+            }
+        }))
+        .build()?;
+
+    let (manifest, manifest_length) =
+        read_bounded_https(&http_client, &manifest_url, MAXIMUM_MANIFEST_BYTES).await?;
+    let (signature, signature_length) =
+        read_bounded_https(&http_client, &signature_url, MAXIMUM_DETACHED_SIGNATURE_BYTES).await?;
+    let trust_store = YamlManifestTrustPolicyRepository::new(trust_path)?;
+    let release = read_verified_release(
+        &mut io::Cursor::new(manifest),
+        &mut io::Cursor::new(signature),
+        Some(manifest_length),
+        Some(signature_length),
+        &package_id,
+        &trust_store,
+    )
+    .await?;
+
+    let artifact = release.artifact();
+    let artifact_url = artifact.uri();
+    if artifact_url.scheme() != "https"
+        || artifact_url.host_str().is_none()
+        || !artifact_url.username().is_empty()
+        || artifact_url.password().is_some()
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Signed online release must reference an HTTPS application package.",
+        )
+        .into());
+    }
+    let response = http_client
+        .head(artifact_url.clone())
+        .send()
+        .await?
+        .error_for_status()?;
+    if response
+        .content_length()
+        .is_some_and(|size| size != artifact.size_bytes())
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Package Content-Length does not match the signed release.",
+        )
+        .into());
+    }
+    println!(
+        "SIGNED_RELEASE_SOURCE_OK | package={} | manifest_verified=true | signature_verified=true | package_head=true | package_downloaded=false",
+        package_id
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod web_release_source_tests {
+    use super::*;
+
+    #[test]
+    fn check_release_source_rejects_unsafe_urls_without_network_io() {
+        assert!(validate_release_probe_url("https://updates.example.test/stable.yaml").is_ok());
+        for invalid in [
+            "",
+            "http://updates.example.test/stable.yaml",
+            "file:///tmp/stable.yaml",
+            "https://user:password@updates.example.test/stable.yaml",
+            "https://updates.example.test/stable.yaml?token=secret",
+            "https://updates.example.test/stable.yaml#fragment",
+        ] {
+            assert!(validate_release_probe_url(invalid).is_err());
         }
     }
 }
