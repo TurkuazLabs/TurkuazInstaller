@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.7.0
+Version: 0.8.0
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -53,6 +53,18 @@ Cevrimici Kurulum (Web Installer) projesinin 04 Cevrimici yayin adiminda **Yayin
 Yayin ve imza baglantilarinda HTTP, sorgu parametresi, fragment ve URL icine kullanici adi/parola konulamaz. GitHub owner, repo, tag ve asset adlarinda path-traversal ve URL operator karakterleri reddedilir; ayri alanlar .tzproj icinde kalici saklanir. Eski .tzproj dosyalari `webReleaseSource` alani olmadiginda `https` secenegiyle acilir ve onceki adresler kullanilir. Secilen kaynak yalnizca adresleri belirler; imza ve SHA-256 dogrulama mevcut kurulum motorunda devam eder. GitHub private repository token'lari EXE'ye gomulmez; bu ilk asamada private repository indirimi desteklenmez.
 
 Bu entegrasyon GitHub'a surum/asset yuklemez, bulut (S3/R2) API'si kurmaz, gercek CDN erisilebilirligini veya temiz Windows VM kurulumunu otomatik dogrulamaz.
+
+## Baglantiyi Test Et (Studio)
+
+**Cevrimici Kurulum (Web Installer) / 04 Cevrimici yayin** adimindaki **Baglantiyi Test Et** dugmesi, kaynak ayarlarini dogrulamak icin arka planda `check-release-source` CLI komutunu cagirir. GitHub Releases seciminde herkese acik release tag ve iki asset URL'si otomatik hesaplanir; Ozel HTTPS seciminde kullanicinin girdigi iki URL kullanilir. Yayinci guven dosyasi zorunludur. Islem arayuzu kilitlemez; kullanici kaynak ayarlarini degistirirse tamamlanmis eski sonuc gecerli kabul edilmez.
+
+Komut: `turkuaz-installer check-release-source --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store POLICY.yaml`. Bu komut:
+1. HTTPS URL parametrelerini sinirlar; HTTP, URL icine gomulu kimlik bilgisi, query ve fragment kabul etmez.
+2. Boyut sinirli manifest ve CMS detached imza dosyalarini indirir; mevcut `read_verified_release` ile imzayi, istenen paket kimligini ve yayinci politikasini dogrular.
+3. Imzali manifestteki uygulama paketinin HTTPS olmasini ister ve paket icin yalnizca **HEAD** istegiyle erisilebilirligi ve sunucunun bildirdigi boyutun imzali boyutla uyumunu denetler.
+4. **Kurulum yapmaz, uygulama paketini indirmez, cikti veya state dosyasi olusturmaz.** Sunucu HEAD desteklemiyorsa kontrol basarisiz raporlanabilir; bu, paketin GET ile kesin indirilemediginin kaniti degildir. HEAD basarisi da paketin SHA-256/hash veya Authenticode kontrolunu sagladigini kanitlamaz.
+
+CLI birinci adimda gercek HTTPS sunucu baglantisi gerektirir. CI unit testleri URL validation, secili kaynak ve trust-file girdi kontratini sinar; public GitHub release'inden gercek CMS imzali manifest / package HEAD E2E testi bu asamada **yapilmadi**. Temiz Windows kabulunde gercek sertifika ve imzali release ile ayri dogrulama gereklidir.
 
 ## WebSetup EXE cikarmak
 
