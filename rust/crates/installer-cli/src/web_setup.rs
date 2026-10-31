@@ -50,6 +50,7 @@ impl WebSetupConfig {
                 || !url.username().is_empty()
                 || url.password().is_some()
                 || url.fragment().is_some()
+                || url.query().is_some()
             {
                 return Err(invalid("WebSetup release URLs must be credential-free HTTPS."));
             }
