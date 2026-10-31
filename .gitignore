@@ -13,5 +13,6 @@ obj/
 *.suo
 TestResults/
 artifacts/
+/rust/target/
 *.nupkg
 *.snupkg

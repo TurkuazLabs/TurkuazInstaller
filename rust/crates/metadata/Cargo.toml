@@ -1,0 +1,20 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/metadata/Cargo.toml
+# Amac: Manifest ve detached signature byte-reader guvenlik katmani bagimliliklarini tanimlamak
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Stream sinirlamasi YAML parse ve CMS verification katmanlarindan once uygulanir
+# Bagimli Oldugu Katman: Tool | Config
+
+[package]
+name = "turkuaz-installer-metadata"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+tokio.workspace = true
+
+[lib]
+name = "turkuaz_installer_metadata"
+path = "src/lib.rs"

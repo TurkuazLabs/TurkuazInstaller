@@ -1,0 +1,20 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/domain/Cargo.toml
+# Amac: Installer'in saf domain kurallarini Rust kutuphanesi olarak derlemek
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Windows API, ag, dosya sistemi veya UI bagimliligi olmayan temel tipler
+# Bagimli Oldugu Katman: Model
+
+[package]
+name = "turkuaz-installer-domain"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+url = "2.5"
+
+[lib]
+name = "turkuaz_installer_domain"
+path = "src/lib.rs"

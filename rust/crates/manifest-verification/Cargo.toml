@@ -1,0 +1,24 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/manifest-verification/Cargo.toml
+# Amac: Detached CMS manifest signature verification bagimliliklarini tanimlamak
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Community manifest imzasini Windows CryptoAPI ile dogrular
+# Bagimli Oldugu Katman: Tool | Config
+
+[package]
+name = "turkuaz-installer-manifest-verification"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+sha2 = "0.10"
+turkuaz-installer-domain = { path = "../domain" }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Security_Cryptography"] }
+
+[lib]
+name = "turkuaz_installer_manifest_verification"
+path = "src/lib.rs"

@@ -1,0 +1,151 @@
+# Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
+# Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
+# Modul - GitHub Actions YAML
+# Version: 0.2.15
+# Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
+# Bagimli Oldugu Katman: Tool | Repo
+
+name: Rust Migration CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "rust/**"
+      - ".github/workflows/rust-migration.yml"
+      - "packaging/TurkuazInstallerBackup.nsi"
+
+concurrency:
+  group: rust-migration-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust-workspace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Report Rust toolchain
+        run: rustc --version && cargo --version
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+
+      - name: Compile workspace
+        run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets
+
+      - name: Run Clippy
+        run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets
+
+  rust-windows:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile Windows workspace
+        run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets
+
+      - name: Install NSIS
+        run: choco install nsis --yes --no-progress
+
+      - name: Validate NSIS backup script
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "turkuaz-nsis-validation"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Set-Content -LiteralPath (Join-Path $stage "TurkuazSetup.exe") -Value "stub" -Encoding ascii
+          Set-Content -LiteralPath (Join-Path $stage "manifest-trust.yaml") -Value "validation: true" -Encoding ascii
+          $outputPath = Join-Path $stage "TurkuazInstallerBackup.exe"
+          $scriptPath = Join-Path $env:GITHUB_WORKSPACE "packaging/TurkuazInstallerBackup.nsi"
+          $makensis = Join-Path ${env:ProgramFiles(x86)} "NSIS/makensis.exe"
+          & $makensis "/DPACKAGE_ID=validation.example" "/DPRIMARY_SETUP_PATH=$(Join-Path $stage "TurkuazSetup.exe")" "/DTRUST_STORE_PATH=$(Join-Path $stage "manifest-trust.yaml")" "/DOUTPUT_PATH=$outputPath" $scriptPath
+          if ($LASTEXITCODE -ne 0) { throw "NSIS backup script compilation failed." }
+          if (!(Test-Path -LiteralPath $outputPath -PathType Leaf)) { throw "NSIS did not produce the backup executable." }
+
+      - name: Resolve CLI version
+        shell: pwsh
+        run: |
+          $metadata = cargo metadata --manifest-path rust/Cargo.toml --no-deps --format-version 1 | ConvertFrom-Json
+          $package = $metadata.packages | Where-Object { $_.name -eq "turkuaz-installer-cli" } | Select-Object -First 1
+          if (!$package) { throw "Could not resolve the installer CLI package version." }
+          "RUST_CLI_VERSION=$($package.version)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build development CLI
+        run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer
+
+      - name: Stamp development CLI artifact
+        shell: pwsh
+        run: Copy-Item -LiteralPath rust/target/release/turkuaz-installer.exe -Destination "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe"
+
+      - name: Upload development CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-installer-cli-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: rust/target/release/turkuaz-installer-v${{ env.RUST_CLI_VERSION }}-windows-x64.exe
+          if-no-files-found: error
+          retention-days: 7
+
+
+      - name: Build GUI setup stub
+        run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui
+
+      - name: Stamp GUI setup stub artifact
+        shell: pwsh
+        run: Copy-Item -LiteralPath rust/target/release/turkuaz-installer.exe -Destination "rust/target/release/turkuaz-setup-gui-stub-v$env:RUST_CLI_VERSION-windows-x64.exe"
+
+      - name: Upload GUI setup stub artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-setup-gui-stub-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: rust/target/release/turkuaz-setup-gui-stub-v${{ env.RUST_CLI_VERSION }}-windows-x64.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build setup authoring GUI
+        run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui
+
+      - name: Test setup authoring GUI theme safety
+        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_typography_is_available_for_both_appearances
+
+      - name: Stamp setup authoring GUI artifact
+        shell: pwsh
+        run: Copy-Item -LiteralPath rust/target/release/turkuaz-installer.exe -Destination "rust/target/release/turkuaz-setup-builder-v$env:RUST_CLI_VERSION-windows-x64.exe"
+
+      - name: Upload setup authoring GUI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-setup-builder-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: rust/target/release/turkuaz-setup-builder-v${{ env.RUST_CLI_VERSION }}-windows-x64.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Run signed offline Windows lifecycle smoke
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          $smokeArguments = @{
+            InstallerPath = "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe"
+            GuiStubPath = "rust/target/release/turkuaz-setup-gui-stub-v$env:RUST_CLI_VERSION-windows-x64.exe"
+            MakensisPath = (Join-Path ([Environment]::GetEnvironmentVariable("ProgramFiles(x86)")) "NSIS/makensis.exe")
+            RetainDistributionPath = (Join-Path $env:RUNNER_TEMP "turkuaz-example-test-setup")
+          }
+          & "rust/scripts/windows-signed-bundle-smoke.ps1" @smokeArguments
+
+      - name: Upload test-only example setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-example-test-setup-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: ${{ runner.temp }}/turkuaz-example-test-setup/**
+          if-no-files-found: error
+          retention-days: 7

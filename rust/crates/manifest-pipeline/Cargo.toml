@@ -1,0 +1,25 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/manifest-pipeline/Cargo.toml
+# Amac: Bounded manifest intake, out-of-band signer trust ve signature verify siralamasini birlestirmek
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Installer manifest bytes'larini parsera gecmeden once boyut, trust ve imza kontrollerinden gecirir
+# Bagimli Oldugu Katman: Application
+
+[package]
+name = "turkuaz-installer-manifest-pipeline"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+tokio = { workspace = true }
+turkuaz-installer-domain = { path = "../domain" }
+turkuaz-installer-manifest-trust-store = { path = "../manifest-trust-store" }
+turkuaz-installer-manifest-parser = { path = "../manifest-parser" }
+turkuaz-installer-manifest-verification = { path = "../manifest-verification" }
+turkuaz-installer-metadata = { path = "../metadata" }
+
+[lib]
+name = "turkuaz_installer_manifest_pipeline"
+path = "src/lib.rs"
