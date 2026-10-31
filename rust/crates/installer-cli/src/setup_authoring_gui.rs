@@ -1369,6 +1369,13 @@ impl BuilderApp {
                                 ui.label("İmzalı yayın doğrulanıyor…");
                             }
                         });
+                        if self.source_check_receiver.is_none()
+                            && self.source_check_result.is_none()
+                        {
+                            if let Some((false, message)) = &self.status {
+                                ui.colored_label(egui::Color32::from_rgb(180, 45, 45), message);
+                            }
+                        }
                         if let Some((checked, succeeded, message)) = &self.source_check_result {
                             if source_check_request(&self.project).ok().as_ref() == Some(checked) {
                                 ui.colored_label(
