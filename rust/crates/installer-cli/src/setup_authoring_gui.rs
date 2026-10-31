@@ -1111,7 +1111,10 @@ impl BuilderApp {
                 );
             }
             _ => {
-                ui.label("Önce uygulama paketini hazırlayın. İmzalı yayın dosyalarınız hazır olduğunda aynı ekrandan dağıtım çiftini üretebilirsiniz.");
+                ui.label(match self.project.installer_kind {
+                    InstallerKind::Offline => "Önce uygulama paketini hazırlayın. İmzalı manifest, detached imza ve yayıncı güven dosyası hazır olunca Normal Setup oluşturabilirsiniz.",
+                    InstallerKind::Web => "Önce uygulama paketini hazırlayın ve imzalı HTTPS yayını sunucunuza yükleyin. WebSetup küçük bir EXE üretir, uygulama paketini internetten indirir.",
+                });
                 ui.add_space(12.0);
 
                 studio_card(ui, |ui| {
@@ -1134,6 +1137,7 @@ impl BuilderApp {
                 });
                 ui.add_space(12.0);
 
+                if self.project.installer_kind == InstallerKind::Offline {
                 studio_card(ui, |ui| {
                     ui.heading("İmzalı kurulum çıktısı");
                     ui.label("İmzalı manifesti, detached imzayı, yayıncı trust store dosyasını ve Windows setup GUI stub dosyasını seçin.");
@@ -1181,10 +1185,28 @@ impl BuilderApp {
                     ui.small("Dağıtım klasöründeki manifest-trust.yaml dosyasını setup dosyalarının yanında tutun.");
                 });
                 ui.add_space(12.0);
+                }
 
+                if self.project.installer_kind == InstallerKind::Web {
                 studio_card(ui, |ui| {
                     ui.heading("Çevrimiçi WebSetup.exe");
                     ui.label("Küçük WebSetup EXE dosyası uygulama paketini içine almaz. İmzalı HTTPS yayından indirir ve aynı güvenlik motoruyla kurar.");
+                    file_row(
+                        ui,
+                        "Yayıncı güven politikası",
+                        &mut self.project.trust_store_path,
+                        "Gerçek yayıncı trust store dosyasını seçin",
+                        "YAML güven politikası",
+                        &["yaml", "yml"],
+                    );
+                    file_row(
+                        ui,
+                        "WebSetup GUI stub",
+                        &mut self.project.setup_stub_path,
+                        "Turkuaz GUI setup stub dosyasını seçin",
+                        "Windows uygulaması",
+                        &["exe"],
+                    );
                     text_row(
                         ui,
                         "İmzalı yayın manifesti HTTPS adresi",
@@ -1195,19 +1217,21 @@ impl BuilderApp {
                         "Detached imza HTTPS adresi (.p7s)",
                         &mut self.project.web_signature_url,
                     );
-                    ui.small("3 WebSetup oluştur düğmesi, yayıncı güven politikasını ve bu adresleri EXE içine ekler. Dosyayı yayınlamadan önce Authenticode ile imzalamalısınız.");
+                    ui.small("2 WebSetup oluştur düğmesi, yayıncı güven politikasını ve bu adresleri EXE içine ekler. Dosyayı yayınlamadan önce Authenticode ile imzalamalısınız.");
                 });
                 ui.add_space(12.0);
+                }
 
                 studio_card(ui, |ui| {
                     ui.colored_label(
                         egui::Color32::from_rgb(170, 92, 22),
                         egui::RichText::new("Yayın imzası ve güven politikası gerekir").strong(),
                     );
-                    ui.label(
-                        "Önce uygulama paketini hazırlayıp release-manifest.draft.yaml dosyasını yayın koşullarınıza göre imzalayın. Ardından imzalı manifest ve gerçek yayıncı trust store ile “İmzalı setup üret” seçeneğini kullanın.",
-                    );
-                    ui.label("Üretilen iki EXE de dağıtımdan önce Authenticode ile imzalanmalıdır. İmzalama anahtarı Setup Studio projesine eklenmez.");
+                    ui.label(match self.project.installer_kind {
+                        InstallerKind::Offline => "Önce release-manifest.draft.yaml dosyasını imzalayın; ardından imzalı manifest ve yayıncı güven dosyasıyla Normal Setup oluşturun.",
+                        InstallerKind::Web => "Önce imzalı release manifestini, detached imzayı ve paketi HTTPS sunucusuna yükleyin; WebSetup EXE'yi yayınlamadan önce imzalayın.",
+                    });
+                    ui.label("Dağıtım EXE dosyaları Authenticode ile imzalanmalıdır. Gizli imzalama anahtarı Setup Studio projesine eklenmez.");
                     ui.hyperlink_to(
                         "Yayın imzalama akışını görüntüle",
                         "https://github.com/TurkuazLabs/TurkuazInstaller/blob/rewrite/rust-community/rust/RELEASE_SIGNING.md",
