@@ -2192,6 +2192,46 @@ mod tests {
     use super::*;
 
     #[test]
+    fn saved_project_kind_preserves_legacy_offline_and_web_projects() {
+        let legacy = SavedProject::default();
+        let mut value = serde_json::to_value(&legacy).expect("serialize project");
+        value
+            .as_object_mut()
+            .expect("project object")
+            .remove("installerKind");
+        let restored: SavedProject =
+            serde_json::from_value(value).expect("legacy project must remain supported");
+        assert_eq!(restored.installer_kind, InstallerKind::Offline);
+
+        let mut web = SavedProject::default();
+        web.installer_kind = InstallerKind::Web;
+        web.web_manifest_url = "https://updates.example.test/stable.yaml".to_owned();
+        let bytes = serde_json::to_vec(&web).expect("serialize web project");
+        let saved: SavedProject =
+            serde_json::from_slice(&bytes).expect("load web project");
+        assert_eq!(saved.installer_kind, InstallerKind::Web);
+        assert_eq!(saved.web_manifest_url, web.web_manifest_url);
+        assert_eq!(saved.schema_version, PROJECT_SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn welcome_selection_opens_mode_specific_modal_without_replacing_old_project_silently() {
+        let mut app = BuilderApp::default();
+        assert!(!app.workspace_open);
+        assert!(!app.has_project);
+        app.request_new_project(InstallerKind::Web);
+        assert!(app.workspace_open);
+        assert!(app.has_project);
+        assert!(app.dialog_open);
+        assert_eq!(app.active_step, 0);
+        assert_eq!(app.project.installer_kind, InstallerKind::Web);
+
+        app.request_new_project(InstallerKind::Offline);
+        assert_eq!(app.pending_new_kind, Some(InstallerKind::Offline));
+        assert_eq!(app.project.installer_kind, InstallerKind::Web);
+    }
+
+    #[test]
     fn output_directory_is_derived_from_package_identity_and_version() {
         let project = SavedProject::default();
         let actual = package_output_directory(&project).expect("valid default project");
