@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.16
+# Version: 0.2.17
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -102,6 +102,33 @@ jobs:
 
       - name: Test signed HTTPS installer wizard source selection
         run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui web_installer_tests
+
+      - name: Build and inspect preconfigured WebSetup EXE
+        shell: pwsh
+        run: |
+          $cli = "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe"
+          $gui = "rust/target/release/turkuaz-installer.exe"
+          $output = Join-Path $env:RUNNER_TEMP "TurkuazWebSetup-test.exe"
+          & $cli build-web-setup --stub $gui --package-id example.product --manifest-url https://updates.example.test/stable.yaml --signature-url https://updates.example.test/stable.yaml.p7s --trust-store rust/examples/manifest-trust.example.yaml --target (Join-Path $env:RUNNER_TEMP "web-app") --output $output
+          if ($LASTEXITCODE -ne 0) { throw "WebSetup build failed." }
+          & $cli web-setup-info --file $output
+          if ($LASTEXITCODE -ne 0) { throw "WebSetup read-back failed." }
+          $file = [System.IO.File]::ReadAllBytes($output)
+          $file[$file.Length - 49] = $file[$file.Length - 49] -bxor 0x01
+          [System.IO.File]::WriteAllBytes($output, $file)
+          & $cli web-setup-info --file $output
+          if ($LASTEXITCODE -eq 0) { throw "Tampered WebSetup was accepted." }
+          Remove-Item -LiteralPath $output -Force
+          & $cli build-web-setup --stub $gui --package-id example.product --manifest-url https://updates.example.test/stable.yaml --signature-url https://updates.example.test/stable.yaml.p7s --trust-store rust/examples/manifest-trust.example.yaml --target (Join-Path $env:RUNNER_TEMP "web-app") --output $output
+          if ($LASTEXITCODE -ne 0) { throw "Clean WebSetup rebuild failed." }
+
+      - name: Upload unsigned WebSetup demonstration
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-web-setup-test-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: ${{ runner.temp }}/TurkuazWebSetup-test.exe
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Stamp GUI setup stub artifact
         shell: pwsh
