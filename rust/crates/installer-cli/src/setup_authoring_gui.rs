@@ -73,7 +73,9 @@ impl InstallerKind {
     const fn description(self) -> &'static str {
         match self {
             Self::Offline => "Uygulama dosyalarını içeren, internet gerektirmeyen kurulum.",
-            Self::Web => "Küçük bir yükleyiciyle uygulama dosyalarını güvenli sunucudan indiren kurulum.",
+            Self::Web => {
+                "Küçük bir yükleyiciyle uygulama dosyalarını güvenli sunucudan indiren kurulum."
+            }
         }
     }
 
@@ -736,9 +738,11 @@ impl BuilderApp {
         let signing_summary = match self.project.installer_kind {
             InstallerKind::Offline => {
                 if self.project.signed_manifest_path.trim().is_empty() {
-                    "İmzalı yayın dosyasını, yayıncı güven dosyasını ve çıktı klasörünü belirleyin.".to_owned()
+                    "İmzalı yayın dosyasını, yayıncı güven dosyasını ve çıktı klasörünü belirleyin."
+                        .to_owned()
                 } else {
-                    "İmzalı yayın dosyası seçildi; diğer dağıtım ayarlarını kontrol edin.".to_owned()
+                    "İmzalı yayın dosyası seçildi; diğer dağıtım ayarlarını kontrol edin."
+                        .to_owned()
                 }
             }
             InstallerKind::Web => {
@@ -835,7 +839,9 @@ impl BuilderApp {
                             InstallerKind::Offline => {
                                 "Tam Kurulum bulundu: distribution/TurkuazSetup.exe"
                             }
-                            InstallerKind::Web => "Çevrimiçi Kurulum bulundu: web/TurkuazWebSetup.exe",
+                            InstallerKind::Web => {
+                                "Çevrimiçi Kurulum bulundu: web/TurkuazWebSetup.exe"
+                            }
                         });
                         ui.small("Üretilen EXE test çıktısıdır; gerçek yayından önce Authenticode ve Windows kabulü gerekir.");
                     } else if package_ready {
@@ -1044,7 +1050,9 @@ impl BuilderApp {
                     ui.add_space(12.0);
                 });
                 ui.add_space(8.0);
-                ui.small("Uygulama kimliği yayinci.uygulama biçiminde olmalıdır (örnek: firma.urun).");
+                ui.small(
+                    "Uygulama kimliği yayinci.uygulama biçiminde olmalıdır (örnek: firma.urun).",
+                );
             }
             1 => {
                 ui.label("Kurulacak uygulamanın yayımlanmış dosyalarının bulunduğu klasörü seçin.");
@@ -1101,7 +1109,11 @@ impl BuilderApp {
                             }
                         });
                     ui.add_space(12.0);
-                    text_row(ui, "Kurulum ekranında marka adı", &mut self.project.brand_name);
+                    text_row(
+                        ui,
+                        "Kurulum ekranında marka adı",
+                        &mut self.project.brand_name,
+                    );
                     text_row(ui, "Alt başlık", &mut self.project.subtitle);
                     text_row(ui, "Vurgu rengi", &mut self.project.accent_color);
                 });
@@ -1932,9 +1944,11 @@ fn build_distribution(project: SavedProject) -> Result<String, String> {
         ));
     }
 
-    let manifest_path = require_regular_file("İmzalı yayın dosyası", &project.signed_manifest_path)?;
+    let manifest_path =
+        require_regular_file("İmzalı yayın dosyası", &project.signed_manifest_path)?;
     let signature_path = require_regular_file("Yayın imza dosyası", &project.signature_path)?;
-    let trust_store_path = require_regular_file("Yayıncı güven dosyası", &project.trust_store_path)?;
+    let trust_store_path =
+        require_regular_file("Yayıncı güven dosyası", &project.trust_store_path)?;
     let setup_stub_path = require_regular_file("Kurulum motoru (EXE)", &project.setup_stub_path)?;
     let makensis_path = if project.makensis_path.trim().is_empty() {
         None
@@ -1986,26 +2000,25 @@ fn build_distribution(project: SavedProject) -> Result<String, String> {
         .arg(&bundle_path)
         .arg("--theme-config")
         .arg(&theme_path);
-    let result =
-        run_child(bundle_command, "İmzalı tam kurulum paketi hazırlama").and_then(|()| {
-            let mut pair_command = Command::new(&executable);
-            pair_command
-                .arg("build-distribution-pair")
-                .arg("--package-id")
-                .arg(package_id.to_string())
-                .arg("--stub")
-                .arg(&setup_stub_path)
-                .arg("--bundle")
-                .arg(&bundle_path)
-                .arg("--trust-store")
-                .arg(&trust_store_path)
-                .arg("--output-dir")
-                .arg(&distribution_directory);
-            if let Some(path) = &makensis_path {
-                pair_command.arg("--makensis").arg(path);
-            }
-            run_child(pair_command, "Tam Kurulum ve yedek yükleyici oluşturma")
-        });
+    let result = run_child(bundle_command, "İmzalı tam kurulum paketi hazırlama").and_then(|()| {
+        let mut pair_command = Command::new(&executable);
+        pair_command
+            .arg("build-distribution-pair")
+            .arg("--package-id")
+            .arg(package_id.to_string())
+            .arg("--stub")
+            .arg(&setup_stub_path)
+            .arg("--bundle")
+            .arg(&bundle_path)
+            .arg("--trust-store")
+            .arg(&trust_store_path)
+            .arg("--output-dir")
+            .arg(&distribution_directory);
+        if let Some(path) = &makensis_path {
+            pair_command.arg("--makensis").arg(path);
+        }
+        run_child(pair_command, "Tam Kurulum ve yedek yükleyici oluşturma")
+    });
     result?;
 
     Ok(format!(
