@@ -1048,6 +1048,9 @@ fn finish_output_reader(reader: JoinHandle<io::Result<Vec<u8>>>) -> Vec<u8> {
 fn run_installer_worker(
     package_id: String,
     trust_store: String,
+    source: InstallSource,
+    manifest_url: String,
+    signature_url: String,
     target: String,
     data_root: String,
     operation: String,
@@ -1070,11 +1073,7 @@ fn run_installer_worker(
     let is_uninstall = operation == "uninstall";
     let mut backend = Command::new(executable);
     backend
-        .arg(if is_uninstall {
-            "uninstall"
-        } else {
-            "install-self"
-        })
+        .arg(backend_subcommand(source, &operation))
         .arg("--package-id")
         .arg(&package_id)
         .arg("--target")
@@ -1084,11 +1083,16 @@ fn run_installer_worker(
     if is_uninstall {
         backend.arg("--confirm-uninstall").arg("YES");
     } else {
-        backend
-            .arg("--trust-store")
-            .arg(&trust_store)
-            .arg("--operation")
-            .arg(&operation);
+        backend.arg("--trust-store").arg(&trust_store);
+        if source == InstallSource::Online {
+            backend
+                .arg("--manifest-url")
+                .arg(&manifest_url)
+                .arg("--signature-url")
+                .arg(&signature_url);
+        } else {
+            backend.arg("--operation").arg(&operation);
+        }
     }
     let mut child = match backend
         .stdout(Stdio::piped())
@@ -1224,5 +1228,51 @@ fn run_installer_worker(
             .or_else(|| stdout.lines().last())
             .unwrap_or("İşlem başarısız oldu.");
         let _ = result_sender.send(Err(detail.to_owned()));
+    }
+}
+
+#[cfg(test)]
+mod web_installer_tests {
+    use super::*;
+
+    #[test]
+    fn source_selects_existing_signed_online_cli_and_offline_self_extractor() {
+        for operation in ["install", "update", "repair", "rollback"] {
+            assert_eq!(backend_subcommand(InstallSource::Online, operation), operation);
+            assert_eq!(
+                backend_subcommand(InstallSource::Offline, operation),
+                "install-self"
+            );
+        }
+        assert_eq!(
+            backend_subcommand(InstallSource::Online, "uninstall"),
+            "uninstall"
+        );
+    }
+
+    #[test]
+    fn online_release_requires_https_without_embedded_credentials() {
+        assert!(validate_online_source(
+            InstallSource::Online,
+            "https://updates.example.test/channel.yaml",
+            "https://updates.example.test/channel.yaml.p7s",
+        )
+        .is_ok());
+
+        for invalid in [
+            "",
+            "http://updates.example.test/channel.yaml",
+            "file:///tmp/manifest.yaml",
+            "https://user:password@updates.example.test/channel.yaml",
+            "https://updates.example.test/channel.yaml#fragment",
+        ] {
+            assert!(validate_online_source(
+                InstallSource::Online,
+                invalid,
+                "https://updates.example.test/channel.yaml.p7s",
+            )
+            .is_err());
+        }
+        assert!(validate_online_source(InstallSource::Offline, "", "").is_ok());
     }
 }
