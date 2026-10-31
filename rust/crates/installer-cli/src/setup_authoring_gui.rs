@@ -1574,6 +1574,7 @@ fn validate_web_project(project: &SavedProject) -> Result<(), String> {
             || !url.username().is_empty()
             || url.password().is_some()
             || url.fragment().is_some()
+            || url.query().is_some()
         {
             return Err(format!("{name} kullanıcı bilgisi içermeyen HTTPS URL olmalıdır."));
         }
