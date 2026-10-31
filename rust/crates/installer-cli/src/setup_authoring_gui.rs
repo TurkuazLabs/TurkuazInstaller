@@ -2402,6 +2402,85 @@ mod tests {
     }
 
     #[test]
+    fn web_provider_preserves_legacy_https_projects_and_roundtrips_github_settings() {
+        let mut legacy = SavedProject::default();
+        legacy.installer_kind = InstallerKind::Web;
+        legacy.web_manifest_url = "https://updates.example.test/stable.yaml".to_owned();
+        legacy.web_signature_url = "https://updates.example.test/stable.yaml.p7s".to_owned();
+
+        let mut serialized = serde_json::to_value(&legacy).expect("serialize legacy");
+        let object = serialized.as_object_mut().expect("project object");
+        for field in [
+            "webReleaseSource",
+            "githubRepository",
+            "githubReleaseTag",
+            "githubManifestAsset",
+            "githubSignatureAsset",
+        ] {
+            object.remove(field);
+        }
+        let restored: SavedProject =
+            serde_json::from_value(serialized).expect("deserialize legacy");
+        assert_eq!(restored.web_release_source, WebReleaseSource::Https);
+        assert_eq!(
+            resolve_web_release_urls(&restored).expect("legacy urls"),
+            (legacy.web_manifest_url, legacy.web_signature_url)
+        );
+
+        let mut github = SavedProject::default();
+        github.installer_kind = InstallerKind::Web;
+        github.web_release_source = WebReleaseSource::GithubReleases;
+        github.github_repository = "example-org/desktop-app".to_owned();
+        github.github_release_tag = "v1.2.3-beta.1".to_owned();
+        let expected = (
+            "https://github.com/example-org/desktop-app/releases/download/v1.2.3-beta.1/release-manifest.yaml".to_owned(),
+            "https://github.com/example-org/desktop-app/releases/download/v1.2.3-beta.1/release-manifest.yaml.p7s".to_owned(),
+        );
+        assert_eq!(resolve_web_release_urls(&github).expect("github URLs"), expected);
+        let encoded = serde_json::to_vec(&github).expect("encode github project");
+        let decoded: SavedProject = serde_json::from_slice(&encoded).expect("decode github");
+        assert_eq!(decoded.web_release_source, WebReleaseSource::GithubReleases);
+        assert_eq!(resolve_web_release_urls(&decoded).expect("restored urls"), expected);
+    }
+
+    #[test]
+    fn web_provider_rejects_secret_links_invalid_segments_and_ambiguous_release_assets() {
+        let mut project = SavedProject::default();
+        project.web_release_source = WebReleaseSource::GithubReleases;
+        project.github_repository = "publisher/product".to_owned();
+        project.github_release_tag = "v1.0.0".to_owned();
+        assert!(resolve_web_release_urls(&project).is_ok());
+
+        for invalid in [
+            "publisher/product/extra",
+            "publisher/../product",
+            "publisher/product?token=secret",
+            "publisher%2fother/product",
+            "",
+        ] {
+            project.github_repository = invalid.to_owned();
+            assert!(resolve_web_release_urls(&project).is_err());
+        }
+        project.github_repository = "publisher/product".to_owned();
+        for invalid in ["", "../latest", "v1.0.0?token=x", "v1/2", "#tag"] {
+            project.github_release_tag = invalid.to_owned();
+            assert!(resolve_web_release_urls(&project).is_err());
+        }
+        project.github_release_tag = "v1.0.0".to_owned();
+        project.github_signature_asset = project.github_manifest_asset.clone();
+        assert!(resolve_web_release_urls(&project).is_err());
+
+        project.web_release_source = WebReleaseSource::Https;
+        project.web_manifest_url = "https://user:secret@updates.example.test/stable.yaml".to_owned();
+        project.web_signature_url = "https://updates.example.test/stable.yaml.p7s".to_owned();
+        assert!(resolve_web_release_urls(&project).is_err());
+        project.web_manifest_url = "https://updates.example.test/stable.yaml?token=secret".to_owned();
+        assert!(resolve_web_release_urls(&project).is_err());
+        project.web_manifest_url = "https://updates.example.test/stable.yaml".to_owned();
+        assert!(resolve_web_release_urls(&project).is_ok());
+    }
+
+    #[test]
     fn welcome_selection_opens_mode_specific_modal_without_replacing_old_project_silently() {
         let mut app = BuilderApp::default();
         assert!(!app.workspace_open);
