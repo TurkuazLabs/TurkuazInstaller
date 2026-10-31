@@ -2,14 +2,14 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.4.0
+Version: 0.5.0
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
 # Turkuaz Setup Studio
 
-Turkuaz Setup Studio, uygulama dosyalarindan Turkuaz .tzpkg paketi, setup tema ayarlari ve imzali yayin girdilerinden dagitim cifti hazirlayan Windows masaustu aracidir. Ana ekranda solda bolum menusu, merkezde proje ozeti ve sagda son kullanici setup onizlemesi bulunur. Bolum secimleri formu arka plani kilitleyen modal pencerede acar. Uygulama gorunumu secenegi yalnizca Setup Studio penceresini etkiler; setup tema preset'i, marka adi, alt baslik ve vurgu rengi son kullanici kurulum sihirbazina uygulanir.
+Turkuaz Setup Studio, uygulama dosyalarindan Turkuaz .tzpkg paketi, setup tema ayarlari ve imzali yayin girdilerinden dagitim ciktilari hazirlayan Windows masaustu aracidir. Acilista IDE benzeri bir karsilama ekrani gorunur. Yeni Normal Setup veya Web Installer projesi secildiginde dort adimli modal proje sihirbazi acilir. Secim .tzproj icerisinde saklanir. Eski projeler varsayilan Normal Setup turuyle uyumlu acilir. Calisma alaninda solda bolum menusu, merkezde proje ozeti ve sagda son kullanici setup onizlemesi bulunur. Uygulama gorunumu secenegi yalnizca Setup Studio penceresini etkiler; setup tema preset'i, marka adi, alt baslik ve vurgu rengi son kullanici kurulum sihirbazina uygulanir.
 
 ## Windows GUI derlemesi
 
@@ -25,12 +25,13 @@ Argumansiz acildiginda Setup Studio penceresini gosterir. Windows CI, ayni dosya
 
 ## Proje calisma alani
 
-Ana ekranda solda numarali proje adimlari, ortada tek sutunlu ve kaydirilabilir duzenleme bolumleri, sagda son kullanici setup onizlemesi yer alir. Ust kisimdaki Proje ac ve Kaydet eylemleri, alt kisimdaki once paket hazirla ve sonra imzali setup olustur eylemlerinden ayri tutulur. Ilk acilista Projeye basla veya Uygulama dosyalarini sec eylemleri yeni kullaniciyi yonlendirir. Bir bolum secildiginde arka plani kilitleyen modal editor acilir. Modal icindeki onceki/sonraki bolum dugmeleriyle ilerlenebilir. Studio arayuzu Sistem/Acik/Koyu ayariyla kendi paletini degistirir; sagdaki onizlemenin Acik/Koyu secimi ise yalnizca olusturulacak setup temasinin onizlemesini etkiler. Bu iki gorunum ayari birbirine karistirilmaz.
+Ilk acilista iki proje sablonu yer alir: Normal Setup (offline paket ve NSIS yedegi) veya Web Installer (kucuk HTTPS bootstrap EXE). Secince modal sihirbaz acilir. Eski .tzproj dosyasi Proje ac ile yuklenebilir. Yeni proje secimi mevcut calisma verisini degistirecekse onay modal'i acilir; baslangica donuldugunde acik projeye geri donulebilir. Proje calisma alaninda solda numarali adimlar, ortada tek sutunlu duzenleme kartlari, sagda son kullanici setup onizlemesi bulunur. Modal sihirbaz urun bilgileri, uygulama dosyalari, setup tasarimi ve yalnizca secilen tipe ait yayin/cikti alanlarini gosterir. Alt kisimda her iki tur icin 1 Uygulama paketini hazirla ve yalnizca secilen tipe ait 2 Normal Setup olustur veya 2 WebSetup olustur dugmeleri yer alir. Studio arayuzu Sistem/Acik/Koyu ayariyla kendi paletini degistirir; sagdaki onizlemenin Acik/Koyu secimi ise olusturulacak setup temasinin onizlemesini etkiler.
 
 - Urun bilgileri: uygulama adi, paket kimligi, SemVer surumu ve stable/beta kanali.
 - Uygulama dosyalari: kaynak klasoru ve istege bagli goreli EXE yolu.
 - Setup tasarimi: varsayilan kurulum yolu, hazir tema preset'i, marka adi, alt baslik ve istege bagli HEX vurgu rengi.
-- Yayin ve cikti: cikti klasoru, imzali manifest, detached imza, yayinci trust store'u, setup GUI stub'i ve istege bagli makensis.exe yolu.
+- Cevrimdisi dagitim (Normal Setup): cikti klasoru, imzali manifest, detached imza, yayinci trust store'u, setup GUI stub'i ve istege bagli makensis.exe yolu.
+- Cevrimici yayin (Web Installer): cikti klasoru, HTTPS manifest/imza adresleri, yayinci trust store'u ve setup GUI stub'i.
 
 Uygulama paketi ve imzali dagitim cifti ana ekrandaki eylemlerden baslatilir. Gerekli bilgiler eksikse ilgili modal editor otomatik acilir.
 
@@ -38,7 +39,7 @@ Projeler .tzproj uzantisiyla kaydedilip Setup Studio icinde tekrar acilabilir. H
 
 ## WebSetup EXE cikarmak
 
-04 Yayin ve cikti bolumunde **Imzali yayin manifesti HTTPS adresi** ve **Detached imza HTTPS adresi** girilir. Yayinci trust store (public policy) ve Windows setup GUI stub'i secilmis olmalidir. Once **1 Uygulama paketini hazirla**, sonra **3 WebSetup olustur** kullanilir. Studio, ayni versiyonlu proje klasorunun `web/TurkuazWebSetup.exe` dosyasina bir Windows WebSetup stub'i uretir.
+Yeni **Web Installer** projesi secilir. Modal sihirbazin **04 Cevrimici yayin** bolumunde **Imzali yayin manifesti HTTPS adresi** ve **Detached imza HTTPS adresi** girilir. Yayinci trust store (public policy) ve Windows setup GUI stub'i secilmis olmalidir. Once **1 Uygulama paketini hazirla**, sonra **2 WebSetup olustur** kullanilir. Studio, ayni versiyonlu proje klasorunun `web/TurkuazWebSetup.exe` dosyasina bir Windows WebSetup stub'i uretir.
 
 WebSetup dosyasi .tzpkg uygulama verisini tasimaz. Icinde paket kimligi, imzali manifest ve imza HTTPS adresleri, hedef kurulum klasoru, secili setup temasi ve **public** yayinci trust store yer alir. Yayin private key'i, imzalama parolasi, kimlik dogrulama bilgisi veya paket verisi EXE icine eklenmez. Bu nedenle EXE genellikle full installer'dan kucuktur. Tek dosyadir; kullanicidan manuel manifest URL'si veya ayri trust-store dosyasi istemez.
 
