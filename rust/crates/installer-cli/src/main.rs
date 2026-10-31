@@ -657,8 +657,10 @@ async fn check_release_source_command() -> Result<(), Box<dyn Error>> {
     let response = http_client
         .head(artifact_url.clone())
         .send()
-        .await?
-        .error_for_status()?;
+        .await
+        .map_err(|_| io::Error::other("Signed package HEAD request failed."))?
+        .error_for_status()
+        .map_err(|_| io::Error::other("Signed package endpoint is unavailable."))?;
     if response
         .content_length()
         .is_some_and(|size| size != artifact.size_bytes())
