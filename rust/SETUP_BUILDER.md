@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.6.0
+Version: 0.7.0
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -43,9 +43,20 @@ Uygulama paketi ve imzali dagitim cifti ana ekrandaki eylemlerden baslatilir. Ge
 
 Projeler .tzproj uzantisiyla kaydedilip Setup Studio icinde tekrar acilabilir. Her uygulama paketi derlemesi, 04 Yayin ve cikti bolumunde secilen cikti ust klasoru altinda yeni bir {package-id}-{version} klasoru olusturur; var olan klasorun ustune yazmaz. Uygulama dosyalari bolumundeki kaynak klasoru cikti konumu degildir. Ana ekrandaki Olusturulan dosyalar paneli hedef klasoru ve gercekten mevcut application.tzpkg ile distribution/TurkuazSetup.exe dosyalarinin durumunu ayri gosterir. Cikti klasorunu ac dugmesi Windows Dosya Gezgini ile mevcut klasoru acar; EXE dosyasini calistirmaz. Ilk adim yalnizca .tzpkg dosyasi olusturur, kurulum EXE'si degildir. Imzali dagitim ciftini hazirlama adimi ayni klasordeki package ve theme dosyalarini kullanir ve yeni bir distribution alt klasoru olusturur.
 
+## Cevrimici yayin kaynagi
+
+Cevrimici Kurulum (Web Installer) projesinin 04 Cevrimici yayin adiminda **Yayin kaynagi** secilir:
+
+- **GitHub Releases:** herkese acik `sahip/depo`, tam yayin etiketi (or. `v1.2.3`) ve imzali YAML manifest/imza asset dosya adlari girilir. Studio bu girdilerden `https://github.com/sahip/depo/releases/download/v1.2.3/<dosya>` seklinde iki HTTPS URL olusturur. Dosyalarin GitHub'a yuklenmesi mevcut kullanici sorumlulugundadir. `stable`/`beta` proje kanali yayin etiketini kendiliginden degistirmez. Bilincli olarak sabit tag secilir; `releases/latest` otomatik secilmez.
+- **Ozel HTTPS sunucusu:** iki var olan HTTPS URL'si manuel girilir; CDN veya herhangi bir guvenli sunucu kullanilabilir.
+
+Yayin ve imza baglantilarinda HTTP, sorgu parametresi, fragment ve URL icine kullanici adi/parola konulamaz. GitHub owner, repo, tag ve asset adlarinda path-traversal ve URL operator karakterleri reddedilir; ayri alanlar .tzproj icinde kalici saklanir. Eski .tzproj dosyalari `webReleaseSource` alani olmadiginda `https` secenegiyle acilir ve onceki adresler kullanilir. Secilen kaynak yalnizca adresleri belirler; imza ve SHA-256 dogrulama mevcut kurulum motorunda devam eder. GitHub private repository token'lari EXE'ye gomulmez; bu ilk asamada private repository indirimi desteklenmez.
+
+Bu entegrasyon GitHub'a surum/asset yuklemez, bulut (S3/R2) API'si kurmaz, gercek CDN erisilebilirligini veya temiz Windows VM kurulumunu otomatik dogrulamaz.
+
 ## WebSetup EXE cikarmak
 
-Yeni **Cevrimici Kurulum** projesi secilir. Modal sihirbazin **04 Cevrimici yayin** bolumunde **Imzali yayin manifesti HTTPS adresi** ve **Detached imza HTTPS adresi** girilir. Yayinci trust store (public policy) ve Windows setup GUI stub'i secilmis olmalidir. Once **1 Uygulama paketini hazirla**, sonra **2 Cevrimici yukleyici olustur** kullanilir. Studio, ayni versiyonlu proje klasorunun `web/TurkuazWebSetup.exe` dosyasina bir Windows WebSetup stub'i uretir.
+Yeni **Cevrimici Kurulum** projesi secilir. Modal sihirbazin **04 Cevrimici yayin** bolumunde **GitHub Releases** veya **Ozel HTTPS** secilir; buna gore release etiketi ve asset adlari ya da iki dogrudan HTTPS URL'si girilir. Yayinci trust store (public policy) ve Windows setup GUI stub'i secilmis olmalidir. Once **1 Uygulama paketini hazirla**, sonra **2 Cevrimici yukleyici olustur** kullanilir. Studio, ayni versiyonlu proje klasorunun `web/TurkuazWebSetup.exe` dosyasina bir Windows WebSetup stub'i uretir.
 
 WebSetup dosyasi .tzpkg uygulama verisini tasimaz. Icinde paket kimligi, imzali manifest ve imza HTTPS adresleri, hedef kurulum klasoru, secili setup temasi ve **public** yayinci trust store yer alir. Yayin private key'i, imzalama parolasi, kimlik dogrulama bilgisi veya paket verisi EXE icine eklenmez. Bu nedenle EXE genellikle full installer'dan kucuktur. Tek dosyadir; kullanicidan manuel manifest URL'si veya ayri trust-store dosyasi istemez.
 
