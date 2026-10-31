@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_gui.rs
 // Amac: Self-extracting Turkuaz setup icin Windows masaustu kurulum sihirbazini sunmak
 // Modul - Rust GUI Module
-// Version: 0.2.0
+// Version: 0.3.0
 // Aciklama: GUI'den install, update, repair, rollback ve onayli uninstall islemlerini yonetir
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -17,6 +17,7 @@ use std::{
 
 use eframe::egui;
 use turkuaz_installer_domain::package_id::PackageId;
+use url::Url;
 use turkuaz_installer_package_engine::{
     SetupThemeConfig, SetupThemePalette, read_embedded_setup_theme,
 };
@@ -108,10 +109,69 @@ impl SetupOperation {
     }
 }
 
+// BRK-WEB-INSTALLER-SOURCE: transport selection must preserve signed-release validation.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum InstallSource {
+    #[default]
+    Offline,
+    Online,
+}
+
+impl InstallSource {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Offline => "Çevrimdışı (paketli setup)",
+            Self::Online => "Çevrimiçi (HTTPS indirme)",
+        }
+    }
+}
+
+fn validate_https_release_url(value: &str) -> Result<(), String> {
+    let url = Url::parse(value.trim())
+        .map_err(|_| "Yayın bağlantısı geçerli bir URL olmalıdır.".to_owned())?;
+    if url.scheme() != "https"
+        || url.host_str().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(
+            "Yayın bağlantısı kullanıcı bilgisi veya fragment içermeyen HTTPS adresi olmalıdır."
+                .to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_online_source(
+    source: InstallSource,
+    manifest_url: &str,
+    signature_url: &str,
+) -> Result<(), String> {
+    if source == InstallSource::Online {
+        validate_https_release_url(manifest_url)
+            .map_err(|error| format!("Manifest URL: {error}"))?;
+        validate_https_release_url(signature_url)
+            .map_err(|error| format!("İmza URL: {error}"))?;
+    }
+    Ok(())
+}
+
+fn backend_subcommand(source: InstallSource, operation: &str) -> &str {
+    if operation == "uninstall" || source == InstallSource::Online {
+        operation
+    } else {
+        "install-self"
+    }
+}
+
 struct SetupApp {
     step: usize,
     package_id: String,
     trust_store: String,
+    install_source: InstallSource,
+    manifest_url: String,
+    signature_url: String,
     target: String,
     data_root: String,
     operation: SetupOperation,
@@ -142,6 +202,9 @@ impl Default for SetupApp {
             step: 0,
             package_id: String::new(),
             trust_store: trust_store.to_string_lossy().into_owned(),
+            install_source: InstallSource::Offline,
+            manifest_url: String::new(),
+            signature_url: String::new(),
             target: local_app_data
                 .join("Programs")
                 .join("TurkuazLabs")
@@ -264,7 +327,11 @@ impl eframe::App for SetupApp {
                         appearance_changed = previous_appearance != self.appearance;
                         ui.label("Görünüm");
                         ui.separator();
-                        ui.label("Yerel kurulum sihirbazı");
+                        ui.label(if self.install_source == InstallSource::Online {
+                            "Çevrimiçi kurulum"
+                        } else {
+                            "Yerel kurulum sihirbazı"
+                        });
                     },
                 );
             });
