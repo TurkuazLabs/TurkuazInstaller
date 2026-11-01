@@ -2,14 +2,14 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.8.3
+Version: 0.8.4
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
 # Turkuaz Setup Studio
 
-Turkuaz Setup Studio, uygulama dosyalarindan Turkuaz .tzpkg paketi, setup tema ayarlari ve imzali yayin girdilerinden dagitim ciktilari hazirlayan Windows masaustu aracidir. Acilista IDE benzeri bir karsilama ekrani gorunur. Yeni Tam Kurulum veya Cevrimici Kurulum projesi secildiginde dort adimli modal proje sihirbazi acilir. Secim .tzproj icerisinde saklanir. Eski projeler varsayilan Tam Kurulum turuyle uyumlu acilir. Calisma alaninda solda bolum menusu, merkezde proje ozeti ve sagda son kullanici setup onizlemesi bulunur. Uygulama gorunumu secenegi yalnizca Setup Studio penceresini etkiler; setup tema preset'i, marka adi, alt baslik ve vurgu rengi son kullanici kurulum sihirbazina uygulanir.
+Turkuaz Setup Studio, uygulama dosyalarindan Turkuaz .tzpkg paketi, setup tema ayarlari ve imzali yayin girdilerinden dagitim ciktilari hazirlayan Windows masaustu aracidir. Acilista IDE benzeri bir karsilama ekrani gorunur. Yeni Tam Kurulum veya Cevrimici Kurulum projesi secildiginde dort adimli modal proje sihirbazi acilir. Secim .tzproj icerisinde saklanir. Eski projeler varsayilan Tam Kurulum turuyle uyumlu acilir. Calisma alaninda solda bolum menusu, merkezde proje ozeti ve sagda son kullanici setup onizlemesi bulunur. Uygulama gorunumu secenegi yalnizca Setup Studio penceresini etkiler; setup tema preset'i, marka adi, alt baslik ve vurgu rengi son kullanici kurulum sihirbazina uygulanir. Sag kurulum onizlemesindeki devam dugmesi yalnizca goruntudur ve kurulum baslatmaz.
 
 ## Kullaniciya gorunen adlandirma
 
@@ -31,7 +31,7 @@ Argumansiz acildiginda Setup Studio penceresini gosterir. Windows CI, ayni dosya
 
 ## Proje calisma alani
 
-Ilk acilista iki proje sablonu yer alir: Tam Kurulum (tum dosyalari iceren offline paket) veya Cevrimici Kurulum (HTTPS uzerinden indiren kucuk EXE). Secince modal sihirbaz acilir. Eski .tzproj dosyasi Proje ac ile yuklenebilir. Yeni proje secimi mevcut calisma verisini degistirecekse onay modal'i acilir; baslangica donuldugunde acik projeye geri donulebilir. Proje calisma alaninda solda numarali adimlar, ortada tek sutunlu duzenleme kartlari, sagda son kullanici setup onizlemesi bulunur. Modal sihirbaz urun bilgileri, uygulama dosyalari, setup tasarimi ve yalnizca secilen tipe ait yayin/cikti alanlarini gosterir. Alt kisimda her iki tur icin 1 Uygulama paketini hazirla ve yalnizca secilen tipe ait 2 Tam Kurulum olustur veya 2 Cevrimici yukleyici olustur dugmeleri yer alir. Studio arayuzu Sistem/Acik/Koyu ayariyla kendi paletini degistirir; sagdaki onizlemenin Acik/Koyu secimi ise olusturulacak setup temasinin onizlemesini etkiler.
+Ilk acilista iki proje sablonu yer alir: Tam Kurulum (tum dosyalari iceren offline paket) veya Cevrimici Kurulum (HTTPS uzerinden indiren kucuk EXE). Ustteki Baslangic dugmesi yeni proje secimine doner; sol menudeki bolumler ve proje ayarlari kartlari mevcut projeyi duzenler. Tekrarlayan "Projeye basla" karti ve sol menudeki ikinci baslangic kisayolu kaldirildi. Secince modal sihirbaz acilir. Eski .tzproj dosyasi Proje ac ile yuklenebilir. Yeni proje secimi mevcut calisma verisini degistirecekse onay modal'i acilir; baslangica donuldugunde acik projeye geri donulebilir. Proje calisma alaninda solda numarali adimlar, ortada tek sutunlu duzenleme kartlari, sagda son kullanici setup onizlemesi bulunur. Modal sihirbaz urun bilgileri, uygulama dosyalari, setup tasarimi ve yalnizca secilen tipe ait yayin/cikti alanlarini gosterir. Alt kisimda her iki tur icin 1 Uygulama paketini hazirla ve yalnizca secilen tipe ait 2 Tam Kurulum olustur veya 2 Cevrimici yukleyici olustur dugmeleri yer alir. Studio arayuzu Sistem/Acik/Koyu ayariyla kendi paletini degistirir; sagdaki onizlemenin Acik/Koyu secimi ise olusturulacak setup temasinin onizlemesini etkiler.
 
 - Urun bilgileri: uygulama adi, paket kimligi, SemVer surumu ve stable/beta kanali.
 - Uygulama dosyalari: kaynak klasoru ve istege bagli goreli EXE yolu.
@@ -58,7 +58,7 @@ ust dizinler reddedilir. Yetki ve disk hatalari acikca raporlanir.
 Kullanici tarafindan secilmis cikti konumu degistirilmez; var olan
 `{package-id}-{version}` klasorunun ustune yazilmaz.
 
-Projeler .tzproj uzantisiyla kaydedilip Setup Studio icinde tekrar acilabilir. Her uygulama paketi derlemesi, 04 Yayin ve cikti bolumunde secilen cikti ust klasoru altinda yeni bir {package-id}-{version} klasoru olusturur; var olan klasorun ustune yazmaz. Uygulama dosyalari bolumundeki kaynak klasoru cikti konumu degildir. Ana ekrandaki Olusturulan dosyalar paneli hedef klasoru ve gercekten mevcut application.tzpkg ile distribution/TurkuazSetup.exe dosyalarinin durumunu ayri gosterir. Cikti klasorunu ac dugmesi Windows Dosya Gezgini ile mevcut klasoru acar; EXE dosyasini calistirmaz. Ilk adim yalnizca .tzpkg dosyasi olusturur, kurulum EXE'si degildir. Imzali dagitim ciftini hazirlama adimi ayni klasordeki package ve theme dosyalarini kullanir ve yeni bir distribution alt klasoru olusturur.
+Projeler .tzproj uzantisiyla kaydedilip Setup Studio icinde tekrar acilabilir. Acik bir proje varken baska proje secmek icin onay istenir; iptal edilen dosya secimi proje verisini korur. Modal sihirbazda dogrulama hatalari ilgili duzenleme penceresinin icinde gorunur. Her uygulama paketi derlemesi, 04 Yayin ve cikti bolumunde secilen cikti ust klasoru altinda yeni bir {package-id}-{version} klasoru olusturur; var olan klasorun ustune yazmaz. Uygulama dosyalari bolumundeki kaynak klasoru cikti konumu degildir. Ana ekrandaki Olusturulan dosyalar paneli hedef klasoru ve gercekten mevcut application.tzpkg ile distribution/TurkuazSetup.exe dosyalarinin durumunu ayri gosterir. Birinci asama paketi hazir sayilmasi icin `project.tzproj` anlik goruntusu guncel kaynak, urun, surum, kurulum hedefi ve tema ayarlariyla eslesmelidir. Bu alanlar degistiyse eski paket hazir gosterilmez ve ikinci asama devre disi kalir; imza, trust ve yayin URL alanlarinin sonradan girilmesi paketi gecersiz kilmaz. Dis kaynak dosyalarinin icerigi proje dosyasindan otomatik takip edilmez. Degisik kaynakla yeniden paket icin yeni surum veya baska guvenli cikti konumu kullanilir. Cikti klasorunu ac dugmesi Windows Dosya Gezgini ile mevcut klasoru acar; EXE dosyasini calistirmaz. Ilk adim yalnizca .tzpkg dosyasi olusturur, kurulum EXE'si degildir. Imzali dagitim ciftini hazirlama adimi ayni klasordeki package ve theme dosyalarini kullanir ve yeni bir distribution alt klasoru olusturur.
 
 ## Cevrimici yayin kaynagi
 

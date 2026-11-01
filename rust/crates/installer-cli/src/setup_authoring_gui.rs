@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.4
+// Version: 0.6.5
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -212,6 +212,7 @@ struct BuilderApp {
     workspace_open: bool,
     has_project: bool,
     pending_new_kind: Option<InstallerKind>,
+    pending_open_requested: bool,
     active_step: usize,
     dialog_open: bool,
     appearance: AppearancePreference,
@@ -230,6 +231,7 @@ impl Default for BuilderApp {
             workspace_open: false,
             has_project: false,
             pending_new_kind: None,
+            pending_open_requested: false,
             active_step: 0,
             dialog_open: false,
             appearance: AppearancePreference::System,
@@ -409,7 +411,7 @@ impl eframe::App for BuilderApp {
                         save_requested = true;
                     }
                     if ui
-                        .add_enabled(!is_building, egui::Button::new("Yeni proje"))
+                        .add_enabled(!is_building, egui::Button::new("Başlangıç"))
                         .clicked()
                     {
                         self.workspace_open = false;
@@ -431,6 +433,7 @@ impl eframe::App for BuilderApp {
         }
 
         if self.workspace_open {
+            let package_ready = prepared_package_is_current(&self.project);
             egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
                 ui.separator();
                 ui.horizontal(|ui| {
@@ -449,9 +452,11 @@ impl eframe::App for BuilderApp {
                     } else if is_building {
                         ui.spinner();
                         ui.label("Paket ve kurulum dosyaları hazırlanıyor…");
+                    } else if !package_ready {
+                        ui.label("Adım 2 için önce güncel uygulama paketini hazırlayın.");
                     } else {
                         ui.label(format!(
-                            "{} projesi · Önce uygulama paketini, sonra kurulum EXE dosyasını oluşturun.",
+                            "{} projesi · Paket hazır; kurulum EXE dosyasını oluşturabilirsiniz.",
                             self.project.installer_kind.label(),
                         ));
                     }
@@ -459,13 +464,13 @@ impl eframe::App for BuilderApp {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self.project.installer_kind == InstallerKind::Web {
                             if ui
-                                .add_enabled(!is_building, egui::Button::new("2  Çevrimiçi yükleyici oluştur"))
+                                .add_enabled(!is_building && package_ready, egui::Button::new("2  Çevrimiçi yükleyici oluştur"))
                                 .clicked()
                             {
                                 web_build_requested = true;
                             }
                         } else if ui
-                            .add_enabled(!is_building, egui::Button::new("2  Tam Kurulum oluştur"))
+                            .add_enabled(!is_building && package_ready, egui::Button::new("2  Tam Kurulum oluştur"))
                             .clicked()
                         {
                             self.start_distribution();
@@ -501,13 +506,7 @@ impl eframe::App for BuilderApp {
                         self.dialog_open = false;
                         self.status = None;
                     }
-                    if navigation_item(ui, false, "Başlangıca dön / Yeni proje").clicked()
-                        && !is_building
-                    {
-                        self.dialog_open = false;
-                        self.workspace_open = false;
-                    }
-                    ui.label(
+                     ui.label(
                         egui::RichText::new(self.project.installer_kind.label())
                             .size(13.0)
                             .strong()
@@ -581,9 +580,12 @@ impl eframe::App for BuilderApp {
         if self.pending_new_kind.is_some() {
             self.confirm_new_project(context);
         }
+        if self.pending_open_requested && !is_building {
+            self.confirm_open_project(context);
+        }
 
         if open_requested {
-            self.open_project();
+            self.request_open_project();
         }
         if save_requested {
             self.save_project();
@@ -608,6 +610,7 @@ impl BuilderApp {
         self.has_project = true;
         self.workspace_open = true;
         self.pending_new_kind = None;
+        self.pending_open_requested = false;
         self.open_editor(0);
     }
 
@@ -704,7 +707,7 @@ impl BuilderApp {
         ui.label("Daha önce kaydettiğiniz .tzproj dosyalarıyla çalışmaya devam edin.");
         ui.horizontal_wrapped(|ui| {
             if ui.button("Kaydedilmiş proje aç…").clicked() {
-                self.open_project();
+                self.request_open_project();
             }
             if self.has_project && ui.button("Açık projeye dön").clicked() {
                 self.workspace_open = true;
@@ -742,34 +745,6 @@ impl BuilderApp {
             self.project.installer_kind.label()
         ));
         ui.add_space(14.0);
-
-        studio_card(ui, |ui| {
-            ui.label(
-                egui::RichText::new("Nereden başlamalıyım?")
-                    .size(20.0)
-                    .strong(),
-            );
-            ui.label(
-                "Önce ürün adını ve dosyalarını belirleyin. Sonra kurulum ekranının görünümünü düzenleyin.",
-            );
-            ui.add_space(10.0);
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .add(
-                        egui::Button::new("Projeye başla")
-                            .fill(egui::Color32::from_rgb(10, 126, 135)),
-                    )
-                    .clicked()
-                {
-                    self.open_editor(0);
-                }
-                if ui.button("Uygulama dosyalarını seç").clicked() {
-                    self.open_editor(1);
-                }
-            });
-        });
-        ui.add_space(16.0);
-
         self.draw_output_status(ui);
         ui.add_space(16.0);
 
@@ -891,8 +866,9 @@ impl BuilderApp {
                     );
                     ui.add_space(7.0);
 
-                    let package_ready =
+                    let package_present =
                         regular_file_exists(&package_directory.join("application.tzpkg"));
+                    let package_ready = prepared_package_is_current(&self.project);
                     let distribution_directory = package_directory.join("distribution");
                     let web_ready = regular_file_exists(
                         &package_directory.join("web").join("TurkuazWebSetup.exe"),
@@ -924,6 +900,12 @@ impl BuilderApp {
                             ui.spinner();
                             ui.label("Paket/kurulum çıktısı hazırlanıyor…");
                         });
+                    } else if package_present {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(170, 92, 22),
+                            "Mevcut paket farklı proje ayarlarına ait veya proje kaydı okunamıyor.",
+                        );
+                        ui.label("Paket kimliğini/sürümünü güncelleyip uygulama paketini yeniden hazırlayın.");
                     } else {
                         ui.label("Bu konumda henüz bir uygulama paketi bulunamadı.");
                         ui.label("Alttaki 1. düğme ile uygulama paketini oluşturun.");
@@ -1052,6 +1034,9 @@ impl BuilderApp {
             egui::ScrollArea::vertical()
                 .max_height(560.0)
                 .show(ui, |ui| self.draw_active_step(ui, is_building));
+            if let Some((false, message)) = &self.status {
+                ui.colored_label(egui::Color32::from_rgb(180, 45, 45), message);
+            }
             ui.separator();
 
             ui.horizontal(|ui| {
@@ -1436,7 +1421,7 @@ impl BuilderApp {
                 .strong(),
         );
         ui.label(
-            egui::RichText::new("Bu görünüm, oluşturacağınız setup dosyası içindir.")
+            egui::RichText::new("Yalnızca görsel önizleme; buradaki düğme kurulum başlatmaz.")
                 .size(13.0)
                 .weak(),
         );
@@ -1489,10 +1474,12 @@ impl BuilderApp {
                                 );
                                 ui.add_space(10.0);
                                 let button_width = ui.available_width();
-                                ui.add_sized(
-                                    [button_width, 40.0],
-                                    egui::Button::new("Kuruluma devam et").fill(accent),
-                                );
+                                ui.add_enabled_ui(false, |ui| {
+                                    ui.add_sized(
+                                        [button_width, 40.0],
+                                        egui::Button::new("Kuruluma devam et").fill(accent),
+                                    );
+                                });
                             });
                     });
                 ui.add_space(10.0);
@@ -1549,6 +1536,46 @@ impl BuilderApp {
         }
     }
 
+    // BRK-STUDIO-PROJECT-OPEN-001: Never replace an active project silently.
+    // Canceling the file picker retains every current setting.
+    fn request_open_project(&mut self) {
+        if self.has_project {
+            self.pending_open_requested = true;
+        } else {
+            self.open_project();
+        }
+    }
+
+    fn confirm_open_project(&mut self, context: &egui::Context) {
+        if !self.pending_open_requested {
+            return;
+        }
+        let mut proceed = false;
+        let mut cancel = false;
+        egui::Modal::new(egui::Id::new("setup-studio-open-project-confirmation")).show(
+            context,
+            |ui| {
+                ui.set_min_width(460.0);
+                ui.heading("Başka bir proje açılsın mı?");
+                ui.label("Mevcut çalışma alanı kapanacak; kaydedilmemiş değişiklikler kaybolabilir.");
+                ui.horizontal(|ui| {
+                    if ui.button("Vazgeç").clicked() {
+                        cancel = true;
+                    }
+                    if ui.button("Proje seç").clicked() {
+                        proceed = true;
+                    }
+                });
+            },
+        );
+        if cancel {
+            self.pending_open_requested = false;
+        } else if proceed {
+            self.pending_open_requested = false;
+            self.open_project();
+        }
+    }
+
     fn open_project(&mut self) {
         if let Some(path) = FileDialog::new()
             .add_filter("Turkuaz setup project", &["tzproj"])
@@ -1561,6 +1588,7 @@ impl BuilderApp {
                     self.has_project = true;
                     self.workspace_open = true;
                     self.pending_new_kind = None;
+                    self.pending_open_requested = false;
                     self.project_path = Some(path.clone());
                     self.active_step = 0;
                     self.dialog_open = false;
@@ -1697,6 +1725,10 @@ impl BuilderApp {
                 return;
             }
         }
+        if let Err(error) = ensure_prepared_package_is_current(&self.project) {
+            self.status = Some((false, error));
+            return;
+        }
         if let Err(error) = validate_web_project(&self.project) {
             self.open_editor(3);
             self.status = Some((false, error));
@@ -1730,6 +1762,10 @@ impl BuilderApp {
             }
         }
 
+        if let Err(error) = ensure_prepared_package_is_current(&self.project) {
+            self.status = Some((false, error));
+            return;
+        }
         if [
             &self.project.signed_manifest_path,
             &self.project.signature_path,
@@ -1790,6 +1826,44 @@ fn package_output_directory(project: &SavedProject) -> Result<PathBuf, String> {
         .map_err(|error| format!("Sürüm geçersiz: {error}"))?;
     let parent = resolve_path(&project.output_directory)?;
     Ok(parent.join(format!("{package_id}-{version}")))
+}
+
+// BRK-STUDIO-PACKAGE-STATE-001: A file left by an earlier project is not
+// proof that today's source, target and theme have been packaged.
+// Signing inputs can change without invalidating the first-stage package.
+fn package_build_inputs_match(current: &SavedProject, packaged: &SavedProject) -> bool {
+    current.installer_kind == packaged.installer_kind
+        && current.product_name == packaged.product_name
+        && current.package_id == packaged.package_id
+        && current.version == packaged.version
+        && current.channel == packaged.channel
+        && current.source_directory == packaged.source_directory
+        && current.entry_point == packaged.entry_point
+        && current.install_target == packaged.install_target
+        && current.output_directory == packaged.output_directory
+        && current.theme_preset == packaged.theme_preset
+        && current.brand_name == packaged.brand_name
+        && current.subtitle == packaged.subtitle
+        && current.accent_color == packaged.accent_color
+}
+
+fn ensure_prepared_package_is_current(project: &SavedProject) -> Result<PathBuf, String> {
+    let directory = package_output_directory(project)?;
+    if !regular_directory_exists(&directory)
+        || !regular_file_exists(&directory.join("application.tzpkg"))
+    {
+        return Err("Önce 1 Uygulama paketini hazırla işlemini tamamlayın.".to_owned());
+    }
+    let packaged = read_project(&directory.join("project.tzproj"))
+        .map_err(|_| "Paket proje kaydı eksik veya geçersiz; yeni sürümle tekrar paket hazırlayın.".to_owned())?;
+    if !package_build_inputs_match(project, &packaged) {
+        return Err("Paket, güncel proje ayarlarıyla eşleşmiyor. Yeni sürümle uygulama paketini yeniden hazırlayın.".to_owned());
+    }
+    Ok(directory)
+}
+
+fn prepared_package_is_current(project: &SavedProject) -> bool {
+    ensure_prepared_package_is_current(project).is_ok()
 }
 
 fn regular_file_exists(path: &Path) -> bool {
@@ -2260,10 +2334,7 @@ fn validate_web_project(project: &SavedProject) -> Result<(), String> {
 
 fn build_web_distribution(project: SavedProject) -> Result<String, String> {
     let (manifest_url, signature_url) = resolve_web_release_urls(&project)?;
-    let target_dir = package_output_directory(&project)?;
-    if !regular_directory_exists(&target_dir) {
-        return Err("Önce 1 Uygulama paketini hazırla işlemini tamamlayın.".to_owned());
-    }
+    let target_dir = ensure_prepared_package_is_current(&project)?;
     let theme = target_dir.join("setup-theme.json");
     let _ = require_regular_file("Kurulum teması ayarı", &theme.to_string_lossy())?;
     let trust = require_regular_file("Yayıncı güven dosyası", &project.trust_store_path)?;
@@ -2312,12 +2383,7 @@ fn build_distribution(project: SavedProject) -> Result<String, String> {
     }
 
     let package_id = PackageId::parse(&project.package_id).map_err(|error| error.to_string())?;
-    let output_parent = resolve_path(&project.output_directory)?;
-    let package_directory = output_parent.join(format!(
-        "{}-{}",
-        package_id,
-        SemanticVersion::parse(&project.version).map_err(|error| error.to_string())?
-    ));
+    let package_directory = ensure_prepared_package_is_current(&project)?;
     let directory_metadata = fs::symlink_metadata(&package_directory)
         .map_err(|error| format!("Paket çıktı klasörü açılamadı: {error}"))?;
     if directory_metadata.file_type().is_symlink() || !directory_metadata.is_dir() {
@@ -2865,6 +2931,63 @@ mod tests {
         let mut invalid = project;
         invalid.version = "wrong version".to_owned();
         assert!(package_output_directory(&invalid).is_err());
+    }
+
+    #[test]
+    fn existing_project_is_not_replaced_without_open_confirmation() {
+        let mut app = BuilderApp::default();
+        app.create_new_project(InstallerKind::Offline);
+        app.project.product_name = "Kaydedilmemiş değişiklik".to_owned();
+        app.request_open_project();
+        assert!(app.pending_open_requested);
+        assert_eq!(app.project.product_name, "Kaydedilmemiş değişiklik");
+    }
+
+    #[test]
+    fn package_snapshot_detects_stale_fields_but_not_signing_settings() {
+        let mut saved = SavedProject::default();
+        let mut current = saved.clone();
+        assert!(package_build_inputs_match(&current, &saved));
+
+        current.signed_manifest_path = "signed-manifest.yaml".to_owned();
+        current.signature_path = "manifest.p7s".to_owned();
+        current.trust_store_path = "publisher-trust.yaml".to_owned();
+        current.setup_stub_path = "setup.exe".to_owned();
+        assert!(package_build_inputs_match(&current, &saved));
+
+        current.source_directory = "C:/build/changed-source".to_owned();
+        assert!(!package_build_inputs_match(&current, &saved));
+        current.source_directory = saved.source_directory.clone();
+        current.brand_name = "Farklı tema".to_owned();
+        assert!(!package_build_inputs_match(&current, &saved));
+        saved.brand_name = current.brand_name.clone();
+        assert!(package_build_inputs_match(&current, &saved));
+    }
+
+    #[test]
+    fn prepared_package_must_match_saved_project_snapshot() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let temporary = std::env::temp_dir().join(format!(
+            "turkuaz-studio-package-state-{}-{nonce}",
+            std::process::id()
+        ));
+        let mut project = SavedProject::default();
+        project.output_directory = temporary.to_string_lossy().into_owned();
+        assert!(!prepared_package_is_current(&project));
+        let dir = package_output_directory(&project).expect("package dir");
+        fs::create_dir_all(&dir).expect("test output root");
+        fs::write(dir.join("application.tzpkg"), b"fixture").expect("test package");
+        assert!(!prepared_package_is_current(&project));
+        write_project(&dir.join("project.tzproj"), &project).expect("save snapshot");
+        assert!(prepared_package_is_current(&project));
+
+        project.subtitle = "Yeni alt başlık".to_owned();
+        assert!(!prepared_package_is_current(&project));
+        assert!(ensure_prepared_package_is_current(&project).is_err());
+        fs::remove_dir_all(&temporary).expect("clean fixture");
     }
 
     #[test]
