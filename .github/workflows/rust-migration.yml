@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.23
+# Version: 0.2.24
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -62,6 +62,16 @@ jobs:
 
       - name: Run Rust tests
         run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets
+
+      # BRK-RUST-LOCK-001: Record the resolved dependency graph for review.
+      # This short-lived artifact is not a release or an implicit pin.
+      - name: Export resolved Cargo.lock candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-community-cargo-lock-candidate
+          path: rust/Cargo.lock
+          retention-days: 3
+          if-no-files-found: error
 
   rust-windows:
     runs-on: windows-2025
