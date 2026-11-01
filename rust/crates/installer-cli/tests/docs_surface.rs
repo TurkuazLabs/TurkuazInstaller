@@ -5,7 +5,10 @@
 //! Aciklama: Markdown metadata, signed .tzpkg fixture ve legacy YAML statulerini denetler
 //! Bagimli Oldugu Katman: QA | Documentation
 
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 fn repository_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -35,7 +38,10 @@ fn public_rust_markdown_metadata_is_not_visible_as_a_heading() {
     ];
     for path in MARKDOWN {
         let content = read_repository_file(path);
-        assert!(content.starts_with("<!--\n"), "{path}: metadata must use HTML comment");
+        assert!(
+            content.starts_with("<!--\n"),
+            "{path}: metadata must use HTML comment"
+        );
         let heading = content
             .lines()
             .find(|line| line.starts_with("# "))
@@ -50,7 +56,10 @@ fn public_rust_markdown_metadata_is_not_visible_as_a_heading() {
 #[test]
 fn example_signed_manifest_matches_current_rust_full_package_contract() {
     let example = read_repository_file("examples/community-manifest.yml");
-    assert!(example.contains("application.tzpkg"), "Rust package example must use .tzpkg");
+    assert!(
+        example.contains("application.tzpkg"),
+        "Rust package example must use .tzpkg"
+    );
     for unsupported in [
         "  prerequisites:",
         "  preserve_paths:",
