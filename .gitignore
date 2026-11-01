@@ -1,18 +1,13 @@
-# 📄 Dosya Yolu: /.gitignore
-# 📌 Amac: Derleme, IDE ve test ciktilarini Git disinda tutar
-# 📌 Modul - Config
-# Version: 0.3.0
-# Aciklama: .NET Core gelistirme artefactlarini ve yerel dosyalari ignore eder
-# Bagimli Oldugu Katman: Tool
+# Dosya Yolu: REPO_ROOT/.gitignore
+# Amac: Cargo ve gelistirme ciktilarini repodan dislamak
+# Modul - Git Ignore
+# Version: 0.4.0
+# Aciklama: Rust ve setup test artefaktlari
+# Bagimli Oldugu Katman: Config | Tool
 
-bin/
-obj/
-.vs/
+**/target/
 .idea/
-*.user
-*.suo
-TestResults/
+.vscode/
 artifacts/
-/rust/target/
-*.nupkg
-*.snupkg
+*.tmp
+*.bak

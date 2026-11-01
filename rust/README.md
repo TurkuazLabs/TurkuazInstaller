@@ -2,18 +2,16 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.14
-Aciklama: Mevcut .NET davranisini koruyarak asamali Rust portu icin mimari sinir ve gercek kapsam durumunu belirtir
+Version: 2.3.15
+Aciklama: Aktif Community Rust kaynak kodu ve kabul sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
 
 # Rust Migration
 
-Bu workspace artik `rewrite/rust-community` dalindaki **tek aktif Community
-uygulama kaynak kodudur**. Eski .NET uygulama dizinleri ve .NET CI
-isleri bu dalin dosya agacindan temizlenmistir. Eski main ve commit
-gecmisi degistirilmemistir. Rust fonksiyonel testleri production
-GUI/kurulum imza kabulunun yerine gecmez; imzali release hala ayri kapidir.
+Bu workspace `rewrite/rust-community` dalinin aktif uygulama kodudur.
+Rust kaynak kodu ve testleri tek workspace altinda gelistirilir.
+Fonksiyonel testler production GUI ve imzali kurulum kabulunun yerine gecmez.
 
 ## Boundary
 
@@ -37,17 +35,17 @@ GUI/kurulum imza kabulunun yerine gecmez; imzali release hala ayri kapidir.
 - `install-workflow`: Package lock altinda `VerifiedArtifact` eslesmesini kontrol eder, ilk install veya ileri SemVer update icin paketi stage eder, etkin deployment'i acar ve installed state'i yazar. Imzali ayni surum artifact'iyle onarim yeni immutable deployment hazirlayip etkin isaretciyi atomik gunceller. Ayni servis package lock ve journal altinda yalnizca bu paketin deployment klasorunu kaldiran recoverable uninstall akisini da saglar. State yazimi basarisizsa etkin surumu telafi eder; current signed release policy izin verirse bir onceki etkin surume rollback yapar. Sinirlar: [INSTALL_WORKFLOW.md](INSTALL_WORKFLOW.md).
 - `installer-cli`: HTTPS manifest/signature okuma, signer policy dogrulamasi, release artifact download/hash/imza kontrolu, install/update/repair/rollback, kurulu paket listesi, envanter dogrulamasi, explicit interrupted-operation recovery ve kullanicinin verdigi pakette beyan edilen entrypoint ile uygulama baslatma komutlarini saglar; eski v1 paketlerde acik exe yolu alabilir. Yeni signed release/artifact dogrulanmis online veya offline bundle islemi baslamadan once bekleyen journal varsa ayni konservatif recovery akisini otomatik cagirir. Ayrica bilinen paket ID/hedef yolu oldugunda `launch`, `verify`, `uninstall` ve `list` oncesinde pending journal kontrol edilir ve guvenli recovery denenir. Argumansiz CLI/GUI acilisinda varsayilan data root icindeki kanonik journal dosyalari taranir ve konservatif recovery denenir; bozuk veya belirsiz kayit CLI'yi durdurur ya da GUI'yi bloklar. Ozel data root, secilen paket islemi oncesinde per-package preflight ile denetlenir; belirsiz first-install durumlari fail-closed birakilir. `.tzpkg` source builder'i ve paketin tam boyut/SHA-256 degerlerinden unsigned release manifest taslagi ureten `describe-package` komutu da CLI'dedir. Taslak imzalama anahtari tasimaz ve imzasizdir; detached CMS release imzalama ve dis trust policy akisi [RELEASE_SIGNING.md](RELEASE_SIGNING.md) icinde belgelenmistir. v2 paketleri entrypoint tasir; v1 paketleri geriye uyumluluk icin acik exe yolu ile calisir. Komut ve klasor sozlesmesi: [CLI.md](CLI.md). Her yeni degisiklik CI'dan gecmeden production setup sayilmaz.
 - `operation-lock`: package ID basina OS advisory file lock alir; ayni paketin ikinci process'teki operation'ini fail-fast reddeder, farkli paketlerin islemleri birbirinden bagimsizdir. Process ID ve UTC unix timestamp'i kilit dosyasinda tanilama icin tutulur. Lease dusurulunce lock serbest kalir; dosya inode race'ini onlemek icin bos dosya olarak birakilir.
-- `operation-journal`: typed operation/phase checkpoint'lerini package basina JSON dosyasinda saklar. 1 MiB okuma siniri ve package ID / enum deger dogrulamasi uygular; guncellemeyi ayni dizindeki gecici dosyayi sync edip rename ederek yazar. .NET journal'daki PascalCase alan adlari ve numeric enum sozlesmesi korunur.
-- `install-state-store`: kurulu paket versiyon/channel/target state'ini package basina JSON'da tutar; bounded okuma, deterministik listeleme, typed deger dogrulamasi ve atomik replace uygular. .NET PascalCase property ve numeric ReleaseChannel sozlesmesi korunur.
+- `operation-journal`: typed operation/phase checkpoint'lerini package basina JSON dosyasinda saklar. 1 MiB okuma siniri ve package ID / enum deger dogrulamasi uygular; guncellemeyi ayni dizindeki gecici dosyayi sync edip rename ederek yazar. Yayimlanmis PascalCase alan adlari ve numeric enum sozlesmesi korunur.
+- `install-state-store`: kurulu paket versiyon/channel/target state'ini package basina JSON'da tutar; bounded okuma, deterministik listeleme, typed deger dogrulamasi ve atomik replace uygular. Yayimlanmis PascalCase property ve numeric ReleaseChannel sozlesmesi korunur.
 - `operation-context`: operation start/resume, phase degisimi, reboot checkpoint arm/await/clear, completion, cancel ve fail gecislerini journal'a yazar. Resume icin package/op/version/target/prerequisite eslesmesini ve reboot-safe phase'i zorunlu tutar. Ilk install ve ileri update akisi bu context'i kullanir. Journal kurtarma, CLI'nin ayri recover komutunda uygulanir; operation-context kendi basina recovery runner saglamaz.
 - `authenticode-verification`: Windows WinTrust ile embedded Authenticode imzasini, whole-chain revocation'i (root haric), publisher subject'i ve varsa certificate SHA-256 pinini dogrular; signer sertifikasi CryptoAPI ile imzali dosyadan alinir.
-- `manifest-verification`: Windows CryptoAPI ile detached CMS/PKCS#7 imzasini dogrulama; tek signer, sertifika gecerlilik zamani, trust policy subject eslesmesi ve sertifika SHA-256 pini kontrolu. Sertifika zinciri dogrulamasi yapilmaz; mevcut .NET sozlesmesiyle ayni signature-only guven modelini izler.
+- `manifest-verification`: Windows CryptoAPI ile detached CMS/PKCS#7 imzasini dogrulama; tek signer, sertifika gecerlilik zamani, trust policy subject eslesmesi ve sertifika SHA-256 pini kontrolu. Sertifika zinciri dogrulamasi yapilmaz; mevcut signature-only guven modelini izler.
 - `manifest-trust-store`: dis YAML trust store okumasini 1 MiB ile sinirlar, yalniz regular file kabul eder, okuma sirasinda boyut degisikligini reddeder; schema version 1, package id, tekrar eden kayit ve package signer policy denetimi yapar; olmayan dosyada policy bulunamadi sonucu.
 - `manifest-pipeline`: manifest ve imza stream'lerini 1 MiB / 256 KiB sinirinda okur, requested package trust policy'sini bulur, CMS imzasini dogrular ve yalnizca strict UTF-8 decode sonrasinda YAML parserini calistirir; sonuc typed `PackageRelease` domain modelidir.
 - `manifest-parser`: schema v1 YAML alanlarini domain invariant'lariyla eslestirir; bilinmeyen alanlari yok sayar ve taninmayan channel, install mode, shortcut location veya signature algorithm degerlerini reddeder.
-- Community Rust CI format, Clippy (uyarilar hata sayilir), workspace testleri, Linux/Windows compile, NSIS validation ve surumlenmis Windows x64 CLI/GUI setup stub/Setup Studio artifact'larini dogrular; artifact'lar yedi gun saklanir. CLI surumunu `--version` veya `-V` ile, GUI surumunu pencere basliginda gosterir. Bunlar development artifact'laridir; dagitilabilir Turkuaz setup ya da production release degildir. .NET CI mevcut Community davranis referansini dogrulamaya devam eder.
+- Community Rust CI format, Clippy (uyarilar hata sayilir), workspace testleri, Linux/Windows compile, NSIS validation ve surumlenmis Windows x64 CLI/GUI setup stub/Setup Studio artifact'larini dogrular; artifact'lar yedi gun saklanir. CLI surumunu `--version` veya `-V` ile, GUI surumunu pencere basliginda gosterir. Bunlar development artifact'laridir; dagitilabilir Turkuaz setup ya da production release degildir.
 
-Rust gecisi halen migration foundation'dir; production veya end-user setup hazirliginda degildir ve mevcut .NET runtime'in yerine gecmez. CLI signed online install/update/repair/rollback, kurulu state listeleme/dogrulama/baslatma/uninstall, signed offline bundle ve self-extracting setup uretim akislarini icerir; no-argument CLI/GUI acilisi varsayilan data root journal'larini tarayip konservatif recovery dener. Ozel data root secilen paket isleminde denetlenir. Prerequisite ve Windows integration adapter'lari, production Authenticode signing/publishing ve gercek imzali paketlerle temiz Windows VM lifecycle kabul testi acik kalir. Windows CI gecici self-signed test sertifikasi ile detached CMS dogrulamasini, offline install/update/repair/rollback/launch/uninstall akisini ve Authenticode sertifikasi eklenmis self-extracting primary setup testini calistirir. Production yayinlayici sertifikasi ve temiz son kullanici VM kabul testi halen gereklidir.
+Rust gecisi halen migration foundation'dir; production veya end-user setup hazirliginda degildir ve production kabulunu kanitlamaz. CLI signed online install/update/repair/rollback, kurulu state listeleme/dogrulama/baslatma/uninstall, signed offline bundle ve self-extracting setup uretim akislarini icerir; no-argument CLI/GUI acilisi varsayilan data root journal'larini tarayip konservatif recovery dener. Ozel data root secilen paket isleminde denetlenir. Prerequisite ve Windows integration adapter'lari, production Authenticode signing/publishing ve gercek imzali paketlerle temiz Windows VM lifecycle kabul testi acik kalir. Windows CI gecici self-signed test sertifikasi ile detached CMS dogrulamasini, offline install/update/repair/rollback/launch/uninstall akisini ve Authenticode sertifikasi eklenmis self-extracting primary setup testini calistirir. Production yayinlayici sertifikasi ve temiz son kullanici VM kabul testi halen gereklidir.
 
 ## Windows smoke test
 
@@ -63,7 +61,7 @@ Gelistirme artifact'ini gercek imzali release girdileriyle temiz bir Windows VM'
 6. Ilk install/ileri update akisini repair/rollback/uninstall ve prerequisite workflow'leriyle tamamla; startup recovery ve crash-safe state reconciliation ekle.
 7. x64 ve ARM64 davranisini koruyarak Windows API'lerini port et.
 8. Mevcut development CLI'yi compile/acceptance kapilarindan gecirip secure bootstrap, portable data paths ve production command contract'ini tamamla; paired setup output'unu signing akisina bagla.
-9. WinUI akislarini Rust-native Windows UI adapteriyla karsila.
-10. .NET uygulamasini kaldirmadan once signing, paired packaging, clean VM startup ve install/update/repair/rollback/uninstall parity'sini kanitla.
+9. Rust Studio ve setup wizard icin gercek Windows GUI kabulunu tamamla.
+10. Signing, paired packaging, temiz VM startup ve install/update/repair/rollback/uninstall testlerini tamamla.
 
-Rust portu tamamlanmis, release-ready veya mevcut .NET runtime'in yerine gecmis degildir.
+Bu gelistirme dali signed production release kabulunu henuz tamamlamamistir.
