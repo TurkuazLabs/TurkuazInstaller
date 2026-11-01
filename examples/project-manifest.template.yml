@@ -1,14 +1,17 @@
-# 📄 Dosya Yolu: /examples/project-manifest.template.yml
-# 📌 Amac: TurkuazInstaller'a gececek projeler icin reusable Stable v1 manifest sablonu saglar
-# 📌 Modul - Config YAML
-# Version: 1.2.1
-# Aciklama: Detached .p7s trust, full install, guvenli prerequisite detection/auto-install, preserve path ve rollback alanlarini migration icin standartlastirir
-# Bagimli Oldugu Katman: Config
+# Dosya Yolu: REPO_ROOT/examples/project-manifest.template.yml
+# Amac: Rust installer icin minimal signed full .tzpkg release sablonu
+# Modul - YAML Template
+# Version: 2.0.0
+# Aciklama: Uygulanmamis legacy prereq/shortcut/preserve alanlarini ornekten ayirir
+# Bagimli Oldugu Katman: Documentation | Config
 
-# Release pipeline bu dosyanin raw byte'larini CMS/PKCS#7 detached olarak imzalamali.
-# Sidecar adi: <manifest-file>.p7s
-# Signer publisher/certificate SHA-256 trust anchor external manifest-trust.yml store'unda provision edilir.
-
+# TEMPLATE: Tum __PLACEHOLDER__ alanlarini gercek degerle degistirin.
+# Detached CMS/PKCS#7 (.p7s) imzasi manifestin EXACT byte'larina uygulanir.
+# Out-of-band manifest trust policy, gercek yayinci subject ve sertifika
+# SHA-256 pin'i istemcide guvenli bicimde ayri dagitilmalidir.
+# Paket artifact'i .tzpkg olmali, dogru boyut/hash hesaplanmalidir.
+# Prerequisites, Windows shortcut/protocol, preserve_paths, delta ve
+# background-updates Rust runtime icin henuz etkin ozellik degildir.
 schema_version: 1
 
 package:
@@ -17,25 +20,14 @@ package:
   channel: stable
 
 artifact:
-  uri: "__HTTPS_OR_FILE_ARTIFACT_URI__"
+  uri: "__HTTPS_TZPKG_URI__"
   sha256: "__64_CHAR_SHA256__"
   size_bytes: 1
-  signature:
-    algorithm: authenticode
-    publisher_subject: "__PUBLISHER_SUBJECT__"
-    # certificate_sha256: "__OPTIONAL_ARTIFACT_CERTIFICATE_SHA256_PIN__"
 
 install:
   mode: full
-  target: "%LOCALAPPDATA%/Programs/__PRODUCT_DIRECTORY__"
-  prerequisites:
-    - id: windows-build
-      version: ">=17763"
-    - id: architecture
-      version: "x64"
-  preserve_paths:
-    - "UserData"
+  target: "__INSTALL_TARGET_PATH__"
 
 rollback:
-  supported: true
-  previous_version_required: true
+  supported: false
+  previous_version_required: false

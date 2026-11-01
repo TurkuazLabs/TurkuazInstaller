@@ -1,31 +1,30 @@
-# 📄 Dosya Yolu: /SECURITY.md
-# 📌 Amac: TurkuazInstaller guvenlik acigi bildirim ve destek politikasini tanimlamak
-# 📌 Modul - Markdown
-# Version: 1.0.0
-# Aciklama: Hassas guvenlik raporlarinin public issue yerine GitHub Security Advisory kanaliyla iletilmesini ister
-# Bagimli Oldugu Katman: View | Config
+<!--
+Dosya Yolu: REPO_ROOT/SECURITY.md
+Amac: Rust Community guvenlik bildirim ve destek sinirlarini tanimlamak
+Modul - Markdown
+Version: 1.1.0
+Aciklama: Gizli guvenlik raporu, aktif Rust migration ve production olmayan artifact politikasi
+Bagimli Oldugu Katman: Documentation | Security
+-->
 
 # Security Policy
 
-TurkuazInstaller guvenlik problemlerini normal public issue olarak paylasmayin.
+TurkuazInstaller guvenlik problemlerini public issue uzerinden paylasmayin.
+GitHub deposunun **Security** bolumunden private vulnerability report /
+Security Advisory kullanin. Varsa etkilenen commit/tag, tekrar uretme
+adimlari, etki, maskelenmis log ve test kanitini ekleyin.
+Secret, token, private key veya gercek musteri verisi eklemeyin.
 
-## Raporlama
+## Destek ve surum durumu
 
-Repository icindeki Security sekmesinden private vulnerability report / Security Advisory kullanin.
+Rust Community uygulamasi `rewrite/rust-community` dalinda,
+[PR #63](https://github.com/TurkuazLabs/TurkuazInstaller/pull/63)
+uzerinden Draft olarak gelistirilmektedir. Rust migration
+artifact'lari gecici TEST ciktilaridir; production release
+veya resmi desteklenen 1.x Rust surumu degildir.
+`main` dalindaki eski dagitim/guvenlik modeli ile Rust
+gelistirme dalini birbirine karistirmayin. Guncel Rust
+kabul durumu icin [Rust readiness](rust/RUST_READINESS.md) belgesine bakin.
 
-Raporda mumkunse su bilgileri ekleyin:
-
-- etkilenen TurkuazInstaller surumu
-- tekrar uretme adimlari
-- beklenen ve gercek davranis
-- guvenlik etkisi
-- varsa PoC dosyasi veya log
-- onerilen duzeltme
-
-Secret, private key, token veya kisisel veri public issue icine eklenmemelidir.
-
-## Desteklenen Surum
-
-Stable Community release hattinda en son 1.x release guvenlik duzeltmesi alir.
-
-Kritik guvenlik duzeltmeleri gerekli oldugunda patch surumu olarak yayinlanir.
+Guvenlik aciklari kritikse yayin, signing veya installer
+production kabulune kadar onay verilmemelidir.
