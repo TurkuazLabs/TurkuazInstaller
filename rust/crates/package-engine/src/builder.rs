@@ -60,7 +60,7 @@ impl Error for PackageBuildError {
 
 /// @dev-id TIZ-PKG-BUILD-010
 /// @purpose Build a custom .tzpkg archive from a trusted release payload directory.
-/// @reason The Rust installer must own both ends of its package format without invoking Velopack.
+/// @reason The Rust installer must own both ends of its package format without invoking an external package engine.
 /// @contract Rejects symlinks, special files, Windows-invalid/colliding paths, output inside source, and source size/count overages; publishes without overwriting an existing package.
 /// @depends Shared package path validation, zip-rs, and UUID temporary names.
 pub fn build_full_package(

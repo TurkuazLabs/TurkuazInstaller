@@ -1,7 +1,7 @@
 # 📄 Dosya Yolu: /contracts/installer-manifest.yml
 # 📌 Amac: TurkuazInstaller Community Stable v1 paket manifest contract alanlarini ve guvenlik invariantlarini tanimlamak
 # 📌 Modul - YAML
-# Version: 1.7.0
+# Version: 1.7.1
 # Aciklama: Detached trust, bounded full/delta transfer, safe delta fallback, prerequisite/reboot resume ve signed Windows integration contractini runtime ile sabitler
 # Bagimli Oldugu Katman: Application | Port | Adapter | Config
 
@@ -115,7 +115,6 @@ install:
     supported_ids:
       - windows-build
       - architecture
-      - dotnet-desktop-runtime
     detection:
       engine: detector_registry
       unknown_id: deny

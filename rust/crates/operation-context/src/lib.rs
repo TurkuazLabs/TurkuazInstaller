@@ -2,7 +2,7 @@
 // Amac: Installer operation journal checkpoint yasam dongusunu koordine etmek
 // Modul - Rust Library
 // Version: 0.2.0
-// Aciklama: .NET workflow context'inin typed phase ve reboot resume sozlesmesini tasir
+// Aciklama: Typed workflow phase ve reboot resume sozlesmesini uygular
 // Bagimli Oldugu Katman: Service
 
 use std::{error::Error, fmt};
@@ -49,7 +49,7 @@ impl InstallerOperationContext {
     /// @dev-id TIZ-OP-CONTEXT-010
     /// @purpose Start an operation with an initial durable checkpoint.
     /// @reason A workflow should have a stable operation ID and recoverable initial state.
-    /// @contract Journal persistence is best-effort, matching the current .NET diagnostic boundary.
+    /// @contract Journal persistence is best-effort and cannot authorize unsafe continuation.
     /// @depends Domain operation types and optional journal repository.
     pub async fn start(
         package_id: PackageId,

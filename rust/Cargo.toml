@@ -2,7 +2,7 @@
 # Amac: TurkuazInstaller Rust gecis workspace'ini tanimlamak
 # Modul - Cargo Workspace
 # Version: 1.0.1
-# Aciklama: Rust Community cekirdek paketlerini derler; eski .NET runtime bagimliligi yok
+# Aciklama: Rust Community cekirdek ve GUI paketlerini derler
 # Bagimli Oldugu Katman: Tool | Config
 
 [workspace]

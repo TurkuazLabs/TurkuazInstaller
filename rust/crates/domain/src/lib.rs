@@ -2,7 +2,7 @@
 // Amac: Rust domain kutuphanesinin public modullerini ve ortak hata tipini sunmak
 // Modul - Rust Library
 // Version: 0.3.0
-// Aciklama: .NET Domain tiplerinin Rust portu icin platformdan bagimsiz giris noktasi
+// Aciklama: Platform bagimsiz paket ve release domain tiplerini sunar
 // Bagimli Oldugu Katman: Model
 
 #![forbid(unsafe_code)]
