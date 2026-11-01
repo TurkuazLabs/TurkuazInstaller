@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.17
+Version: 2.3.18
 Aciklama: Aktif Community Rust kaynak kodu ve kabul sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
@@ -12,6 +12,16 @@ Bagimli Oldugu Katman: Documentation
 Bu workspace `rewrite/rust-community` dalinin aktif uygulama kodudur.
 Rust kaynak kodu ve testleri tek workspace altinda gelistirilir.
 Fonksiyonel testler production GUI ve imzali kurulum kabulunun yerine gecmez.
+
+## Kanitlanmis Rust CI siniri
+
+`rust/Cargo.lock` kaynak denetimindedir ve Linux/Windows CI cargo
+check/build/test/Clippy kapilari `--locked` ile calisir. Sabit
+`7b0c2613` revizyonundaki
+[CI 41339318653](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41339318653)
+iki platformda **PASS**. Bu gelistirme kanitidir; gercek temiz Windows
+masaustunde GUI tiklama veya production imza kabulu degildir. Belge
+navigasyonu icin [dokumantasyon dizinine](../docs/README.md) bakin.
 
 ## Boundary
 
@@ -65,8 +75,9 @@ gercek production kabulune kalmis islerdir. Durum/kanit
    kesintisi, kesinti recovery ve upgrade/rollback E2E'yi kanitla.
 4. Gercek publisher signing, timestamp, trust chain/revocation,
    artifact provenance ve antivirus/SmartScreen olaylarini dogrula.
-5. Commit edilmis Cargo.lock icin Linux/Windows --locked build ve test CI kapisini
-   olustur; tum test ZIP'lerini production release'den ayir.
+5. Commit edilmis Cargo.lock ve Linux/Windows --locked CI kapilarini koru;
+   degisen her commit'in sonucunu ayri dogrula, TEST artifact'larini
+   production release'den ayir.
 6. NSIS yedek yukleyicisinin yerine guvenli Rust recovery/fallback
    alternatifi hazirlamadan tum dagitimin %100 Rust oldugunu iddia etme.
 7. Pro runtime entitlement, credentials ve signed rollout baglantisini

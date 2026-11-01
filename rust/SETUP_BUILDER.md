@@ -21,7 +21,7 @@ Sihirbazda **Kurulum tasarimi** (eski Setup tasarimi), **Kurulum motoru (EXE)** 
 
 Rust workspace kokunden calistirin:
 
-    cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --features setup-authoring-gui
+    cargo build --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --features setup-authoring-gui
 
 Olusan dosya:
 

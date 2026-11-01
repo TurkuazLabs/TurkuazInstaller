@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/PACKAGE_FORMAT.md
 Amac: Ozel Turkuaz .tzpkg paket kapsayicisinin surumlu sozlesmesini tanimlamak
 Modul - Markdown Specification
-Version: 0.2.0
+Version: 0.2.1
 Aciklama: Paket archive v1/v2 metadata, entry point ve payload path kurallarini belgeler
 Bagimli Oldugu Katman: Service | Tool | Documentation
 -->
@@ -68,4 +68,4 @@ Only regular files and directories are accepted. Payload permissions and ownersh
 - `stage_full_package(verified_artifact, release, payload_directory, limits)` validates the metadata and entry point, then returns a `PackageStage` carrying the optional path.
 - The default extraction limits are 250,000 archive entries, 4 GiB per file, and 32 GiB total expanded payload.
 
-The install workflow publishes immutable versions and stores the active and previous entry points in the active record. `launch` uses the active package entry point by default. Existing v1 packages can still be launched by passing `--executable` explicitly. Repair, uninstall, startup recovery, and production setup packaging remain later migration work.
+The install workflow publishes immutable versions and stores the active and previous entry points in the active record. `launch` uses the active package entry point by default. Existing v1 packages can still be launched by passing `--executable` explicitly. Repair, uninstall, conservative startup recovery, offline setup bundles, and development self-extracting setup already have Rust paths. Production publisher signing and independent clean-Windows acceptance remain open.

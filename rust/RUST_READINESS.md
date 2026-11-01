@@ -1,96 +1,96 @@
 <!--
 Dosya Yolu: REPO_ROOT/rust/RUST_READINESS.md
-Amac: Community ve Pro Rust migration icin gercek islev ve release kabul sinirlarini kaydetmek
+Amac: Community Rust gelistirme kaniti ve production kabul eksiklerini ayri kaydetmek
 Modul - Markdown
-Version: 1.0.2
-Aciklama: Uygulanan, CI ile dogrulanan ve production icin eksik zorunlu kapilar
+Version: 1.0.3
+Aciklama: Sabit commit/CI dogrulamasi, gercek runtime siniri ve kalici kabul kapilari
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
 
 # Rust Installer - Dogrulanmis durum ve acik kabul kapilari
 
-Denetim temel alinmis kaynak: Community `7acc8b7`,
-[PR #63](https://github.com/TurkuazLabs/TurkuazInstaller/pull/63).
-Bagli Pro kaynak: `d3e9238`,
-[PR #10](https://github.com/TurkuazSoft/TurkuazInstaller-Pro/pull/10).
-CI sonucu ile kullanicinin temiz Windows makinesinde gercek
-calisma testi birbirinin yerine gecmez.
+Bu belgedeki CI kaniti **2026-11-01** itibariyla incelenen sabit
+Community revizyonu `7b0c2613e9d20717ff8db850db563ecba8f89609`
+ve [taslak PR #63](https://github.com/TurkuazLabs/TurkuazInstaller/pull/63)
+icin gecerlidir. Yeni docs commit'leri otomatik olarak test edilmis sayilmaz.
+Pro icin [taslak PR #10](https://github.com/TurkuazSoft/TurkuazInstaller-Pro/pull/10)
+ayri kaynak ve kabul surecidir.
 
-## Runtime - aktif Rust kodu
+## Aktif Rust gelistirme islevleri
 
-- `rust/crates/installer-cli`: Rust CLI, Windows Studio ve GUI wizard.
-  Yeni Studio projeleri per-user LOCALAPPDATA proje/cikti/kurulum
-  koklerini varsayilan olarak kullanir; kullanici kayitli .tzproj
-  yollarinin anlami degistirilmez.
-- `rust/crates/package-engine`: .tzpkg, .tzsetup, self-extracting setup.
+- `rust/crates/installer-cli`: CLI; Windows Setup Studio, setup wizard
+  ve onceden yapilandirilmis WebSetup gelistirme araclari.
+- `rust/crates/package-engine`: `.tzpkg`, `.tzsetup` ve
+  self-extracting setup olusturma/dogrulama.
 - `manifest-pipeline`, `manifest-verification`, `manifest-trust-store`:
-  dis guven politikasina bagli signed CMS manifest.
-- `artifact-transfer`, `artifact-validation`, `authenticode-verification`:
-  HTTPS/file staging, size/SHA-256, istege bagli Windows Authenticode.
+  detached CMS ve out-of-band publisher trust policy.
+- `artifact-transfer`, `artifact-validation`,
+  `authenticode-verification`: HTTPS/file staging, sinirli indirme,
+  byte size/SHA-256 ve gerekli Windows Authenticode.
 - `install-workflow`, `deployment-activation`, `operation-journal`,
-  `install-state-store`: full install, update, repair, policy rollback,
+  `install-state-store`: gelistirme install/update/repair/rollback/
   uninstall ve konservatif recovery.
 
-Kodun varligi her islevin production ortami icin kabulunu kanitlamaz.
+Studio yeni projelerde per-user LOCALAPPDATA dizinini varsayar;
+var olan `.tzproj` dosyalarinda secilmis yollar degistirilmez.
+Bu kapsamin production kabulunu sagladigi iddia edilmez.
 
-## Dogrulanmis otomatik CI
+## Kanit: sabit revizyon icin otomatik CI
 
-- [Community run 41333284129](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41333284129):
-  Linux/Windows build, fmt, Clippy, Rust tests, Windows signed
-  fixture ile lifecycle testleri ve TEST artifact'lari PASS.
-- [Pro run 41335243809](https://github.com/TurkuazSoft/TurkuazInstaller-Pro/actions/runs/41335243809):
-  Pro Rust workspace, CMS adapter, egui Studio, 3 GUI Windows
-  TEST ZIP packaging PASS. Production release uretilmedi.
+- [Community CI 41339318653](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41339318653):
+  **PASS** — Linux Rust format/check/Clippy/test ve Windows
+  `--locked` workspace, NSIS script kontrolu, GUI build/test,
+  imzali TEST fixture offline lifecycle smoke ve artifact upload.
+- `rust/Cargo.lock` commit edilmistir; Linux/Windows cargo
+  check/build/test/Clippy komutlari `--locked` kullanir.
+- CI'nin urettigi CLI, GUI stub, Setup Studio, WebSetup ve ornek
+  setup **TEST artifact'lari** production imzali dagitim degildir.
+- Gercek kullanici masaustunde GUI pencere/tiklama: **NOT RUN**.
+  Temiz Windows VM ve production certificate: **NOT RUN**.
 
-## Desteklenmeyen / bekleyen ozellikler
+## Production icin acik kabul kapilari
 
-1. **Gercek publisher imzalama ve kaynak guveni:** Test sertifikasi
-   production certificate, timestamp, provenance ve revocation kabulunu
-   kanitlamaz.
-2. **Windows entegrasyon adapter'lari:** Rust runtime onkosul
-   yukleyici, kisayol, protocol registration, preserve_paths ve tam
-   data migration davranisini henuz yerine getirmiyor. Kullanilmaz
-   manifest alanlari destekleniyormus gibi ilan edilmemeli.
-3. **Temiz Windows VM GUI/E2E:** GUI gercek pencere acilisi,
-   klavye/tiklama, setup/update/repair/rollback/uninstall ve
-   kesinti/kurtarma manuel/otonom clean-VM testleri bekliyor.
-4. **Tam Rust dagitim hedefi:** Ana motor Rust; `packaging/
-   TurkuazInstallerBackup.nsi` NSIS backup betigi ve Windows CI
-   PowerShell smoke araclari Rust degil. NSIS fallback Rust temelli
-   guvenli alternatife donusturulmeden `%100 Rust installer` iddiasi
-   dogru olmaz.
-5. **Tekrarlanabilir build:** Community `rust/Cargo.lock` [CI 41338891561](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41338891561)
-   workspace testinin cozumledigi graph olarak commit edildi. Cargo
-   komutlari `--locked` ile zorunlu calistirilacak; bu degisikligin
-   Linux ve Windows CI'si basariyla bitmeden kabul PASS degildir.
-   Pro workspace'leri icin lockfile sabitlemesi ve `--locked` henuz eksik.
-6. **Pro canli islevler:** Lisans provider, OS credential store,
-   private feed UI baglantisi, authoritative rollout revision backend
-   ve full production integration E2E tamamlanmadi.
-7. **Dis yayin:** Gercek HTTPS signed release, kopuk ag,
-   clean-VM install ve SmartScreen/antivirus kaniti bekliyor.
+1. **BLOCKED — Publisher/provenance:** gercek yayin sertifikasi,
+   Authenticode, timestamp, zincir/revocation, AV/SmartScreen ve
+   signed HTTPS release trust kabulu.
+2. **BLOCKED — Windows uygulama entegrasyonlari:** Rust prereq
+   yukleme, kisayol, protocol kaydi, preserve_paths ve veri tasima
+   adapter'lari gelistirme runtime'inda uygulanmadi.
+3. **BLOCKED — Temiz Windows 10/11 VM:** GUI startup, tiklama/klavye,
+   install/update/repair/rollback/uninstall, reboot, kesinti ve
+   guvenli recovery kabul kanitlari.
+4. **BLOCKED — Tam Rust dagitim:** birincil motor Rust olsa da
+   `packaging/TurkuazInstallerBackup.nsi` zorunlu NSIS backup'tir.
+   CI testleri icin PowerShell kullanilir. Tum dagitima `%100 Rust`
+   denemez.
+5. **BLOCKED — Ilk gercek urun pilotu ve dis yayin:** gercek uygulama
+   verisi, dogrulanmis publisher trust ve son kullanici kabul kaniti.
+6. **BLOCKED — Pro canli entegrasyonu:** lisans kaynagi, OS credential
+   store, private feed arayuzu, authoritative rollout backend ve
+   Pro/Community E2E private Pro deposunun sorumlulugundadir.
 
-## Kontrat ve belge siniri
+## Tarihsel YAML sozlesmesi / canli Rust kontrati
 
-`contracts/` altindaki bazi YAML'ler eski .NET uygulamasinin
-**gelecek/legacy tasarim kontratlari** olarak tutulur; Rust crate'leri
-tarafindan yuklenmezler ve production ozelligi sayilmazlar.
-Rust manifestinin uygulanan otoritesi
-`rust/crates/manifest-parser/src/lib.rs` ve
-`rust/crates/domain/src/release.rs` dosyalaridir.
-Kullanilabilir minimal Rust YAML ornegi
-`examples/community-manifest.yml`; placeholder'lar gercek
-signed release ile degistirilmedikce bu da TEST ornegidir.
-Gercek paket uretimi icin [RELEASE_SIGNING.md](RELEASE_SIGNING.md)
-ve [SETUP_BUILDER.md](SETUP_BUILDER.md) gecerlidir.
+`contracts/` altindaki 11 YAML dosyasi
+`# Rust-Runtime-Status: legacy-design-only` isaretlidir.
+Bunlar onceki .NET planlarinin **tarihsel tasarim** kaydidir;
+Rust bunlari yuklemez, belge veya schema olarak var olmalari
+uygulama destegi anlamina gelmez.
 
-## Kapanis icin gercek kanit
+Gecerli Rust signed manifest parser'i
+`rust/crates/manifest-parser/src/lib.rs`,
+release domain'i `rust/crates/domain/src/release.rs` dosyasindadir.
+`examples/community-manifest.yml` TEST placeholder'lari icerir.
+Uretim oncesi [RELEASE_SIGNING.md](RELEASE_SIGNING.md),
+[SETUP_BUILDER.md](SETUP_BUILDER.md) ve
+[Windows smoke rehberi](SMOKE_TEST.md) izlenmelidir.
 
-- Community: [manuel Windows kabul #41](https://github.com/TurkuazLabs/TurkuazInstaller/issues/41),
-  [ilk urun pilotu #42](https://github.com/TurkuazLabs/TurkuazInstaller/issues/42),
-  [security #51](https://github.com/TurkuazLabs/TurkuazInstaller/issues/51),
-  [AV #58](https://github.com/TurkuazLabs/TurkuazInstaller/issues/58).
-- Pro: [authoritative rollout #5](https://github.com/TurkuazSoft/TurkuazInstaller-Pro/issues/5)
-  ve [Rust Pro PR #10](https://github.com/TurkuazSoft/TurkuazInstaller-Pro/pull/10).
-- Public installer private Pro crate'lerine baglanamaz. Production
-  imzali cikti ve main merge icin ayri onay gerekir.
+## Takip ve kapanis kaniti
+
+- [Windows manuel kabul #41](https://github.com/TurkuazLabs/TurkuazInstaller/issues/41)
+- [Gercek uygulama pilotu #42](https://github.com/TurkuazLabs/TurkuazInstaller/issues/42)
+- [Guvenlik #51](https://github.com/TurkuazLabs/TurkuazInstaller/issues/51)
+- [AV / SmartScreen #58](https://github.com/TurkuazLabs/TurkuazInstaller/issues/58)
+
+Community public crate'leri private Pro crate'lerine baglanmaz.
+PR Draft, `main` merge ve production release yoktur.
