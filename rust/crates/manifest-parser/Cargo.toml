@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/crates/manifest-parser/Cargo.toml
 # Amac: Signature-verified installer manifest YAML'ini typed domain release modeline donusturmek
 # Modul - Cargo Package
-# Version: 0.1.0
-# Aciklama: Stable v1 manifest schema'sini .NET davranis referansiyla parse eder
+# Version: 0.1.1
+# Aciklama: Stable v1 manifest semasini typed Rust domain modeline donusturur
 # Bagimli Oldugu Katman: Application
 
 [package]
