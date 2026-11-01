@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.3
+// Version: 0.6.4
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -1958,14 +1958,68 @@ fn validate_project_step(project: &SavedProject, step: usize) -> Result<(), Stri
 
     if step == 3 {
         let output_directory = resolve_path(&project.output_directory)?;
-        let metadata = fs::symlink_metadata(&output_directory)
-            .map_err(|error| format!("Çıktı üst klasörü okunamadı: {error}"))?;
-        if metadata.file_type().is_symlink() || !metadata.is_dir() {
-            return Err("Çıktı üst klasörü normal ve mevcut bir klasör olmalıdır.".to_owned());
-        }
+        validate_or_create_output_parent(&output_directory, false)?;
     }
 
     Ok(())
+}
+
+// BRK-RUST-STUDIO-OUTPUT-001: Validate without side effects in the editor,
+// then create missing output ancestors only when building the first package.
+// Walk components instead of create_dir_all so existing links/junctions and
+// non-directory ancestors are not silently followed.
+fn validate_or_create_output_parent(path: &Path, create_missing: bool) -> Result<(), String> {
+    if path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        return Err("Çıktı klasörü yolu '..' bileşeni içeremez.".to_owned());
+    }
+
+    let mut current = PathBuf::new();
+    for component in path.components() {
+        current.push(component.as_os_str());
+        if matches!(component, Component::Prefix(_) | Component::RootDir) {
+            continue;
+        }
+        let metadata = match fs::symlink_metadata(&current) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound && create_missing => {
+                match fs::create_dir(&current) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                    Err(error) => {
+                        return Err(format!("Çıktı üst klasörü oluşturulamadı: {error}"));
+                    }
+                }
+                fs::symlink_metadata(&current)
+                    .map_err(|error| format!("Çıktı üst klasörü doğrulanamadı: {error}"))?
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(format!("Çıktı üst klasörü okunamadı: {error}")),
+        };
+        if !metadata.is_dir()
+            || metadata.file_type().is_symlink()
+            || is_windows_reparse_point(&metadata)
+        {
+            return Err(
+                "Çıktı üst klasörü ve üst dizinleri normal klasörler olmalıdır.".to_owned(),
+            );
+        }
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn is_windows_reparse_point(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    // FILE_ATTRIBUTE_REPARSE_POINT covers junctions as well as symlinks.
+    metadata.file_attributes() & 0x0400 != 0
+}
+
+#[cfg(not(windows))]
+fn is_windows_reparse_point(_metadata: &fs::Metadata) -> bool {
+    false
 }
 
 fn theme_config_from_project(project: &SavedProject) -> Result<SetupThemeConfig, String> {
@@ -2400,6 +2454,7 @@ fn build_project(project: SavedProject) -> Result<String, String> {
     let output_parent = resolve_path(&project.output_directory)?;
     let executable = std::env::current_exe()
         .map_err(|error| format!("Setup Builder executable path could not be read: {error}"))?;
+    validate_or_create_output_parent(&output_parent, true)?;
 
     let final_directory = output_parent.join(format!("{package_id}-{version}"));
     match fs::symlink_metadata(&final_directory) {
@@ -2571,6 +2626,76 @@ mod tests {
             target.ends_with(Path::new("Programs").join("Uygulamam")),
             "default install must be per-user and avoid Program Files elevation"
         );
+    }
+
+    #[test]
+    fn missing_output_parent_is_created_only_when_build_starts() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let temporary = std::env::temp_dir().join(format!(
+            "turkuaz-studio-output-{}-{nonce}",
+            std::process::id()
+        ));
+        let parent = temporary.join("Türkçe klasör").join("Projects");
+        let mut project = SavedProject::default();
+        project.output_directory = parent.to_string_lossy().into_owned();
+
+        validate_project_step(&project, 3).expect("missing output path is valid");
+        assert!(!temporary.exists(), "validation must not write to the disk");
+
+        validate_or_create_output_parent(&parent, true).expect("create nested output path");
+        assert!(regular_directory_exists(&parent));
+        validate_or_create_output_parent(&parent, true).expect("idempotent output preparation");
+        fs::remove_dir_all(&temporary).expect("clean test fixture");
+    }
+
+    #[test]
+    fn output_parent_rejects_existing_file_and_traversal() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let temporary = std::env::temp_dir().join(format!(
+            "turkuaz-studio-output-file-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&temporary).expect("create fixture");
+        let file = temporary.join("not-a-directory");
+        fs::write(&file, b"fixture").expect("create blocking file");
+        let blocked = file.join("Projects");
+        assert!(validate_or_create_output_parent(&blocked, false).is_err());
+        assert!(validate_or_create_output_parent(&blocked, true).is_err());
+        assert!(!blocked.exists());
+
+        let traversal = temporary.join("nested").join("..").join("Projects");
+        assert!(validate_or_create_output_parent(&traversal, true).is_err());
+        fs::remove_dir_all(&temporary).expect("clean fixture");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn output_parent_rejects_symlink_ancestor() {
+        use std::os::unix::fs::symlink;
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let temporary = std::env::temp_dir().join(format!(
+            "turkuaz-studio-output-symlink-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&temporary).expect("create fixture");
+        let target = temporary.join("target");
+        fs::create_dir(&target).expect("create target");
+        let link = temporary.join("linked");
+        symlink(&target, &link).expect("create symlink");
+
+        assert!(validate_or_create_output_parent(&link.join("Projects"), true).is_err());
+        assert!(!target.join("Projects").exists());
+        fs::remove_dir_all(&temporary).expect("clean fixture");
     }
 
     #[test]

@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.8.2
+Version: 0.8.3
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -49,6 +49,14 @@ Explorer'dan veya kisayoldan acilista process CWD'sine gore degismez.
 yedek yolu kullanilir; bu durumda kalici cikti icin Studio'dan
 guvenli bir klasor secilmelidir. Kaydedilmis `.tzproj` dosyalarinin
 kullanici tarafindan secilmis cikti yollari korunur.
+
+Ilk paket olusturma isteginde, yeni projedeki varsayilan cikti ust klasoru
+henuz yoksa Setup Studio eksik alt klasorleri olusturur. Modal bolum
+dogrulamasi klasor olusturmaz; yalnizca paket olusturma asamasinda
+olusturulur. Dosya, sembolik baglanti/junction veya `..` gecisi iceren
+ust dizinler reddedilir. Yetki ve disk hatalari acikca raporlanir.
+Kullanici tarafindan secilmis cikti konumu degistirilmez; var olan
+`{package-id}-{version}` klasorunun ustune yazilmaz.
 
 Projeler .tzproj uzantisiyla kaydedilip Setup Studio icinde tekrar acilabilir. Her uygulama paketi derlemesi, 04 Yayin ve cikti bolumunde secilen cikti ust klasoru altinda yeni bir {package-id}-{version} klasoru olusturur; var olan klasorun ustune yazmaz. Uygulama dosyalari bolumundeki kaynak klasoru cikti konumu degildir. Ana ekrandaki Olusturulan dosyalar paneli hedef klasoru ve gercekten mevcut application.tzpkg ile distribution/TurkuazSetup.exe dosyalarinin durumunu ayri gosterir. Cikti klasorunu ac dugmesi Windows Dosya Gezgini ile mevcut klasoru acar; EXE dosyasini calistirmaz. Ilk adim yalnizca .tzpkg dosyasi olusturur, kurulum EXE'si degildir. Imzali dagitim ciftini hazirlama adimi ayni klasordeki package ve theme dosyalarini kullanir ve yeni bir distribution alt klasoru olusturur.
 
