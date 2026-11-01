@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.18
+Version: 2.3.19
 Aciklama: Aktif Community Rust kaynak kodu ve kabul sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
@@ -16,9 +16,8 @@ Fonksiyonel testler production GUI ve imzali kurulum kabulunun yerine gecmez.
 ## Kanitlanmis Rust CI siniri
 
 `rust/Cargo.lock` kaynak denetimindedir ve Linux/Windows CI cargo
-check/build/test/Clippy kapilari `--locked` ile calisir. Sabit
-`7b0c2613` revizyonundaki
-[CI 41339318653](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41339318653)
+check/build/test/Clippy kapilari `--locked` ile calisir. Sabit `203192d1` revizyonundaki
+[CI 41342571609](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41342571609)
 iki platformda **PASS**. Bu gelistirme kanitidir; gercek temiz Windows
 masaustunde GUI tiklama veya production imza kabulu degildir. Belge
 navigasyonu icin [dokumantasyon dizinine](../docs/README.md) bakin.

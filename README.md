@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/README.md
 Amac: Community Rust kurulum sistemi icin guncel kaynak ve test kapsamini anlatmak
 Modul - Markdown
-Version: 2.2.1
+Version: 2.2.2
 Aciklama: Rust Studio, installer CLI ve release guveni
 Bagimli Oldugu Katman: Documentation
 -->
@@ -52,8 +52,9 @@ cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --all-targets 
 cargo test --locked --manifest-path rust/Cargo.toml --workspace --all-targets
 ```
 
-`rust/Cargo.lock` commit edilmistir. Kaynak revizyonu `7b0c2613`
-icin [Linux ve Windows CI 41339318653](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41339318653)
+`rust/Cargo.lock` commit edilmistir. Rust docs dahil
+`203192d1` revizyonunda
+[Linux ve Windows CI 41342571609](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41342571609)
 **PASS**; bu kanit yalniz o commit'e aittir. Rust Windows gelistirme
 artifact'lari (CLI, Setup Studio, GUI stub, WebSetup ve ornek TEST kurulum)
 Actions ciktilaridir, release degildir. Gercek Windows masaustu ve

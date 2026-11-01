@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/docs/README.md
 Amac: Community Rust installer icin mevcut dokumantasyonun giris ve kaynak dizini
 Modul - Markdown
-Version: 1.0.0
+Version: 1.0.1
 Aciklama: Gercek Rust kaynaklari, test kaniti, tarihsel kontratlar ve kabul sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
@@ -32,10 +32,12 @@ ozelligi olarak anlatilmaz. TEST artifact'i release degildir.
 ## Dogrulanmis ile henuz onaylanmamis olanin farki
 
 `rust/Cargo.lock` sabitlenmistir.
-[Community 41339318653](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41339318653)
-sabit `7b0c2613` kaynaginda Linux ve Windows
-`--locked` CI'yi **PASS** tamamladi. Sonraki commit'ler kendi CI
-sonuclari gelmeden PASS sayilmaz.
+[Community 41342571609](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41342571609)
+`203192d1` Rust kaynak ve docs revizyonunda Linux ve Windows
+`--locked` CI'yi **PASS** tamamladi. Onceki `7b0c2613` revizyonu
+da [41339318653](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41339318653)
+ile PASS idi. Yeni commit'ler kendi CI sonuclari gelmeden
+PASS sayilmaz.
 
 Rust installer, Studio/wizard, signed offline TEST setup ve WebSetup
 gelistirme artifact'lari uretilir. Gercek Windows GUI click,

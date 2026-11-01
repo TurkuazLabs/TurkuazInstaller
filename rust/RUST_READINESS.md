@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/RUST_READINESS.md
 Amac: Community Rust gelistirme kaniti ve production kabul eksiklerini ayri kaydetmek
 Modul - Markdown
-Version: 1.0.3
+Version: 1.0.4
 Aciklama: Sabit commit/CI dogrulamasi, gercek runtime siniri ve kalici kabul kapilari
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
@@ -10,7 +10,7 @@ Bagimli Oldugu Katman: Documentation | QA | Release
 # Rust Installer - Dogrulanmis durum ve acik kabul kapilari
 
 Bu belgedeki CI kaniti **2026-11-01** itibariyla incelenen sabit
-Community revizyonu `7b0c2613e9d20717ff8db850db563ecba8f89609`
+Community revizyonu `203192d1e9649eb22cf502ff3fe947d4e5a002ba`
 ve [taslak PR #63](https://github.com/TurkuazLabs/TurkuazInstaller/pull/63)
 icin gecerlidir. Yeni docs commit'leri otomatik olarak test edilmis sayilmaz.
 Pro icin [taslak PR #10](https://github.com/TurkuazSoft/TurkuazInstaller-Pro/pull/10)
@@ -37,7 +37,7 @@ Bu kapsamin production kabulunu sagladigi iddia edilmez.
 
 ## Kanit: sabit revizyon icin otomatik CI
 
-- [Community CI 41339318653](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41339318653):
+- [Community CI 41342571609](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41342571609):
   **PASS** — Linux Rust format/check/Clippy/test ve Windows
   `--locked` workspace, NSIS script kontrolu, GUI build/test,
   imzali TEST fixture offline lifecycle smoke ve artifact upload.
