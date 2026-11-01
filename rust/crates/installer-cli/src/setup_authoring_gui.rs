@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.1
+// Version: 0.6.2
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -154,7 +154,15 @@ impl Default for SavedProject {
         let program_files = std::env::var_os("ProgramFiles")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
-        let output_directory = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        // BRK-RUST-STUDIO-PATH-001: New project output is rooted in the
+        // Windows user's data directory, not the launcher's working directory.
+        // Saved .tzproj paths are preserved unchanged when reopened.
+        let output_directory = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+            .unwrap_or_else(std::env::temp_dir)
+            .join("TurkuazInstaller")
+            .join("Projects");
 
         Self {
             schema_version: PROJECT_SCHEMA_VERSION,
@@ -2547,6 +2555,17 @@ fn color(rgb: [u8; 3]) -> egui::Color32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn new_project_uses_os_data_root_instead_of_process_cwd() {
+        let project = SavedProject::default();
+        let output = Path::new(&project.output_directory);
+        assert!(output.is_absolute(), "new project output must be absolute");
+        assert!(
+            output.ends_with(Path::new("TurkuazInstaller").join("Projects")),
+            "new project output must stay in the installer project root"
+        );
+    }
 
     #[test]
     fn saved_project_kind_preserves_legacy_offline_and_web_projects() {

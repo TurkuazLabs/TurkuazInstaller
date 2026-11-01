@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/metadata/src/limits.rs
 // Amac: Manifest ve detached CMS signature byte sinirlarini merkezi sabitlerde toplamak
 // Modul - Rust Config
-// Version: 0.1.0
-// Aciklama: Contracts/manifest-trust.yml degerlerini runtime konfigrasyonuna tasir
+// Version: 0.1.1
+// Aciklama: Rust pipeline icin sabit byte limitleri; legacy YAML contract runtime'a yuklenmez
 // Bagimli Oldugu Katman: Config | Tool
 
 pub const MAXIMUM_MANIFEST_BYTES: usize = 1024 * 1024;

@@ -2,14 +2,14 @@
 Dosya Yolu: REPO_ROOT/rust/DEPLOYMENT_LAYOUT.md
 Amac: Surumlu deployment klasorlerinin ve etkin surum isaretcisinin davranisini tanimlamak
 Modul - Markdown Specification
-Version: 0.4.0
+Version: 0.4.1
 Aciklama: Hazirlama, etkinlestirme ve geri alma icin mevcut dosya sistemi sozlesmesini aciklar
 Bagimli Oldugu Katman: Service | Infrastructure | Documentation
 -->
 
 # Versioned Deployment Layout
 
-Status: implementation draft. The activation crate publishes immutable version directories and atomically replaces the active-version record. First-install, forward-update, rollback, and package-declared launch workflows use this crate. Startup recovery and automatic orphan cleanup are not connected yet; explicit journal-based recovery now handles interrupted uninstall and repair operations.
+Status: implementation draft. The activation crate publishes immutable version directories and atomically replaces the active-version record. First-install, forward-update, rollback, and package-declared launch workflows use this crate. Default CLI and setup GUI startup scan the default data root for pending operation journals; per-package commands verify their configured data root. Ambiguous recovery is blocked and requires explicit review. Automatic orphan cleanup is still not implemented.
 
 ## Layout
 
