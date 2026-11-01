@@ -2563,7 +2563,10 @@ mod tests {
             "new project output must stay in the installer project root"
         );
         let target = Path::new(&project.install_target);
-        assert!(target.is_absolute(), "default install path must be absolute");
+        assert!(
+            target.is_absolute(),
+            "default install path must be absolute"
+        );
         assert!(
             target.ends_with(Path::new("Programs").join("Uygulamam")),
             "default install must be per-user and avoid Program Files elevation"
