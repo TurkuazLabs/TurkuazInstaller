@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/RUST_READINESS.md
 Amac: Community ve Pro Rust migration icin gercek islev ve release kabul sinirlarini kaydetmek
 Modul - Markdown
-Version: 1.0.0
+Version: 1.0.1
 Aciklama: Uygulanan, CI ile dogrulanan ve production icin eksik zorunlu kapilar
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
@@ -19,6 +19,9 @@ calisma testi birbirinin yerine gecmez.
 ## Runtime - aktif Rust kodu
 
 - `rust/crates/installer-cli`: Rust CLI, Windows Studio ve GUI wizard.
+  Yeni Studio projeleri per-user LOCALAPPDATA proje/cikti/kurulum
+  koklerini varsayilan olarak kullanir; kullanici kayitli .tzproj
+  yollarinin anlami degistirilmez.
 - `rust/crates/package-engine`: .tzpkg, .tzsetup, self-extracting setup.
 - `manifest-pipeline`, `manifest-verification`, `manifest-trust-store`:
   dis guven politikasina bagli signed CMS manifest.

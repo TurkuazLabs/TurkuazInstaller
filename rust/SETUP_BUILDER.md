@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.8.1
+Version: 0.8.2
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -41,8 +41,10 @@ Ilk acilista iki proje sablonu yer alir: Tam Kurulum (tum dosyalari iceren offli
 
 Uygulama paketi ve imzali dagitim cifti ana ekrandaki eylemlerden baslatilir. Gerekli bilgiler eksikse ilgili modal editor otomatik acilir.
 
-Yeni projede varsayilan cikti klasoru Windows `LOCALAPPDATA/TurkuazInstaller/Projects`
-altindadir; Explorer'dan veya kisayoldan acilista process CWD'sine gore degismez.
+Yeni projede varsayilan cikti klasoru Windows `LOCALAPPDATA/TurkuazInstaller/Projects`,
+uygulama kurulum hedefi ise `LOCALAPPDATA/Programs/Uygulamam` altindadir.
+Bu ilk acilista yonetici yetkisi gerektiren Program Files hedefini dayatmaz;
+Explorer'dan veya kisayoldan acilista process CWD'sine gore degismez.
 `LOCALAPPDATA` yoksa OS gecici dizininde `TurkuazInstaller/Projects`
 yedek yolu kullanilir; bu durumda kalici cikti icin Studio'dan
 guvenli bir klasor secilmelidir. Kaydedilmis `.tzproj` dosyalarinin

@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.2
+// Version: 0.6.3
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -151,18 +151,14 @@ struct SavedProject {
 
 impl Default for SavedProject {
     fn default() -> Self {
-        let program_files = std::env::var_os("ProgramFiles")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(r"C:\Program Files"));
-        // BRK-RUST-STUDIO-PATH-001: New project output is rooted in the
-        // Windows user's data directory, not the launcher's working directory.
-        // Saved .tzproj paths are preserved unchanged when reopened.
-        let output_directory = std::env::var_os("LOCALAPPDATA")
+        // BRK-RUST-STUDIO-PATH-001: Default project locations must be
+        // per-user and independent from the launcher process working directory.
+        // Stored .tzproj paths are preserved when existing projects are opened.
+        let local_app_data = std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .filter(|path| path.is_absolute())
-            .unwrap_or_else(std::env::temp_dir)
-            .join("TurkuazInstaller")
-            .join("Projects");
+            .unwrap_or_else(std::env::temp_dir);
+        let output_directory = local_app_data.join("TurkuazInstaller").join("Projects");
 
         Self {
             schema_version: PROJECT_SCHEMA_VERSION,
@@ -173,7 +169,8 @@ impl Default for SavedProject {
             channel: "stable".to_owned(),
             source_directory: String::new(),
             entry_point: String::new(),
-            install_target: program_files
+            install_target: local_app_data
+                .join("Programs")
                 .join("Uygulamam")
                 .to_string_lossy()
                 .into_owned(),
@@ -2564,6 +2561,12 @@ mod tests {
         assert!(
             output.ends_with(Path::new("TurkuazInstaller").join("Projects")),
             "new project output must stay in the installer project root"
+        );
+        let target = Path::new(&project.install_target);
+        assert!(target.is_absolute(), "default install path must be absolute");
+        assert!(
+            target.ends_with(Path::new("Programs").join("Uygulamam")),
+            "default install must be per-user and avoid Program Files elevation"
         );
     }
 

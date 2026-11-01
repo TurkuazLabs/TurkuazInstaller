@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.15
+Version: 2.3.16
 Aciklama: Aktif Community Rust kaynak kodu ve kabul sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
@@ -51,17 +51,25 @@ Rust gecisi halen migration foundation'dir; production veya end-user setup hazir
 
 Gelistirme artifact'ini gercek imzali release girdileriyle temiz bir Windows VM'de denemek icin [SMOKE_TEST.md](SMOKE_TEST.md) adimlarini izleyin. Bu kabul akisi henuz calistirilmis degildir; CI derleme sonucu VM kurulum kabulunun yerine gecmez.
 
-## Migration order
+## Guncel Rust kabul sirasi
 
-1. Saf Domain degerlerini port edip serialized contract'i koru.
-2. Manifest bounded input, detached CMS/PKCS#7 signature, external signer trust ve strict YAML parse zincirini port et.
-3. Release providerlari ve artifact secim/indirme use-case'ini port et; mevcut exact-size transferi, SHA-256 ve Windows Authenticode dogrulamasini workflow'a bagla.
-4. Mevcut package lock, journal, installed state repository ve operation context'i startup recovery orchestration'ina bagla.
-5. `.tzpkg` v1 formatini release uretim akisina bagla; artifact size/hash ve manifest imzasini builder ciktisina gore olustur.
-6. Ilk install/ileri update akisini repair/rollback/uninstall ve prerequisite workflow'leriyle tamamla; startup recovery ve crash-safe state reconciliation ekle.
-7. x64 ve ARM64 davranisini koruyarak Windows API'lerini port et.
-8. Mevcut development CLI'yi compile/acceptance kapilarindan gecirip secure bootstrap, portable data paths ve production command contract'ini tamamla; paired setup output'unu signing akisina bagla.
-9. Rust Studio ve setup wizard icin gercek Windows GUI kabulunu tamamla.
-10. Signing, paired packaging, temiz VM startup ve install/update/repair/rollback/uninstall testlerini tamamla.
+Asagidaki adimlar yapilmis Rust kodunu yeniden port etme plani degildir;
+gercek production kabulune kalmis islerdir. Durum/kanit
+[RUST_READINESS.md](RUST_READINESS.md) icindedir.
+
+1. Windows prereq, shortcut/protocol, preserve_paths ve data migration
+   adapter'larini Rust runtime'a yaz ve security/contract testlerini ekle.
+2. Setup Studio, wizard, kurulum/onarma/kaldirma icin gercek Windows
+   pencere, tus/tiklama ve ayrintili kullanici kabulunu yap.
+3. Windows 10/11 temiz VM, yanlis signature/hash, yol kacisi, ag
+   kesintisi, kesinti recovery ve upgrade/rollback E2E'yi kanitla.
+4. Gercek publisher signing, timestamp, trust chain/revocation,
+   artifact provenance ve antivirus/SmartScreen olaylarini dogrula.
+5. Cargo.lock ve --locked ile tekrar uretilebilir release build kapisini
+   olustur; tum test ZIP'lerini production release'den ayir.
+6. NSIS yedek yukleyicisinin yerine guvenli Rust recovery/fallback
+   alternatifi hazirlamadan tum dagitimin %100 Rust oldugunu iddia etme.
+7. Pro runtime entitlement, credentials ve signed rollout baglantisini
+   Community install guven sinirini bozmadan bagla.
 
 Bu gelistirme dali signed production release kabulunu henuz tamamlamamistir.
