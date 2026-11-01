@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.25
+# Version: 0.2.26
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -55,32 +55,13 @@ jobs:
         run: cargo fmt --manifest-path rust/Cargo.toml --all -- --check
 
       - name: Compile workspace
-        run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets
+        run: cargo check --locked --manifest-path rust/Cargo.toml --workspace --all-targets
 
       - name: Run Clippy
-        run: cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
 
       - name: Run Rust tests
-        run: cargo test --manifest-path rust/Cargo.toml --workspace --all-targets
-
-      # BRK-RUST-LOCK-001: Record the resolved dependency graph for review.
-      # This short-lived artifact is not a release or an implicit pin.
-      - name: Export resolved Cargo.lock candidate
-        uses: actions/upload-artifact@v4
-        with:
-          name: turkuaz-community-cargo-lock-candidate
-          path: rust/Cargo.lock
-          retention-days: 3
-          if-no-files-found: error
-
-      # BRK-RUST-LOCK-TRANSFER-001: One-time UTF-8 transport for committing
-      # the exact runner-resolved lockfile; remove after source control pinning.
-      - name: Emit Cargo.lock for source control pinning
-        if: github.event_name == 'pull_request'
-        run: |
-          printf '%s\n' 'BRK_COMMUNITY_CARGO_LOCK_BEGIN'
-          cat rust/Cargo.lock
-          printf '%s\n' 'BRK_COMMUNITY_CARGO_LOCK_END'
+        run: cargo test --locked --manifest-path rust/Cargo.toml --workspace --all-targets
 
   rust-windows:
     runs-on: windows-2025
@@ -90,7 +71,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Compile Windows workspace
-        run: cargo check --manifest-path rust/Cargo.toml --workspace --all-targets
+        run: cargo check --locked --manifest-path rust/Cargo.toml --workspace --all-targets
 
       - name: Install NSIS
         run: choco install nsis --yes --no-progress
@@ -118,7 +99,7 @@ jobs:
           "RUST_CLI_VERSION=$($package.version)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Build development CLI
-        run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer
+        run: cargo build --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer
 
       - name: Stamp development CLI artifact
         shell: pwsh
@@ -134,10 +115,10 @@ jobs:
 
 
       - name: Build GUI setup stub
-        run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui
+        run: cargo build --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui
 
       - name: Test signed HTTPS installer wizard source selection
-        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui web_installer_tests
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui web_installer_tests
 
       - name: Build and inspect preconfigured WebSetup EXE
         shell: pwsh
@@ -179,31 +160,31 @@ jobs:
           retention-days: 7
 
       - name: Build setup authoring GUI
-        run: cargo build --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui
+        run: cargo build --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui
 
       - name: Test setup authoring GUI theme safety
-        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_typography_is_available_for_both_appearances
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_typography_is_available_for_both_appearances
 
       - name: Test default Studio project output root
-        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui new_project_uses_os_data_root_instead_of_process_cwd
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui new_project_uses_os_data_root_instead_of_process_cwd
 
       - name: Test IDE welcome and saved project mode compatibility
-        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui saved_project_kind_preserves_legacy_offline_and_web_projects
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui saved_project_kind_preserves_legacy_offline_and_web_projects
 
       - name: Test modal wizard opening for chosen installer type
-        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui welcome_selection_opens_mode_specific_modal_without_replacing_old_project_silently
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui welcome_selection_opens_mode_specific_modal_without_replacing_old_project_silently
 
       - name: Test GitHub Releases and existing HTTPS source migration
-        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui web_provider_preserves_legacy_https_projects_and_roundtrips_github_settings
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui web_provider_preserves_legacy_https_projects_and_roundtrips_github_settings
 
       - name: Test web source URL validation
-        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui web_provider_rejects_secret_links_invalid_segments_and_ambiguous_release_assets
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui web_provider_rejects_secret_links_invalid_segments_and_ambiguous_release_assets
 
       - name: Test signed source URLs without network requests
-        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui check_release_source_rejects_unsafe_urls_without_network_io
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui check_release_source_rejects_unsafe_urls_without_network_io
 
       - name: Test Studio source check request and trust policy selection
-        run: cargo test --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui source_check_uses_selected_release_and_requires_trust_file
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui source_check_uses_selected_release_and_requires_trust_file
 
       - name: Stamp setup authoring GUI artifact
         shell: pwsh

@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.16
+Version: 2.3.17
 Aciklama: Aktif Community Rust kaynak kodu ve kabul sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
@@ -65,7 +65,7 @@ gercek production kabulune kalmis islerdir. Durum/kanit
    kesintisi, kesinti recovery ve upgrade/rollback E2E'yi kanitla.
 4. Gercek publisher signing, timestamp, trust chain/revocation,
    artifact provenance ve antivirus/SmartScreen olaylarini dogrula.
-5. Cargo.lock ve --locked ile tekrar uretilebilir release build kapisini
+5. Commit edilmis Cargo.lock icin Linux/Windows --locked build ve test CI kapisini
    olustur; tum test ZIP'lerini production release'den ayir.
 6. NSIS yedek yukleyicisinin yerine guvenli Rust recovery/fallback
    alternatifi hazirlamadan tum dagitimin %100 Rust oldugunu iddia etme.

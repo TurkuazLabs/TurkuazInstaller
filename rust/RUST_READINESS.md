@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/RUST_READINESS.md
 Amac: Community ve Pro Rust migration icin gercek islev ve release kabul sinirlarini kaydetmek
 Modul - Markdown
-Version: 1.0.1
+Version: 1.0.2
 Aciklama: Uygulanan, CI ile dogrulanan ve production icin eksik zorunlu kapilar
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
@@ -59,9 +59,11 @@ Kodun varligi her islevin production ortami icin kabulunu kanitlamaz.
    PowerShell smoke araclari Rust degil. NSIS fallback Rust temelli
    guvenli alternatife donusturulmeden `%100 Rust installer` iddiasi
    dogru olmaz.
-5. **Tekrarlanabilir build:** Community ve Pro Rust workspace'lerinde
-   `Cargo.lock` track edilmiyor; uygulama release'lerinde lockfile
-   politikasi ve `--locked` CI kabul kapisi gerekir.
+5. **Tekrarlanabilir build:** Community `rust/Cargo.lock` [CI 41338891561](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41338891561)
+   workspace testinin cozumledigi graph olarak commit edildi. Cargo
+   komutlari `--locked` ile zorunlu calistirilacak; bu degisikligin
+   Linux ve Windows CI'si basariyla bitmeden kabul PASS degildir.
+   Pro workspace'leri icin lockfile sabitlemesi ve `--locked` henuz eksik.
 6. **Pro canli islevler:** Lisans provider, OS credential store,
    private feed UI baglantisi, authoritative rollout revision backend
    ve full production integration E2E tamamlanmadi.
