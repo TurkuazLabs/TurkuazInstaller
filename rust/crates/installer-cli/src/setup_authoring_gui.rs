@@ -464,13 +464,19 @@ impl eframe::App for BuilderApp {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self.project.installer_kind == InstallerKind::Web {
                             if ui
-                                .add_enabled(!is_building && package_ready, egui::Button::new("2  Çevrimiçi yükleyici oluştur"))
+                                .add_enabled(
+                                    !is_building && package_ready,
+                                    egui::Button::new("2  Çevrimiçi yükleyici oluştur"),
+                                )
                                 .clicked()
                             {
                                 web_build_requested = true;
                             }
                         } else if ui
-                            .add_enabled(!is_building && package_ready, egui::Button::new("2  Tam Kurulum oluştur"))
+                            .add_enabled(
+                                !is_building && package_ready,
+                                egui::Button::new("2  Tam Kurulum oluştur"),
+                            )
                             .clicked()
                         {
                             self.start_distribution();
@@ -506,7 +512,7 @@ impl eframe::App for BuilderApp {
                         self.dialog_open = false;
                         self.status = None;
                     }
-                     ui.label(
+                    ui.label(
                         egui::RichText::new(self.project.installer_kind.label())
                             .size(13.0)
                             .strong()
@@ -1557,7 +1563,9 @@ impl BuilderApp {
             |ui| {
                 ui.set_min_width(460.0);
                 ui.heading("Başka bir proje açılsın mı?");
-                ui.label("Mevcut çalışma alanı kapanacak; kaydedilmemiş değişiklikler kaybolabilir.");
+                ui.label(
+                    "Mevcut çalışma alanı kapanacak; kaydedilmemiş değişiklikler kaybolabilir.",
+                );
                 ui.horizontal(|ui| {
                     if ui.button("Vazgeç").clicked() {
                         cancel = true;
@@ -1854,8 +1862,9 @@ fn ensure_prepared_package_is_current(project: &SavedProject) -> Result<PathBuf,
     {
         return Err("Önce 1 Uygulama paketini hazırla işlemini tamamlayın.".to_owned());
     }
-    let packaged = read_project(&directory.join("project.tzproj"))
-        .map_err(|_| "Paket proje kaydı eksik veya geçersiz; yeni sürümle tekrar paket hazırlayın.".to_owned())?;
+    let packaged = read_project(&directory.join("project.tzproj")).map_err(|_| {
+        "Paket proje kaydı eksik veya geçersiz; yeni sürümle tekrar paket hazırlayın.".to_owned()
+    })?;
     if !package_build_inputs_match(project, &packaged) {
         return Err("Paket, güncel proje ayarlarıyla eşleşmiyor. Yeni sürümle uygulama paketini yeniden hazırlayın.".to_owned());
     }
