@@ -2,14 +2,18 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.13
+Version: 2.3.14
 Aciklama: Mevcut .NET davranisini koruyarak asamali Rust portu icin mimari sinir ve gercek kapsam durumunu belirtir
 Bagimli Oldugu Katman: Documentation
 -->
 
 # Rust Migration
 
-Bu workspace TurkuazInstaller'in paralel Rust uygulamasidir. Rust ozellikleri .NET referansiyla contract ve Windows kabul kontrollerinden gecene kadar mevcut .NET uygulamasi davranis referansi olarak kalir. Production release akislari mevcut imzali release kapilarini kullanmaya devam eder.
+Bu workspace artik `rewrite/rust-community` dalindaki **tek aktif Community
+uygulama kaynak kodudur**. Eski .NET uygulama dizinleri ve .NET CI
+isleri bu dalin dosya agacindan temizlenmistir. Eski main ve commit
+gecmisi degistirilmemistir. Rust fonksiyonel testleri production
+GUI/kurulum imza kabulunun yerine gecmez; imzali release hala ayri kapidir.
 
 ## Boundary
 

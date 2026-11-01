@@ -1,13 +1,20 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.20
+# Version: 0.2.21
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
 
 on:
+  push:
+    branches:
+      - rewrite/rust-community
+    paths:
+      - "rust/**"
+      - ".github/workflows/rust-migration.yml"
+      - "README.md"
   pull_request:
     branches:
       - main
@@ -15,6 +22,7 @@ on:
       - "rust/**"
       - ".github/workflows/rust-migration.yml"
       - "packaging/TurkuazInstallerBackup.nsi"
+      - "README.md"
 
 concurrency:
   group: rust-migration-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
