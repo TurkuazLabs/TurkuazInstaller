@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/unsigned_setup.rs
 // Amac: NSIS olmadan yalniz yerel standart kurulum icin .tzpkg gomulu EXE uretmek
 // Modul - Rust Package Engine
-// Version: 0.2.1
+// Version: 0.2.2
 // Aciklama: Imzasiz yerel EXE butunluk kontrolu; imzali release/trust asla atlanmaz
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -14,7 +14,8 @@ use std::{
 use sha2::{Digest, Sha256};
 
 use crate::{
-    PackageEngineError, PackageExtractionLimits, extract_archive,
+    MalwareScanner, PackageEngineError, PackageExtractionLimits, ScanPhase, extract_archive,
+    scan_directory,
     format::{
         MAXIMUM_PACKAGE_METADATA_BYTES, PACKAGE_FORMAT_VERSION,
         PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT, PACKAGE_METADATA_ENTRY, PackageArchiveMetadata,
@@ -346,7 +347,27 @@ pub fn install_unsigned_local_setup(
     executable: impl AsRef<Path>,
     target: impl AsRef<Path>,
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
-    let target = target.as_ref();
+    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), None)
+}
+
+/// @dev-id BRK-LOCAL-SETUP-006
+/// @purpose Fail-closed local install with caller-provided platform-neutral AV scanner.
+/// @contract Scan all staged files before publishing; deny threat, unknown, or engine failure.
+/// @warning The legacy unsigned install entry point remains separate until a real AV
+/// adapter and explicit product policy are configured. Do not claim it scans malware.
+pub fn install_unsigned_local_setup_scanned(
+    executable: impl AsRef<Path>,
+    target: impl AsRef<Path>,
+    scanner: &dyn MalwareScanner,
+) -> Result<UnsignedLocalIdentity, PackageEngineError> {
+    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), Some(scanner))
+}
+
+fn install_unsigned_local_setup_inner(
+    executable: &Path,
+    target: &Path,
+    scanner: Option<&dyn MalwareScanner>,
+) -> Result<UnsignedLocalIdentity, PackageEngineError> {
     let parent = target
         .parent()
         .ok_or(invalid("local install target has no parent"))?;
@@ -372,6 +393,10 @@ pub fn install_unsigned_local_setup(
         &identity.package_id,
         &identity.version,
     )?;
+    if let Some(scanner) = scanner {
+        scan_directory(&stage, ScanPhase::BeforeInstall, scanner)
+            .map_err(|_| invalid("malware scan did not return a clean result; install refused"))?;
+    }
     // Existing target directories must never be overwritten. Windows rename is
     // fail-if-exists; this precheck is retained for clear cross-platform behavior.
     if fs::symlink_metadata(target).is_ok() {
@@ -385,6 +410,39 @@ pub fn install_unsigned_local_setup(
 mod tests {
     use super::*;
     use uuid::Uuid;
+
+    struct ScannerBlocker;
+    impl MalwareScanner for ScannerBlocker {
+        fn scan_file(&self, _file: &Path, _phase: ScanPhase)
+            -> Result<crate::ScanVerdict, crate::ScanGateError>
+        {
+            Ok(crate::ScanVerdict::Threat)
+        }
+    }
+
+    #[test]
+    fn scanned_local_install_refuses_malware_before_target_is_published() {
+        let root = std::env::temp_dir().join(format!("tz-malware-gate-{}", Uuid::new_v4()));
+        fs::create_dir(&root).expect("fixture root");
+        let source = root.join("source");
+        fs::create_dir(&source).expect("fixture source");
+        fs::write(source.join("demo.txt"), b"fixture").expect("fixture payload");
+        let package = root.join("demo.tzpkg");
+        let stub = root.join("studio.exe");
+        let setup = root.join("setup.exe");
+        let target = root.join("installed");
+        let package_id = PackageId::parse("qa.malware").expect("id");
+        let version = SemanticVersion::parse("1.0.0").expect("version");
+        crate::build_full_package(
+            &source, &package_id, &version, &package,
+            PackageExtractionLimits::default(),
+        ).expect("build package");
+        fs::write(&stub, b"MZ-test-stub").expect("stub");
+        create_unsigned_local_setup(&stub, &package, &setup).expect("setup");
+        assert!(install_unsigned_local_setup_scanned(&setup, &target, &ScannerBlocker).is_err());
+        assert!(!target.exists(), "unsafe target must not be published");
+        fs::remove_dir_all(&root).expect("fixture cleanup");
+    }
 
     #[test]
     fn local_setup_does_not_overwrite_existing_install_directory() {
