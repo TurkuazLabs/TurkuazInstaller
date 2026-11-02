@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.8.4
+Version: 0.8.5
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -28,6 +28,17 @@ Olusan dosya:
     rust/target/release/turkuaz-installer.exe
 
 Argumansiz acildiginda Setup Studio penceresini gosterir. Windows CI, ayni dosyanin surumlu turkuaz-setup-builder-vX.Y.Z-windows-x64.exe gelistirme artifact'ini de uretir.
+
+## UI seciciler ve proje kaydi
+
+- EXE secici ve kaynak klasoru secici ayni satir ve 112 x 40 piksel dugme olcusunu kullanir.
+- Kurulum temasi listesinin uzerine gelince acik/koyu tema ornegi gorunur.
+- Vurgu rengi HEX alani ve yanindaki RGB renk paletinden duzenlenebilir.
+- "Projeyi kaydet" ilk kayitta Belgeler/TurkuazInstaller/<urun adi>/project.tzproj
+  yolunu olusturur. Gecersiz klasor karakterleri duzeltilir; urun adi
+  proje icinde degismez. Var olan proje sessizce ezilmez.
+- "Farkli kaydet" farkli konum secmeye izin verir. Var olan proje
+  dosyasi kaydedildiginde ayni konum kullanilir.
 
 ## Proje calisma alani
 
@@ -94,6 +105,22 @@ Kurulum sihirbazi, gomulu yayini kullanip mevcut CLI HTTPS indirme ve detached C
 Windows CI, imzasiz bir WebSetup test EXE'si olusturup config'i geri okur ve byte degistirilmis config'i reddeder. CI ornegi `.test` URL'si tasir, bu nedenle gercek bir sunucudan indirme yapmaz. Manuel temiz Windows VM'de gercek imzali HTTPS yayin test edilmedikce production hazir sayilmaz.
 
 Komut satiri ayni output'u `build-web-setup --stub GUI.exe --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store trust.yaml --target DIR --theme-config setup-theme.json --output WebSetup.exe` ile uretebilir. `web-setup-info --file WebSetup.exe` config'i ozetler (trust policy'yi yazdirmaz).
+
+## Yerel imzasiz NSIS testi
+
+Tam Kurulum projesinde birinci paket olusturma adimindan sonra
+"2 Yerel test EXE olustur" ile `local-test/LOCAL-TEST-ONLY.exe` uretilir.
+NSIS `makensis.exe` gerekli; bilinen dizinlerden otomatik bulunur veya
+04 bolumunden secilir. Dosyalar kaynak klasorunden eklenir ve
+symlink/junction ile ic ice kaynak/cikti reddedilir.
+
+Bu dosya yalnizca geliştirici TEST ciktisidir ve varsayilan olarak
+`LocalAppData/TurkuazInstaller/LocalTests/<package-id>` klasorune kurar.
+CMS manifest dogrulama, imzali guncelleme, rollback veya
+production publisher dogrulamasi yapmaz. Guvenilir dagitim icin
+04 bolumundeki "Imzali dagitim (gelismis)" akisi korunur.
+Imzalama ozelligi Community temel guven mekanizmasindan cikartilmaz;
+Pro tarafina tasinmasi gerekli degildir.
 
 ## Derleme ciktisi
 
