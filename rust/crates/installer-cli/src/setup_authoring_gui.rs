@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.5
+// Version: 0.6.6
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -365,6 +365,7 @@ impl eframe::App for BuilderApp {
         let mut appearance_changed = false;
         let mut open_requested = false;
         let mut save_requested = false;
+        let mut save_as_requested = false;
         let mut web_build_requested = false;
 
         egui::TopBottomPanel::top("setup-builder-header").show(context, |ui| {
@@ -409,6 +410,15 @@ impl eframe::App for BuilderApp {
                         .clicked()
                     {
                         save_requested = true;
+                    }
+                    if ui
+                        .add_enabled(
+                            !is_building && self.workspace_open,
+                            egui::Button::new("Farklı kaydet…"),
+                        )
+                        .clicked()
+                    {
+                        save_as_requested = true;
                     }
                     if ui
                         .add_enabled(!is_building, egui::Button::new("Başlangıç"))
@@ -595,6 +605,9 @@ impl eframe::App for BuilderApp {
         }
         if save_requested {
             self.save_project();
+        }
+        if save_as_requested {
+            self.save_project_as();
         }
         if web_build_requested {
             self.start_web_build();
@@ -1126,11 +1139,30 @@ impl BuilderApp {
                         "Uygulama dosyalarının bulunduğu klasörü seçin",
                     );
                     ui.add_space(10.0);
-                    text_row(ui, "Başlangıç dosyası", &mut self.project.entry_point);
-                    if ui
-                        .add_enabled(!is_building, egui::Button::new("EXE dosyası seç"))
-                        .clicked()
-                    {
+                    field_label(ui, "Başlangıç dosyası");
+                    let mut exe_requested = false;
+                    ui.horizontal(|ui| {
+                        let button_width = 112.0;
+                        let width = (ui.available_width()
+                            - button_width
+                            - ui.spacing().item_spacing.x)
+                            .max(160.0);
+                        ui.add_sized(
+                            [width, 40.0],
+                            egui::TextEdit::singleline(&mut self.project.entry_point)
+                                .desired_width(width),
+                        );
+                        exe_requested = ui
+                            .add_enabled_ui(!is_building, |ui| {
+                                ui.add_sized(
+                                    [button_width, 40.0],
+                                    egui::Button::new("EXE seç…"),
+                                )
+                                .clicked()
+                            })
+                            .inner;
+                    });
+                    if exe_requested {
                         self.pick_entry_point();
                     }
                 });
@@ -1161,11 +1193,35 @@ impl BuilderApp {
                         )
                         .show_ui(ui, |ui| {
                             for preset in SetupThemePreset::ALL {
-                                ui.selectable_value(
+                                let mut sample = self.project.clone();
+                                sample.theme_preset = preset.as_str().to_owned();
+                                let response = ui.selectable_value(
                                     &mut self.project.theme_preset,
                                     preset.as_str().to_owned(),
                                     preset.label(),
                                 );
+                                response.on_hover_ui(|ui| {
+                                    ui.set_min_width(240.0);
+                                    ui.label(format!("{} teması", preset.label()));
+                                    if let Ok(theme) = theme_config_from_project(&sample) {
+                                        for dark in [false, true] {
+                                            let palette = theme.palette(dark);
+                                            egui::Frame::new()
+                                                .inner_margin(egui::Margin::same(12))
+                                                .fill(color(palette.background))
+                                                .show(ui, |ui| {
+                                                    ui.colored_label(
+                                                        color(palette.accent),
+                                                        theme.brand_name(),
+                                                    );
+                                                    ui.label(
+                                                        egui::RichText::new(theme.subtitle())
+                                                            .color(color(palette.text)),
+                                                    );
+                                                });
+                                        }
+                                    }
+                                });
                             }
                         });
                     ui.add_space(12.0);
@@ -1175,7 +1231,29 @@ impl BuilderApp {
                         &mut self.project.brand_name,
                     );
                     text_row(ui, "Alt başlık", &mut self.project.subtitle);
-                    text_row(ui, "Vurgu rengi", &mut self.project.accent_color);
+                    field_label(ui, "Vurgu rengi");
+                    let fallback = default_theme_accent(&self.project);
+                    let mut rgb = parse_rgb_hex(&self.project.accent_color).unwrap_or(fallback);
+                    ui.horizontal(|ui| {
+                        let picker_width = 112.0;
+                        let field_width = (ui.available_width()
+                            - picker_width
+                            - ui.spacing().item_spacing.x)
+                            .max(160.0);
+                        ui.add_sized(
+                            [field_width, 40.0],
+                            egui::TextEdit::singleline(&mut self.project.accent_color)
+                                .hint_text("#127984")
+                                .desired_width(field_width),
+                        );
+                        ui.vertical(|ui| {
+                            if ui.color_edit_button_srgb(&mut rgb).changed() {
+                                self.project.accent_color =
+                                    format!("#{:02X}{:02X}{:02X}", rgb[0], rgb[1], rgb[2]);
+                            }
+                        });
+                    });
+                    ui.add_space(12.0);
                 });
                 ui.add_space(8.0);
                 ui.small("Vurgu rengi isteğe bağlıdır; HEX biçimi kullanın, örnek: #127984.");
@@ -1618,11 +1696,29 @@ impl BuilderApp {
             return;
         }
 
-        if let Some(mut path) = FileDialog::new()
+        match save_new_project_in_documents(&self.project, &default_documents_root()) {
+            Ok(path) => {
+                self.project_path = Some(path.clone());
+                self.status = Some((true, format!("Proje kaydedildi: {}", path.display())));
+            }
+            Err(error) => self.status = Some((false, error)),
+        }
+    }
+
+    fn save_project_as(&mut self) {
+        let mut dialog = FileDialog::new()
             .add_filter("Turkuaz setup project", &["tzproj"])
-            .set_file_name("new-setup.tzproj")
-            .save_file()
-        {
+            .set_file_name("project.tzproj");
+        if let Ok(directory) = documents_project_directory(&self.project, &default_documents_root()) {
+            if directory.is_dir() {
+                dialog = dialog.set_directory(directory);
+            } else if let Some(parent) = directory.parent() {
+                if parent.is_dir() {
+                    dialog = dialog.set_directory(parent);
+                }
+            }
+        }
+        if let Some(mut path) = dialog.save_file() {
             if path.extension().is_none() {
                 path.set_extension("tzproj");
             }
@@ -2105,6 +2201,27 @@ fn is_windows_reparse_point(_metadata: &fs::Metadata) -> bool {
     false
 }
 
+// BRK-STUDIO-COLOR-001: The picker edits an optional RGB hex field while
+// keeping manually entered values backward-compatible with saved .tzproj files.
+fn parse_rgb_hex(value: &str) -> Option<[u8; 3]> {
+    let hex = value.trim().strip_prefix('#')?;
+    if hex.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
+    Some([r, g, b])
+}
+
+fn default_theme_accent(project: &SavedProject) -> [u8; 3] {
+    let mut sample = project.clone();
+    sample.accent_color.clear();
+    theme_config_from_project(&sample)
+        .map(|theme| theme.palette(false).accent)
+        .unwrap_or([18, 121, 132])
+}
+
 fn theme_config_from_project(project: &SavedProject) -> Result<SetupThemeConfig, String> {
     let preset = project
         .theme_preset
@@ -2140,6 +2257,66 @@ fn theme_config_from_project(project: &SavedProject) -> Result<SetupThemeConfig,
     let bytes = serde_json::to_vec(&value)
         .map_err(|error| format!("Tema ayarı JSON'a dönüştürülemedi: {error}"))?;
     SetupThemeConfig::from_json(&bytes).map_err(|error| error.to_string())
+}
+
+// BRK-STUDIO-SAVE-001: New projects default to Documents/TurkuazInstaller/
+// <product name>/project.tzproj, independent from the executable's CWD.
+// Existing project paths remain intact; no implicit overwrite on first save.
+fn default_documents_root() -> PathBuf {
+    std::env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+        .unwrap_or_else(std::env::temp_dir)
+        .join("Documents")
+}
+
+fn safe_project_folder_name(name: &str) -> String {
+    let cleaned: String = name
+        .trim()
+        .chars()
+        .take(64)
+        .map(|ch| {
+            if ch.is_alphanumeric() || matches!(ch, '-' | '_' | ' ') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim_matches([' ', '_', '.']);
+    if cleaned.is_empty() {
+        "Yeni Proje".to_owned()
+    } else {
+        // Avoid Windows reserved device names even when the user names the product so.
+        let upper = cleaned.to_ascii_uppercase();
+        if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "COM1" | "LPT1") {
+            format!("Proje_{cleaned}")
+        } else {
+            cleaned.to_owned()
+        }
+    }
+}
+
+fn documents_project_directory(project: &SavedProject, documents: &Path) -> Result<PathBuf, String> {
+    if !documents.is_absolute() {
+        return Err("Belgeler dizini mutlak olmalıdır.".to_owned());
+    }
+    Ok(documents
+        .join("TurkuazInstaller")
+        .join(safe_project_folder_name(&project.product_name)))
+}
+
+fn save_new_project_in_documents(project: &SavedProject, documents: &Path) -> Result<PathBuf, String> {
+    let directory = documents_project_directory(project, documents)?;
+    validate_or_create_output_parent(&directory, true)?;
+    let path = directory.join("project.tzproj");
+    let mut saved = project.clone();
+    saved.schema_version = PROJECT_SCHEMA_VERSION;
+    let bytes = serde_json::to_vec_pretty(&saved)
+        .map_err(|error| format!("Proje JSON'a dönüştürülemedi: {error}"))?;
+    write_new_file(&path, &bytes)
+        .map_err(|error| format!("{error}. Başka bir proje varsa 'Farklı kaydet…' kullanın."))?;
+    Ok(path)
 }
 
 fn read_project(path: &Path) -> Result<SavedProject, String> {
@@ -2997,6 +3174,52 @@ mod tests {
         assert!(!prepared_package_is_current(&project));
         assert!(ensure_prepared_package_is_current(&project).is_err());
         fs::remove_dir_all(&temporary).expect("clean fixture");
+    }
+
+    #[test]
+    fn accent_picker_hex_parsing_is_strict_and_roundtrips() {
+        assert_eq!(parse_rgb_hex("#127984"), Some([18, 121, 132]));
+        assert_eq!(parse_rgb_hex("#FF7a00"), Some([255, 122, 0]));
+        for invalid in ["", "red", "#fff", "#gg1122", "#12345678"] {
+            assert_eq!(parse_rgb_hex(invalid), None);
+        }
+        let project = SavedProject::default();
+        assert_eq!(default_theme_accent(&project).len(), 3);
+    }
+
+    #[test]
+    fn documents_project_folder_sanitizes_names_without_changing_project_data() {
+        let project = SavedProject {
+            product_name: "Oyun: Türkçe / Test?".to_owned(),
+            ..SavedProject::default()
+        };
+        let docs = std::env::temp_dir().join("Documents");
+        let folder = documents_project_directory(&project, &docs).expect("documents path");
+        assert!(folder.ends_with(Path::new("TurkuazInstaller").join("Oyun_ Türkçe _ Test_")));
+        assert_eq!(project.product_name, "Oyun: Türkçe / Test?");
+        assert_eq!(safe_project_folder_name("CON"), "Proje_CON");
+    }
+
+    #[test]
+    fn documents_default_save_creates_named_directory_and_refuses_overwrite() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "turkuaz-documents-test-{}-{nonce}",
+            std::process::id()
+        ));
+        let documents = root.join("Documents");
+        let project = SavedProject::default();
+        let first = save_new_project_in_documents(&project, &documents)
+            .expect("create default project under Documents");
+        assert!(first.ends_with(Path::new("TurkuazInstaller").join("Uygulamam").join("project.tzproj")));
+        let restored = read_project(&first).expect("read saved project");
+        assert_eq!(restored.product_name, project.product_name);
+        assert!(save_new_project_in_documents(&project, &documents).is_err());
+        assert_eq!(read_project(&first).expect("unchanged project").product_name, project.product_name);
+        fs::remove_dir_all(&root).expect("clean test project");
     }
 
     #[test]
