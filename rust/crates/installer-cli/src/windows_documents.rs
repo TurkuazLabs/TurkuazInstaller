@@ -45,18 +45,17 @@ unsafe extern "system" {
 // or group policy. Never infer it by appending Documents to USERPROFILE.
 pub(super) fn documents_path() -> Result<PathBuf, String> {
     // SAFETY: COM initialization is balanced below. An existing MTA is valid.
-    let initialized = unsafe {
-        CoInitializeEx(core::ptr::null_mut(), COINIT_APARTMENTTHREADED)
-    };
+    let initialized = unsafe { CoInitializeEx(core::ptr::null_mut(), COINIT_APARTMENTTHREADED) };
     if initialized < 0 && initialized != RPC_E_CHANGED_MODE {
-        return Err(format!("Belgeler klasörü COM başlatılamadı: {initialized:#x}"));
+        return Err(format!(
+            "Belgeler klasörü COM başlatılamadı: {initialized:#x}"
+        ));
     }
     let owns_com = initialized >= 0;
     let mut pointer: *mut u16 = core::ptr::null_mut();
     // SAFETY: DOCUMENTS_ID is the known Windows GUID, the output is writable.
-    let result = unsafe {
-        SHGetKnownFolderPath(&DOCUMENTS_ID, 0, core::ptr::null_mut(), &mut pointer)
-    };
+    let result =
+        unsafe { SHGetKnownFolderPath(&DOCUMENTS_ID, 0, core::ptr::null_mut(), &mut pointer) };
     let outcome = if result == 0 && !pointer.is_null() {
         let mut length = 0usize;
         // SAFETY: The Shell API returns a NUL-terminated UTF-16 string.
