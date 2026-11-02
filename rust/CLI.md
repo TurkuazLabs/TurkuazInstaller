@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.14
+Version: 0.4.15
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -146,6 +146,29 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-pack
 ```
 
 The builder rejects unsafe paths and overwriting an existing output. Pass `--executable bin/app.exe` to embed an entry point and create format v2; omitting it creates a backward-compatible v1 package. Generate an unsigned manifest draft from the finished archive's exact size and SHA-256, then sign it separately.
+
+## Native standard setup without NSIS
+
+The Rust Studio build (`setup-authoring-gui` feature) can embed a completed
+`.tzpkg` into its own EXE and launch a separate local installer UI.
+The default Studio action writes `standard/TurkuazSetup.exe`.
+
+A headless build command is provided for Windows smoke testing:
+
+```powershell
+turkuaz-installer build-native-setup --stub Studio.exe --package application.tzpkg --output TurkuazSetup.exe
+TurkuazSetup.exe install-local-self --target "C:\\Users\\Public\\App-Test-New"
+```
+
+The second command accepts only a previously absent directory. The normal
+unsigned GUI defaults to the current user's LocalAppData/Programs/<package-id>.
+This route verifies embedded SHA-256 integrity and validates ZIP paths,
+regular files, size limits, and collisions. It is **not** a signed publisher
+release, does not use the verified InstallWorkflow, and does not support
+authenticated update/repair/rollback or managed uninstall. A malicious party
+can rebuild its own unsigned EXE; SHA-256 is not a signature. Signed
+distribution commands are unchanged. On Windows, use an isolated VM and
+run `rust/scripts/windows-native-setup-smoke.ps1` for CLI integration tests.
 
 ## Generate an unsigned release manifest draft
 
