@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.8.6
+Version: 0.8.7
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -127,6 +127,20 @@ production publisher dogrulamasi yapmaz. Guvenilir dagitim icin
 04 bolumundeki "Imzali dagitim (gelismis)" akisi korunur.
 Imzalama ozelligi Community temel guven mekanizmasindan cikartilmaz;
 Pro tarafina tasinmasi gerekli degildir.
+
+Windows test ortaminda NSIS template derlemesini ve izole sessiz kurulumu
+dogrulamak icin:
+
+```powershell
+pwsh -NoProfile -File .\\rust\\scripts\\windows-local-nsis-smoke.ps1
+```
+
+Betik test icin yalnizca rastgele, kullanici-bazli iki klasor olusturur.
+Derleme sonunda `LOCAL_NSIS_COMPILE_PASS`, temiz test yuklemesi
+sonunda `LOCAL_NSIS_INSTALL_PASS` yazilir. Varsayilan olarak test
+dosyalarini temizler. `-KeepArtifacts` ile izole deneme dosyalari
+korunabilir. Bu betik gercek Studio UI tiklama testi degildir ve
+production imzalama / guven zincirini kapsamaz.
 
 ## Derleme ciktisi
 
