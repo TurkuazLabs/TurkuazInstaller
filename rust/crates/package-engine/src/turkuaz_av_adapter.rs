@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/turkuaz_av_adapter.rs
 // Amac: TurkuazAV rule-scan JSON protokolunu platform bagimsiz Rust scanner'a baglamak
 // Modul - Rust Security Adapter
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Pinli motor/anahtar, surumlu JSON, timeout, sinirli cikti ve fail-closed
 // Bagimli Oldugu Katman: Service | Adapter
 
@@ -68,7 +68,14 @@ fn sha256_file(path: &Path) -> Result<String, ScanGateError> {
     }
     let mut file = fs::File::open(path).map_err(|_| scanner_failed())?;
     let mut hasher = Sha256::new();
-    io::copy(&mut file, &mut hasher).map_err(|_| scanner_failed())?;
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer).map_err(|_| scanner_failed())?;
+        if count == 0 {
+            break;
+        }
+        hasher.update(&buffer[..count]);
+    }
     Ok(format!("{:x}", hasher.finalize()))
 }
 
