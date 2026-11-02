@@ -45,8 +45,8 @@ use turkuaz_installer_operation_lock::FileOperationLockOptions;
 use turkuaz_installer_package_engine::{
     MAXIMUM_SETUP_THEME_BYTES, PackageExtractionLimits, SetupThemeConfig, SetupThemePreset,
     build_full_package_with_entry_point, create_self_extracting_setup, create_unsigned_local_setup,
-    extract_embedded_setup_bundle, extract_setup_bundle,
-    install_unsigned_local_setup, write_setup_bundle_with_theme,
+    extract_embedded_setup_bundle, extract_setup_bundle, install_unsigned_local_setup,
+    write_setup_bundle_with_theme,
 };
 use url::Url;
 
