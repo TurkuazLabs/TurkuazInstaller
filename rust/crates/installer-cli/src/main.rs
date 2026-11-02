@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.24
+// Version: 0.2.25
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -45,7 +45,7 @@ use turkuaz_installer_operation_lock::FileOperationLockOptions;
 use turkuaz_installer_package_engine::{
     MAXIMUM_SETUP_THEME_BYTES, PackageExtractionLimits, SetupThemeConfig, SetupThemePreset,
     build_full_package_with_entry_point, create_self_extracting_setup, create_unsigned_local_setup,
-    extract_embedded_setup_bundle, extract_setup_bundle, has_unsigned_local_setup,
+    extract_embedded_setup_bundle, extract_setup_bundle,
     install_unsigned_local_setup, write_setup_bundle_with_theme,
 };
 use url::Url;
@@ -60,6 +60,9 @@ mod setup_authoring_gui;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod unsigned_local_gui;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
+use turkuaz_installer_package_engine::has_unsigned_local_setup;
 
 #[tokio::main]
 async fn main() {
