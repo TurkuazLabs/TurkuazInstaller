@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.8.7
+Version: 0.9.0
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -108,39 +108,46 @@ Windows CI, imzasiz bir WebSetup test EXE'si olusturup config'i geri okur ve byt
 
 Komut satiri ayni output'u `build-web-setup --stub GUI.exe --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store trust.yaml --target DIR --theme-config setup-theme.json --output WebSetup.exe` ile uretebilir. `web-setup-info --file WebSetup.exe` config'i ozetler (trust policy'yi yazdirmaz).
 
-## Yerel imzasiz NSIS testi
+## Rust Standart Kurulum (NSIS gerektirmez)
 
-Tam Kurulum projesinde birinci paket olusturma adimindan sonra
-"2 Yerel test EXE olustur" ile `local-test/LOCAL-TEST-ONLY.exe` uretilir.
-NSIS `makensis.exe` gerekli; bilinen dizinlerden otomatik bulunur veya
-04 bolumunden secilir. Dosyalar kaynak klasorunden eklenir ve
-symlink/junction ile ic ice kaynak/cikti reddedilir.
+Tam Kurulum projesinin birinci adiminda `application.tzpkg` hazirlanir.
+Ikinci adim olan "2 Standart Kurulum olustur", Studio'nun Rust EXE
+motoruna paketi ekleyerek `standard/TurkuazSetup.exe` uretir.
+Bir NSIS derleyicisi veya imza sertifikasi gerektirmez.
 
-Birinci asama tamamlandiginda Studio'nun durum mesaji yerel NSIS testini
-ve imzali dagitimi ayri yollar olarak tarif eder. Onceki zorunlu
-imzalama uyarisi yerel test akisina uygulanmaz.
+Bu EXE kendi baslatildiginda Rust yerel kurulum penceresini acar,
+paketin kimligini/surumunu gosterir ve uygulama dosyalarini
+`LocalAppData/Programs/<package-id>` altina kurabilir.
+Kullanici hedef klasoru degistirebilir. Mevcut hedef asla uzerine
+yazilmaz. Paket ZIP path, symlink, normal dosya ve boyut denetimleri
+ile SHA-256 butunluk kontrolunden gecer.
 
-Bu dosya yalnizca geliştirici TEST ciktisidir ve varsayilan olarak
-`LocalAppData/TurkuazInstaller/LocalTests/<package-id>` klasorune kurar.
-CMS manifest dogrulama, imzali guncelleme, rollback veya
-production publisher dogrulamasi yapmaz. Guvenilir dagitim icin
-04 bolumundeki "Imzali dagitim (gelismis)" akisi korunur.
-Imzalama ozelligi Community temel guven mekanizmasindan cikartilmaz;
-Pro tarafina tasinmasi gerekli degildir.
+**Guvenlik siniri:** Imzasiz standart paket kendi icindeki SHA-256'yi
+kontrol eder fakat bu, yayinci kimligi/dijital imza dogrulamasi
+degildir. Bu yol signed manifest trust/secure update/repair/rollback
+motorunu kullanmaz. Imzali dagitim islemi Studio'da ayri gelismis
+secenektir; ilerideki Pro otomasyonu Community'nin guvenligi asamaz.
+Windows bilinmeyen yayinci uyarisi verebilir. Imzasiz EXE production
+imzalama ve temiz Windows kabulunden gecmis sayilmaz.
 
-Windows test ortaminda NSIS template derlemesini ve izole sessiz kurulumu
-dogrulamak icin:
+Kurulum penceresini otomatik tiklamadan kurulum motoru testini Windows'ta
+izole ornek uygulama ile dogrulamak icin:
 
 ```powershell
-pwsh -NoProfile -File .\\rust\\scripts\\windows-local-nsis-smoke.ps1
+pwsh -NoProfile -File .\\rust\\scripts\\windows-native-setup-smoke.ps1 `
+    -CliPath .\\rust\\target\\release\\turkuaz-installer-v0.2.19-windows-x64.exe `
+    -StudioStubPath .\\rust\\target\\release\\turkuaz-setup-builder-v0.2.19-windows-x64.exe
 ```
 
-Betik test icin yalnizca rastgele, kullanici-bazli iki klasor olusturur.
-Derleme sonunda `LOCAL_NSIS_COMPILE_PASS`, temiz test yuklemesi
-sonunda `LOCAL_NSIS_INSTALL_PASS` yazilir. Varsayilan olarak test
-dosyalarini temizler. `-KeepArtifacts` ile izole deneme dosyalari
-korunabilir. Bu betik gercek Studio UI tiklama testi degildir ve
-production imzalama / guven zincirini kapsamaz.
+Bu betik `NATIVE_RUST_SETUP_BUILD_PASS`, `NATIVE_RUST_SETUP_INSTALL_PASS`,
+`NATIVE_RUST_SETUP_TAMPER_REJECTED` ve
+`NATIVE_RUST_SETUP_OVERWRITE_REJECTED` adimlarini raporlar.
+Gercek UI tiklama/kurulum deneyimi ayri Windows kabul testidir.
+
+Eski NSIS yerel demo test betigi geriye donuk deneme icin dosya
+gecmisinde bulunabilir; standart kurulumun bagimliligi degildir.
+Gelistirmis imzali dagitimda NSIS yedek yukleyici ozelligi
+istege bagli olarak ayrica bulunabilir.
 
 ## Derleme ciktisi
 
