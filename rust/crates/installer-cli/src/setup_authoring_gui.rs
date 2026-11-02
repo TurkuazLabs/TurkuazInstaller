@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.8
+// Version: 0.6.9
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -451,6 +451,10 @@ impl eframe::App for BuilderApp {
 
         if self.workspace_open {
             let package_ready = prepared_package_is_current(&self.project);
+            let local_test_ready = package_ready
+                && package_output_directory(&self.project).is_ok_and(|directory| {
+                    regular_file_exists(&directory.join("local-test/LOCAL-TEST-ONLY.exe"))
+                });
             egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
                 ui.separator();
                 ui.horizontal(|ui| {
@@ -471,6 +475,8 @@ impl eframe::App for BuilderApp {
                         ui.label("Paket ve kurulum dosyaları hazırlanıyor…");
                     } else if !package_ready {
                         ui.label("Adım 2 için önce güncel uygulama paketini hazırlayın.");
+                    } else if local_test_ready {
+                        ui.label("İmzasız yerel test EXE'si hazır; çıktı klasöründen açabilirsiniz.");
                     } else {
                         ui.label(format!(
                             "{} projesi · Paket hazır; kurulum EXE dosyasını oluşturabilirsiniz.",
@@ -491,7 +497,7 @@ impl eframe::App for BuilderApp {
                             }
                         } else if ui
                             .add_enabled(
-                                !is_building && package_ready,
+                                !is_building && package_ready && !local_test_ready,
                                 egui::Button::new("2  Yerel test EXE oluştur"),
                             )
                             .clicked()
@@ -901,26 +907,32 @@ impl BuilderApp {
                     );
                     let setup_ready =
                         regular_file_exists(&distribution_directory.join("TurkuazSetup.exe"));
+                    let local_test_ready =
+                        regular_file_exists(&package_directory.join("local-test/LOCAL-TEST-ONLY.exe"));
                     let installer_ready = match self.project.installer_kind {
-                        InstallerKind::Offline => setup_ready,
+                        InstallerKind::Offline => setup_ready || local_test_ready,
                         InstallerKind::Web => web_ready,
                     };
-                    if installer_ready {
-                        ui.label(match self.project.installer_kind {
-                            InstallerKind::Offline => {
-                                "Tam Kurulum bulundu: distribution/TurkuazSetup.exe"
-                            }
-                            InstallerKind::Web => {
-                                "Çevrimiçi Kurulum bulundu: web/TurkuazWebSetup.exe"
-                            }
-                        });
-                        ui.small("Üretilen EXE test çıktısıdır; gerçek yayından önce Authenticode ve Windows kabulü gerekir.");
+                    if installer_ready && package_ready {
+                        ui.label("Uygulama paketi hazır: application.tzpkg");
+                        if local_test_ready && self.project.installer_kind == InstallerKind::Offline {
+                            ui.label("İmzasız yerel TEST hazır: local-test/LOCAL-TEST-ONLY.exe");
+                            ui.small("Yalnızca test amaçlıdır; imzalı paket doğrulama veya güncelleme içermez.");
+                        }
+                        if setup_ready && self.project.installer_kind == InstallerKind::Offline {
+                            ui.label("İmzalı dağıtım bulundu: distribution/TurkuazSetup.exe");
+                            ui.small("Gerçek yayından önce Authenticode ve Windows kabulü gerekir.");
+                        }
+                        if web_ready && self.project.installer_kind == InstallerKind::Web {
+                            ui.label("Çevrimiçi Kurulum bulundu: web/TurkuazWebSetup.exe");
+                            ui.small("Gerçek yayından önce Authenticode ve Windows kabulü gerekir.");
+                        }
                     } else if package_ready {
                         ui.label("Uygulama paketi hazır: application.tzpkg");
-                        ui.label(format!(
-                            "Henüz {} EXE dosyası yok. 04. adımı tamamlayıp ikinci üretim düğmesine basın.",
-                            self.project.installer_kind.label()
-                        ));
+                        ui.label(match self.project.installer_kind {
+                            InstallerKind::Offline => "Yerel EXE henüz yok. 2 Yerel test EXE oluştur ile imzasız test yapabilirsiniz.",
+                            InstallerKind::Web => "Çevrimiçi EXE henüz yok. 04. adımda yayın ayarlarını tamamlayın.",
+                        });
                     } else if is_building {
                         ui.horizontal(|ui| {
                             ui.spinner();
