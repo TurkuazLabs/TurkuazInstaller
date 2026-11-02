@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/unsigned_setup.rs
 // Amac: NSIS olmadan yalniz yerel standart kurulum icin .tzpkg gomulu EXE uretmek
 // Modul - Rust Package Engine
-// Version: 0.2.2
+// Version: 0.2.3
 // Aciklama: Imzasiz yerel EXE butunluk kontrolu; imzali release/trust asla atlanmaz
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -382,7 +382,7 @@ fn install_unsigned_local_setup_inner(
         Err(err) => return Err(PackageEngineError::Io(err)),
     }
     let mut guard = TemporaryFiles(Vec::new());
-    let package = embedded_to_temporary_package(executable.as_ref(), parent, &mut guard)?;
+    let package = embedded_to_temporary_package(executable, parent, &mut guard)?;
     let identity = read_identity(&package)?;
     let stage = parent.join(format!(".turkuaz-native-stage-{}", Uuid::new_v4()));
     guard.0.push(stage.clone());
