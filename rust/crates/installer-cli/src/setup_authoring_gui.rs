@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.6
+// Version: 0.6.7
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -21,6 +21,9 @@ use serde::{Deserialize, Serialize};
 use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePreset};
 use url::Url;
+
+#[path = "local_nsis_test.rs"]
+mod local_nsis_test;
 
 const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
 const PROJECT_SCHEMA_VERSION: u32 = 1;
@@ -485,11 +488,11 @@ impl eframe::App for BuilderApp {
                         } else if ui
                             .add_enabled(
                                 !is_building && package_ready,
-                                egui::Button::new("2  Tam Kurulum oluştur"),
+                                egui::Button::new("2  Yerel test EXE oluştur"),
                             )
                             .clicked()
                         {
-                            self.start_distribution();
+                            self.start_local_test_build();
                         }
 
                         let build_clicked = ui
@@ -1263,7 +1266,7 @@ impl BuilderApp {
             }
             _ => {
                 ui.label(match self.project.installer_kind {
-                    InstallerKind::Offline => "Önce uygulama paketini hazırlayın. İmzalı yayın bilgileri, yayın imzası ve yayıncı güven dosyası hazır olunca Tam Kurulum oluşturabilirsiniz.",
+                    InstallerKind::Offline => "Önce uygulama paketini hazırlayın. Ardından imza gerektirmeyen yerel NSIS test EXE'sini oluşturabilirsiniz. İmzalı dağıtım gelişmiş seçenektir.",
                     InstallerKind::Web => "Önce uygulama paketini hazırlayın, ardından imzalı yayın dosyalarını ve paketi HTTPS sunucunuza yükleyin. Çevrimiçi yükleyici uygulamayı buradan indirir.",
                 });
                 ui.add_space(12.0);
@@ -1290,8 +1293,25 @@ impl BuilderApp {
 
                 if self.project.installer_kind == InstallerKind::Offline {
                     studio_card(ui, |ui| {
-                        ui.heading("İmzalı kurulum çıktısı");
-                        ui.label("İmzalı yayın dosyasını, yayın imzasını, yayıncı güven dosyasını ve kurulum motorunu seçin.");
+                        ui.heading("Yerel NSIS kurulumu (imzasız TEST)");
+                        ui.label("İkinci adımda sertifika olmadan yerel deneme EXE'si üretebilirsiniz. NSIS makensis.exe gereklidir.");
+                        ui.label("Güvenli güncelleme veya rollback değil; üretim dağıtımı için kullanmayın.");
+                        file_row(
+                            ui,
+                            "NSIS derleyici (isteğe bağlı)",
+                            &mut self.project.makensis_path,
+                            "NSIS makensis.exe seçin",
+                            "Windows uygulaması",
+                            &["exe"],
+                        );
+                    });
+                    ui.add_space(12.0);
+                    let mut signed_requested = false;
+                    egui::CollapsingHeader::new("İmzalı dağıtım (gelişmiş)")
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            studio_card(ui, |ui| {
+                                ui.label("İmzalı manifest, detached CMS imzası ve güven dosyası gerektirir.");
                         file_row(
                             ui,
                             "İmzalı yayın dosyası",
@@ -1324,17 +1344,19 @@ impl BuilderApp {
                             "Windows uygulaması",
                             &["exe"],
                         );
-                        file_row(
-                            ui,
-                            "Yedek yükleyici aracı (NSIS)",
-                            &mut self.project.makensis_path,
-                            "NSIS derleyici dosyasını seçin (makensis.exe)",
-                            "Windows uygulaması",
-                            &["exe"],
-                        );
-                        ui.small("Yedek yükleyici için NSIS derleyicisini seçin. Tam Kurulum ve NSIS yedeği birlikte hazırlanır.");
-                        ui.small("Dağıtım klasöründeki manifest-trust.yaml güven dosyasını kurulum EXE dosyalarının yanında tutun.");
-                    });
+                        ui.small("Yedek NSIS yükleyicisi yukarıda seçilen derleyiciyi kullanır.");
+                                ui.small("Dağıtım klasöründeki manifest-trust.yaml güven dosyasını kurulum EXE dosyalarının yanında tutun.");
+                                signed_requested = ui
+                                    .add_enabled(
+                                        !is_building && prepared_package_is_current(&self.project),
+                                        egui::Button::new("İmzalı dağıtım oluştur"),
+                                    )
+                                    .clicked();
+                            });
+                        });
+                    if signed_requested {
+                        self.start_distribution();
+                    }
                     ui.add_space(12.0);
                 }
 
@@ -1845,6 +1867,45 @@ impl BuilderApp {
         self.status = None;
         thread::spawn(move || {
             let _ = sender.send(build_web_distribution(project));
+        });
+    }
+
+    // BRK-STUDIO-LOCAL-TEST-001: Local unsigned NSIS smoke and verified
+    // signed distribution have independent commands and output directories.
+    fn start_local_test_build(&mut self) {
+        if self.project.installer_kind != InstallerKind::Offline {
+            self.status = Some((false, "Yerel NSIS testi yalnızca Tam Kurulum içindir.".to_owned()));
+            return;
+        }
+        for step in 0..4 {
+            if let Err(error) = validate_project_step(&self.project, step) {
+                self.open_editor(step);
+                self.status = Some((false, error));
+                return;
+            }
+        }
+        if let Err(error) = ensure_prepared_package_is_current(&self.project) {
+            self.status = Some((false, error));
+            return;
+        }
+        let project = self.project.clone();
+        let (sender, receiver) = mpsc::channel();
+        self.build_receiver = Some(receiver);
+        self.dialog_open = false;
+        self.status = None;
+        thread::spawn(move || {
+            let result = (|| {
+                let root = ensure_prepared_package_is_current(&project)?;
+                let source = resolve_path(&project.source_directory)?;
+                local_nsis_test::build(
+                    &source,
+                    &root,
+                    &project.makensis_path,
+                    &project.product_name,
+                    &project.package_id,
+                )
+            })();
+            let _ = sender.send(result);
         });
     }
 
