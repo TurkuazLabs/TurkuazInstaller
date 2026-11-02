@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.20
+Version: 2.3.21
 Aciklama: Aktif Community Rust kaynak kodu ve kabul sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
@@ -55,6 +55,17 @@ navigasyonu icin [dokumantasyon dizinine](../docs/README.md) bakin.
 - Community Rust CI now also tests native unsigned setup extraction, tamper detection and clean Windows file installation, separately from the signed release path. Community Rust CI format, Clippy (uyarilar hata sayilir), workspace testleri, Linux/Windows compile, NSIS validation ve surumlenmis Windows x64 CLI/GUI setup stub/Setup Studio artifact'larini dogrular; artifact'lar yedi gun saklanir. CLI surumunu `--version` veya `-V` ile, GUI surumunu pencere basliginda gosterir. Bunlar development artifact'laridir; dagitilabilir Turkuaz setup ya da production release degildir.
 
 Rust gecisi halen migration foundation'dir; production veya end-user setup hazirliginda degildir ve production kabulunu kanitlamaz. CLI signed online install/update/repair/rollback, kurulu state listeleme/dogrulama/baslatma/uninstall, signed offline bundle ve self-extracting setup uretim akislarini icerir; no-argument CLI/GUI acilisi varsayilan data root journal'larini tarayip konservatif recovery dener. Ozel data root secilen paket isleminde denetlenir. Prerequisite ve Windows integration adapter'lari, production Authenticode signing/publishing ve gercek imzali paketlerle temiz Windows VM lifecycle kabul testi acik kalir. Windows CI gecici self-signed test sertifikasi ile detached CMS dogrulamasini, offline install/update/repair/rollback/launch/uninstall akisini ve Authenticode sertifikasi eklenmis self-extracting primary setup testini calistirir. Production yayinlayici sertifikasi ve temiz son kullanici VM kabul testi halen gereklidir.
+
+## Platform-independent antivirus integration foundation
+
+The package engine now provides a `MalwareScanner` trait and a fail-closed
+`scan_directory` service for per-file pre-package/pre-install checks.
+`install_unsigned_local_setup_scanned` checks the extracted staging tree
+before publishing a new target. These APIs have mock-based security tests.
+There is **no real antivirus adapter or scan policy wiring in Studio/CLI yet**,
+so current user installations must not be described as antivirus-scanned.
+See [MALWARE_SCAN_INTEGRATION.md](MALWARE_SCAN_INTEGRATION.md) for the
+cross-platform contract, fail-closed policy and missing integration work.
 
 ## Windows smoke test
 
