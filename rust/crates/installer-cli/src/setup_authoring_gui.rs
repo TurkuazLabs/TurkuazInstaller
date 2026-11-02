@@ -1146,10 +1146,9 @@ impl BuilderApp {
                     let mut exe_requested = false;
                     ui.horizontal(|ui| {
                         let button_width = 112.0;
-                        let width = (ui.available_width()
-                            - button_width
-                            - ui.spacing().item_spacing.x)
-                            .max(160.0);
+                        let width =
+                            (ui.available_width() - button_width - ui.spacing().item_spacing.x)
+                                .max(160.0);
                         ui.add_sized(
                             [width, 40.0],
                             egui::TextEdit::singleline(&mut self.project.entry_point)
@@ -1157,11 +1156,8 @@ impl BuilderApp {
                         );
                         exe_requested = ui
                             .add_enabled_ui(!is_building, |ui| {
-                                ui.add_sized(
-                                    [button_width, 40.0],
-                                    egui::Button::new("EXE seç…"),
-                                )
-                                .clicked()
+                                ui.add_sized([button_width, 40.0], egui::Button::new("EXE seç…"))
+                                    .clicked()
                             })
                             .inner;
                     });
@@ -1239,10 +1235,9 @@ impl BuilderApp {
                     let mut rgb = parse_rgb_hex(&self.project.accent_color).unwrap_or(fallback);
                     ui.horizontal(|ui| {
                         let picker_width = 112.0;
-                        let field_width = (ui.available_width()
-                            - picker_width
-                            - ui.spacing().item_spacing.x)
-                            .max(160.0);
+                        let field_width =
+                            (ui.available_width() - picker_width - ui.spacing().item_spacing.x)
+                                .max(160.0);
                         ui.add_sized(
                             [field_width, 40.0],
                             egui::TextEdit::singleline(&mut self.project.accent_color)
@@ -1731,7 +1726,8 @@ impl BuilderApp {
         let mut dialog = FileDialog::new()
             .add_filter("Turkuaz setup project", &["tzproj"])
             .set_file_name("project.tzproj");
-        if let Ok(directory) = documents_project_directory(&self.project, &default_documents_root()) {
+        if let Ok(directory) = documents_project_directory(&self.project, &default_documents_root())
+        {
             if directory.is_dir() {
                 dialog = dialog.set_directory(directory);
             } else if let Some(parent) = directory.parent() {
@@ -1874,7 +1870,10 @@ impl BuilderApp {
     // signed distribution have independent commands and output directories.
     fn start_local_test_build(&mut self) {
         if self.project.installer_kind != InstallerKind::Offline {
-            self.status = Some((false, "Yerel NSIS testi yalnızca Tam Kurulum içindir.".to_owned()));
+            self.status = Some((
+                false,
+                "Yerel NSIS testi yalnızca Tam Kurulum içindir.".to_owned(),
+            ));
             return;
         }
         for step in 0..4 {
@@ -2350,7 +2349,10 @@ fn safe_project_folder_name(name: &str) -> String {
     } else {
         // Avoid Windows reserved device names even when the user names the product so.
         let upper = cleaned.to_ascii_uppercase();
-        if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "COM1" | "LPT1") {
+        if matches!(
+            upper.as_str(),
+            "CON" | "PRN" | "AUX" | "NUL" | "COM1" | "LPT1"
+        ) {
             format!("Proje_{cleaned}")
         } else {
             cleaned.to_owned()
@@ -2358,7 +2360,10 @@ fn safe_project_folder_name(name: &str) -> String {
     }
 }
 
-fn documents_project_directory(project: &SavedProject, documents: &Path) -> Result<PathBuf, String> {
+fn documents_project_directory(
+    project: &SavedProject,
+    documents: &Path,
+) -> Result<PathBuf, String> {
     if !documents.is_absolute() {
         return Err("Belgeler dizini mutlak olmalıdır.".to_owned());
     }
@@ -2367,7 +2372,10 @@ fn documents_project_directory(project: &SavedProject, documents: &Path) -> Resu
         .join(safe_project_folder_name(&project.product_name)))
 }
 
-fn save_new_project_in_documents(project: &SavedProject, documents: &Path) -> Result<PathBuf, String> {
+fn save_new_project_in_documents(
+    project: &SavedProject,
+    documents: &Path,
+) -> Result<PathBuf, String> {
     let directory = documents_project_directory(project, documents)?;
     validate_or_create_output_parent(&directory, true)?;
     let path = directory.join("project.tzproj");
@@ -3256,7 +3264,7 @@ mod tests {
         };
         let docs = std::env::temp_dir().join("Documents");
         let folder = documents_project_directory(&project, &docs).expect("documents path");
-        assert!(folder.ends_with(Path::new("TurkuazInstaller").join("Oyun_ Türkçe _ Test_")));
+        assert!(folder.ends_with(Path::new("TurkuazInstaller").join("Oyun_ Türkçe _ Test")));
         assert_eq!(project.product_name, "Oyun: Türkçe / Test?");
         assert_eq!(safe_project_folder_name("CON"), "Proje_CON");
     }
@@ -3275,11 +3283,22 @@ mod tests {
         let project = SavedProject::default();
         let first = save_new_project_in_documents(&project, &documents)
             .expect("create default project under Documents");
-        assert!(first.ends_with(Path::new("TurkuazInstaller").join("Uygulamam").join("project.tzproj")));
+        assert!(
+            first.ends_with(
+                Path::new("TurkuazInstaller")
+                    .join("Uygulamam")
+                    .join("project.tzproj")
+            )
+        );
         let restored = read_project(&first).expect("read saved project");
         assert_eq!(restored.product_name, project.product_name);
         assert!(save_new_project_in_documents(&project, &documents).is_err());
-        assert_eq!(read_project(&first).expect("unchanged project").product_name, project.product_name);
+        assert_eq!(
+            read_project(&first)
+                .expect("unchanged project")
+                .product_name,
+            project.product_name
+        );
         fs::remove_dir_all(&root).expect("clean test project");
     }
 
