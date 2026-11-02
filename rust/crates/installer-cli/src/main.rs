@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.23
+// Version: 0.2.24
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -45,6 +45,7 @@ use turkuaz_installer_operation_lock::FileOperationLockOptions;
 use turkuaz_installer_package_engine::{
     MAXIMUM_SETUP_THEME_BYTES, PackageExtractionLimits, SetupThemeConfig, SetupThemePreset,
     build_full_package_with_entry_point, create_self_extracting_setup,
+    create_unsigned_local_setup,
     extract_embedded_setup_bundle, extract_setup_bundle, has_unsigned_local_setup,
     install_unsigned_local_setup, write_setup_bundle_with_theme,
 };
@@ -88,6 +89,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     if std::env::args().nth(1).as_deref() == Some("build-self-extracting-setup") {
         return build_self_extracting_setup_command();
+    }
+    if std::env::args().nth(1).as_deref() == Some("build-native-setup") {
+        return build_native_setup_command();
     }
     if std::env::args().nth(1).as_deref() == Some("install-self") {
         return install_self_setup_command().await;
@@ -764,6 +768,24 @@ fn web_setup_info_command() -> Result<(), Box<dyn Error>> {
     })?;
     println!("WebSetup package: {}", config.package_id);
     println!("Signed release URL: {}", config.manifest_url);
+    Ok(())
+}
+
+// BRK-NATIVE-STANDARD-CLI-001: Unsigned local standalone installer,
+// not an alternate code path for signed update/repair/rollback operations.
+fn build_native_setup_command() -> Result<(), Box<dyn Error>> {
+    let values = parse_setup_bundle_options(&["stub", "package", "output"])?;
+    if values.is_empty() {
+        println!(
+            "Usage: turkuaz-installer build-native-setup --stub STUDIO.exe --package APP.tzpkg --output StandartKurulum.exe"
+        );
+        return Ok(());
+    }
+    let stub = absolute_path(Path::new(required(&values, "stub")?))?;
+    let package = absolute_path(Path::new(required(&values, "package")?))?;
+    let output = absolute_path(Path::new(required(&values, "output")?))?;
+    create_unsigned_local_setup(stub, package, &output)?;
+    println!("Unsigned native setup built: {}", output.display());
     Ok(())
 }
 
