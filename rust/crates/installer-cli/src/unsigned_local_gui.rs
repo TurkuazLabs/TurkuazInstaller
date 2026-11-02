@@ -13,9 +13,7 @@ use std::{
 };
 
 use eframe::egui;
-use turkuaz_installer_package_engine::{
-    install_unsigned_local_setup, unsigned_local_identity,
-};
+use turkuaz_installer_package_engine::{install_unsigned_local_setup, unsigned_local_identity};
 
 struct LocalInstaller {
     executable: PathBuf,
@@ -27,8 +25,8 @@ struct LocalInstaller {
 
 impl LocalInstaller {
     fn new(executable: PathBuf) -> Result<Self, String> {
-        let identity = unsigned_local_identity(&executable)
-            .map_err(|e| format!("Paket okunamadı: {e}"))?;
+        let identity =
+            unsigned_local_identity(&executable).map_err(|e| format!("Paket okunamadı: {e}"))?;
         let app_data = std::env::var_os("LOCALAPPDATA")
             .map(PathBuf::from)
             .ok_or("Windows kullanıcı LocalAppData yolu bulunamadı.")?;
@@ -57,7 +55,14 @@ impl LocalInstaller {
         self.status = None;
         thread::spawn(move || {
             let result = install_unsigned_local_setup(executable, &target)
-                .map(|identity| format!("{} v{} kuruldu: {}", identity.package_id, identity.version, target.display()))
+                .map(|identity| {
+                    format!(
+                        "{} v{} kuruldu: {}",
+                        identity.package_id,
+                        identity.version,
+                        target.display()
+                    )
+                })
                 .map_err(|error| error.to_string());
             let _ = sender.send(result);
         });
@@ -89,10 +94,7 @@ impl eframe::App for LocalInstaller {
             ui.add_space(14.0);
             ui.label("Kurulacak klasör (mevcut klasörün üzerine yazılmaz)");
             ui.add_enabled_ui(self.busy.is_none(), |ui| {
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.target)
-                        .desired_width(f32::INFINITY),
-                );
+                ui.add(egui::TextEdit::singleline(&mut self.target).desired_width(f32::INFINITY));
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -110,8 +112,12 @@ impl eframe::App for LocalInstaller {
             if let Some(result) = &self.status {
                 ui.add_space(16.0);
                 match result {
-                    Ok(message) => { ui.colored_label(egui::Color32::DARK_GREEN, message); }
-                    Err(message) => { ui.colored_label(egui::Color32::RED, message); }
+                    Ok(message) => {
+                        ui.colored_label(egui::Color32::DARK_GREEN, message);
+                    }
+                    Err(message) => {
+                        ui.colored_label(egui::Color32::RED, message);
+                    }
                 }
             }
         });

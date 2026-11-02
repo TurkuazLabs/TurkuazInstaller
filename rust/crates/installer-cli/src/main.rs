@@ -44,8 +44,7 @@ use turkuaz_installer_operation_journal::{
 use turkuaz_installer_operation_lock::FileOperationLockOptions;
 use turkuaz_installer_package_engine::{
     MAXIMUM_SETUP_THEME_BYTES, PackageExtractionLimits, SetupThemeConfig, SetupThemePreset,
-    build_full_package_with_entry_point, create_self_extracting_setup,
-    create_unsigned_local_setup,
+    build_full_package_with_entry_point, create_self_extracting_setup, create_unsigned_local_setup,
     extract_embedded_setup_bundle, extract_setup_bundle, has_unsigned_local_setup,
     install_unsigned_local_setup, write_setup_bundle_with_theme,
 };
@@ -104,8 +103,12 @@ async fn run() -> Result<(), Box<dyn Error>> {
         }
         let target = absolute_path(Path::new(required(&options, "target")?))?;
         let identity = install_unsigned_local_setup(std::env::current_exe()?, &target)?;
-        println!("Local unsigned package installed: {} v{} at {}",
-            identity.package_id, identity.version, target.display());
+        println!(
+            "Local unsigned package installed: {} v{} at {}",
+            identity.package_id,
+            identity.version,
+            target.display()
+        );
         return Ok(());
     }
     if std::env::args().nth(1).is_none() {

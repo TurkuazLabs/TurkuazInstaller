@@ -9,8 +9,8 @@ mod builder;
 mod format;
 mod setup_bundle;
 mod setup_executable;
-mod unsigned_setup;
 mod setup_theme;
+mod unsigned_setup;
 
 pub use builder::{PackageBuildError, build_full_package, build_full_package_with_entry_point};
 pub use setup_bundle::{
@@ -21,13 +21,13 @@ pub use setup_executable::{
     SetupExecutableError, create_self_extracting_setup, extract_embedded_setup_bundle,
     pe_unsigned_payload_end, read_embedded_setup_theme,
 };
-pub use unsigned_setup::{
-    UnsignedLocalIdentity, create_unsigned_local_setup, extract_unsigned_local_package,
-    has_unsigned_local_setup, install_unsigned_local_setup, unsigned_local_identity,
-};
 pub use setup_theme::{
     MAXIMUM_SETUP_THEME_BYTES, SetupThemeConfig, SetupThemeError, SetupThemePalette,
     SetupThemePreset,
+};
+pub use unsigned_setup::{
+    UnsignedLocalIdentity, create_unsigned_local_setup, extract_unsigned_local_package,
+    has_unsigned_local_setup, install_unsigned_local_setup, unsigned_local_identity,
 };
 
 use std::{

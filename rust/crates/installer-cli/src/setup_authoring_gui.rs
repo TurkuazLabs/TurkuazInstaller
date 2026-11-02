@@ -475,9 +475,7 @@ impl eframe::App for BuilderApp {
                     } else if !package_ready {
                         ui.label("Adım 2 için önce güncel uygulama paketini hazırlayın.");
                     } else if local_test_ready {
-                        ui.label(
-                            "Standart Kurulum EXE'si hazır; çıktı klasöründen açabilirsiniz.",
-                        );
+                        ui.label("Standart Kurulum EXE'si hazır; çıktı klasöründen açabilirsiniz.");
                     } else {
                         ui.label(format!(
                             "{} projesi · Paket hazır; kurulum EXE dosyasını oluşturabilirsiniz.",
@@ -908,9 +906,8 @@ impl BuilderApp {
                     );
                     let setup_ready =
                         regular_file_exists(&distribution_directory.join("TurkuazSetup.exe"));
-                    let local_test_ready = regular_file_exists(
-                        &package_directory.join("standard/TurkuazSetup.exe"),
-                    );
+                    let local_test_ready =
+                        regular_file_exists(&package_directory.join("standard/TurkuazSetup.exe"));
                     let installer_ready = match self.project.installer_kind {
                         InstallerKind::Offline => setup_ready || local_test_ready,
                         InstallerKind::Web => web_ready,
@@ -2800,11 +2797,8 @@ fn build_native_standard_setup(project: SavedProject) -> Result<String, String> 
     let output = directory.join("TurkuazSetup.exe");
     let stub = std::env::current_exe()
         .map_err(|error| format!("Rust kurulum motoru yolu okunamadı: {error}"))?;
-    if let Err(error) = create_unsigned_local_setup(
-        &stub,
-        root.join("application.tzpkg"),
-        &output,
-    ) {
+    if let Err(error) = create_unsigned_local_setup(&stub, root.join("application.tzpkg"), &output)
+    {
         let _ = fs::remove_dir(&directory);
         return Err(format!("Standart Kurulum EXE oluşturulamadı: {error}"));
     }

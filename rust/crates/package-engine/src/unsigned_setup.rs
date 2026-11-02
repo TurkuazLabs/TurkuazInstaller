@@ -14,8 +14,11 @@ use std::{
 use sha2::{Digest, Sha256};
 
 use crate::{
-    format::{MAXIMUM_PACKAGE_METADATA_BYTES, PACKAGE_FORMAT_VERSION, PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT, PACKAGE_METADATA_ENTRY, PackageArchiveMetadata},
     PackageEngineError, PackageExtractionLimits, extract_archive,
+    format::{
+        MAXIMUM_PACKAGE_METADATA_BYTES, PACKAGE_FORMAT_VERSION,
+        PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT, PACKAGE_METADATA_ENTRY, PackageArchiveMetadata,
+    },
 };
 use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 use uuid::Uuid;
@@ -46,12 +49,14 @@ fn footer(file: &mut fs::File) -> Result<Option<(u64, [u8; 32])>, PackageEngineE
     file.seek(SeekFrom::End(-(FOOTER_BYTES as i64)))
         .map_err(PackageEngineError::Io)?;
     let mut magic = [0; 8];
-    file.read_exact(&mut magic).map_err(PackageEngineError::Io)?;
+    file.read_exact(&mut magic)
+        .map_err(PackageEngineError::Io)?;
     if magic != MAGIC {
         return Ok(None);
     }
     let mut encoded = [0; 8];
-    file.read_exact(&mut encoded).map_err(PackageEngineError::Io)?;
+    file.read_exact(&mut encoded)
+        .map_err(PackageEngineError::Io)?;
     let package_length = u64::from_le_bytes(encoded);
     if package_length == 0
         || package_length > MAXIMUM_PACKAGE_BYTES
@@ -60,7 +65,8 @@ fn footer(file: &mut fs::File) -> Result<Option<(u64, [u8; 32])>, PackageEngineE
         return Err(invalid("local setup package length is invalid"));
     }
     let mut digest = [0; 32];
-    file.read_exact(&mut digest).map_err(PackageEngineError::Io)?;
+    file.read_exact(&mut digest)
+        .map_err(PackageEngineError::Io)?;
     Ok(Some((package_length, digest)))
 }
 
@@ -74,11 +80,14 @@ fn copy_hashed<R: Read, W: Write>(
     let mut bytes = [0; COPY_BYTES];
     while left > 0 {
         let limit = left.min(bytes.len() as u64) as usize;
-        let count = from.read(&mut bytes[..limit]).map_err(PackageEngineError::Io)?;
+        let count = from
+            .read(&mut bytes[..limit])
+            .map_err(PackageEngineError::Io)?;
         if count == 0 {
             return Err(invalid("local setup input was truncated"));
         }
-        to.write_all(&bytes[..count]).map_err(PackageEngineError::Io)?;
+        to.write_all(&bytes[..count])
+            .map_err(PackageEngineError::Io)?;
         hasher.update(&bytes[..count]);
         left -= count as u64;
     }
@@ -101,18 +110,28 @@ pub fn create_unsigned_local_setup(
     if stub_len < 2 || package_len == 0 || package_len > MAXIMUM_PACKAGE_BYTES {
         return Err(invalid("local setup stub or package size is invalid"));
     }
-    if package.extension().is_none_or(|x| !x.eq_ignore_ascii_case("tzpkg"))
-        || output.extension().is_none_or(|x| !x.eq_ignore_ascii_case("exe"))
+    if package
+        .extension()
+        .is_none_or(|x| !x.eq_ignore_ascii_case("tzpkg"))
+        || output
+            .extension()
+            .is_none_or(|x| !x.eq_ignore_ascii_case("exe"))
     {
         return Err(invalid("local setup requires .tzpkg input and .exe output"));
     }
     let mut stub_reader = fs::File::open(stub).map_err(PackageEngineError::Io)?;
     let mut header = [0; 2];
-    stub_reader.read_exact(&mut header).map_err(PackageEngineError::Io)?;
+    stub_reader
+        .read_exact(&mut header)
+        .map_err(PackageEngineError::Io)?;
     if header != *b"MZ" || footer(&mut stub_reader)?.is_some() {
-        return Err(invalid("local setup stub must be a plain Windows executable"));
+        return Err(invalid(
+            "local setup stub must be a plain Windows executable",
+        ));
     }
-    stub_reader.seek(SeekFrom::Start(0)).map_err(PackageEngineError::Io)?;
+    stub_reader
+        .seek(SeekFrom::Start(0))
+        .map_err(PackageEngineError::Io)?;
     read_identity(package)?;
     let mut pkg_reader = fs::File::open(package).map_err(PackageEngineError::Io)?;
     let mut out = fs::OpenOptions::new()
@@ -124,7 +143,8 @@ pub fn create_unsigned_local_setup(
         io::copy(&mut stub_reader, &mut out).map_err(PackageEngineError::Io)?;
         let digest = copy_hashed(&mut pkg_reader, &mut out, package_len)?;
         out.write_all(&MAGIC).map_err(PackageEngineError::Io)?;
-        out.write_all(&package_len.to_le_bytes()).map_err(PackageEngineError::Io)?;
+        out.write_all(&package_len.to_le_bytes())
+            .map_err(PackageEngineError::Io)?;
         out.write_all(&digest).map_err(PackageEngineError::Io)?;
         out.sync_all().map_err(PackageEngineError::Io)?;
         Ok(())
@@ -154,18 +174,22 @@ pub fn extract_unsigned_local_package(
     let executable = executable.as_ref();
     let output = output.as_ref();
     let metadata = regular_file(executable)?;
-    if output.extension().is_none_or(|x| !x.eq_ignore_ascii_case("tzpkg")) {
+    if output
+        .extension()
+        .is_none_or(|x| !x.eq_ignore_ascii_case("tzpkg"))
+    {
         return Err(invalid("unsigned local payload output must be .tzpkg"));
     }
     let mut input = fs::File::open(executable).map_err(PackageEngineError::Io)?;
-    let (pkg_len, expected) = footer(&mut input)?.ok_or(invalid(
-        "executable is not an unsigned local setup",
-    ))?;
+    let (pkg_len, expected) =
+        footer(&mut input)?.ok_or(invalid("executable is not an unsigned local setup"))?;
     let start = metadata
         .len()
         .checked_sub(FOOTER_BYTES + pkg_len)
         .ok_or(invalid("unsigned local setup offsets are invalid"))?;
-    input.seek(SeekFrom::Start(start)).map_err(PackageEngineError::Io)?;
+    input
+        .seek(SeekFrom::Start(start))
+        .map_err(PackageEngineError::Io)?;
     let mut out = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -196,14 +220,20 @@ pub struct UnsignedLocalIdentity {
 fn read_identity(package: &Path) -> Result<UnsignedLocalIdentity, PackageEngineError> {
     let file = fs::File::open(package).map_err(PackageEngineError::Io)?;
     let mut zip = ZipArchive::new(file).map_err(PackageEngineError::Archive)?;
-    let mut entry = zip.by_name(PACKAGE_METADATA_ENTRY).map_err(PackageEngineError::Archive)?;
+    let mut entry = zip
+        .by_name(PACKAGE_METADATA_ENTRY)
+        .map_err(PackageEngineError::Archive)?;
     if !entry.is_file() || entry.is_symlink() || entry.size() > MAXIMUM_PACKAGE_METADATA_BYTES {
-        return Err(invalid("unsigned local package metadata is missing or invalid"));
+        return Err(invalid(
+            "unsigned local package metadata is missing or invalid",
+        ));
     }
     let size = entry.size();
     let mut bytes = Vec::with_capacity(size as usize);
-    (&mut entry).take(MAXIMUM_PACKAGE_METADATA_BYTES + 1)
-        .read_to_end(&mut bytes).map_err(PackageEngineError::Io)?;
+    (&mut entry)
+        .take(MAXIMUM_PACKAGE_METADATA_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(PackageEngineError::Io)?;
     if bytes.len() as u64 != size {
         return Err(invalid("unsigned local metadata length mismatch"));
     }
@@ -220,7 +250,10 @@ fn read_identity(package: &Path) -> Result<UnsignedLocalIdentity, PackageEngineE
         .map_err(|_| invalid("unsigned local package id is invalid"))?;
     SemanticVersion::parse(&metadata.version)
         .map_err(|_| invalid("unsigned local package version is invalid"))?;
-    Ok(UnsignedLocalIdentity { package_id: metadata.package_id, version: metadata.version })
+    Ok(UnsignedLocalIdentity {
+        package_id: metadata.package_id,
+        version: metadata.version,
+    })
 }
 
 struct TemporaryFiles(Vec<PathBuf>);
@@ -241,7 +274,9 @@ impl Drop for TemporaryFiles {
 
 fn ensure_safe_directory(path: &Path) -> Result<(), PackageEngineError> {
     if !path.is_absolute() || path.components().any(|c| matches!(c, Component::ParentDir)) {
-        return Err(invalid("unsigned local install directory must be an absolute path without traversal"));
+        return Err(invalid(
+            "unsigned local install directory must be an absolute path without traversal",
+        ));
     }
     let mut visited = PathBuf::new();
     for component in path.components() {
@@ -262,7 +297,9 @@ fn ensure_safe_directory(path: &Path) -> Result<(), PackageEngineError> {
             Err(err) => return Err(PackageEngineError::Io(err)),
         };
         if !meta.is_dir() || meta.file_type().is_symlink() || windows_reparse_point(&meta) {
-            return Err(invalid("unsigned local install parent contains a file, symlink, or junction"));
+            return Err(invalid(
+                "unsigned local install parent contains a file, symlink, or junction",
+            ));
         }
     }
     Ok(())
@@ -274,11 +311,15 @@ fn windows_reparse_point(meta: &fs::Metadata) -> bool {
     meta.file_attributes() & 0x0400 != 0
 }
 #[cfg(not(windows))]
-fn windows_reparse_point(_meta: &fs::Metadata) -> bool { false }
+fn windows_reparse_point(_meta: &fs::Metadata) -> bool {
+    false
+}
 
-fn embedded_to_temporary_package(executable: &Path, parent: &Path, guard: &mut TemporaryFiles)
-    -> Result<PathBuf, PackageEngineError>
-{
+fn embedded_to_temporary_package(
+    executable: &Path,
+    parent: &Path,
+    guard: &mut TemporaryFiles,
+) -> Result<PathBuf, PackageEngineError> {
     let package = parent.join(format!(".turkuaz-native-{}.tzpkg", Uuid::new_v4()));
     // Guard before creation to ensure cleanup on all errors.
     guard.0.push(package.clone());
@@ -288,9 +329,9 @@ fn embedded_to_temporary_package(executable: &Path, parent: &Path, guard: &mut T
 
 /// @dev-id BRK-LOCAL-SETUP-004
 /// @purpose Display the embedded unsigned package identity in the local setup UI.
-pub fn unsigned_local_identity(executable: impl AsRef<Path>)
-    -> Result<UnsignedLocalIdentity, PackageEngineError>
-{
+pub fn unsigned_local_identity(
+    executable: impl AsRef<Path>,
+) -> Result<UnsignedLocalIdentity, PackageEngineError> {
     let mut guard = TemporaryFiles(Vec::new());
     let base = std::env::temp_dir();
     let package = embedded_to_temporary_package(executable.as_ref(), &base, &mut guard)?;
@@ -302,13 +343,20 @@ pub fn unsigned_local_identity(executable: impl AsRef<Path>)
 /// @contract No existing targets, validated ZIP paths, bounded extraction, symlink-safe ancestors.
 /// @warning Local integrity is NOT publisher authenticity; no signed update/repair/rollback support.
 pub fn install_unsigned_local_setup(
-    executable: impl AsRef<Path>, target: impl AsRef<Path>
+    executable: impl AsRef<Path>,
+    target: impl AsRef<Path>,
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
     let target = target.as_ref();
-    let parent = target.parent().ok_or(invalid("local install target has no parent"))?;
+    let parent = target
+        .parent()
+        .ok_or(invalid("local install target has no parent"))?;
     ensure_safe_directory(parent)?;
     match fs::symlink_metadata(target) {
-        Ok(_) => return Err(invalid("local install target already exists; overwrite refused")),
+        Ok(_) => {
+            return Err(invalid(
+                "local install target already exists; overwrite refused",
+            ));
+        }
         Err(err) if err.kind() == io::ErrorKind::NotFound => {}
         Err(err) => return Err(PackageEngineError::Io(err)),
     }
@@ -317,8 +365,13 @@ pub fn install_unsigned_local_setup(
     let identity = read_identity(&package)?;
     let stage = parent.join(format!(".turkuaz-native-stage-{}", Uuid::new_v4()));
     guard.0.push(stage.clone());
-    extract_archive(&package, &stage, PackageExtractionLimits::default(),
-        &identity.package_id, &identity.version)?;
+    extract_archive(
+        &package,
+        &stage,
+        PackageExtractionLimits::default(),
+        &identity.package_id,
+        &identity.version,
+    )?;
     // Existing target directories must never be overwritten. Windows rename is
     // fail-if-exists; this precheck is retained for clear cross-platform behavior.
     if fs::symlink_metadata(target).is_ok() {
@@ -359,11 +412,21 @@ mod tests {
         fs::write(source.join("app.txt"), b"local-package-example").expect("source");
         let id = PackageId::parse("qa.local").expect("id");
         let version = SemanticVersion::parse("1.0.0").expect("version");
-        crate::build_full_package(&source, &id, &version, &package, PackageExtractionLimits::default()).expect("package");
+        crate::build_full_package(
+            &source,
+            &id,
+            &version,
+            &package,
+            PackageExtractionLimits::default(),
+        )
+        .expect("package");
         create_unsigned_local_setup(&stub, &package, &installer).expect("create");
         assert!(has_unsigned_local_setup(&installer).expect("marker"));
         extract_unsigned_local_package(&installer, &extracted).expect("extract");
-        assert_eq!(fs::read(&extracted).expect("read"), fs::read(&package).expect("original"));
+        assert_eq!(
+            fs::read(&extracted).expect("read"),
+            fs::read(&package).expect("original")
+        );
         assert!(create_unsigned_local_setup(&stub, &package, &installer).is_err());
         fs::remove_file(&extracted).expect("remove extracted");
         let mut bytes = fs::read(&installer).expect("read installer");
@@ -394,7 +457,8 @@ mod tests {
             &version,
             &package,
             PackageExtractionLimits::default(),
-        ).expect("build package");
+        )
+        .expect("build package");
         fs::write(&stub, b"MZ-rust-studio-stub").expect("stub");
         create_unsigned_local_setup(&stub, &package, &installer).expect("create setup");
         let inspected = unsigned_local_identity(&installer).expect("inspect setup");
