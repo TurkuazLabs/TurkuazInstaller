@@ -1,19 +1,25 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/unsigned_setup.rs
 // Amac: NSIS olmadan yalniz yerel standart kurulum icin .tzpkg gomulu EXE uretmek
 // Modul - Rust Package Engine
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: Imzasiz yerel EXE butunluk kontrolu; imzali release/trust asla atlanmaz
 // Bagimli Oldugu Katman: Service | Tool
 
 use std::{
     fs,
     io::{self, Read, Seek, SeekFrom, Write},
-    path::Path,
+    path::{Component, Path, PathBuf},
 };
 
 use sha2::{Digest, Sha256};
 
-use crate::PackageEngineError;
+use crate::{
+    format::{MAXIMUM_PACKAGE_METADATA_BYTES, PACKAGE_FORMAT_VERSION, PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT, PACKAGE_METADATA_ENTRY, PackageArchiveMetadata},
+    PackageEngineError, PackageExtractionLimits, extract_archive,
+};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
+use uuid::Uuid;
+use zip::ZipArchive;
 
 const MAGIC: [u8; 8] = *b"TZLOCAL1";
 const FOOTER_BYTES: u64 = 8 + 8 + 32;
@@ -107,6 +113,7 @@ pub fn create_unsigned_local_setup(
         return Err(invalid("local setup stub must be a plain Windows executable"));
     }
     stub_reader.seek(SeekFrom::Start(0)).map_err(PackageEngineError::Io)?;
+    read_identity(package)?;
     let mut pkg_reader = fs::File::open(package).map_err(PackageEngineError::Io)?;
     let mut out = fs::OpenOptions::new()
         .write(true)
@@ -179,10 +186,164 @@ pub fn extract_unsigned_local_package(
     result
 }
 
+/// Only local installer metadata; no publisher authentication is asserted.
+#[derive(Debug, Clone)]
+pub struct UnsignedLocalIdentity {
+    pub package_id: String,
+    pub version: String,
+}
+
+fn read_identity(package: &Path) -> Result<UnsignedLocalIdentity, PackageEngineError> {
+    let file = fs::File::open(package).map_err(PackageEngineError::Io)?;
+    let mut zip = ZipArchive::new(file).map_err(PackageEngineError::Archive)?;
+    let mut entry = zip.by_name(PACKAGE_METADATA_ENTRY).map_err(PackageEngineError::Archive)?;
+    if !entry.is_file() || entry.is_symlink() || entry.size() > MAXIMUM_PACKAGE_METADATA_BYTES {
+        return Err(invalid("unsigned local package metadata is missing or invalid"));
+    }
+    let size = entry.size();
+    let mut bytes = Vec::with_capacity(size as usize);
+    (&mut entry).take(MAXIMUM_PACKAGE_METADATA_BYTES + 1)
+        .read_to_end(&mut bytes).map_err(PackageEngineError::Io)?;
+    if bytes.len() as u64 != size {
+        return Err(invalid("unsigned local metadata length mismatch"));
+    }
+    let metadata: PackageArchiveMetadata = serde_json::from_slice(&bytes)
+        .map_err(|_| invalid("unsigned local package metadata JSON is invalid"))?;
+    if !match metadata.format_version {
+        PACKAGE_FORMAT_VERSION => metadata.entry_point.is_none(),
+        PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT => metadata.entry_point.is_some(),
+        _ => false,
+    } {
+        return Err(invalid("unsigned local package format version is invalid"));
+    }
+    PackageId::parse(&metadata.package_id)
+        .map_err(|_| invalid("unsigned local package id is invalid"))?;
+    SemanticVersion::parse(&metadata.version)
+        .map_err(|_| invalid("unsigned local package version is invalid"))?;
+    Ok(UnsignedLocalIdentity { package_id: metadata.package_id, version: metadata.version })
+}
+
+struct TemporaryFiles(Vec<PathBuf>);
+impl Drop for TemporaryFiles {
+    fn drop(&mut self) {
+        for path in &self.0 {
+            let metadata = fs::symlink_metadata(path);
+            if let Ok(meta) = metadata {
+                if meta.is_dir() && !meta.file_type().is_symlink() {
+                    let _ = fs::remove_dir_all(path);
+                } else {
+                    let _ = fs::remove_file(path);
+                }
+            }
+        }
+    }
+}
+
+fn ensure_safe_directory(path: &Path) -> Result<(), PackageEngineError> {
+    if !path.is_absolute() || path.components().any(|c| matches!(c, Component::ParentDir)) {
+        return Err(invalid("unsigned local install directory must be an absolute path without traversal"));
+    }
+    let mut visited = PathBuf::new();
+    for component in path.components() {
+        visited.push(component.as_os_str());
+        if matches!(component, Component::Prefix(_) | Component::RootDir) {
+            continue;
+        }
+        let meta = match fs::symlink_metadata(&visited) {
+            Ok(meta) => meta,
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                match fs::create_dir(&visited) {
+                    Ok(()) => {}
+                    Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {}
+                    Err(err) => return Err(PackageEngineError::Io(err)),
+                }
+                fs::symlink_metadata(&visited).map_err(PackageEngineError::Io)?
+            }
+            Err(err) => return Err(PackageEngineError::Io(err)),
+        };
+        if !meta.is_dir() || meta.file_type().is_symlink() || windows_reparse_point(&meta) {
+            return Err(invalid("unsigned local install parent contains a file, symlink, or junction"));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn windows_reparse_point(meta: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    meta.file_attributes() & 0x0400 != 0
+}
+#[cfg(not(windows))]
+fn windows_reparse_point(_meta: &fs::Metadata) -> bool { false }
+
+fn embedded_to_temporary_package(executable: &Path, parent: &Path, guard: &mut TemporaryFiles)
+    -> Result<PathBuf, PackageEngineError>
+{
+    let package = parent.join(format!(".turkuaz-native-{}.tzpkg", Uuid::new_v4()));
+    // Guard before creation to ensure cleanup on all errors.
+    guard.0.push(package.clone());
+    extract_unsigned_local_package(executable, &package)?;
+    Ok(package)
+}
+
+/// @dev-id BRK-LOCAL-SETUP-004
+/// @purpose Display the embedded unsigned package identity in the local setup UI.
+pub fn unsigned_local_identity(executable: impl AsRef<Path>)
+    -> Result<UnsignedLocalIdentity, PackageEngineError>
+{
+    let mut guard = TemporaryFiles(Vec::new());
+    let base = std::env::temp_dir();
+    let package = embedded_to_temporary_package(executable.as_ref(), &base, &mut guard)?;
+    read_identity(&package)
+}
+
+/// @dev-id BRK-LOCAL-SETUP-005
+/// @purpose Install a local unsigned package to a new folder without modifying signed install state.
+/// @contract No existing targets, validated ZIP paths, bounded extraction, symlink-safe ancestors.
+/// @warning Local integrity is NOT publisher authenticity; no signed update/repair/rollback support.
+pub fn install_unsigned_local_setup(
+    executable: impl AsRef<Path>, target: impl AsRef<Path>
+) -> Result<UnsignedLocalIdentity, PackageEngineError> {
+    let target = target.as_ref();
+    let parent = target.parent().ok_or(invalid("local install target has no parent"))?;
+    ensure_safe_directory(parent)?;
+    match fs::symlink_metadata(target) {
+        Ok(_) => return Err(invalid("local install target already exists; overwrite refused")),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+        Err(err) => return Err(PackageEngineError::Io(err)),
+    }
+    let mut guard = TemporaryFiles(Vec::new());
+    let package = embedded_to_temporary_package(executable.as_ref(), parent, &mut guard)?;
+    let identity = read_identity(&package)?;
+    let stage = parent.join(format!(".turkuaz-native-stage-{}", Uuid::new_v4()));
+    guard.0.push(stage.clone());
+    extract_archive(&package, &stage, PackageExtractionLimits::default(),
+        &identity.package_id, &identity.version)?;
+    // Existing target directories must never be overwritten. Windows rename is
+    // fail-if-exists; this precheck is retained for clear cross-platform behavior.
+    if fs::symlink_metadata(target).is_ok() {
+        return Err(invalid("local install target became occupied"));
+    }
+    fs::rename(&stage, target).map_err(PackageEngineError::Io)?;
+    Ok(identity)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use uuid::Uuid;
+
+    #[test]
+    fn local_setup_does_not_overwrite_existing_install_directory() {
+        let root = std::env::temp_dir().join(format!("tz-local-existing-{}", Uuid::new_v4()));
+        fs::create_dir(&root).expect("create");
+        let output = root.join("existing");
+        fs::create_dir(&output).expect("create existing");
+        let err = install_unsigned_local_setup(root.join("nothing.exe"), &output);
+        assert!(err.is_err());
+        assert!(output.is_dir());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
 
     #[test]
     fn local_setup_roundtrip_rejects_corruption_and_overwrites() {
@@ -193,7 +354,12 @@ mod tests {
         let installer = root.join("setup.exe");
         let extracted = root.join("unpacked.tzpkg");
         fs::write(&stub, b"MZ-example-rust-binary").expect("stub");
-        fs::write(&package, b"local-package-example").expect("package");
+        let source = root.join("source");
+        fs::create_dir(&source).expect("create source");
+        fs::write(source.join("app.txt"), b"local-package-example").expect("source");
+        let id = PackageId::parse("qa.local").expect("id");
+        let version = SemanticVersion::parse("1.0.0").expect("version");
+        crate::build_full_package(&source, &id, &version, &package, PackageExtractionLimits::default()).expect("package");
         create_unsigned_local_setup(&stub, &package, &installer).expect("create");
         assert!(has_unsigned_local_setup(&installer).expect("marker"));
         extract_unsigned_local_package(&installer, &extracted).expect("extract");
