@@ -21,7 +21,8 @@ fn validate_define(value: &str) -> Result<(), String> {
     if value.is_empty()
         || value
             .chars()
-            .any(|ch| ch.is_control() || ch == '"' || ch == '
+            .any(|ch| ch.is_control() || matches!(ch as u32, 33 | 34 | 36 | 96))
+    {
         return Err("NSIS yolu veya ürün adı geçersiz özel karakter içeriyor.".to_owned());
     }
     Ok(())
