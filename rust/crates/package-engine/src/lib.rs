@@ -13,10 +13,10 @@ mod setup_executable;
 mod setup_theme;
 mod unsigned_setup;
 
+pub use builder::{PackageBuildError, build_full_package, build_full_package_with_entry_point};
 pub use malware_scan::{
     MalwareScanner, ScanGateError, ScanPhase, ScanSummary, ScanVerdict, scan_directory,
 };
-pub use builder::{PackageBuildError, build_full_package, build_full_package_with_entry_point};
 pub use setup_bundle::{
     SetupBundleError, SetupBundleFiles, extract_setup_bundle, read_setup_bundle_theme,
     write_setup_bundle, write_setup_bundle_with_theme,

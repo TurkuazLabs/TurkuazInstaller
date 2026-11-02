@@ -15,11 +15,11 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     MalwareScanner, PackageEngineError, PackageExtractionLimits, ScanPhase, extract_archive,
-    scan_directory,
     format::{
         MAXIMUM_PACKAGE_METADATA_BYTES, PACKAGE_FORMAT_VERSION,
         PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT, PACKAGE_METADATA_ENTRY, PackageArchiveMetadata,
     },
+    scan_directory,
 };
 use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 use uuid::Uuid;
@@ -413,9 +413,11 @@ mod tests {
 
     struct ScannerBlocker;
     impl MalwareScanner for ScannerBlocker {
-        fn scan_file(&self, _file: &Path, _phase: ScanPhase)
-            -> Result<crate::ScanVerdict, crate::ScanGateError>
-        {
+        fn scan_file(
+            &self,
+            _file: &Path,
+            _phase: ScanPhase,
+        ) -> Result<crate::ScanVerdict, crate::ScanGateError> {
             Ok(crate::ScanVerdict::Threat)
         }
     }
@@ -434,9 +436,13 @@ mod tests {
         let package_id = PackageId::parse("qa.malware").expect("id");
         let version = SemanticVersion::parse("1.0.0").expect("version");
         crate::build_full_package(
-            &source, &package_id, &version, &package,
+            &source,
+            &package_id,
+            &version,
+            &package,
             PackageExtractionLimits::default(),
-        ).expect("build package");
+        )
+        .expect("build package");
         fs::write(&stub, b"MZ-test-stub").expect("stub");
         create_unsigned_local_setup(&stub, &package, &setup).expect("setup");
         assert!(install_unsigned_local_setup_scanned(&setup, &target, &ScannerBlocker).is_err());
