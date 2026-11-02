@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.10
+// Version: 0.6.11
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -19,11 +19,10 @@ use eframe::egui;
 use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
-use turkuaz_installer_package_engine::{SetupThemeConfig, SetupThemePreset};
+use turkuaz_installer_package_engine::{
+    SetupThemeConfig, SetupThemePreset, create_unsigned_local_setup,
+};
 use url::Url;
-
-#[path = "local_nsis_test.rs"]
-mod local_nsis_test;
 
 #[cfg(windows)]
 #[path = "windows_documents.rs"]
@@ -453,7 +452,7 @@ impl eframe::App for BuilderApp {
             let package_ready = prepared_package_is_current(&self.project);
             let local_test_ready = package_ready
                 && package_output_directory(&self.project).is_ok_and(|directory| {
-                    regular_file_exists(&directory.join("local-test/LOCAL-TEST-ONLY.exe"))
+                    regular_file_exists(&directory.join("standard/TurkuazSetup.exe"))
                 });
             egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
                 ui.separator();
@@ -477,7 +476,7 @@ impl eframe::App for BuilderApp {
                         ui.label("Adım 2 için önce güncel uygulama paketini hazırlayın.");
                     } else if local_test_ready {
                         ui.label(
-                            "İmzasız yerel test EXE'si hazır; çıktı klasöründen açabilirsiniz.",
+                            "Standart Kurulum EXE'si hazır; çıktı klasöründen açabilirsiniz.",
                         );
                     } else {
                         ui.label(format!(
@@ -500,11 +499,11 @@ impl eframe::App for BuilderApp {
                         } else if ui
                             .add_enabled(
                                 !is_building && package_ready && !local_test_ready,
-                                egui::Button::new("2  Yerel test EXE oluştur"),
+                                egui::Button::new("2  Standart Kurulum oluştur"),
                             )
                             .clicked()
                         {
-                            self.start_local_test_build();
+                            self.start_standard_build();
                         }
 
                         let build_clicked = ui
@@ -910,7 +909,7 @@ impl BuilderApp {
                     let setup_ready =
                         regular_file_exists(&distribution_directory.join("TurkuazSetup.exe"));
                     let local_test_ready = regular_file_exists(
-                        &package_directory.join("local-test/LOCAL-TEST-ONLY.exe"),
+                        &package_directory.join("standard/TurkuazSetup.exe"),
                     );
                     let installer_ready = match self.project.installer_kind {
                         InstallerKind::Offline => setup_ready || local_test_ready,
@@ -920,8 +919,8 @@ impl BuilderApp {
                         ui.label("Uygulama paketi hazır: application.tzpkg");
                         if local_test_ready && self.project.installer_kind == InstallerKind::Offline
                         {
-                            ui.label("İmzasız yerel TEST hazır: local-test/LOCAL-TEST-ONLY.exe");
-                            ui.small("Yalnızca test amaçlıdır; imzalı paket doğrulama veya güncelleme içermez.");
+                            ui.label("Standart Kurulum hazır: standard/TurkuazSetup.exe");
+                            ui.small("İmzasız kurulum; güvenli güncelleme/rollback ve yayıncı doğrulaması içermez.");
                         }
                         if setup_ready && self.project.installer_kind == InstallerKind::Offline {
                             ui.label("İmzalı dağıtım bulundu: distribution/TurkuazSetup.exe");
@@ -938,7 +937,7 @@ impl BuilderApp {
                     } else if package_ready {
                         ui.label("Uygulama paketi hazır: application.tzpkg");
                         ui.label(match self.project.installer_kind {
-                            InstallerKind::Offline => "Yerel EXE henüz yok. 2 Yerel test EXE oluştur ile imzasız test yapabilirsiniz.",
+                            InstallerKind::Offline => "Standart EXE henüz yok. 2 Standart Kurulum oluştur ile oluşturabilirsiniz.",
                             InstallerKind::Web => "Çevrimiçi EXE henüz yok. 04. adımda yayın ayarlarını tamamlayın.",
                         });
                     } else if is_building {
@@ -1285,7 +1284,7 @@ impl BuilderApp {
             }
             _ => {
                 ui.label(match self.project.installer_kind {
-                    InstallerKind::Offline => "Önce uygulama paketini hazırlayın. Ardından imza gerektirmeyen yerel NSIS test EXE'sini oluşturabilirsiniz. İmzalı dağıtım gelişmiş seçenektir.",
+                    InstallerKind::Offline => "Önce uygulama paketini hazırlayın. Ardından NSIS veya sertifika gerektirmeyen Rust Standart Kurulum EXE'sini oluşturun. İmzalı dağıtım gelişmiş seçenektir.",
                     InstallerKind::Web => "Önce uygulama paketini hazırlayın, ardından imzalı yayın dosyalarını ve paketi HTTPS sunucunuza yükleyin. Çevrimiçi yükleyici uygulamayı buradan indirir.",
                 });
                 ui.add_space(12.0);
@@ -1312,17 +1311,10 @@ impl BuilderApp {
 
                 if self.project.installer_kind == InstallerKind::Offline {
                     studio_card(ui, |ui| {
-                        ui.heading("Yerel NSIS kurulumu (imzasız TEST)");
-                        ui.label("İkinci adımda sertifika olmadan yerel deneme EXE'si üretebilirsiniz. NSIS makensis.exe gereklidir.");
-                        ui.label("Güvenli güncelleme veya rollback değil; üretim dağıtımı için kullanmayın.");
-                        file_row(
-                            ui,
-                            "NSIS derleyici (isteğe bağlı)",
-                            &mut self.project.makensis_path,
-                            "NSIS makensis.exe seçin",
-                            "Windows uygulaması",
-                            &["exe"],
-                        );
+                        ui.heading("Standart Kurulum (Rust, imzasız)");
+                        ui.label("İkinci adımda standard/TurkuazSetup.exe üretilir.");
+                        ui.label("NSIS, başka derleyici veya imza sertifikası gerekmez.");
+                        ui.small("İmzasız kurulumda yayıncı doğrulaması, güvenli güncelleme ve rollback yoktur.");
                     });
                     ui.add_space(12.0);
                     let mut signed_requested = false;
@@ -1363,7 +1355,15 @@ impl BuilderApp {
                             "Windows uygulaması",
                             &["exe"],
                         );
-                        ui.small("Yedek NSIS yükleyicisi yukarıda seçilen derleyiciyi kullanır.");
+                        file_row(
+                            ui,
+                            "İsteğe bağlı NSIS yedek motoru",
+                            &mut self.project.makensis_path,
+                            "NSIS makensis.exe seçin",
+                            "Windows uygulaması",
+                            &["exe"],
+                        );
+                        ui.small("NSIS yalnızca gelişmiş imzalı dağıtımın yedek motoru içindir.");
                                 ui.small("Dağıtım klasöründeki manifest-trust.yaml güven dosyasını kurulum EXE dosyalarının yanında tutun.");
                                 signed_requested = ui
                                     .add_enabled(
@@ -1893,13 +1893,12 @@ impl BuilderApp {
         });
     }
 
-    // BRK-STUDIO-LOCAL-TEST-001: Local unsigned NSIS smoke and verified
-    // signed distribution have independent commands and output directories.
-    fn start_local_test_build(&mut self) {
+    // BRK-STUDIO-STANDARD-001: Native unsigned setup never bypasses signed releases.
+    fn start_standard_build(&mut self) {
         if self.project.installer_kind != InstallerKind::Offline {
             self.status = Some((
                 false,
-                "Yerel NSIS testi yalnızca Tam Kurulum içindir.".to_owned(),
+                "Standart Kurulum yalnızca Tam Kurulum içindir.".to_owned(),
             ));
             return;
         }
@@ -1920,18 +1919,7 @@ impl BuilderApp {
         self.dialog_open = false;
         self.status = None;
         thread::spawn(move || {
-            let result = (|| {
-                let root = ensure_prepared_package_is_current(&project)?;
-                let source = resolve_path(&project.source_directory)?;
-                local_nsis_test::build(
-                    &source,
-                    &root,
-                    &project.makensis_path,
-                    &project.product_name,
-                    &project.package_id,
-                )
-            })();
-            let _ = sender.send(result);
+            let _ = sender.send(build_native_standard_setup(project));
         });
     }
 
@@ -2795,6 +2783,37 @@ fn require_regular_file(label: &str, value: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+// BRK-STUDIO-STANDARD-002: Create-new native EXE without external build tools.
+fn build_native_standard_setup(project: SavedProject) -> Result<String, String> {
+    if project.installer_kind != InstallerKind::Offline {
+        return Err("Standart Kurulum yalnızca Tam Kurulum içindir.".to_owned());
+    }
+    let root = ensure_prepared_package_is_current(&project)?;
+    let directory = root.join("standard");
+    match fs::symlink_metadata(&directory) {
+        Ok(_) => return Err("Standart Kurulum klasörü zaten var; üzerine yazılmadı.".to_owned()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("Çıktı klasörü doğrulanamadı: {error}")),
+    }
+    fs::create_dir(&directory)
+        .map_err(|error| format!("Standart Kurulum klasörü oluşturulamadı: {error}"))?;
+    let output = directory.join("TurkuazSetup.exe");
+    let stub = std::env::current_exe()
+        .map_err(|error| format!("Rust kurulum motoru yolu okunamadı: {error}"))?;
+    if let Err(error) = create_unsigned_local_setup(
+        &stub,
+        root.join("application.tzpkg"),
+        &output,
+    ) {
+        let _ = fs::remove_dir(&directory);
+        return Err(format!("Standart Kurulum EXE oluşturulamadı: {error}"));
+    }
+    Ok(format!(
+        "Standart Kurulum hazır: {}. İmzasızdır; yayıncı doğrulaması, güvenli güncelleme ve rollback içermez.",
+        output.display()
+    ))
+}
+
 fn build_project(project: SavedProject) -> Result<String, String> {
     for step in 0..4 {
         validate_project_step(&project, step)?;
@@ -2851,7 +2870,7 @@ fn build_project(project: SavedProject) -> Result<String, String> {
     }
 
     Ok(format!(
-        "Uygulama paketi hazır.\nÇıktı klasörü: {}\nDosyalar: application.tzpkg, release-manifest.draft.yaml, setup-theme.json ve project.tzproj.\nİmzasız yerel test için 2 Yerel test EXE oluştur seçeneğini kullanın. Güvenilir yayın için 04 İmzalı dağıtım (gelişmiş) bölümündeki imza ve trust dosyaları gereklidir.",
+        "Uygulama paketi hazır.\nÇıktı klasörü: {}\nDosyalar: application.tzpkg, release-manifest.draft.yaml, setup-theme.json ve project.tzproj.\nStandart Kurulum için 2 Standart Kurulum oluştur seçeneğini kullanın. Güvenilir yayın için 04 İmzalı dağıtım (gelişmiş) bölümündeki imza ve trust dosyaları gereklidir.",
         final_directory.display()
     ))
 }
