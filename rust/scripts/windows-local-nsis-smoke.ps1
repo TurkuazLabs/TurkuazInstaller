@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-local-nsis-smoke.ps1
 # Amac: Imzasiz yerel NSIS test EXE'sini derlemek ve yalniz izole hedefe kurmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.1.0
+# Version: 0.1.1
 # Aciklama: Imzali production workflow'a dokunmadan NSIS template E2E smoke
 # Bagimli Oldugu Katman: QA | Tool
 param(
@@ -33,7 +33,7 @@ if ($MakensisPath) {
         $exe = Get-Command 'makensis.exe' -ErrorAction SilentlyContinue
         if ($exe) { $makensis = $exe.Source }
     }
-    if (-not $makensis) { throw 'NSIS makensis.exe bulunamadi; once NSIS kurun veya -MakensisPath kullanin.' }
+    if (-not $makensis) { throw 'NSIS makensis.exe bulunamadi. Kurulum: winget install --id NSIS.NSIS --exact. Sonra tekrar deneyin veya -MakensisPath kullanin.' }
 }
 
 $id = [guid]::NewGuid().ToString('N')
