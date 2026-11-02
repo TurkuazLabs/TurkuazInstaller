@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/unsigned_setup.rs
 // Amac: NSIS olmadan yalniz yerel standart kurulum icin .tzpkg gomulu EXE uretmek
 // Modul - Rust Package Engine
-// Version: 0.2.0
+// Version: 0.2.1
 // Aciklama: Imzasiz yerel EXE butunluk kontrolu; imzali release/trust asla atlanmaz
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -373,6 +373,47 @@ mod tests {
         assert!(extract_unsigned_local_package(&installer, &extracted).is_err());
         assert!(!extracted.exists());
         fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn native_unsigned_install_exercises_real_package_extraction_and_no_overwrite() {
+        let root = std::env::temp_dir().join(format!("tz-local-e2e-{}", Uuid::new_v4()));
+        fs::create_dir(&root).expect("test directory");
+        let stub = root.join("studio.exe");
+        let package = root.join("sample.tzpkg");
+        let installer = root.join("standalone.exe");
+        let source = root.join("source");
+        fs::create_dir(&source).expect("source directory");
+        fs::write(source.join("hello.txt"), "Türkçe test payload".as_bytes())
+            .expect("test payload");
+        let id = PackageId::parse("qa.native").expect("package id");
+        let version = SemanticVersion::parse("1.0.0").expect("package version");
+        crate::build_full_package(
+            &source,
+            &id,
+            &version,
+            &package,
+            PackageExtractionLimits::default(),
+        ).expect("build package");
+        fs::write(&stub, b"MZ-rust-studio-stub").expect("stub");
+        create_unsigned_local_setup(&stub, &package, &installer).expect("create setup");
+        let inspected = unsigned_local_identity(&installer).expect("inspect setup");
+        assert_eq!(inspected.package_id, "qa.native");
+        assert_eq!(inspected.version, "1.0.0");
+
+        let target = root.join("installed");
+        let installed = install_unsigned_local_setup(&installer, &target).expect("install");
+        assert_eq!(installed.package_id, "qa.native");
+        assert_eq!(
+            fs::read(target.join("hello.txt")).expect("read installed payload"),
+            "Türkçe test payload".as_bytes()
+        );
+        assert!(install_unsigned_local_setup(&installer, &target).is_err());
+        assert_eq!(
+            fs::read(target.join("hello.txt")).expect("still preserved"),
+            "Türkçe test payload".as_bytes()
+        );
+        fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
