@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.8.5
+Version: 0.8.6
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -34,7 +34,9 @@ Argumansiz acildiginda Setup Studio penceresini gosterir. Windows CI, ayni dosya
 - EXE secici ve kaynak klasoru secici ayni satir ve 112 x 40 piksel dugme olcusunu kullanir.
 - Kurulum temasi listesinin uzerine gelince acik/koyu tema ornegi gorunur.
 - Vurgu rengi HEX alani ve yanindaki RGB renk paletinden duzenlenebilir.
-- "Projeyi kaydet" ilk kayitta Belgeler/TurkuazInstaller/<urun adi>/project.tzproj
+- "Projeyi kaydet" ilk kayitta Windows FOLDERID_Documents API ile kullanicinin
+gercek Belgeler (OneDrive'a tasinmis/yeniden yonlendirilmis olabilir)
+klasorunu bulur ve Belgeler/TurkuazInstaller/<urun adi>/project.tzproj
   yolunu olusturur. Gecersiz klasor karakterleri duzeltilir; urun adi
   proje icinde degismez. Var olan proje sessizce ezilmez.
 - "Farkli kaydet" farkli konum secmeye izin verir. Var olan proje
@@ -113,6 +115,10 @@ Tam Kurulum projesinde birinci paket olusturma adimindan sonra
 NSIS `makensis.exe` gerekli; bilinen dizinlerden otomatik bulunur veya
 04 bolumunden secilir. Dosyalar kaynak klasorunden eklenir ve
 symlink/junction ile ic ice kaynak/cikti reddedilir.
+
+Birinci asama tamamlandiginda Studio'nun durum mesaji yerel NSIS testini
+ve imzali dagitimi ayri yollar olarak tarif eder. Onceki zorunlu
+imzalama uyarisi yerel test akisina uygulanmaz.
 
 Bu dosya yalnizca geliştirici TEST ciktisidir ve varsayilan olarak
 `LocalAppData/TurkuazInstaller/LocalTests/<package-id>` klasorune kurar.

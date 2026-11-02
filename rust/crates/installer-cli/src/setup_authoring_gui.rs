@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.7
+// Version: 0.6.8
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -24,6 +24,10 @@ use url::Url;
 
 #[path = "local_nsis_test.rs"]
 mod local_nsis_test;
+
+#[cfg(windows)]
+#[path = "windows_documents.rs"]
+mod windows_documents;
 
 const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
 const PROJECT_SCHEMA_VERSION: u32 = 1;
@@ -1713,7 +1717,9 @@ impl BuilderApp {
             return;
         }
 
-        match save_new_project_in_documents(&self.project, &default_documents_root()) {
+        let result = default_documents_root()
+            .and_then(|documents| save_new_project_in_documents(&self.project, &documents));
+        match result {
             Ok(path) => {
                 self.project_path = Some(path.clone());
                 self.status = Some((true, format!("Proje kaydedildi: {}", path.display())));
@@ -1726,7 +1732,8 @@ impl BuilderApp {
         let mut dialog = FileDialog::new()
             .add_filter("Turkuaz setup project", &["tzproj"])
             .set_file_name("project.tzproj");
-        if let Ok(directory) = documents_project_directory(&self.project, &default_documents_root())
+        if let Ok(directory) = default_documents_root()
+            .and_then(|documents| documents_project_directory(&self.project, &documents))
         {
             if directory.is_dir() {
                 dialog = dialog.set_directory(directory);
@@ -2322,12 +2329,16 @@ fn theme_config_from_project(project: &SavedProject) -> Result<SetupThemeConfig,
 // BRK-STUDIO-SAVE-001: New projects default to Documents/TurkuazInstaller/
 // <product name>/project.tzproj, independent from the executable's CWD.
 // Existing project paths remain intact; no implicit overwrite on first save.
-fn default_documents_root() -> PathBuf {
-    std::env::var_os("USERPROFILE")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
-        .unwrap_or_else(std::env::temp_dir)
-        .join("Documents")
+#[cfg(windows)]
+fn default_documents_root() -> Result<PathBuf, String> {
+    windows_documents::documents_path()
+}
+
+#[cfg(not(windows))]
+fn default_documents_root() -> Result<PathBuf, String> {
+    std::env::var_os("HOME")
+        .map(|home| PathBuf::from(home).join("Documents"))
+        .ok_or_else(|| "Kullanıcının Belgeler klasörü bulunamadı.".to_owned())
 }
 
 fn safe_project_folder_name(name: &str) -> String {
@@ -2820,7 +2831,7 @@ fn build_project(project: SavedProject) -> Result<String, String> {
     }
 
     Ok(format!(
-        "Uygulama paketi hazır.\nÇıktı klasörü: {}\nDosyalar: application.tzpkg, release-manifest.draft.yaml, setup-theme.json ve project.tzproj.\nKurulum EXE dosyası üretmeden önce yayın taslağını imzalayın ve yayıncı güven dosyasını seçin.",
+        "Uygulama paketi hazır.\nÇıktı klasörü: {}\nDosyalar: application.tzpkg, release-manifest.draft.yaml, setup-theme.json ve project.tzproj.\nİmzasız yerel test için 2 Yerel test EXE oluştur seçeneğini kullanın. Güvenilir yayın için 04 İmzalı dağıtım (gelişmiş) bölümündeki imza ve trust dosyaları gereklidir.",
         final_directory.display()
     ))
 }
