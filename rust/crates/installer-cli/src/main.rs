@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.22
+// Version: 0.2.23
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -45,7 +45,8 @@ use turkuaz_installer_operation_lock::FileOperationLockOptions;
 use turkuaz_installer_package_engine::{
     MAXIMUM_SETUP_THEME_BYTES, PackageExtractionLimits, SetupThemeConfig, SetupThemePreset,
     build_full_package_with_entry_point, create_self_extracting_setup,
-    extract_embedded_setup_bundle, extract_setup_bundle, write_setup_bundle_with_theme,
+    extract_embedded_setup_bundle, extract_setup_bundle, has_unsigned_local_setup,
+    install_unsigned_local_setup, write_setup_bundle_with_theme,
 };
 use url::Url;
 
@@ -56,6 +57,9 @@ mod web_setup;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod setup_authoring_gui;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
+mod unsigned_local_gui;
 
 #[tokio::main]
 async fn main() {
@@ -88,7 +92,23 @@ async fn run() -> Result<(), Box<dyn Error>> {
     if std::env::args().nth(1).as_deref() == Some("install-self") {
         return install_self_setup_command().await;
     }
+    if std::env::args().nth(1).as_deref() == Some("install-local-self") {
+        let options = parse_setup_bundle_options(&["target"])?;
+        if options.is_empty() {
+            println!("Usage: TurkuazSetup.exe install-local-self --target NEW_DIRECTORY");
+            return Ok(());
+        }
+        let target = absolute_path(Path::new(required(&options, "target")?))?;
+        let identity = install_unsigned_local_setup(std::env::current_exe()?, &target)?;
+        println!("Local unsigned package installed: {} v{} at {}",
+            identity.package_id, identity.version, target.display());
+        return Ok(());
+    }
     if std::env::args().nth(1).is_none() {
+        #[cfg(all(windows, feature = "setup-authoring-gui"))]
+        if has_unsigned_local_setup(std::env::current_exe()?)? {
+            return unsigned_local_gui::run();
+        }
         #[cfg(all(windows, feature = "setup-authoring-gui", not(feature = "setup-gui")))]
         {
             setup_authoring_gui::run()?;
