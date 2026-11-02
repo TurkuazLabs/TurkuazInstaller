@@ -8,14 +8,13 @@
 mod builder;
 mod format;
 mod malware_scan;
-mod turkuaz_av_adapter;
 mod setup_bundle;
 mod setup_executable;
 mod setup_theme;
+mod turkuaz_av_adapter;
 mod unsigned_setup;
 
 pub use builder::{PackageBuildError, build_full_package, build_full_package_with_entry_point};
-pub use turkuaz_av_adapter::{NoMatchPolicy, TurkuazAvScanner};
 pub use malware_scan::{
     MalwareScanner, ScanGateError, ScanPhase, ScanSummary, ScanVerdict, scan_directory,
 };
@@ -31,6 +30,7 @@ pub use setup_theme::{
     MAXIMUM_SETUP_THEME_BYTES, SetupThemeConfig, SetupThemeError, SetupThemePalette,
     SetupThemePreset,
 };
+pub use turkuaz_av_adapter::{NoMatchPolicy, TurkuazAvScanner};
 pub use unsigned_setup::{
     UnsignedLocalIdentity, create_unsigned_local_setup, extract_unsigned_local_package,
     has_unsigned_local_setup, install_unsigned_local_setup, install_unsigned_local_setup_scanned,

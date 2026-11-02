@@ -112,7 +112,11 @@ impl TurkuazAvScanner {
             return Err(scanner_failed());
         }
         let scanner = Self {
-            cli, rules, signature, public_key, engine,
+            cli,
+            rules,
+            signature,
+            public_key,
+            engine,
             cli_sha256: expected_cli_sha256.to_lowercase(),
             public_key_sha256: expected_public_key_sha256.to_lowercase(),
             no_match,
@@ -151,7 +155,9 @@ impl TurkuazAvScanner {
 
 fn read_capped(mut pipe: impl Read) -> Result<Vec<u8>, io::Error> {
     let mut output = Vec::new();
-    pipe.by_ref().take(MAX_OUTPUT + 1).read_to_end(&mut output)?;
+    pipe.by_ref()
+        .take(MAX_OUTPUT + 1)
+        .read_to_end(&mut output)?;
     if output.len() as u64 > MAX_OUTPUT {
         return Err(io::Error::other("AV output exceeds protocol limit"));
     }
@@ -194,9 +200,13 @@ impl MalwareScanner for TurkuazAvScanner {
                 }
             }
         };
-        let output = output_thread.join().map_err(|_| scanner_failed())?
+        let output = output_thread
+            .join()
+            .map_err(|_| scanner_failed())?
             .map_err(|_| scanner_failed())?;
-        error_thread.join().map_err(|_| scanner_failed())?
+        error_thread
+            .join()
+            .map_err(|_| scanner_failed())?
             .map_err(|_| scanner_failed())?;
 
         if !status?.success() || sha256_file(file)? != expected {
@@ -212,9 +222,13 @@ mod tests {
 
     fn scanner(policy: NoMatchPolicy) -> TurkuazAvScanner {
         TurkuazAvScanner {
-            cli: PathBuf::new(), rules: PathBuf::new(), signature: PathBuf::new(),
-            public_key: PathBuf::new(), engine: PathBuf::new(),
-            cli_sha256: String::new(), public_key_sha256: String::new(),
+            cli: PathBuf::new(),
+            rules: PathBuf::new(),
+            signature: PathBuf::new(),
+            public_key: PathBuf::new(),
+            engine: PathBuf::new(),
+            cli_sha256: String::new(),
+            public_key_sha256: String::new(),
             no_match: policy,
         }
     }
@@ -226,11 +240,15 @@ mod tests {
             "{{\"schema\":\"{SCHEMA}\",\"status\":\"no_match\",\"sha256\":\"{hash}\",\"matches\":[]}}"
         );
         assert_eq!(
-            scanner(NoMatchPolicy::BlockAsUnknown).parse(response.as_bytes(), &hash).unwrap(),
+            scanner(NoMatchPolicy::BlockAsUnknown)
+                .parse(response.as_bytes(), &hash)
+                .unwrap(),
             ScanVerdict::Unknown
         );
         assert_eq!(
-            scanner(NoMatchPolicy::AcceptOnlyForPinnedRuleCoverage).parse(response.as_bytes(), &hash).unwrap(),
+            scanner(NoMatchPolicy::AcceptOnlyForPinnedRuleCoverage)
+                .parse(response.as_bytes(), &hash)
+                .unwrap(),
             ScanVerdict::Clean
         );
     }
@@ -242,7 +260,10 @@ mod tests {
             "{{\"schema\":\"{SCHEMA}\",\"status\":\"match\",\"sha256\":\"{hash}\",\"matches\":[\"TEST_RULE\"]}}"
         );
         let scanner = scanner(NoMatchPolicy::BlockAsUnknown);
-        assert_eq!(scanner.parse(response.as_bytes(), &hash).unwrap(), ScanVerdict::Suspicious);
+        assert_eq!(
+            scanner.parse(response.as_bytes(), &hash).unwrap(),
+            ScanVerdict::Suspicious
+        );
         assert!(scanner.parse(response.as_bytes(), &"b".repeat(64)).is_err());
         let forged = response.replace("match", "no_match");
         assert!(scanner.parse(forged.as_bytes(), &hash).is_err());
