@@ -139,9 +139,17 @@ asla ezilmez. Yalnizca kurulmus ve kurulum koku icinde dogrulanan EXE
 hedeflenir. Kisayol hatasinda yuklenen dosyalar saklanir, son durum
 eksik Windows butunlesmesi olarak acikca raporlanir.
 
-**Bu committe kaldirma kisayolu, Windows Uygulamalar kaydi, uninstaller
-sahiplik envanteri ve signli installer shortcut parity henuz yoktur.**
-Dosyalari topluca silen dogrulanmamis bir kaldirici eklenmemistir.
+Yeni yerel kurulumlar `.turkuaz-local-install.json` sahiplik kaydi ile
+yayinlanir: kayit tam payload dosya yollari, SHA-256 ozetleri ve boyutlari
+tasir. `turkuaz-installer uninstall-local --package-id ID --target DIR
+--confirm-uninstall YES` sadece degistirilmemis kayitli dosyalari siler;
+taninmayan/degistirilen klasor ve dosyalara dokunulmaz. Onceki
+v0.2.19 kurulumlarinda kayit olmadigi icin otomatik kaldirma reddedilir.
+
+**Windows Kaldir kisayolu, Windows Uygulamalar kaydi, kisayollarin
+sahiplik kaydina baglanmasi ve imzali installer kisayol parity'si henuz
+uygulanmadi.** Yerel receipt kriptografik imza degildir; dis kullanici
+verilerini otomatik silecek bir yol acilmaz.
 Bu kalan guvenlik ve kabul kapsami GitHub issue #64'te izlenir.
 Kisayol birlestirme testleri Windows hosted CI'da calisir; manuel temiz
 VM ve signed lifecycle kabul testleri ayridir.
