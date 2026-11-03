@@ -2900,6 +2900,7 @@ dependencies = [
  "turkuaz-installer-operation-lock",
  "turkuaz-installer-package-engine",
  "url",
+ "windows",
 ]
 
 [[package]]
