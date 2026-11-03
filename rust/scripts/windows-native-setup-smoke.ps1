@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-native-setup-smoke.ps1
 # Amac: Rust Standart Kurulum EXE paketi icin Windows kurulum E2E testi
 # Modul - PowerShell QA Script
-# Version: 0.1.0
+# Version: 0.1.1
 # Aciklama: NSIS ve sertifika olmadan olustur, kur, icerigi dogrula, bozulmayi reddet
 # Bagimli Oldugu Katman: QA | Tool
 param(
@@ -66,6 +66,50 @@ try {
     $process = Start-Process -FilePath $setup -ArgumentList @('install-local-self', '--target', "`"$target`"") -Wait -PassThru
     if ($process.ExitCode -eq 0) { throw 'Existing install folder was overwritten.' }
     Write-Host 'NATIVE_RUST_SETUP_OVERWRITE_REJECTED'
+
+    # A user-created file must survive a receipt-checked local uninstall.
+    $receipt = Join-Path $target '.turkuaz-local-install.json'
+    if (-not (Test-Path -LiteralPath $receipt -PathType Leaf)) {
+        throw 'Owned local install receipt is missing.'
+    }
+    $userFile = Join-Path $target 'user-notes.txt'
+    Set-Content -LiteralPath $userFile -Value 'user-owned fixture' -Encoding UTF8
+    & $cli uninstall-local --package-id 'qa.native' --target $target --confirm-uninstall YES
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Receipt-checked local uninstall failed.'
+    }
+    if ((Test-Path -LiteralPath $installedFile) -or
+        (Test-Path -LiteralPath $receipt) -or
+        -not (Test-Path -LiteralPath $userFile)) {
+        throw 'Local uninstall did not preserve user data or remove only owned files.'
+    }
+    Write-Host 'NATIVE_RUST_SETUP_UNINSTALL_PRESERVES_USER_FILES'
+
+    # Old installations without a receipt must never be auto-cleaned.
+    $unknown = Join-Path $base 'foreign-install'
+    New-Item -ItemType Directory -Path $unknown -ErrorAction Stop | Out-Null
+    $unknownFile = Join-Path $unknown 'unowned.txt'
+    Set-Content -LiteralPath $unknownFile -Value 'do not delete' -Encoding UTF8
+    & $cli uninstall-local --package-id 'qa.native' --target $unknown --confirm-uninstall YES
+    if ($LASTEXITCODE -eq 0 -or -not (Test-Path -LiteralPath $unknownFile)) {
+        throw 'Unrecognized install was modified or uninstalled without a receipt.'
+    }
+    Write-Host 'NATIVE_RUST_SETUP_UNTRACKED_INSTALL_REJECTED'
+
+    # Tampering with an owned file blocks uninstall before deletion.
+    $changedTarget = Join-Path $base 'changed-install'
+    $process = Start-Process -FilePath $setup -ArgumentList @('install-local-self', '--target', ('"' + $changedTarget + '"')) -Wait -PassThru
+    if ($process.ExitCode -ne 0) {
+        throw 'Changed-file fixture install failed.'
+    }
+    $changedFile = Join-Path $changedTarget 'hello.txt'
+    Set-Content -LiteralPath $changedFile -Value 'changed' -Encoding UTF8
+    & $cli uninstall-local --package-id 'qa.native' --target $changedTarget --confirm-uninstall YES
+    if ($LASTEXITCODE -eq 0 -or -not (Test-Path -LiteralPath $changedFile) -or
+        -not (Test-Path -LiteralPath (Join-Path $changedTarget '.turkuaz-local-install.json'))) {
+        throw 'Modified payload was deleted or receipt vanished.'
+    }
+    Write-Host 'NATIVE_RUST_SETUP_CHANGED_PAYLOAD_PROTECTED'
 }
 finally {
     if ($KeepArtifacts) {
