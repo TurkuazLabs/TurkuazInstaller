@@ -30,7 +30,9 @@ use windows::{
 fn safe_relative_executable(root: &Path, relative: &str) -> Result<PathBuf, String> {
     let path = Path::new(relative);
     if relative.is_empty()
-        || !path.components().all(|part| matches!(part, Component::Normal(_)))
+        || !path
+            .components()
+            .all(|part| matches!(part, Component::Normal(_)))
         || !path
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
@@ -109,10 +111,7 @@ fn create_link_file(target: &Path, destination: &Path, name: &str) -> Result<(),
         .duration_since(UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_nanos();
-    let staged = parent.join(format!(
-        ".turkuaz-link-{}-{nonce}.lnk",
-        std::process::id()
-    ));
+    let staged = parent.join(format!(".turkuaz-link-{}-{nonce}.lnk", std::process::id()));
     let reserved = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -121,9 +120,8 @@ fn create_link_file(target: &Path, destination: &Path, name: &str) -> Result<(),
     drop(reserved);
     let _cleanup = TemporaryShortcut(staged.clone());
 
-    let link: IShellLinkW =
-        unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }
-            .map_err(|e| format!("Windows ShellLink olusturulamadi: {e}"))?;
+    let link: IShellLinkW = unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }
+        .map_err(|e| format!("Windows ShellLink olusturulamadi: {e}"))?;
     let target_w = wide(target.as_os_str());
     let working_w = wide(
         target
@@ -150,8 +148,7 @@ fn create_link_file(target: &Path, destination: &Path, name: &str) -> Result<(),
 
     // NTFS hard link publication is no-clobber. Do not fall back to a rename
     // that could overwrite an unrelated shortcut.
-    fs::hard_link(&staged, destination)
-        .map_err(|e| format!("Kisayol guvenli yayinlanamadi: {e}"))
+    fs::hard_link(&staged, destination).map_err(|e| format!("Kisayol guvenli yayinlanamadi: {e}"))
 }
 
 #[derive(Default)]
@@ -189,9 +186,9 @@ pub(super) fn create_installed_shortcuts(
                 }
             }
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                report.warnings.push(
-                    "Baslat menusu grubunda mevcut dosyalar var; uzerine yazilmadi.".into(),
-                );
+                report
+                    .warnings
+                    .push("Baslat menusu grubunda mevcut dosyalar var; uzerine yazilmadi.".into());
             }
             Err(error) => report.warnings.push(format!("Baslat menusu: {error}")),
         }
@@ -214,17 +211,24 @@ mod tests {
     #[test]
     fn reject_missing_exe_and_escaping_paths() {
         let root = std::env::temp_dir();
-        for relative in ["../escape.exe", "C:\\escape.exe", "app.bat", "", "/absolute.exe"] {
-            assert!(safe_relative_executable(&root, relative).is_err(), "{relative}");
+        for relative in [
+            "../escape.exe",
+            "C:\\escape.exe",
+            "app.bat",
+            "",
+            "/absolute.exe",
+        ] {
+            assert!(
+                safe_relative_executable(&root, relative).is_err(),
+                "{relative}"
+            );
         }
     }
 
     #[test]
     fn creates_shell_link_without_overwriting_foreign_file() {
-        let root = std::env::temp_dir().join(format!(
-            "turkuaz-shortcut-test-{}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("turkuaz-shortcut-test-{}", std::process::id()));
         fs::create_dir(&root).expect("fixture");
         let exe = root.join("uygulama.exe");
         fs::write(&exe, b"MZ-fixture").expect("fixture EXE");
