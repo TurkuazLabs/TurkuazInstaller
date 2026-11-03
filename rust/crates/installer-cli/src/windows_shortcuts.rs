@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: OS known folder, guvenli entry point ve yabanci LNK korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -69,6 +69,36 @@ fn folder_path(id: &GUID) -> Result<PathBuf, String> {
     fs::canonicalize(path).map_err(|e| format!("Windows klasörüne erişilemiyor: {e}"))
 }
 
+// BRK-WIN-SHORTCUT-004: fs::canonicalize returns Win32 verbatim paths;
+// keep those for security validation, but pass ordinary paths to ShellLink.
+// The Shell API may reject the "\\?\" prefix with E_INVALIDARG.
+fn shell_path(path: &Path) -> Result<PathBuf, String> {
+    let text = path
+        .to_str()
+        .ok_or("Kısayol yolu geçerli Unicode içermiyor.")?;
+    let ordinary = if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{rest}")
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        // Reject opaque device namespaces; canonicalized disk paths only.
+        if rest.len() < 3
+            || !rest.as_bytes()[0].is_ascii_alphabetic()
+            || rest.as_bytes()[1] != b':'
+            || rest.as_bytes()[2] != b'\\'
+        {
+            return Err("Windows Shell için desteklenmeyen aygıt yolu.".into());
+        }
+        rest.to_owned()
+    } else {
+        text.to_owned()
+    };
+    // Windows ShellLink has limited support for long paths. Never silently
+    // truncate a target or change the validated destination.
+    if ordinary.encode_utf16().count() >= 260 {
+        return Err("Kısayol hedef yolu Windows Shell sınırını aşıyor.".into());
+    }
+    Ok(PathBuf::from(ordinary))
+}
+
 fn wide(value: &OsStr) -> Vec<u16> {
     value.encode_wide().chain(std::iter::once(0)).collect()
 }
@@ -122,13 +152,14 @@ fn create_link_file(target: &Path, destination: &Path, name: &str) -> Result<(),
 
     let link: IShellLinkW = unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }
         .map_err(|e| format!("Windows ShellLink oluşturulamadı: {e}"))?;
-    let target_w = wide(target.as_os_str());
-    let working_w = wide(
+    let shell_target = shell_path(target)?;
+    let shell_working = shell_path(
         target
             .parent()
-            .ok_or("Uygulama çalışma klasörü bulunamadı.")?
-            .as_os_str(),
-    );
+            .ok_or("Uygulama çalışma klasörü bulunamadı.")?,
+    )?;
+    let target_w = wide(shell_target.as_os_str());
+    let working_w = wide(shell_working.as_os_str());
     let description = format!("{name} uygulamasını aç");
     let description_w = wide(OsStr::new(&description));
     unsafe {
@@ -226,13 +257,26 @@ mod tests {
     }
 
     #[test]
+    fn converts_only_known_verbatim_prefixes_for_shell() {
+        assert_eq!(
+            shell_path(Path::new(r"\\?\C:\Program Files\Uygulama.exe"))
+                .expect("disk"),
+            PathBuf::from(r"C:\Program Files\Uygulama.exe")
+        );
+        assert_eq!(
+            shell_path(Path::new(r"\\?\UNC\host\share\uygulama.exe"))
+                .expect("UNC"),
+            PathBuf::from(r"\\host\share\uygulama.exe")
+        );
+        assert!(shell_path(Path::new(r"\\?\GLOBALROOT\Device\Harddisk")).is_err());
+    }
+
+    #[test]
     fn creates_shell_link_without_overwriting_foreign_file() {
         let root =
             std::env::temp_dir().join(format!("turkuaz-shortcut-test-{}", std::process::id()));
         fs::create_dir(&root).expect("fixture");
-        let exe = root.join("uygulama.exe");
-        fs::write(&exe, b"MZ-fixture").expect("fixture EXE");
-        let exe = safe_relative_executable(&root, "uygulama.exe").expect("target");
+        let exe = std::env::current_exe().expect("running Windows test executable");
         let _com = ComApartment::enter().expect("COM");
         let link = root.join("Kisayol.lnk");
         create_link_file(&exe, &link, "Test").expect("create shell link");
