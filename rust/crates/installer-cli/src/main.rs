@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.26
+// Version: 0.2.27
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -46,7 +46,7 @@ use turkuaz_installer_package_engine::{
     MAXIMUM_SETUP_THEME_BYTES, PackageExtractionLimits, SetupThemeConfig, SetupThemePreset,
     build_full_package_with_entry_point, create_self_extracting_setup, create_unsigned_local_setup,
     extract_embedded_setup_bundle, extract_setup_bundle, install_unsigned_local_setup,
-    write_setup_bundle_with_theme,
+    uninstall_local_install, write_setup_bundle_with_theme,
 };
 use url::Url;
 
@@ -100,6 +100,34 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     if std::env::args().nth(1).as_deref() == Some("install-self") {
         return install_self_setup_command().await;
+    }
+    if std::env::args().nth(1).as_deref() == Some("uninstall-local") {
+        let options = parse_setup_bundle_options(&[
+            "target",
+            "package-id",
+            "confirm-uninstall",
+        ])?;
+        if options.is_empty() {
+            println!(
+                "Usage: turkuaz-installer uninstall-local --package-id ID --target DIR --confirm-uninstall YES"
+            );
+            return Ok(());
+        }
+        if required(&options, "confirm-uninstall")? != "YES" {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Local uninstall requires --confirm-uninstall YES.",
+            )
+            .into());
+        }
+        let id = PackageId::parse(required(&options, "package-id")?)?;
+        let target = absolute_path(Path::new(required(&options, "target")?))?;
+        let summary = uninstall_local_install(&target, &id.to_string())?;
+        println!(
+            "Local package removed: {id}; unchanged files removed: {}; unknown user data preserved: {}",
+            summary.removed_files, summary.retained_unknown_files
+        );
+        return Ok(());
     }
     if std::env::args().nth(1).as_deref() == Some("install-local-self") {
         let options = parse_setup_bundle_options(&["target"])?;
