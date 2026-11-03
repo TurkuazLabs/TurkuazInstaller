@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/local_install_receipt.rs
 // Amac: Imzasiz yerel kurulumun sahip oldugu payload dosyalarini guvenli kaydetmek ve kaldirmak
 // Modul - Rust Package Lifecycle Service
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: SHA-256 envanter, path siniri, kullanici verisini koruyan no-overwrite uninstall
 // Bagimli Oldugu Katman: Service | Security
 
@@ -207,7 +207,15 @@ fn checked_record(target: &Path, expected_id: &str) -> Result<InstallRecord, Pac
     if metadata.len() == 0 || metadata.len() > MAX_RECORD_BYTES {
         return Err(invalid("local install receipt size invalid"));
     }
-    let raw = fs::read(path).map_err(PackageEngineError::Io)?;
+    let mut raw = Vec::with_capacity(metadata.len() as usize);
+    fs::File::open(path)
+        .map_err(PackageEngineError::Io)?
+        .take(MAX_RECORD_BYTES + 1)
+        .read_to_end(&mut raw)
+        .map_err(PackageEngineError::Io)?;
+    if raw.len() as u64 > MAX_RECORD_BYTES {
+        return Err(invalid("local install receipt grew during read"));
+    }
     let record: InstallRecord =
         serde_json::from_slice(&raw).map_err(|_| invalid("local install receipt JSON invalid"))?;
     if record.format_version != RECORD_VERSION
@@ -286,9 +294,13 @@ pub fn uninstall_local_install(
     for item in &record.files {
         preflight_file(target, item)?;
         let file = target.join(validate_archive_path(&item.path)?);
-        if fs::symlink_metadata(&file).is_ok() {
-            fs::remove_file(&file).map_err(PackageEngineError::Io)?;
-            removed += 1;
+        match fs::symlink_metadata(&file) {
+            Ok(_) => {
+                fs::remove_file(&file).map_err(PackageEngineError::Io)?;
+                removed += 1;
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(PackageEngineError::Io(error)),
         }
         let mut parent = file.parent();
         while let Some(dir) = parent {
