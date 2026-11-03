@@ -1101,7 +1101,9 @@ impl BuilderApp {
                         if self.project.installer_kind == InstallerKind::Offline {
                             let already_built = prepared_package_is_current(&self.project)
                                 && package_output_directory(&self.project).is_ok_and(|directory| {
-                                    regular_file_exists(&directory.join("standard/TurkuazSetup.exe"))
+                                    regular_file_exists(
+                                        &directory.join("standard/TurkuazSetup.exe"),
+                                    )
                                 });
                             if ui
                                 .add_enabled(
