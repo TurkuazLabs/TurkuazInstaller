@@ -165,7 +165,20 @@ unsigned GUI defaults to the current user's LocalAppData/Programs/<package-id>.
 This route verifies embedded SHA-256 integrity and validates ZIP paths,
 regular files, size limits, and collisions. It is **not** a signed publisher
 release, does not use the verified InstallWorkflow, and does not support
-authenticated update/repair/rollback or managed uninstall. A malicious party
+authenticated update/repair/rollback or the signed managed uninstall.
+New local installations carry a bounded `.turkuaz-local-install.json` receipt
+with the recorded payload paths, SHA-256 digests and sizes. A separate,
+explicit operator command can remove only unchanged payload files:
+
+```powershell
+turkuaz-installer uninstall-local --package-id example.product --target "C:\\Users\\Public\\App-Test-New" --confirm-uninstall YES
+```
+
+Older installations without a receipt are refused. Missing, modified or
+unsafe entries block deletion; unrelated files remain. The unsigned receipt
+is not a cryptographic trust root, and its local uninstall does not yet
+remove Start-menu/Desktop shortcuts or register a Windows Apps uninstaller.
+It must not be confused with the signed release workflow. A malicious party
 can rebuild its own unsigned EXE; SHA-256 is not a signature. Signed
 distribution commands are unchanged. On Windows, use an isolated VM and
 run `rust/scripts/windows-native-setup-smoke.ps1` for CLI integration tests.
