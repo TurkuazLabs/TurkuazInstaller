@@ -1,21 +1,15 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/cloudmersive_adapter.rs
 // Amac: Istege bagli bulut antivirus taramasini ortak motor arayuzune eklemek
 // Modul - Rust Security Adapter
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Acik onayla dosya yukleme, sinirli HTTPS cevaplari, fail-closed sonuc
 // Bagimli Oldugu Katman: Service | Adapter
 
-use std::{
-    fs,
-    io::Read,
-    path::Path,
-    time::Duration,
-};
+use std::{fs, path::Path, time::Duration};
 
-use reqwest::{
-    blocking::{Client, multipart},
-    redirect::Policy,
-};
+use reqwest::{Client, redirect::Policy};
+use tokio::runtime::Builder;
+use uuid::Uuid;
 use serde::Deserialize;
 
 use crate::{MalwareScanner, ScanGateError, ScanPhase, ScanVerdict};
@@ -120,31 +114,59 @@ impl MalwareScanner for CloudmersiveScanner {
             return Err(unavailable());
         }
 
-        let form = multipart::Form::new()
-            .file("inputFile", file)
-            .map_err(|_| unavailable())?;
-        let mut response = self
-            .client
-            .post(CLOUDMERSIVE_ENDPOINT)
-            .header("Apikey", &self.api_key)
-            .header("Accept", "application/json")
-            .multipart(form)
-            .send()
-            .map_err(|_| unavailable())?;
-        if !response.status().is_success() {
-            return Err(unavailable());
-        }
+        // Use the existing async HTTPS client. Avoid adding synchronous or
+        // multipart dependency features to the locked Rust workspace.
+        // The body stays bounded by MAX_CLOUD_SCAN_FILE_BYTES.
+        let input = fs::read(file).map_err(|_| unavailable())?;
+        let boundary = format!("turkuazav-{}", Uuid::new_v4().simple());
+        let file_name = file
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .filter(|ext| {
+                !ext.is_empty()
+                    && ext.len() <= 10
+                    && ext.bytes().all(|b| b.is_ascii_alphanumeric())
+            })
+            .map(|ext| format!("payload.{ext}"))
+            .unwrap_or_else(|| "payload.bin".to_owned());
+        let mut content = Vec::with_capacity(input.len() + 320);
+        content.extend_from_slice(
+            format!(
+                "--{boundary}\r\nContent-Disposition: form-data; name=\"inputFile\"; filename=\"{file_name}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+            ).as_bytes()
+        );
+        content.extend_from_slice(&input);
+        content.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
 
-        let mut body = Vec::new();
-        response
-            .by_ref()
-            .take(MAX_RESPONSE_BYTES + 1)
-            .read_to_end(&mut body)
+        let runtime = Builder::new_current_thread()
+            .enable_all()
+            .build()
             .map_err(|_| unavailable())?;
-        if body.len() as u64 > MAX_RESPONSE_BYTES {
-            return Err(unavailable());
-        }
-        response_verdict(&body)
+        let response = runtime.block_on(async {
+            let mut response = self
+                .client
+                .post(CLOUDMERSIVE_ENDPOINT)
+                .header("Apikey", &self.api_key)
+                .header("Accept", "application/json")
+                .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+                .body(content)
+                .send()
+                .await
+                .map_err(|_| unavailable())?;
+            if !response.status().is_success() {
+                return Err(unavailable());
+            }
+
+            let mut body = Vec::new();
+            while let Some(bytes) = response.chunk().await.map_err(|_| unavailable())? {
+                if body.len() + bytes.len() > MAX_RESPONSE_BYTES as usize {
+                    return Err(unavailable());
+                }
+                body.extend_from_slice(&bytes);
+            }
+            Ok::<_, ScanGateError>(body)
+        })?;
+        response_verdict(&response)
     }
 }
 

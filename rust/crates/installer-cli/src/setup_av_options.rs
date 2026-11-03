@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_av_options.rs
 // Amac: Setup Studio icin istege bagli coklu antivirus secim ayarlari
 // Modul - Rust Config and Security Adapter
-// Version: 0.2.0
+// Version: 0.2.1
 // Aciklama: Kapali mod, TurkuazAV veya ClamAV secimi, hatada sessiz gecis yok
 // Bagimli Oldugu Katman: Config | Service | Adapter
 
@@ -81,7 +81,7 @@ impl AvScanConfig {
                 return Err("Bulut taraması için dosyaların sağlayıcıya gönderilmesini açıkça onaylamalısınız.".to_owned());
             }
             if std::env::var(CLOUDMERSIVE_KEY_ENV)
-                .is_err_or(|key| key.trim().is_empty())
+                .map_or(true, |key| key.trim().is_empty())
             {
                 return Err(format!(
                     "Çevrimiçi tarama anahtarı eksik: {} ortam değişkenini ayarlayın.",
