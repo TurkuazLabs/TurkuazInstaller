@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.14
+// Version: 0.6.15
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -1052,6 +1052,7 @@ impl BuilderApp {
         let mut close_requested = false;
         let mut next_requested = false;
         let mut previous_requested = false;
+        let mut build_setup_requested = false;
 
         egui::Modal::new(egui::Id::new("setup-builder-section-editor")).show(context, |ui| {
             ui.set_min_width(760.0);
@@ -1096,8 +1097,25 @@ impl BuilderApp {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if self.active_step < 3 && ui.button("Sonraki bölüm").clicked() {
                         next_requested = true;
-                    } else if self.active_step == 3 && ui.button("Tamam").clicked() {
-                        close_requested = true;
+                    } else if self.active_step == 3 {
+                        if self.project.installer_kind == InstallerKind::Offline {
+                            let already_built = prepared_package_is_current(&self.project)
+                                && package_output_directory(&self.project).is_ok_and(|directory| {
+                                    regular_file_exists(&directory.join("standard/TurkuazSetup.exe"))
+                                });
+                            if ui
+                                .add_enabled(
+                                    !is_building && !already_built,
+                                    egui::Button::new("Kurulum EXE'sini oluştur")
+                                        .fill(egui::Color32::from_rgb(18, 121, 132)),
+                                )
+                                .clicked()
+                            {
+                                build_setup_requested = true;
+                            }
+                        } else if ui.button("Tamam").clicked() {
+                            close_requested = true;
+                        }
                     }
                     if self.active_step > 0 && ui.button("Önceki bölüm").clicked() {
                         previous_requested = true;
@@ -1106,7 +1124,9 @@ impl BuilderApp {
             });
         });
 
-        if close_requested {
+        if build_setup_requested {
+            self.start_standard_build();
+        } else if close_requested {
             self.dialog_open = false;
         } else if previous_requested {
             self.active_step = self.active_step.saturating_sub(1);
