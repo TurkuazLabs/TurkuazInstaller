@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_av_options.rs
 // Amac: Setup Studio icin istege bagli coklu antivirus secim ayarlari
 // Modul - Rust Config and Security Adapter
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: Kapali mod, TurkuazAV veya ClamAV secimi, hatada sessiz gecis yok
 // Bagimli Oldugu Katman: Config | Service | Adapter
 
@@ -12,7 +12,8 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use turkuaz_installer_package_engine::{
-    ClamAvScanner, MalwareScanner, NoMatchPolicy, TurkuazAvScanner, scan_package_archive,
+    CLOUDMERSIVE_KEY_ENV, ClamAvScanner, CloudmersiveScanner, MalwareScanner, NoMatchPolicy,
+    TurkuazAvScanner, scan_package_archive,
 };
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -21,15 +22,17 @@ pub(super) enum AvProvider {
     #[default]
     TurkuazAv,
     ClamAv,
+    Cloudmersive,
 }
 
 impl AvProvider {
-    pub(super) const ALL: [Self; 2] = [Self::TurkuazAv, Self::ClamAv];
+    pub(super) const ALL: [Self; 3] = [Self::TurkuazAv, Self::ClamAv, Self::Cloudmersive];
 
     pub(super) const fn label(self) -> &'static str {
         match self {
             Self::TurkuazAv => "TurkuazAV (YARA-X)",
             Self::ClamAv => "ClamAV",
+            Self::Cloudmersive => "Cloudmersive (çevrimiçi)",
         }
     }
 }
@@ -49,6 +52,8 @@ pub(super) struct AvScanConfig {
     // YARA-X rule no-match is not a guarantee of malware-free software.
     // The operator must opt in specifically to accept pinned ruleset coverage.
     pub(super) accept_pinned_no_match: bool,
+    // Must be checked explicitly before sending any local file to a third party.
+    pub(super) cloud_upload_consent: bool,
 }
 
 fn selected_file(value: &str, label: &str) -> Result<PathBuf, String> {
@@ -69,6 +74,20 @@ impl AvScanConfig {
     // unsuccessful scan. Enabled mode must have a selected, usable scanner.
     pub(super) fn validate(&self) -> Result<(), String> {
         if !self.enabled {
+            return Ok(());
+        }
+        if self.provider == AvProvider::Cloudmersive {
+            if !self.cloud_upload_consent {
+                return Err("Bulut taraması için dosyaların sağlayıcıya gönderilmesini açıkça onaylamalısınız.".to_owned());
+            }
+            if std::env::var(CLOUDMERSIVE_KEY_ENV)
+                .is_err_or(|key| key.trim().is_empty())
+            {
+                return Err(format!(
+                    "Çevrimiçi tarama anahtarı eksik: {} ortam değişkenini ayarlayın.",
+                    CLOUDMERSIVE_KEY_ENV
+                ));
+            }
             return Ok(());
         }
         selected_file(&self.executable_path, "Antivirüs motoru")?;
@@ -94,11 +113,17 @@ impl AvScanConfig {
         if !self.enabled {
             return Err("Antivirüs taraması kapalıdır.".to_owned());
         }
+        if self.provider == AvProvider::Cloudmersive {
+            return CloudmersiveScanner::new(self.cloud_upload_consent)
+                .map(|scanner| Box::new(scanner) as Box<dyn MalwareScanner>)
+                .map_err(|error| format!("Cloudmersive başlatılamadı: {error}"));
+        }
         let binary = selected_file(&self.executable_path, "Antivirüs motoru")?;
         match self.provider {
             AvProvider::ClamAv => ClamAvScanner::new(binary)
                 .map(|scanner| Box::new(scanner) as Box<dyn MalwareScanner>)
                 .map_err(|error| format!("ClamAV başlatılamadı: {error}")),
+            AvProvider::Cloudmersive => unreachable!("online provider handled above"),
             AvProvider::TurkuazAv => TurkuazAvScanner::new(
                 binary,
                 selected_file(&self.rules_path, "YARA-X kural dosyası")?,
@@ -157,6 +182,22 @@ mod tests {
         };
         assert!(config.validate().is_err());
         assert!(config.scanner().is_err());
+    }
+
+    #[test]
+    fn cloud_provider_requires_explicit_consent_without_local_motor() {
+        let mut config = AvScanConfig {
+            enabled: true,
+            provider: AvProvider::Cloudmersive,
+            cloud_upload_consent: false,
+            ..AvScanConfig::default()
+        };
+        assert!(config.validate().is_err());
+        config.cloud_upload_consent = true;
+        // A missing API key still blocks. No network requests in unit tests.
+        // Never modify environment variables in parallel tests.
+        assert_eq!(config.provider.label(), "Cloudmersive (çevrimiçi)");
+        assert!(config.executable_path.is_empty());
     }
 
     #[test]
