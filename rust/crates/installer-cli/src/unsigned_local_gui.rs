@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust paket motoruyla imzasiz standart Windows kurulum penceresi
 // Modul - Rust GUI
-// Version: 0.1.0
+// Version: 0.2.0
 // Aciklama: Paket kimligini gosterir, dosyalari yalniz yeni konuma kurar
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -15,12 +15,17 @@ use std::{
 use eframe::egui;
 use turkuaz_installer_package_engine::{install_unsigned_local_setup, unsigned_local_identity};
 
+use crate::windows_shortcuts::create_installed_shortcuts;
+
 struct LocalInstaller {
     executable: PathBuf,
     target: String,
     package_label: String,
-    busy: Option<Receiver<Result<String, String>>>,
-    status: Option<Result<String, String>>,
+    entry_point: Option<String>,
+    start_menu: bool,
+    desktop: bool,
+    busy: Option<Receiver<Result<(String, bool), String>>>,
+    status: Option<Result<(String, bool), String>>,
 }
 
 impl LocalInstaller {
@@ -35,10 +40,18 @@ impl LocalInstaller {
             .join(&identity.package_id)
             .to_string_lossy()
             .into_owned();
+        let supports_shortcuts = identity.entry_point.as_ref().is_some_and(|entry| {
+            std::path::Path::new(entry)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+        });
         Ok(Self {
             executable,
             target,
             package_label: format!("{} · v{}", identity.package_id, identity.version),
+            entry_point: identity.entry_point,
+            start_menu: supports_shortcuts,
+            desktop: false,
             busy: None,
             status: None,
         })
@@ -50,20 +63,63 @@ impl LocalInstaller {
         }
         let target = PathBuf::from(self.target.trim());
         let executable = self.executable.clone();
+        let start_menu = self.start_menu;
+        let desktop = self.desktop;
         let (sender, receiver) = mpsc::channel();
         self.busy = Some(receiver);
         self.status = None;
         thread::spawn(move || {
             let result = install_unsigned_local_setup(executable, &target)
+                .map_err(|error| error.to_string())
                 .map(|identity| {
-                    format!(
+                    let mut message = format!(
                         "{} v{} kuruldu: {}",
                         identity.package_id,
                         identity.version,
                         target.display()
-                    )
-                })
-                .map_err(|error| error.to_string());
+                    );
+                    let mut warning = false;
+                    if start_menu || desktop {
+                        match identity.entry_point.as_deref() {
+                            Some(entry) => match create_installed_shortcuts(
+                                &target,
+                                entry,
+                                &identity.package_id,
+                                start_menu,
+                                desktop,
+                            ) {
+                                Ok(report) => {
+                                    if !report.created.is_empty() {
+                                        message.push_str(&format!(
+                                            "\\n{} Windows kisayolu olusturuldu.",
+                                            report.created.len()
+                                        ));
+                                    }
+                                    if !report.warnings.is_empty() {
+                                        warning = true;
+                                        message.push_str(&format!(
+                                            "\\nKisayol uyarisi: {}",
+                                            report.warnings.join("; ")
+                                        ));
+                                    }
+                                }
+                                Err(error) => {
+                                    warning = true;
+                                    message.push_str(&format!(
+                                        "\\nDosyalar kuruldu ancak kisayol olusturulamadi: {error}"
+                                    ));
+                                }
+                            },
+                            None => {
+                                warning = true;
+                                message.push_str(
+                                    "\\nPakette ana EXE tanimi yok; kisayol olusturulamadi.",
+                                );
+                            }
+                        }
+                    }
+                    (message, warning)
+                });
             let _ = sender.send(result);
         });
     }
@@ -97,6 +153,15 @@ impl eframe::App for LocalInstaller {
                 ui.add(egui::TextEdit::singleline(&mut self.target).desired_width(f32::INFINITY));
             });
             ui.add_space(8.0);
+            if self.entry_point.is_some() {
+                ui.add_enabled_ui(self.busy.is_none(), |ui| {
+                    ui.checkbox(&mut self.start_menu, "Başlat menüsünde kısayol oluştur");
+                    ui.checkbox(&mut self.desktop, "Masaüstünde kısayol oluştur");
+                });
+            } else {
+                ui.small("Kısayol için Studio / 02 Uygulama dosyaları bölümünde ana EXE seçilmelidir.");
+            }
+            ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if ui
                     .add_enabled(self.busy.is_none(), egui::Button::new("Kurulumu başlat"))
@@ -112,8 +177,15 @@ impl eframe::App for LocalInstaller {
             if let Some(result) = &self.status {
                 ui.add_space(16.0);
                 match result {
-                    Ok(message) => {
-                        ui.colored_label(egui::Color32::DARK_GREEN, message);
+                    Ok((message, warning)) => {
+                        ui.colored_label(
+                            if *warning {
+                                egui::Color32::from_rgb(170, 92, 22)
+                            } else {
+                                egui::Color32::DARK_GREEN
+                            },
+                            message,
+                        );
                     }
                     Err(message) => {
                         ui.colored_label(egui::Color32::RED, message);
@@ -129,8 +201,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let app = LocalInstaller::new(executable)?;
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([620.0, 320.0])
-            .with_min_inner_size([560.0, 300.0])
+            .with_inner_size([660.0, 420.0])
+            .with_min_inner_size([600.0, 380.0])
             .with_title("Turkuaz Standart Kurulum"),
         ..Default::default()
     };
