@@ -24,7 +24,7 @@ use windows::{
             SHGetKnownFolderPath, ShellLink,
         },
     },
-    core::{GUID, PCWSTR},
+    core::{GUID, Interface, PCWSTR},
 };
 
 fn safe_relative_executable(root: &Path, relative: &str) -> Result<PathBuf, String> {
@@ -37,17 +37,17 @@ fn safe_relative_executable(root: &Path, relative: &str) -> Result<PathBuf, Stri
             .extension()
             .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
     {
-        return Err("Kisayol icin pakette tanimli guvenli bir EXE giris noktasi gerekli.".into());
+        return Err("Kısayol için pakette tanımlı güvenli bir EXE giriş noktası gerekli.".into());
     }
-    let root = fs::canonicalize(root).map_err(|e| format!("Kurulum klasoru okunamadi: {e}"))?;
+    let root = fs::canonicalize(root).map_err(|e| format!("Kurulum klasörü okunamadı: {e}"))?;
     let file = root.join(path);
-    let meta = fs::symlink_metadata(&file).map_err(|e| format!("Ana EXE bulunamadi: {e}"))?;
+    let meta = fs::symlink_metadata(&file).map_err(|e| format!("Ana EXE bulunamadı: {e}"))?;
     if !meta.is_file() || meta.file_type().is_symlink() || windows_reparse(&meta) {
-        return Err("Ana EXE normal bir dosya degil; kisayol olusturulmadi.".into());
+        return Err("Ana EXE normal bir dosya değil; kısayol oluşturulmadı.".into());
     }
-    let resolved = fs::canonicalize(&file).map_err(|e| format!("EXE yolu dogrulanamadi: {e}"))?;
+    let resolved = fs::canonicalize(&file).map_err(|e| format!("EXE yolu doğrulanamadı: {e}"))?;
     if !resolved.starts_with(&root) {
-        return Err("Ana EXE kurulum kokunun disina cikiyor.".into());
+        return Err("Ana EXE kurulum kökünün dışına çıkıyor.".into());
     }
     Ok(resolved)
 }
@@ -61,12 +61,12 @@ fn folder_path(id: &GUID) -> Result<PathBuf, String> {
     // BRK-WIN-SHORTCUT-001: Resolve actual redirected Windows folders through
     // known-folder API; never compose paths from USERPROFILE or process CWD.
     let wide = unsafe { SHGetKnownFolderPath(id, KNOWN_FOLDER_FLAG(0), None) }
-        .map_err(|e| format!("Windows sistem klasoru bulunamadi: {e}"))?;
+        .map_err(|e| format!("Windows sistem klasörü bulunamadı: {e}"))?;
     let text = unsafe { wide.to_string() };
     unsafe { CoTaskMemFree(Some(wide.0.cast())) };
-    let folder = text.map_err(|e| format!("Windows klasor yolu gecersiz: {e}"))?;
+    let folder = text.map_err(|e| format!("Windows klasör yolu geçersiz: {e}"))?;
     let path = PathBuf::from(folder);
-    fs::canonicalize(path).map_err(|e| format!("Windows klasoru erisilemiyor: {e}"))
+    fs::canonicalize(path).map_err(|e| format!("Windows klasörüne erişilemiyor: {e}"))
 }
 
 fn wide(value: &OsStr) -> Vec<u16> {
@@ -79,7 +79,7 @@ impl ComApartment {
         // All COM objects remain on the background install worker thread.
         unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
             .ok()
-            .map_err(|e| format!("Windows kisayol servisi baslatilamadi: {e}"))?;
+            .map_err(|e| format!("Windows kısayol servisi başlatılamadı: {e}"))?;
         Ok(Self)
     }
 }
@@ -103,9 +103,9 @@ impl Drop for TemporaryShortcut {
 fn create_link_file(target: &Path, destination: &Path, name: &str) -> Result<(), String> {
     let parent = destination
         .parent()
-        .ok_or("Kisayol hedef klasoru bulunamadi.")?;
+        .ok_or("Kısayol hedef klasörü bulunamadı.")?;
     if fs::symlink_metadata(destination).is_ok() {
-        return Err("Bu adda kisayol zaten var; mevcut dosya korunuyor.".into());
+        return Err("Bu adda kısayol zaten var; mevcut dosya korunuyor.".into());
     }
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -116,39 +116,39 @@ fn create_link_file(target: &Path, destination: &Path, name: &str) -> Result<(),
         .write(true)
         .create_new(true)
         .open(&staged)
-        .map_err(|e| format!("Gecici kisayol dosyasi acilamadi: {e}"))?;
+        .map_err(|e| format!("Geçici kısayol dosyası açılamadı: {e}"))?;
     drop(reserved);
     let _cleanup = TemporaryShortcut(staged.clone());
 
     let link: IShellLinkW = unsafe { CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER) }
-        .map_err(|e| format!("Windows ShellLink olusturulamadi: {e}"))?;
+        .map_err(|e| format!("Windows ShellLink oluşturulamadı: {e}"))?;
     let target_w = wide(target.as_os_str());
     let working_w = wide(
         target
             .parent()
-            .ok_or("Uygulama calisma klasoru bulunamadi.")?
+            .ok_or("Uygulama çalışma klasörü bulunamadı.")?
             .as_os_str(),
     );
-    let description = format!("{name} uygulamasini ac");
+    let description = format!("{name} uygulamasını aç");
     let description_w = wide(OsStr::new(&description));
     unsafe {
         link.SetPath(PCWSTR(target_w.as_ptr()))
-            .map_err(|e| format!("Kisayol EXE hedefi atanamadi: {e}"))?;
+            .map_err(|e| format!("Kısayol EXE hedefi atanamadı: {e}"))?;
         link.SetWorkingDirectory(PCWSTR(working_w.as_ptr()))
-            .map_err(|e| format!("Kisayol calisma klasoru atanamadi: {e}"))?;
+            .map_err(|e| format!("Kısayol çalışma klasörü atanamadı: {e}"))?;
         link.SetDescription(PCWSTR(description_w.as_ptr()))
-            .map_err(|e| format!("Kisayol aciklamasi atanamadi: {e}"))?;
+            .map_err(|e| format!("Kısayol açıklaması atanamadı: {e}"))?;
     }
     let persist: IPersistFile = link
         .cast()
-        .map_err(|e| format!("ShellLink kayit arayuzu acilamadi: {e}"))?;
+        .map_err(|e| format!("ShellLink kayıt arayüzü açılamadı: {e}"))?;
     let staged_w = wide(staged.as_os_str());
     unsafe { persist.Save(PCWSTR(staged_w.as_ptr()), true) }
-        .map_err(|e| format!("Kisayol kaydedilemedi: {e}"))?;
+        .map_err(|e| format!("Kısayol kaydedilemedi: {e}"))?;
 
     // NTFS hard link publication is no-clobber. Do not fall back to a rename
     // that could overwrite an unrelated shortcut.
-    fs::hard_link(&staged, destination).map_err(|e| format!("Kisayol guvenli yayinlanamadi: {e}"))
+    fs::hard_link(&staged, destination).map_err(|e| format!("Kısayol güvenli yayımlanamadı: {e}"))
 }
 
 #[derive(Default)]
@@ -181,16 +181,16 @@ pub(super) fn create_installed_shortcuts(
                     Ok(()) => report.created.push(shortcut),
                     Err(error) => {
                         let _ = fs::remove_dir(&group);
-                        report.warnings.push(format!("Baslat menusu: {error}"));
+                        report.warnings.push(format!("Başlat menüsü: {error}"));
                     }
                 }
             }
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                 report
                     .warnings
-                    .push("Baslat menusu grubunda mevcut dosyalar var; uzerine yazilmadi.".into());
+                    .push("Başlat menüsü grubunda mevcut dosyalar var; üzerine yazılmadı.".into());
             }
-            Err(error) => report.warnings.push(format!("Baslat menusu: {error}")),
+            Err(error) => report.warnings.push(format!("Başlat menüsü: {error}")),
         }
     }
     if desktop {
@@ -198,7 +198,7 @@ pub(super) fn create_installed_shortcuts(
         let shortcut = parent.join(format!("{package_id}.lnk"));
         match create_link_file(&exe, &shortcut, package_id) {
             Ok(()) => report.created.push(shortcut),
-            Err(error) => report.warnings.push(format!("Masaustu: {error}")),
+            Err(error) => report.warnings.push(format!("Masaüstü: {error}")),
         }
     }
     Ok(report)
