@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.12
+// Version: 0.6.13
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -1223,9 +1223,9 @@ impl BuilderApp {
                             ui,
                             "Motor uygulaması",
                             &mut self.project.av_scan.executable_path,
-                            "Seçilen antivirüs komut dosyasını seçin",
+                            "Seçilen antivirüs programını seçin",
                             "Uygulama",
-                            &["exe"],
+                            &[],
                         );
                         match self.project.av_scan.provider {
                             AvProvider::ClamAv => {
@@ -1263,7 +1263,7 @@ impl BuilderApp {
                                     &mut self.project.av_scan.engine_path,
                                     "YARA-X programını seçin",
                                     "Uygulama",
-                                    &["exe"],
+                                    &[],
                                 );
                                 text_row(
                                     ui,
@@ -2239,9 +2239,13 @@ fn file_row(
             .add_sized([button_width, 40.0], egui::Button::new("Gözat…"))
             .clicked()
         {
-            let picker = FileDialog::new()
-                .set_title(picker_title)
-                .add_filter(filter_name, extensions);
+            let picker = FileDialog::new().set_title(picker_title);
+            // Executables on Linux/macOS usually have no .exe extension.
+            let picker = if extensions.is_empty() {
+                picker
+            } else {
+                picker.add_filter(filter_name, extensions)
+            };
             if let Some(path) = picker.pick_file() {
                 *value = path.to_string_lossy().into_owned();
             }
@@ -3179,6 +3183,25 @@ mod tests {
         assert!(validate_or_create_output_parent(&link.join("Projects"), true).is_err());
         assert!(!target.join("Projects").exists());
         fs::remove_dir_all(&temporary).expect("clean fixture");
+    }
+
+    #[test]
+    fn optional_av_preferences_preserve_legacy_projects_and_refresh_package_state() {
+        let mut original = SavedProject::default();
+        let mut json = serde_json::to_value(&original).expect("to JSON");
+        json.as_object_mut().expect("object").remove("avScan");
+        let restored: SavedProject = serde_json::from_value(json).expect("legacy project");
+        assert!(!restored.av_scan.enabled);
+        assert!(restored.av_scan.validate().is_ok());
+
+        original.av_scan.enabled = true;
+        original.av_scan.provider = AvProvider::ClamAv;
+        assert!(!package_build_inputs_match(&original, &restored));
+
+        original.av_scan.enabled = false;
+        assert!(!package_build_inputs_match(&original, &restored));
+        original.av_scan = AvScanConfig::default();
+        assert!(package_build_inputs_match(&original, &restored));
     }
 
     #[test]
