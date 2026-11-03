@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.13
+// Version: 0.6.14
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -480,7 +480,7 @@ impl eframe::App for BuilderApp {
                         ui.spinner();
                         ui.label("Paket ve kurulum dosyaları hazırlanıyor…");
                     } else if !package_ready {
-                        ui.label("Adım 2 için önce güncel uygulama paketini hazırlayın.");
+                        ui.label("Paket güncel değil: 2. düğme önce paketi yenileyip sonra kurulum EXE'sini oluşturabilir.");
                     } else if local_test_ready {
                         ui.label("Standart Kurulum EXE'si hazır; çıktı klasöründen açabilirsiniz.");
                     } else {
@@ -503,8 +503,8 @@ impl eframe::App for BuilderApp {
                             }
                         } else if ui
                             .add_enabled(
-                                !is_building && package_ready && !local_test_ready,
-                                egui::Button::new("2  Standart Kurulum oluştur"),
+                                !is_building && !local_test_ready,
+                                egui::Button::new("2  Standart Kurulum EXE oluştur"),
                             )
                             .clicked()
                         {
@@ -954,7 +954,8 @@ impl BuilderApp {
                             egui::Color32::from_rgb(170, 92, 22),
                             "Mevcut paket farklı proje ayarlarına ait veya proje kaydı okunamıyor.",
                         );
-                        ui.label("Paket kimliğini/sürümünü güncelleyip uygulama paketini yeniden hazırlayın.");
+                        ui.label("2 Standart Kurulum EXE oluştur: eski çıktıyı güvenli yedekleyip güncel paketle EXE üretir.");
+                        ui.small("Eski paket tanınmıyorsa güvenlik nedeniyle korunur; farklı çıktı klasörü veya yeni sürüm seçin.");
                     } else {
                         ui.label("Bu konumda henüz bir uygulama paketi bulunamadı.");
                         ui.label("Alttaki 1. düğme ile uygulama paketini oluşturun.");
@@ -1219,20 +1220,42 @@ impl BuilderApp {
                                     );
                                 }
                             });
-                        file_row(
-                            ui,
-                            "Motor uygulaması",
-                            &mut self.project.av_scan.executable_path,
-                            "Seçilen antivirüs programını seçin",
-                            "Uygulama",
-                            &[],
-                        );
                         match self.project.av_scan.provider {
+                            AvProvider::Cloudmersive => {
+                                ui.label("Cloudmersive Virus Scan API");
+                                ui.small("Yerel antivirüs motoru gerekmez. Dosyalar HTTPS üzerinden Cloudmersive hizmetine ayrı ayrı gönderilir.");
+                                ui.small("API anahtarını CLOUDMERSIVE_API_KEY ortam değişkeninden okur; anahtar .tzproj dosyasına kaydedilmez.");
+                                ui.small("Bir dosya 32 MiB sınırını aşarsa veya API erişilemezse paket oluşturma durur. Hizmet ücretli/kotalı olabilir.");
+                                ui.checkbox(
+                                    &mut self.project.av_scan.cloud_upload_consent,
+                                    "Uygulama dosyalarımın Cloudmersive'a gönderilmesini kabul ediyorum",
+                                );
+                                ui.colored_label(
+                                    egui::Color32::from_rgb(170, 92, 22),
+                                    "Gizli, lisanslı veya üçüncü tarafa gönderilemeyecek dosyalar için bulut taramasını seçmeyin.",
+                                );
+                            }
                             AvProvider::ClamAv => {
-                                ui.small("ClamAV: clamscan ikili dosyasını seçin. İmza veritabanı kurulu ve güncel olmalıdır. Tehdit, tarama limiti ve hata durumunda paketleme durur.");
+                                file_row(
+                                    ui,
+                                    "ClamAV (clamscan) motoru",
+                                    &mut self.project.av_scan.executable_path,
+                                    "ClamAV motorunu seçin",
+                                    "Program",
+                                    &[],
+                                );
+                                ui.small("ClamAV: clamscan ikili dosyasını seçin. İmza veritabanı güncel olmalıdır. Tehdit veya hata varsa paketleme durur.");
                             }
                             AvProvider::TurkuazAv => {
-                                ui.small("TurkuazAV: derlenmiş CLI motorunu ve imzalı YARA-X kural dosyalarını seçin.");
+                                file_row(
+                                    ui,
+                                    "TurkuazAV uygulaması",
+                                    &mut self.project.av_scan.executable_path,
+                                    "TurkuazAV CLI dosyasını seçin",
+                                    "Program",
+                                    &[],
+                                );
+                                ui.small("TurkuazAV: imzalı YARA-X kurallarını ve güvenilir motoru seçin.");
                                 file_row(
                                     ui,
                                     "YARA-X kuralları",
@@ -1262,7 +1285,7 @@ impl BuilderApp {
                                     "YARA-X motoru",
                                     &mut self.project.av_scan.engine_path,
                                     "YARA-X programını seçin",
-                                    "Uygulama",
+                                    "Program",
                                     &[],
                                 );
                                 text_row(
@@ -1275,9 +1298,11 @@ impl BuilderApp {
                                     "Açık anahtar SHA-256",
                                     &mut self.project.av_scan.expected_public_key_sha256,
                                 );
-                                ui.checkbox(&mut self.project.av_scan.accept_pinned_no_match,
-                                    "İmzalı kurallarda eşleşme yoksa devam et (yalnızca seçili kural kapsamı)");
-                                ui.small("Eşleşme olmaması dosyanın virüssüz olduğunu kanıtlamaz. Bu izin kapalıysa TurkuazAV bilinmeyen sonucu engeller.");
+                                ui.checkbox(
+                                    &mut self.project.av_scan.accept_pinned_no_match,
+                                    "İmzalı kurallarda eşleşme yoksa devam et (yalnızca seçili kural kapsamı)",
+                                );
+                                ui.small("Eşleşme yok sonucu virüssüzlük garantisi değildir. İzin verilmezse TurkuazAV bilinmeyen sonucu engeller.");
                             }
                         }
                     } else {
@@ -2001,10 +2026,6 @@ impl BuilderApp {
                 self.status = Some((false, error));
                 return;
             }
-        }
-        if let Err(error) = ensure_prepared_package_is_current(&self.project) {
-            self.status = Some((false, error));
-            return;
         }
         let project = self.project.clone();
         let (sender, receiver) = mpsc::channel();
@@ -2886,6 +2907,11 @@ fn require_regular_file(label: &str, value: &str) -> Result<PathBuf, String> {
 fn build_native_standard_setup(project: SavedProject) -> Result<String, String> {
     if project.installer_kind != InstallerKind::Offline {
         return Err("Standart Kurulum yalnızca Tam Kurulum içindir.".to_owned());
+    }
+    // BRK-STUDIO-REBUILD-001: One-click EXE generation must never skip
+    // selected antivirus scanning when the project or its inputs changed.
+    if ensure_prepared_package_is_current(&project).is_err() {
+        prepare_project(project.clone(), true)?;
     }
     let root = ensure_prepared_package_is_current(&project)?;
     let directory = root.join("standard");
