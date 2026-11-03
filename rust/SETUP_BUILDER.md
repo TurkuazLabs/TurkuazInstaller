@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.1
+Version: 0.9.2
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -176,6 +176,45 @@ Bu asamada secim Studio'daki **paket olusturma** icindir; kullanicinin
 elindeki kurulum EXE'si henüz son kullanici antivirüs secme arayuzu
 saglamaz. AV taramasi tek basina virus yok garantisi vermez; yayinci
 imzasi ve butunluk dogrulamasi ayri kontrollerdir.
+
+## Cloudmersive ile çevrimiçi AV taraması (isteğe bağlı)
+
+Antivirüs taraması seçiliyse açılır listeden **Cloudmersive (çevrimiçi)**
+seçilebilir. Yerel EXE/ClamAV/YARA-X motoru istemez. Bulut taraması,
+her bir uygulama dosyasını TLS üzerinden üçüncü tarafın
+`POST https://api.cloudmersive.com/virus/scan/file` API'sine gönderir.
+**Dosya içeriği karşı tarafa aktarılır.** Gizli veya telif hakkı nedeniyle
+gönderme izni bulunmayan dosyalar için bu seçeneği kullanmayın.
+
+Önce geçerli bir Cloudmersive hesabı ve API anahtarı edinin. Studio'yu
+başlatan PowerShell oturumunda ortam değişkenini ayarlayın:
+
+```powershell
+$env:CLOUDMERSIVE_API_KEY = Read-Host 'Cloudmersive API anahtarı'
+```
+
+Bu değer `.tzproj` içine yazılmaz, program tarafından loglanmaz.
+Studio'da **dosya gönderimini kabul ediyorum** onayı verilmeden tek bir
+dosya bile gönderilmez. Her dosya en çok 32 MiB olabilir; daha büyük
+dosya, kota, bağlantı ve belirsiz API yanıtı durumlarında paket oluşturma
+reddedilir. Bulut taraması ücretli/kotalı olabilir; sağlayıcının veri
+işleme şartlarını kullanıcı kontrol etmelidir. Temiz yanıt bilinmeyen
+zararlı kod bulunmadığının kesin kanıtı değildir.
+
+## Eski paket güncel değilse Standart Kurulum EXE oluşturma
+
+"2 Standart Kurulum EXE oluştur" güncel paket varsa doğrudan EXE
+oluşturur. Güncel paket yoksa önce **güncel proje ayarlarıyla** yeniden
+paket hazırlar (antivirüs seçimi etkinse tarama uygular). Aynı
+kimlik/sürümde daha önce Studio'nun oluşturduğu paket dizini varsa
+önceki bütün çıktı klasörü, silinmeden
+`<paket>-<surum>-backup-<pid>-<nonce>` biçiminde yedeklenir. Ancak
+eski paket ve `project.tzproj` gerçek/okunabilir değilse veya başka
+kimliğe aitse dizin korunur; farklı çıktı konumu ya da sürüm seçmek
+gerekir. Yayın dosyaları sessizce üzerine yazılmaz.
+
+Bu kolaylık sadece Community standart EXE akışındadır. İmzalı dağıtım
+hala ayrı bir güvenilir imza/trust doğrulaması gerektirir.
 
 ## Derleme ciktisi
 
