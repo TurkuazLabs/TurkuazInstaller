@@ -5,7 +5,10 @@
 // Aciklama: Kapali mod, TurkuazAV veya ClamAV secimi, hatada sessiz gecis yok
 // Bagimli Oldugu Katman: Config | Service | Adapter
 
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use serde::{Deserialize, Serialize};
 use turkuaz_installer_package_engine::{
@@ -53,8 +56,8 @@ fn selected_file(value: &str, label: &str) -> Result<PathBuf, String> {
     if !path.is_absolute() {
         return Err(format!("{label}: mutlak dosya yolu seçilmelidir."));
     }
-    let metadata = fs::symlink_metadata(&path)
-        .map_err(|error| format!("{label} bulunamadı: {error}"))?;
+    let metadata =
+        fs::symlink_metadata(&path).map_err(|error| format!("{label} bulunamadı: {error}"))?;
     if !metadata.is_file() || metadata.file_type().is_symlink() {
         return Err(format!("{label}: normal bir dosya seçilmelidir."));
     }
@@ -118,7 +121,11 @@ impl AvScanConfig {
     // BRK-AV-OPTIONAL-002: Scan the extracted bytes of the new .tzpkg before
     // any build outputs are published. No silent fallback to another provider.
     pub(super) fn scan_package(
-        &self, package_path: &Path, staging: &Path, id: &str, version: &str,
+        &self,
+        package_path: &Path,
+        staging: &Path,
+        id: &str,
+        version: &str,
     ) -> Result<usize, String> {
         let scanner = self.scanner()?;
         let summary = scan_package_archive(package_path, staging, id, version, scanner.as_ref())

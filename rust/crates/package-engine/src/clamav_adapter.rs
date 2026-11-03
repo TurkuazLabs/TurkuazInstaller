@@ -57,9 +57,14 @@ fn ensure_regular_file(path: &Path) -> Result<fs::Metadata, ScanGateError> {
 
 fn bounded_output(mut reader: impl Read) -> Result<Vec<u8>, io::Error> {
     let mut bytes = Vec::new();
-    reader.by_ref().take(MAXIMUM_OUTPUT + 1).read_to_end(&mut bytes)?;
+    reader
+        .by_ref()
+        .take(MAXIMUM_OUTPUT + 1)
+        .read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAXIMUM_OUTPUT {
-        return Err(io::Error::other("ClamAV output exceeded the supported limit"));
+        return Err(io::Error::other(
+            "ClamAV output exceeded the supported limit",
+        ));
     }
     Ok(bytes)
 }
@@ -67,8 +72,10 @@ fn bounded_output(mut reader: impl Read) -> Result<Vec<u8>, io::Error> {
 fn interpret(status: ExitStatus, stdout: &[u8]) -> Result<ScanVerdict, ScanGateError> {
     match status.code() {
         Some(0) => Ok(ScanVerdict::Clean),
-        Some(1) if stdout.windows(b"Heuristics.Limits.Exceeded".len())
-            .any(|window| window == b"Heuristics.Limits.Exceeded") =>
+        Some(1)
+            if stdout
+                .windows(b"Heuristics.Limits.Exceeded".len())
+                .any(|window| window == b"Heuristics.Limits.Exceeded") =>
         {
             Ok(ScanVerdict::Suspicious)
         }
@@ -128,9 +135,13 @@ impl MalwareScanner for ClamAvScanner {
                 }
             }
         };
-        let stdout = reader_out.join().map_err(|_| unavailable())?
+        let stdout = reader_out
+            .join()
+            .map_err(|_| unavailable())?
             .map_err(|_| unavailable())?;
-        reader_err.join().map_err(|_| unavailable())?
+        reader_err
+            .join()
+            .map_err(|_| unavailable())?
             .map_err(|_| unavailable())?;
         interpret(status?, &stdout)
     }

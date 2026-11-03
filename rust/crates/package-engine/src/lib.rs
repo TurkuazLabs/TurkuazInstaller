@@ -16,12 +16,12 @@ mod setup_theme;
 mod turkuaz_av_adapter;
 mod unsigned_setup;
 
-pub use clamav_adapter::ClamAvScanner;
-pub use package_scan::{PackageScanError, scan_package_archive};
 pub use builder::{PackageBuildError, build_full_package, build_full_package_with_entry_point};
+pub use clamav_adapter::ClamAvScanner;
 pub use malware_scan::{
     MalwareScanner, ScanGateError, ScanPhase, ScanSummary, ScanVerdict, scan_directory,
 };
+pub use package_scan::{PackageScanError, scan_package_archive};
 pub use setup_bundle::{
     SetupBundleError, SetupBundleFiles, extract_setup_bundle, read_setup_bundle_theme,
     write_setup_bundle, write_setup_bundle_with_theme,

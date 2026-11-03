@@ -5,13 +5,17 @@
 // Aciklama: ZIP path denetimli staging, AV taramasi, cleanup ve fail-closed
 // Bagimli Oldugu Katman: Service | Adapter
 
-use std::{error::Error, fmt, fs, io, path::{Path, PathBuf}};
+use std::{
+    error::Error,
+    fmt, fs, io,
+    path::{Path, PathBuf},
+};
 
 use uuid::Uuid;
 
 use crate::{
-    MalwareScanner, PackageEngineError, PackageExtractionLimits, ScanGateError,
-    ScanPhase, ScanSummary, extract_archive, scan_directory,
+    MalwareScanner, PackageEngineError, PackageExtractionLimits, ScanGateError, ScanPhase,
+    ScanSummary, extract_archive, scan_directory,
 };
 
 #[derive(Debug)]
@@ -64,9 +68,13 @@ pub fn scan_package_archive(
     let temporary = staging_parent.join(format!(".av-review-{}", Uuid::new_v4()));
     let guard = TemporaryDirectory(temporary.clone());
     extract_archive(
-        archive, &temporary, PackageExtractionLimits::default(),
-        package_id, version,
-    ).map_err(PackageScanError::Archive)?;
+        archive,
+        &temporary,
+        PackageExtractionLimits::default(),
+        package_id,
+        version,
+    )
+    .map_err(PackageScanError::Archive)?;
     let result = scan_directory(&temporary, ScanPhase::BeforePackaging, scanner)
         .map_err(PackageScanError::Malware);
     drop(guard);
@@ -77,9 +85,7 @@ pub fn scan_package_archive(
 mod tests {
     use super::*;
     use crate::ScanVerdict;
-    use turkuaz_installer_domain::{
-        package_id::PackageId, semantic_version::SemanticVersion,
-    };
+    use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 
     struct FixedVerdict(ScanVerdict);
     impl MalwareScanner for FixedVerdict {
@@ -99,16 +105,36 @@ mod tests {
         let version = SemanticVersion::parse("1.0.0").expect("version");
         let archive = folder.join("application.tzpkg");
         crate::build_full_package(
-            &source, &id, &version, &archive, PackageExtractionLimits::default(),
-        ).expect("package");
-        let ok = scan_package_archive(&archive, &folder, "qa.multiscan", "1.0.0",
-            &FixedVerdict(ScanVerdict::Clean)).expect("clean");
+            &source,
+            &id,
+            &version,
+            &archive,
+            PackageExtractionLimits::default(),
+        )
+        .expect("package");
+        let ok = scan_package_archive(
+            &archive,
+            &folder,
+            "qa.multiscan",
+            "1.0.0",
+            &FixedVerdict(ScanVerdict::Clean),
+        )
+        .expect("clean");
         assert_eq!(ok.files_scanned, 1);
-        let denied = scan_package_archive(&archive, &folder, "qa.multiscan", "1.0.0",
-            &FixedVerdict(ScanVerdict::Threat));
+        let denied = scan_package_archive(
+            &archive,
+            &folder,
+            "qa.multiscan",
+            "1.0.0",
+            &FixedVerdict(ScanVerdict::Threat),
+        );
         assert!(matches!(denied, Err(PackageScanError::Malware(_))));
-        assert!(!fs::read_dir(&folder).expect("root files")
-            .filter_map(Result::ok).any(|x| x.file_name().to_string_lossy().starts_with(".av-review-")));
+        assert!(
+            !fs::read_dir(&folder)
+                .expect("root files")
+                .filter_map(Result::ok)
+                .any(|x| x.file_name().to_string_lossy().starts_with(".av-review-"))
+        );
         fs::remove_dir_all(folder).expect("cleanup");
     }
 }

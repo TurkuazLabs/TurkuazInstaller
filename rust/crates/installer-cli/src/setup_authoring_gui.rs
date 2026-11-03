@@ -1233,16 +1233,48 @@ impl BuilderApp {
                             }
                             AvProvider::TurkuazAv => {
                                 ui.small("TurkuazAV: derlenmiş CLI motorunu ve imzalı YARA-X kural dosyalarını seçin.");
-                                file_row(ui, "YARA-X kuralları", &mut self.project.av_scan.rules_path,
-                                    "YARA-X kural dosyasını seçin", "YARA-X kuralları", &["yar", "yara"]);
-                                file_row(ui, "Kural imzası", &mut self.project.av_scan.signature_path,
-                                    "Kural imzasını seçin", "İmza", &["sig"]);
-                                file_row(ui, "Güvenilir açık anahtar", &mut self.project.av_scan.public_key_path,
-                                    "Yayıncı açık anahtarını seçin", "PEM anahtarı", &["pem"]);
-                                file_row(ui, "YARA-X motoru", &mut self.project.av_scan.engine_path,
-                                    "YARA-X programını seçin", "Uygulama", &["exe"]);
-                                text_row(ui, "TurkuazAV program SHA-256", &mut self.project.av_scan.expected_cli_sha256);
-                                text_row(ui, "Açık anahtar SHA-256", &mut self.project.av_scan.expected_public_key_sha256);
+                                file_row(
+                                    ui,
+                                    "YARA-X kuralları",
+                                    &mut self.project.av_scan.rules_path,
+                                    "YARA-X kural dosyasını seçin",
+                                    "YARA-X kuralları",
+                                    &["yar", "yara"],
+                                );
+                                file_row(
+                                    ui,
+                                    "Kural imzası",
+                                    &mut self.project.av_scan.signature_path,
+                                    "Kural imzasını seçin",
+                                    "İmza",
+                                    &["sig"],
+                                );
+                                file_row(
+                                    ui,
+                                    "Güvenilir açık anahtar",
+                                    &mut self.project.av_scan.public_key_path,
+                                    "Yayıncı açık anahtarını seçin",
+                                    "PEM anahtarı",
+                                    &["pem"],
+                                );
+                                file_row(
+                                    ui,
+                                    "YARA-X motoru",
+                                    &mut self.project.av_scan.engine_path,
+                                    "YARA-X programını seçin",
+                                    "Uygulama",
+                                    &["exe"],
+                                );
+                                text_row(
+                                    ui,
+                                    "TurkuazAV program SHA-256",
+                                    &mut self.project.av_scan.expected_cli_sha256,
+                                );
+                                text_row(
+                                    ui,
+                                    "Açık anahtar SHA-256",
+                                    &mut self.project.av_scan.expected_public_key_sha256,
+                                );
                                 ui.checkbox(&mut self.project.av_scan.accept_pinned_no_match,
                                     "İmzalı kurallarda eşleşme yoksa devam et (yalnızca seçili kural kapsamı)");
                                 ui.small("Eşleşme olmaması dosyanın virüssüz olduğunu kanıtlamaz. Bu izin kapalıysa TurkuazAV bilinmeyen sonucu engeller.");
@@ -2930,7 +2962,10 @@ fn build_project(project: SavedProject) -> Result<String, String> {
     }
 
     let scan_status = if project.av_scan.enabled {
-        format!("\nAntivirüs taraması: {} ile tamamlandı.", project.av_scan.provider.label())
+        format!(
+            "\nAntivirüs taraması: {} ile tamamlandı.",
+            project.av_scan.provider.label()
+        )
     } else {
         "\nAntivirüs taraması: kullanıcı tarafından kapatıldı.".to_owned()
     };
