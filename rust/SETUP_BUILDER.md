@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.0
+Version: 0.9.1
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -148,6 +148,34 @@ Eski NSIS yerel demo test betigi geriye donuk deneme icin dosya
 gecmisinde bulunabilir; standart kurulumun bagimliligi degildir.
 Gelistirmis imzali dagitimda NSIS yedek yukleyici ozelligi
 istege bagli olarak ayrica bulunabilir.
+
+## Istege bagli antivirüs taramasi
+
+**02 Uygulama dosyalari** bolumunde "Paket olusturmadan once antivirüsle
+tara" secenegi varsayilan olarak kapalidir. Acilirsa listeden TurkuazAV
+(YARA-X) veya ClamAV secilebilir. Kullanici sectigi AV programinin
+yolunu belirler. ClamAV icin `clamscan` kurulmus ve imza veritabani
+guncel olmalidir. TurkuazAV icin imzali YARA-X kural dosyalari, motor,
+ve guvenilir CLI/acik anahtar SHA-256 sabitleri gereklidir.
+
+TurkuazAV'da kural eslesmesi yoksa **varsayilan olarak paketleme
+durdurulur** (Unknown). Yalnizca kullanici kural kapsamini bilerek
+onaylarsa no-match durumunda ilerlenebilir. ClamAV'da tarama hata
+verirse, dosya boyutu limiti asilirsa veya virus bildirirse paket
+olusturulmaz. Tarama acikken diger motora otomatik gecilmez.
+
+Secim `.tzproj` dosyasina `avScan` altinda kaydedilir. Eski projeler
+antivirus secenegi kapali olarak acilir; antivirüs programi kurmak
+zorunda degildir. Secim degisirse daha once hazirlanmis paket "guncel"
+sayilmaz ve yeniden hazirlanmalidir. Tarama her dosyayi kaynak
+klasorunden degil, olusturulmus `.tzpkg` dosyasindan guvenli gecici
+alana cikararak kontrol eder; kontrol tamamlanmadan paket paylasima
+hazir hale getirilmez.
+
+Bu asamada secim Studio'daki **paket olusturma** icindir; kullanicinin
+elindeki kurulum EXE'si henüz son kullanici antivirüs secme arayuzu
+saglamaz. AV taramasi tek basina virus yok garantisi vermez; yayinci
+imzasi ve butunluk dogrulamasi ayri kontrollerdir.
 
 ## Derleme ciktisi
 
