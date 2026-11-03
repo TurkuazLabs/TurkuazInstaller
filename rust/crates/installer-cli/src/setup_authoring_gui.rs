@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.11
+// Version: 0.6.12
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -27,6 +27,10 @@ use url::Url;
 #[cfg(windows)]
 #[path = "windows_documents.rs"]
 mod windows_documents;
+
+#[path = "setup_av_options.rs"]
+mod setup_av_options;
+use setup_av_options::{AvProvider, AvScanConfig};
 
 const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
 const PROJECT_SCHEMA_VERSION: u32 = 1;
@@ -140,6 +144,8 @@ struct SavedProject {
     #[serde(default)]
     makensis_path: String,
     #[serde(default)]
+    av_scan: AvScanConfig,
+    #[serde(default)]
     web_manifest_url: String,
     #[serde(default)]
     web_signature_url: String,
@@ -190,6 +196,7 @@ impl Default for SavedProject {
             trust_store_path: String::new(),
             setup_stub_path: String::new(),
             makensis_path: String::new(),
+            av_scan: AvScanConfig::default(),
             web_manifest_url: String::new(),
             web_signature_url: String::new(),
             web_release_source: WebReleaseSource::Https,
@@ -1188,6 +1195,63 @@ impl BuilderApp {
                 ui.add_space(8.0);
                 ui.small("Başlangıç dosyası, kaynak klasörünün içindeki göreli EXE yoludur. Boş bırakılabilir.");
                 ui.small("Kaynak klasörde güvenli olmayan bağlantılar veya desteklenmeyen dosyalar varsa paket oluşturulmaz.");
+                ui.add_space(12.0);
+
+                // BRK-STUDIO-AV-SELECT-001: AV is a user-selected optional check,
+                // separate from signed publisher verification and package SHA-256.
+                studio_card(ui, |ui| {
+                    ui.heading("Antivirüs taraması (isteğe bağlı)");
+                    ui.checkbox(
+                        &mut self.project.av_scan.enabled,
+                        "Paket oluşturmadan önce antivirüsle tara",
+                    );
+                    if self.project.av_scan.enabled {
+                        field_label(ui, "Antivirüs motoru");
+                        egui::ComboBox::from_id_salt("studio-av-provider")
+                            .width(ui.available_width())
+                            .selected_text(self.project.av_scan.provider.label())
+                            .show_ui(ui, |ui| {
+                                for provider in AvProvider::ALL {
+                                    ui.selectable_value(
+                                        &mut self.project.av_scan.provider,
+                                        provider,
+                                        provider.label(),
+                                    );
+                                }
+                            });
+                        file_row(
+                            ui,
+                            "Motor uygulaması",
+                            &mut self.project.av_scan.executable_path,
+                            "Seçilen antivirüs komut dosyasını seçin",
+                            "Uygulama",
+                            &["exe"],
+                        );
+                        match self.project.av_scan.provider {
+                            AvProvider::ClamAv => {
+                                ui.small("ClamAV: clamscan ikili dosyasını seçin. İmza veritabanı kurulu ve güncel olmalıdır. Tehdit, tarama limiti ve hata durumunda paketleme durur.");
+                            }
+                            AvProvider::TurkuazAv => {
+                                ui.small("TurkuazAV: derlenmiş CLI motorunu ve imzalı YARA-X kural dosyalarını seçin.");
+                                file_row(ui, "YARA-X kuralları", &mut self.project.av_scan.rules_path,
+                                    "YARA-X kural dosyasını seçin", "YARA-X kuralları", &["yar", "yara"]);
+                                file_row(ui, "Kural imzası", &mut self.project.av_scan.signature_path,
+                                    "Kural imzasını seçin", "İmza", &["sig"]);
+                                file_row(ui, "Güvenilir açık anahtar", &mut self.project.av_scan.public_key_path,
+                                    "Yayıncı açık anahtarını seçin", "PEM anahtarı", &["pem"]);
+                                file_row(ui, "YARA-X motoru", &mut self.project.av_scan.engine_path,
+                                    "YARA-X programını seçin", "Uygulama", &["exe"]);
+                                text_row(ui, "TurkuazAV program SHA-256", &mut self.project.av_scan.expected_cli_sha256);
+                                text_row(ui, "Açık anahtar SHA-256", &mut self.project.av_scan.expected_public_key_sha256);
+                                ui.checkbox(&mut self.project.av_scan.accept_pinned_no_match,
+                                    "İmzalı kurallarda eşleşme yoksa devam et (yalnızca seçili kural kapsamı)");
+                                ui.small("Eşleşme olmaması dosyanın virüssüz olduğunu kanıtlamaz. Bu izin kapalıysa TurkuazAV bilinmeyen sonucu engeller.");
+                            }
+                        }
+                    } else {
+                        ui.small("Kapalı: hiçbir antivirüs programı gerekmiyor. Paket SHA-256 ve mevcut güvenlik kontrolleri devam eder.");
+                    }
+                });
             }
             2 => {
                 ui.label("Son kullanıcı setup penceresinin hedef klasörünü ve görünümünü seçin.");
@@ -2021,6 +2085,7 @@ fn package_build_inputs_match(current: &SavedProject, packaged: &SavedProject) -
         && current.brand_name == packaged.brand_name
         && current.subtitle == packaged.subtitle
         && current.accent_color == packaged.accent_color
+        && current.av_scan == packaged.av_scan
 }
 
 fn ensure_prepared_package_is_current(project: &SavedProject) -> Result<PathBuf, String> {
@@ -2194,6 +2259,7 @@ fn validate_project_step(project: &SavedProject, step: usize) -> Result<(), Stri
                 );
             }
         }
+        project.av_scan.validate()?;
     }
 
     if step == 2 {
@@ -2863,9 +2929,15 @@ fn build_project(project: SavedProject) -> Result<String, String> {
         return Err(format!("Hazır proje çıktı klasörüne taşınamadı: {error}"));
     }
 
+    let scan_status = if project.av_scan.enabled {
+        format!("\nAntivirüs taraması: {} ile tamamlandı.", project.av_scan.provider.label())
+    } else {
+        "\nAntivirüs taraması: kullanıcı tarafından kapatıldı.".to_owned()
+    };
     Ok(format!(
-        "Uygulama paketi hazır.\nÇıktı klasörü: {}\nDosyalar: application.tzpkg, release-manifest.draft.yaml, setup-theme.json ve project.tzproj.\nStandart Kurulum için 2 Standart Kurulum oluştur seçeneğini kullanın. Güvenilir yayın için 04 İmzalı dağıtım (gelişmiş) bölümündeki imza ve trust dosyaları gereklidir.",
-        final_directory.display()
+        "Uygulama paketi hazır.\nÇıktı klasörü: {}\nDosyalar: application.tzpkg, release-manifest.draft.yaml, setup-theme.json ve project.tzproj.{}\nStandart Kurulum için 2 Standart Kurulum oluştur seçeneğini kullanın. Güvenilir yayın için 04 İmzalı dağıtım (gelişmiş) bölümündeki imza ve trust dosyaları gereklidir.",
+        final_directory.display(),
+        scan_status
     ))
 }
 
@@ -2896,6 +2968,17 @@ fn build_into_staging(
             .arg(project.entry_point.trim());
     }
     run_child(package_command, "Paket derlemesi")?;
+
+    // Scan the package's extracted bytes, not the mutable source folder.
+    // Enabled policy never falls back silently to another AV provider.
+    if project.av_scan.enabled {
+        project.av_scan.scan_package(
+            &package_path,
+            staging_directory,
+            &package_id.to_string(),
+            &version.to_string(),
+        )?;
+    }
 
     let package_uri = Url::from_file_path(final_package_path)
         .map_err(|_| "Paket dosyası için yerel URI üretilemedi.".to_owned())?;
