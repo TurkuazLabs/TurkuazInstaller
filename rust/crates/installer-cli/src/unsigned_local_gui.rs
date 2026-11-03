@@ -163,7 +163,9 @@ impl eframe::App for LocalInstaller {
                     ui.checkbox(&mut self.desktop, "Masaüstünde kısayol oluştur");
                 });
             } else {
-                ui.small("Kısayol için Studio / 02 Uygulama dosyaları bölümünde ana EXE seçilmelidir.");
+                ui.small(
+                    "Kısayol için Studio / 02 Uygulama dosyaları bölümünde ana EXE seçilmelidir.",
+                );
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
