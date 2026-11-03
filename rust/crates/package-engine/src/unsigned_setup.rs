@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/unsigned_setup.rs
 // Amac: NSIS olmadan yalniz yerel standart kurulum icin .tzpkg gomulu EXE uretmek
 // Modul - Rust Package Engine
-// Version: 0.2.4
+// Version: 0.2.5
 // Aciklama: Imzasiz yerel EXE butunluk kontrolu; imzali release/trust asla atlanmaz
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -15,6 +15,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     MalwareScanner, PackageEngineError, PackageExtractionLimits, ScanPhase, extract_archive,
+    local_install_receipt::write_local_install_record,
     format::{
         MAXIMUM_PACKAGE_METADATA_BYTES, PACKAGE_FORMAT_VERSION,
         PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT, PACKAGE_METADATA_ENTRY, PackageArchiveMetadata,
@@ -401,6 +402,9 @@ fn install_unsigned_local_setup_inner(
         scan_directory(&stage, ScanPhase::BeforeInstall, scanner)
             .map_err(|_| invalid("malware scan did not return a clean result; install refused"))?;
     }
+    // Record the exact staged payload before it becomes an installed tree.
+    // Untracked older installs have no receipt and are never auto-uninstalled.
+    write_local_install_record(&stage, &identity.package_id, &identity.version)?;
     // Existing target directories must never be overwritten. Windows rename is
     // fail-if-exists; this precheck is retained for clear cross-platform behavior.
     if fs::symlink_metadata(target).is_ok() {
