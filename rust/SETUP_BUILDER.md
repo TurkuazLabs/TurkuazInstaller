@@ -122,6 +122,30 @@ Kullanici hedef klasoru degistirebilir. Mevcut hedef asla uzerine
 yazilmaz. Paket ZIP path, symlink, normal dosya ve boyut denetimleri
 ile SHA-256 butunluk kontrolunden gecer.
 
+### Windows kisayollari (gelistirme, imzasiz standart kurulum)
+
+`02 Uygulama dosyalari` bolumunde **ana uygulama EXE'si** (kaynak
+dizinine gore goreli `entryPoint`) secilirse yeni Rust kurulum
+penceresinde **Baslat menusunde kisayol olustur** varsayilan acik,
+**Masaustunde kisayol olustur** ise varsayilan kapali olarak gorunur.
+EXE tanimlanmazsa ya da paket ana uygulama yolu EXE degilse kisayol
+olusturulmaz; tahmini EXE secimi yapilmaz.
+
+Kisayollar Windows known-folder API ile mevcut kullaniciya ait gercek
+Baslat Menusu/Programs ve yonlendirilmis Masaustu yolunda olusturulur.
+`<package-id>/<package-id>.lnk` ve `<package-id>.lnk` adlandirmasi
+kullanilir. Ucuncu taraf kisayollari ve mevcut Baslat menusu gruplari
+asla ezilmez. Yalnizca kurulmus ve kurulum koku icinde dogrulanan EXE
+hedeflenir. Kisayol hatasinda yuklenen dosyalar saklanir, son durum
+eksik Windows butunlesmesi olarak acikca raporlanir.
+
+**Bu committe kaldirma kisayolu, Windows Uygulamalar kaydi, uninstaller
+sahiplik envanteri ve signli installer shortcut parity henuz yoktur.**
+Dosyalari topluca silen dogrulanmamis bir kaldirici eklenmemistir.
+Bu kalan guvenlik ve kabul kapsami GitHub issue #64'te izlenir.
+Kisayol birlestirme testleri Windows hosted CI'da calisir; manuel temiz
+VM ve signed lifecycle kabul testleri ayridir.
+
 **Guvenlik siniri:** Imzasiz standart paket kendi icindeki SHA-256'yi
 kontrol eder fakat bu, yayinci kimligi/dijital imza dogrulamasi
 degildir. Bu yol signed manifest trust/secure update/repair/rollback
