@@ -15,11 +15,11 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     MalwareScanner, PackageEngineError, PackageExtractionLimits, ScanPhase, extract_archive,
-    local_install_receipt::write_local_install_record,
     format::{
         MAXIMUM_PACKAGE_METADATA_BYTES, PACKAGE_FORMAT_VERSION,
         PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT, PACKAGE_METADATA_ENTRY, PackageArchiveMetadata,
     },
+    local_install_receipt::write_local_install_record,
     scan_directory,
 };
 use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
