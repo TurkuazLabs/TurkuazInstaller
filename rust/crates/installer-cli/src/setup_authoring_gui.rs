@@ -2966,7 +2966,9 @@ fn prepare_project(project: SavedProject, backup_stale_output: bool) -> Result<S
                 ));
             }
             if metadata.file_type().is_symlink() || !metadata.is_dir() {
-                return Err("Eski çıktı klasörü gerçek bir dizin değil; üzerine yazılmadı.".to_owned());
+                return Err(
+                    "Eski çıktı klasörü gerçek bir dizin değil; üzerine yazılmadı.".to_owned(),
+                );
             }
             if !regular_file_exists(&final_directory.join("application.tzpkg"))
                 || !regular_file_exists(&final_directory.join("project.tzproj"))
@@ -3034,14 +3036,17 @@ fn prepare_project(project: SavedProject, backup_stale_output: bool) -> Result<S
         None
     };
     if let Err(error) = fs::rename(&staging_directory, &final_directory) {
-        let restore_error = previous_backup.as_ref().and_then(|backup| {
-            fs::rename(backup, &final_directory).err()
-        });
+        let restore_error = previous_backup
+            .as_ref()
+            .and_then(|backup| fs::rename(backup, &final_directory).err());
         let _ = fs::remove_dir_all(&staging_directory);
         return Err(format!(
             "Hazır proje taşınamadı: {error}. Eski çıktıyı geri yükleme: {}",
-            if restore_error.is_some() { "başarısız; yedek klasörünü kontrol edin" }
-            else { "tamamlandı" }
+            if restore_error.is_some() {
+                "başarısız; yedek klasörünü kontrol edin"
+            } else {
+                "tamamlandı"
+            }
         ));
     }
 

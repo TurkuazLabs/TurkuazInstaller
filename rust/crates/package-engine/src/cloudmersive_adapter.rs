@@ -8,9 +8,9 @@
 use std::{fs, path::Path, time::Duration};
 
 use reqwest::{Client, redirect::Policy};
+use serde::Deserialize;
 use tokio::runtime::Builder;
 use uuid::Uuid;
-use serde::Deserialize;
 
 use crate::{MalwareScanner, ScanGateError, ScanPhase, ScanVerdict};
 
@@ -54,15 +54,16 @@ fn is_reparse_point(_metadata: &fs::Metadata) -> bool {
 }
 
 fn response_verdict(body: &[u8]) -> Result<ScanVerdict, ScanGateError> {
-    let record: CloudmersiveResponse =
-        serde_json::from_slice(body).map_err(|_| unavailable())?;
+    let record: CloudmersiveResponse = serde_json::from_slice(body).map_err(|_| unavailable())?;
     let findings = record.found_viruses.unwrap_or_default();
     // Unexpected, contradictory results are not silently accepted.
     if record.clean_result && !findings.is_empty() {
         return Err(unavailable());
     }
     // Parse fields without reflecting potentially sensitive cloud data to logs.
-    let _ = findings.iter().any(|d| d.file_name.is_some() || d.virus_name.is_some());
+    let _ = findings
+        .iter()
+        .any(|d| d.file_name.is_some() || d.virus_name.is_some());
     if record.clean_result {
         Ok(ScanVerdict::Clean)
     } else if findings.is_empty() {
@@ -81,10 +82,7 @@ impl CloudmersiveScanner {
             return Err(unavailable());
         }
         let api_key = std::env::var(CLOUDMERSIVE_KEY_ENV).map_err(|_| unavailable())?;
-        if api_key.is_empty()
-            || api_key.len() > 1024
-            || api_key.chars().any(char::is_control)
-        {
+        if api_key.is_empty() || api_key.len() > 1024 || api_key.chars().any(char::is_control) {
             return Err(unavailable());
         }
         let client = Client::builder()
@@ -123,9 +121,7 @@ impl MalwareScanner for CloudmersiveScanner {
             .extension()
             .and_then(|ext| ext.to_str())
             .filter(|ext| {
-                !ext.is_empty()
-                    && ext.len() <= 10
-                    && ext.bytes().all(|b| b.is_ascii_alphanumeric())
+                !ext.is_empty() && ext.len() <= 10 && ext.bytes().all(|b| b.is_ascii_alphanumeric())
             })
             .map(|ext| format!("payload.{ext}"))
             .unwrap_or_else(|| "payload.bin".to_owned());
@@ -148,7 +144,10 @@ impl MalwareScanner for CloudmersiveScanner {
                 .post(CLOUDMERSIVE_ENDPOINT)
                 .header("Apikey", &self.api_key)
                 .header("Accept", "application/json")
-                .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+                .header(
+                    "Content-Type",
+                    format!("multipart/form-data; boundary={boundary}"),
+                )
                 .body(content)
                 .send()
                 .await
@@ -183,7 +182,8 @@ mod tests {
         assert_eq!(
             response_verdict(
                 br#"{"CleanResult":false,"FoundViruses":[{"FileName":"test","VirusName":"TEST"}]}"#
-            ).unwrap(),
+            )
+            .unwrap(),
             ScanVerdict::Threat
         );
         assert_eq!(

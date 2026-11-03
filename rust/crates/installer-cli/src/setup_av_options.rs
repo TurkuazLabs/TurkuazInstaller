@@ -80,9 +80,7 @@ impl AvScanConfig {
             if !self.cloud_upload_consent {
                 return Err("Bulut taraması için dosyaların sağlayıcıya gönderilmesini açıkça onaylamalısınız.".to_owned());
             }
-            if std::env::var(CLOUDMERSIVE_KEY_ENV)
-                .map_or(true, |key| key.trim().is_empty())
-            {
+            if std::env::var(CLOUDMERSIVE_KEY_ENV).map_or(true, |key| key.trim().is_empty()) {
                 return Err(format!(
                     "Çevrimiçi tarama anahtarı eksik: {} ortam değişkenini ayarlayın.",
                     CLOUDMERSIVE_KEY_ENV

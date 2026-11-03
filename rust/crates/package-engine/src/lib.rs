@@ -19,7 +19,9 @@ mod unsigned_setup;
 
 pub use builder::{PackageBuildError, build_full_package, build_full_package_with_entry_point};
 pub use clamav_adapter::ClamAvScanner;
-pub use cloudmersive_adapter::{CLOUDMERSIVE_KEY_ENV, CloudmersiveScanner, MAX_CLOUD_SCAN_FILE_BYTES};
+pub use cloudmersive_adapter::{
+    CLOUDMERSIVE_KEY_ENV, CloudmersiveScanner, MAX_CLOUD_SCAN_FILE_BYTES,
+};
 pub use malware_scan::{
     MalwareScanner, ScanGateError, ScanPhase, ScanSummary, ScanVerdict, scan_directory,
 };
