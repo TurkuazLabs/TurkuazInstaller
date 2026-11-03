@@ -102,11 +102,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         return install_self_setup_command().await;
     }
     if std::env::args().nth(1).as_deref() == Some("uninstall-local") {
-        let options = parse_setup_bundle_options(&[
-            "target",
-            "package-id",
-            "confirm-uninstall",
-        ])?;
+        let options = parse_setup_bundle_options(&["target", "package-id", "confirm-uninstall"])?;
         if options.is_empty() {
             println!(
                 "Usage: turkuaz-installer uninstall-local --package-id ID --target DIR --confirm-uninstall YES"
