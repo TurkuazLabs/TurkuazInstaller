@@ -40,16 +40,20 @@ impl LocalInstaller {
             .join(&identity.package_id)
             .to_string_lossy()
             .into_owned();
-        let supports_shortcuts = identity.entry_point.as_ref().is_some_and(|entry| {
-            std::path::Path::new(entry)
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
+        let entry_point = identity.entry_point.filter(|entry| {
+            let path = std::path::Path::new(entry);
+            path.components()
+                .all(|part| matches!(part, std::path::Component::Normal(_)))
+                && path
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
         });
+        let supports_shortcuts = entry_point.is_some();
         Ok(Self {
             executable,
             target,
             package_label: format!("{} · v{}", identity.package_id, identity.version),
-            entry_point: identity.entry_point,
+            entry_point,
             start_menu: supports_shortcuts,
             desktop: false,
             busy: None,
@@ -91,14 +95,14 @@ impl LocalInstaller {
                                 Ok(report) => {
                                     if !report.created.is_empty() {
                                         message.push_str(&format!(
-                                            "\\n{} Windows kisayolu olusturuldu.",
+                                            "\n{} Windows kisayolu olusturuldu.",
                                             report.created.len()
                                         ));
                                     }
                                     if !report.warnings.is_empty() {
                                         warning = true;
                                         message.push_str(&format!(
-                                            "\\nKisayol uyarisi: {}",
+                                            "\nKisayol uyarisi: {}",
                                             report.warnings.join("; ")
                                         ));
                                     }
@@ -106,14 +110,14 @@ impl LocalInstaller {
                                 Err(error) => {
                                     warning = true;
                                     message.push_str(&format!(
-                                        "\\nDosyalar kuruldu ancak kisayol olusturulamadi: {error}"
+                                        "\nDosyalar kuruldu ancak kisayol olusturulamadi: {error}"
                                     ));
                                 }
                             },
                             None => {
                                 warning = true;
                                 message.push_str(
-                                    "\\nPakette ana EXE tanimi yok; kisayol olusturulamadi.",
+                                    "\nPakette ana EXE tanimi yok; kisayol olusturulamadi.",
                                 );
                             }
                         }
