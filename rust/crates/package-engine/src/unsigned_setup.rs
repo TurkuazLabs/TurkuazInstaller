@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/unsigned_setup.rs
 // Amac: NSIS olmadan yalniz yerel standart kurulum icin .tzpkg gomulu EXE uretmek
 // Modul - Rust Package Engine
-// Version: 0.2.3
+// Version: 0.2.4
 // Aciklama: Imzasiz yerel EXE butunluk kontrolu; imzali release/trust asla atlanmaz
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -216,6 +216,9 @@ pub fn extract_unsigned_local_package(
 pub struct UnsignedLocalIdentity {
     pub package_id: String,
     pub version: String,
+    /// Verified against package payload paths during the extraction step.
+    /// UI shortcut creation must additionally validate the installed file.
+    pub entry_point: Option<String>,
 }
 
 fn read_identity(package: &Path) -> Result<UnsignedLocalIdentity, PackageEngineError> {
@@ -254,6 +257,7 @@ fn read_identity(package: &Path) -> Result<UnsignedLocalIdentity, PackageEngineE
     Ok(UnsignedLocalIdentity {
         package_id: metadata.package_id,
         version: metadata.version,
+        entry_point: metadata.entry_point,
     })
 }
 
