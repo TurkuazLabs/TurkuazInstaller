@@ -95,14 +95,14 @@ impl LocalInstaller {
                                 Ok(report) => {
                                     if !report.created.is_empty() {
                                         message.push_str(&format!(
-                                            "\n{} Windows kisayolu olusturuldu.",
+                                            "\n{} Windows kısayolu oluşturuldu.",
                                             report.created.len()
                                         ));
                                     }
                                     if !report.warnings.is_empty() {
                                         warning = true;
                                         message.push_str(&format!(
-                                            "\nKisayol uyarisi: {}",
+                                            "\nKısayol uyarısı: {}",
                                             report.warnings.join("; ")
                                         ));
                                     }
@@ -110,14 +110,14 @@ impl LocalInstaller {
                                 Err(error) => {
                                     warning = true;
                                     message.push_str(&format!(
-                                        "\nDosyalar kuruldu ancak kisayol olusturulamadi: {error}"
+                                        "\nDosyalar kuruldu ancak kısayol oluşturulamadı: {error}"
                                     ));
                                 }
                             },
                             None => {
                                 warning = true;
                                 message.push_str(
-                                    "\nPakette ana EXE tanimi yok; kisayol olusturulamadi.",
+                                    "\nPakette ana EXE tanımı yok; kısayol oluşturulamadı.",
                                 );
                             }
                         }
