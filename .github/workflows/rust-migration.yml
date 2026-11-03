@@ -162,6 +162,10 @@ jobs:
       - name: Build setup authoring GUI
         run: cargo build --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui
 
+      # Native ShellLink COM contract: LNK created, foreign LNK preserved.
+      - name: Test Windows per-user shortcut adapter
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_shortcuts::tests
+
       - name: Test setup authoring GUI theme safety
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_typography_is_available_for_both_appearances
 
