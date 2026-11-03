@@ -73,9 +73,13 @@ fn safe_regular(path: &Path) -> Result<fs::Metadata, PackageEngineError> {
 fn safe_root(path: &Path) -> Result<(), PackageEngineError> {
     if !path.is_absolute()
         || path.components().count() < 3
-        || path.components().any(|c| matches!(c, Component::ParentDir | Component::CurDir))
+        || path
+            .components()
+            .any(|c| matches!(c, Component::ParentDir | Component::CurDir))
     {
-        return Err(invalid("local install target must be a non-root absolute path"));
+        return Err(invalid(
+            "local install target must be a non-root absolute path",
+        ));
     }
     let mut current = PathBuf::new();
     for part in path.components() {
@@ -204,15 +208,17 @@ fn checked_record(target: &Path, expected_id: &str) -> Result<InstallRecord, Pac
         return Err(invalid("local install receipt size invalid"));
     }
     let raw = fs::read(path).map_err(PackageEngineError::Io)?;
-    let record: InstallRecord = serde_json::from_slice(&raw)
-        .map_err(|_| invalid("local install receipt JSON invalid"))?;
+    let record: InstallRecord =
+        serde_json::from_slice(&raw).map_err(|_| invalid("local install receipt JSON invalid"))?;
     if record.format_version != RECORD_VERSION
         || record.package_id != expected_id
         || record.files.is_empty()
         || record.files.len() > MAX_OWNED_FILES
         || record.version.is_empty()
     {
-        return Err(invalid("local install receipt identity or version mismatch"));
+        return Err(invalid(
+            "local install receipt identity or version mismatch",
+        ));
     }
     let mut seen = HashSet::new();
     for entry in &record.files {
@@ -248,7 +254,9 @@ fn preflight_file(target: &Path, item: &OwnedFile) -> Result<(), PackageEngineEr
         Err(error) => Err(PackageEngineError::Io(error)),
         Ok(meta) => {
             if !meta.is_file() || meta.file_type().is_symlink() || is_reparse(&meta) {
-                return Err(invalid("local install file was replaced with a special file"));
+                return Err(invalid(
+                    "local install file was replaced with a special file",
+                ));
             }
             if meta.len() != item.size_bytes || digest_file(&full)? != item.sha256 {
                 return Err(invalid("local install file was changed; uninstall refused"));
@@ -332,7 +340,10 @@ mod tests {
         assert_eq!(result.removed_files, 1);
         assert!(result.retained_unknown_files);
         assert!(!target.join("bin/hello.txt").exists());
-        assert_eq!(fs::read(target.join("user-notes.txt")).unwrap(), b"never delete");
+        assert_eq!(
+            fs::read(target.join("user-notes.txt")).unwrap(),
+            b"never delete"
+        );
         fs::remove_dir_all(base).expect("cleanup");
     }
 
