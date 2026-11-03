@@ -259,13 +259,11 @@ mod tests {
     #[test]
     fn converts_only_known_verbatim_prefixes_for_shell() {
         assert_eq!(
-            shell_path(Path::new(r"\\?\C:\Program Files\Uygulama.exe"))
-                .expect("disk"),
+            shell_path(Path::new(r"\\?\C:\Program Files\Uygulama.exe")).expect("disk"),
             PathBuf::from(r"C:\Program Files\Uygulama.exe")
         );
         assert_eq!(
-            shell_path(Path::new(r"\\?\UNC\host\share\uygulama.exe"))
-                .expect("UNC"),
+            shell_path(Path::new(r"\\?\UNC\host\share\uygulama.exe")).expect("UNC"),
             PathBuf::from(r"\\host\share\uygulama.exe")
         );
         assert!(shell_path(Path::new(r"\\?\GLOBALROOT\Device\Harddisk")).is_err());
