@@ -2937,6 +2937,13 @@ fn build_native_standard_setup(project: SavedProject) -> Result<String, String> 
 }
 
 fn build_project(project: SavedProject) -> Result<String, String> {
+    prepare_project(project, false)
+}
+
+/// BRK-STUDIO-REBUILD-002: Prepare a new package and only then, if requested,
+/// preserve the previous recognized output as a timestamped backup. Never delete
+/// or silently overwrite an unknown user directory.
+fn prepare_project(project: SavedProject, backup_stale_output: bool) -> Result<String, String> {
     for step in 0..4 {
         validate_project_step(&project, step)?;
     }
@@ -2950,16 +2957,32 @@ fn build_project(project: SavedProject) -> Result<String, String> {
     validate_or_create_output_parent(&output_parent, true)?;
 
     let final_directory = output_parent.join(format!("{package_id}-{version}"));
-    match fs::symlink_metadata(&final_directory) {
-        Ok(_) => {
-            return Err(format!(
-                "Çıktı klasörü zaten var: {}",
-                final_directory.display()
-            ));
+    let has_previous_output = match fs::symlink_metadata(&final_directory) {
+        Ok(metadata) => {
+            if !backup_stale_output {
+                return Err(format!(
+                    "Çıktı klasörü zaten var: {}. İsterseniz 2 Standart Kurulum EXE oluştur ile eski paketi güvenli yedekleyin.",
+                    final_directory.display()
+                ));
+            }
+            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                return Err("Eski çıktı klasörü gerçek bir dizin değil; üzerine yazılmadı.".to_owned());
+            }
+            if !regular_file_exists(&final_directory.join("application.tzpkg"))
+                || !regular_file_exists(&final_directory.join("project.tzproj"))
+            {
+                return Err("Eski çıktı tanınmıyor. Dosyaları korumak için yeni sürüm veya çıktı konumu seçin.".to_owned());
+            }
+            let older = read_project(&final_directory.join("project.tzproj"))
+                .map_err(|_| "Eski proje kaydı okunamıyor. Eski dosyalara dokunulmadı; yeni sürüm veya çıktı konumu seçin.".to_owned())?;
+            if older.package_id != project.package_id || older.version != project.version {
+                return Err("Eski çıktı başka bir pakete ait; üzerine yazılmadı.".to_owned());
+            }
+            true
         }
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => false,
         Err(error) => return Err(format!("Çıktı klasörü denetlenemedi: {error}")),
-    }
+    };
 
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -2986,9 +3009,40 @@ fn build_project(project: SavedProject) -> Result<String, String> {
         return Err(error);
     }
 
+    let previous_backup = if has_previous_output {
+        let backup_path = output_parent.join(format!(
+            "{package_id}-{version}-backup-{}-{nonce}",
+            std::process::id()
+        ));
+        match fs::symlink_metadata(&backup_path) {
+            Ok(_) => {
+                let _ = fs::remove_dir_all(&staging_directory);
+                return Err("Yedek klasörü zaten var; hiçbir dosya değiştirilmedi.".to_owned());
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => {
+                let _ = fs::remove_dir_all(&staging_directory);
+                return Err(format!("Yedek klasörü denetlenemedi: {error}"));
+            }
+        }
+        if let Err(error) = fs::rename(&final_directory, &backup_path) {
+            let _ = fs::remove_dir_all(&staging_directory);
+            return Err(format!("Eski çıktı yedeklenemedi: {error}"));
+        }
+        Some(backup_path)
+    } else {
+        None
+    };
     if let Err(error) = fs::rename(&staging_directory, &final_directory) {
+        let restore_error = previous_backup.as_ref().and_then(|backup| {
+            fs::rename(backup, &final_directory).err()
+        });
         let _ = fs::remove_dir_all(&staging_directory);
-        return Err(format!("Hazır proje çıktı klasörüne taşınamadı: {error}"));
+        return Err(format!(
+            "Hazır proje taşınamadı: {error}. Eski çıktıyı geri yükleme: {}",
+            if restore_error.is_some() { "başarısız; yedek klasörünü kontrol edin" }
+            else { "tamamlandı" }
+        ));
     }
 
     let scan_status = if project.av_scan.enabled {
@@ -3004,6 +3058,13 @@ fn build_project(project: SavedProject) -> Result<String, String> {
         final_directory.display(),
         scan_status
     ))
+    .map(|message| match previous_backup {
+        Some(backup) => format!(
+            "{message}\nEski paket yedeklendi (silinmedi): {}",
+            backup.display()
+        ),
+        None => message,
+    })
 }
 
 fn build_into_staging(
