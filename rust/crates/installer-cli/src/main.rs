@@ -62,6 +62,9 @@ mod setup_authoring_gui;
 mod unsigned_local_gui;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
+mod windows_elevation;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod wizard_language;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
@@ -106,6 +109,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     if std::env::args().nth(1).as_deref() == Some("install-self") {
         return install_self_setup_command().await;
+    }
+    #[cfg(all(windows, feature = "setup-authoring-gui"))]
+    if std::env::args().nth(1).as_deref() == Some("resume-local-wizard") {
+        return unsigned_local_gui::run_resumed();
     }
     if std::env::args().nth(1).as_deref() == Some("uninstall-local") {
         let options = parse_setup_bundle_options(&["target", "package-id", "confirm-uninstall"])?;
