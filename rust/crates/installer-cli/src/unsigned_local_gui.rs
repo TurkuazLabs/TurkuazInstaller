@@ -128,6 +128,7 @@ struct LocalInstaller {
     package_label: String,
     target: String,
     program_files_root: PathBuf,
+    current_user_root: PathBuf,
     scope: InstallScope,
     entry_point: Option<String>,
     start_menu: bool,
@@ -143,9 +144,13 @@ impl LocalInstaller {
     fn new(executable: PathBuf) -> Result<Self, String> {
         let identity =
             unsigned_local_identity(&executable).map_err(|e| format!("Paket okunamadı: {e}"))?;
-        let target = default_install_directory(InstallScope::CurrentUser, &identity.package_id)?
-            .to_string_lossy()
-            .into_owned();
+        let current_user_path =
+            default_install_directory(InstallScope::CurrentUser, &identity.package_id)?;
+        let current_user_root = current_user_path
+            .parent()
+            .ok_or("Windows kullanıcı program klasörü geçersiz.")?
+            .to_path_buf();
+        let target = current_user_path.to_string_lossy().into_owned();
         let program_files_root = known_folder(&FOLDERID_ProgramFiles)?;
 
         let entry_point = identity.entry_point.filter(|entry| {
@@ -164,6 +169,7 @@ impl LocalInstaller {
             package_label: format!("{} · v{}", identity.package_id, identity.version),
             target,
             program_files_root,
+            current_user_root,
             scope: InstallScope::CurrentUser,
             entry_point,
             start_menu: supports_shortcuts,
@@ -183,9 +189,11 @@ impl LocalInstaller {
         if self.scope != scope && self.busy.is_none() {
             self.scope = scope;
             self.target = match scope {
-                InstallScope::CurrentUser => default_install_directory(scope, &self.package_id)
-                    .map(|path| path.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
+                InstallScope::CurrentUser => self
+                    .current_user_root
+                    .join(&self.package_id)
+                    .to_string_lossy()
+                    .into_owned(),
                 InstallScope::AllUsers => self
                     .program_files_root
                     .join(&self.package_id)
