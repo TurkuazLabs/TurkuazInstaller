@@ -1747,7 +1747,9 @@ impl BuilderApp {
                                 );
                                 ui.add_space(12.0);
                                 ui.separator();
-                                if let Some(page) = self.project.wizard.page(self.selected_wizard_page) {
+                                if let Some(page) =
+                                    self.project.wizard.page(self.selected_wizard_page)
+                                {
                                     ui.strong(format!("Önizleme: {}", page.title_tr));
                                     ui.label(&page.description_tr);
                                     if self.selected_wizard_page == WizardPageId::License {
@@ -1757,12 +1759,20 @@ impl BuilderApp {
                                                 .id_salt("studio-eula-preview")
                                                 .max_height(140.0)
                                                 .show(ui, |ui| {
-                                                    if self.project.wizard.license_text_tr.is_empty() {
+                                                    if self
+                                                        .project
+                                                        .wizard
+                                                        .license_text_tr
+                                                        .is_empty()
+                                                    {
                                                         ui.weak("EULA metni henüz eklenmedi.");
                                                     } else {
                                                         ui.add(
                                                             egui::Label::new(
-                                                                &self.project.wizard.license_text_tr,
+                                                                &self
+                                                                    .project
+                                                                    .wizard
+                                                                    .license_text_tr,
                                                             )
                                                             .wrap(),
                                                         );
@@ -2264,7 +2274,9 @@ fn draw_wizard_pages_editor(
     selected: &mut WizardPageId,
 ) {
     ui.heading("Kurulum sihirbazı sayfaları");
-    ui.label("Sayfaları seçin, ekleyin/kaldırın veya sıralayın. Zorunlu kurulum aşamaları kilitlidir.");
+    ui.label(
+        "Sayfaları seçin, ekleyin/kaldırın veya sıralayın. Zorunlu kurulum aşamaları kilitlidir.",
+    );
     ui.add_space(9.0);
     let mut move_delta = 0;
     let mut toggle_selected = None;
@@ -2275,12 +2287,15 @@ fn draw_wizard_pages_editor(
         for (index, page) in config.pages.iter_mut().enumerate() {
             columns[0].horizontal(|ui| {
                 if ui
-                    .selectable_label(*selected == page.page, format!(
-                        "{}  {}{}",
-                        index + 1,
-                        page.page.label(),
-                        if page.page.required() { "  🔒" } else { "" },
-                    ))
+                    .selectable_label(
+                        *selected == page.page,
+                        format!(
+                            "{}  {}{}",
+                            index + 1,
+                            page.page.label(),
+                            if page.page.required() { "  🔒" } else { "" },
+                        ),
+                    )
                     .clicked()
                 {
                     *selected = page.page;
@@ -2310,17 +2325,13 @@ fn draw_wizard_pages_editor(
             }
         });
         columns[1].label(
-            egui::RichText::new(format!("Sayfa özellikleri — {}", selected.label())).strong()
+            egui::RichText::new(format!("Sayfa özellikleri — {}", selected.label())).strong(),
         );
         columns[1].add_space(7.0);
         if let Some(page) = config.page_mut(*selected) {
             ui_for_wizard_field(&mut columns[1], "Türkçe başlık", &mut page.title_tr);
             ui_for_wizard_field(&mut columns[1], "English title", &mut page.title_en);
-            ui_for_wizard_field(
-                &mut columns[1],
-                "Türkçe açıklama",
-                &mut page.description_tr,
-            );
+            ui_for_wizard_field(&mut columns[1], "Türkçe açıklama", &mut page.description_tr);
             ui_for_wizard_field(
                 &mut columns[1],
                 "English description",
@@ -2345,7 +2356,9 @@ fn draw_wizard_pages_editor(
     if *selected == WizardPageId::License {
         ui.separator();
         ui.label(
-            egui::RichText::new("EULA — Son Kullanıcı Lisans Sözleşmesi").strong().size(17.0)
+            egui::RichText::new("EULA — Son Kullanıcı Lisans Sözleşmesi")
+                .strong()
+                .size(17.0),
         );
         ui.small("Aşağıdaki metinleri yayıncı sağlamalıdır. Örnek veya otomatik hukuk metni kullanılmaz.");
         ui.add_space(6.0);
@@ -2374,10 +2387,7 @@ fn draw_wizard_pages_editor(
 
 fn ui_for_wizard_field(ui: &mut egui::Ui, label: &str, value: &mut String) {
     ui.label(label);
-    ui.add(
-        egui::TextEdit::singleline(value)
-            .desired_width(f32::INFINITY),
-    );
+    ui.add(egui::TextEdit::singleline(value).desired_width(f32::INFINITY));
     ui.add_space(3.0);
 }
 
@@ -3112,8 +3122,8 @@ fn backup_existing_standard_setup(directory: &Path) -> Result<Option<PathBuf>, S
     if !meta.is_dir() || meta.file_type().is_symlink() || is_windows_reparse_point(&meta) {
         return Err("Mevcut standart çıktı klasörü güvenli değil; korunuyor.".into());
     }
-    let mut entries = fs::read_dir(directory)
-        .map_err(|e| format!("Mevcut çıktı klasörü okunamadı: {e}"))?;
+    let mut entries =
+        fs::read_dir(directory).map_err(|e| format!("Mevcut çıktı klasörü okunamadı: {e}"))?;
     let only_entry = entries
         .next()
         .ok_or("Eski standart klasör boş veya tanınmıyor; korunuyor.")?
@@ -3124,7 +3134,10 @@ fn backup_existing_standard_setup(directory: &Path) -> Result<Option<PathBuf>, S
         || !regular_file_exists(&only_entry)
         || !has_unsigned_local_setup(&only_entry).unwrap_or(false)
     {
-        return Err("Mevcut Standart Kurulum klasörü Studio çıktısı olarak doğrulanamadı; korunuyor.".into());
+        return Err(
+            "Mevcut Standart Kurulum klasörü Studio çıktısı olarak doğrulanamadı; korunuyor."
+                .into(),
+        );
     }
     let epoch = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -3135,8 +3148,7 @@ fn backup_existing_standard_setup(directory: &Path) -> Result<Option<PathBuf>, S
         if fs::symlink_metadata(&backup).is_ok() {
             continue;
         }
-        fs::rename(directory, &backup)
-            .map_err(|e| format!("Önceki kurulum yedeklenemedi: {e}"))?;
+        fs::rename(directory, &backup).map_err(|e| format!("Önceki kurulum yedeklenemedi: {e}"))?;
         return Ok(Some(backup));
     }
     Err("Standart Kurulum yedeği için boş klasör adı bulunamadı.".into())
@@ -3446,11 +3458,18 @@ mod tests {
     #[test]
     fn eula_editor_roundtrips_without_bypassing_license_validation() {
         let mut project = SavedProject::default();
-        project.wizard.page_mut(WizardPageId::License).unwrap().enabled = true;
+        project
+            .wizard
+            .page_mut(WizardPageId::License)
+            .unwrap()
+            .enabled = true;
         assert!(validate_project_step(&project, 2).is_err());
         project.wizard.license_text_tr = "Ürüne özel gerçek koşullar".to_owned();
         project.wizard.license_text_en = "Product-specific actual terms".to_owned();
-        project.wizard.move_optional(WizardPageId::License, 1).unwrap();
+        project
+            .wizard
+            .move_optional(WizardPageId::License, 1)
+            .unwrap();
         validate_project_step(&project, 2).expect("valid EULA and custom order");
         let value = serde_json::to_vec(&project).expect("serialize");
         let restored: SavedProject = serde_json::from_slice(&value).expect("parse");
