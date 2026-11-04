@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -18,6 +18,7 @@ use sha2::{Digest, Sha256};
 use windows::{
     Win32::{
         Foundation::ERROR_SUCCESS,
+        Storage::FileSystem::{MOVEFILE_DELAY_UNTIL_REBOOT, MoveFileExW},
         System::Registry::{
             HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, KEY_SET_VALUE,
             REG_CREATED_NEW_KEY, REG_CREATE_KEY_DISPOSITION, REG_DWORD, REG_OPTION_NON_VOLATILE,
@@ -143,7 +144,12 @@ fn hash_bytes(bytes: &[u8]) -> String {
 
 fn digest_file(path: &Path) -> Result<String, String> {
     let meta = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
-    if !meta.is_file() || meta.file_type().is_symlink() || meta.len() > MAX_EXECUTABLE_BYTES {
+    use std::os::windows::fs::MetadataExt;
+    if !meta.is_file()
+        || meta.file_type().is_symlink()
+        || meta.file_attributes() & 0x400 != 0
+        || meta.len() > MAX_EXECUTABLE_BYTES
+    {
         return Err("Dosya normal veya izin verilen boyutta değil.".into());
     }
     let mut file = File::open(path).map_err(|e| e.to_string())?;
@@ -492,7 +498,12 @@ pub(super) fn register_local_install(
 /// @purpose Clean up only verified Windows integration after package engine
 /// confirms receipt-owned files have been removed.
 /// @contract Foreign or modified LNKs and changed registry values survive.
-pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> Vec<String> {
+pub(super) struct CleanupReport {
+    pub(super) warnings: Vec<String>,
+    pub(super) registry_removed: bool,
+}
+
+pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupReport {
     let mut warnings = Vec::new();
     for owned in &record.shortcuts {
         let allowed = shortcut_location_is_owned(
@@ -509,15 +520,62 @@ pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> Vec<String>
             warnings.push(format!("Kısayol kaldırılamadı: {error}"));
         }
         if let Some(folder) = owned.path.parent() {
-            // Only empty app-owned Start menu groups disappear.
-            let _ = fs::remove_dir(folder);
+            // Never delete an empty Desktop, Programs root, or foreign folder.
+            let programs = match record.scope() {
+                InstallScope::CurrentUser => &windows::Win32::UI::Shell::FOLDERID_Programs,
+                InstallScope::AllUsers => &windows::Win32::UI::Shell::FOLDERID_CommonPrograms,
+            };
+            if known_folder(programs)
+                .ok()
+                .is_some_and(|root| folder == root.join(&record.package_id))
+            {
+                let _ = fs::remove_dir(folder);
+            }
         }
     }
-    if let Err(error) = remove_key(record) {
-        warnings.push(error);
+    let registry_removed = match remove_key(record) {
+        Ok(()) => true,
+        Err(error) => {
+            warnings.push(error);
+            false
+        }
+    };
+    CleanupReport {
+        warnings,
+        registry_removed,
     }
-    // The independent uninstaller EXE may be in use on Windows.
-    // It is not forcibly deleted and never triggers arbitrary shell commands.
+}
+
+/// @dev-id BRK-WIN-UNINSTALL-003
+/// @purpose Dispose of the owner receipt and request deferred uninstaller
+/// removal once the program is no longer running. No untrusted commands.
+/// @contract Only called after the owned registry entry was removed.
+pub(super) fn finalize_uninstaller(
+    record: &LocalRegistration,
+    manifest: &Path,
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+    if manifest != registration_path(record).ok().as_deref().unwrap_or(Path::new("")) {
+        return vec!["Kaldırıcı konum doğrulaması başarısız oldu.".into()];
+    }
+    if let Err(error) = fs::remove_file(manifest) {
+        warnings.push(format!("Kaldırıcı envanteri silinemedi: {error}"));
+    }
+    let path_w = wide(record.uninstaller.as_os_str());
+    if let Err(error) = unsafe {
+        MoveFileExW(
+            PCWSTR(path_w.as_ptr()),
+            PCWSTR::null(),
+            MOVEFILE_DELAY_UNTIL_REBOOT,
+        )
+    } {
+        // On non-elevated per-user installs Windows can deny the system-wide
+        // delayed-delete registry operation. Preserve rather than force delete.
+        warnings.push(format!(
+            "Kaldırıcı EXE daha sonra temizlenmelidir: {} ({error})",
+            record.uninstaller.display()
+        ));
+    }
     warnings
 }
 
