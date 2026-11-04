@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.4
+// Version: 0.1.5
 // Aciklama: OS known folder, guvenli entry point ve yabanci LNK korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -278,6 +278,7 @@ pub(super) fn create_owned_uninstaller_link(
     manifest: &Path,
     package_id: &str,
     scope: InstallScope,
+    owns_existing_group: bool,
 ) -> Result<PathBuf, String> {
     let metadata = fs::symlink_metadata(executable).map_err(|e| e.to_string())?;
     if !metadata.is_file() || metadata.file_type().is_symlink() || windows_reparse(&metadata) {
@@ -288,7 +289,14 @@ pub(super) fn create_owned_uninstaller_link(
         InstallScope::AllUsers => &FOLDERID_CommonPrograms,
     };
     let directory = known_folder(programs)?.join(package_id);
-    fs::create_dir_all(&directory).map_err(|e| format!("Kaldır kısayolu klasörü: {e}"))?;
+    match fs::create_dir(&directory) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists && owns_existing_group => {}
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            return Err("Başlat menüsündeki mevcut yabancı gruba dokunulmadı.".into());
+        }
+        Err(error) => return Err(format!("Kaldır kısayolu klasörü: {error}")),
+    }
     let folder_meta = fs::symlink_metadata(&directory).map_err(|e| e.to_string())?;
     if !folder_meta.is_dir()
         || folder_meta.file_type().is_symlink()
