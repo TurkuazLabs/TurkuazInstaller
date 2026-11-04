@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.3.1
+// Version: 0.4.0
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -18,7 +18,14 @@ use turkuaz_installer_package_engine::{
     LocalInstallPhase, install_unsigned_local_setup_with_progress, unsigned_local_identity,
 };
 
-use crate::windows_shortcuts::create_installed_shortcuts;
+use crate::{
+    windows_install_scope::{
+        InstallScope, current_process_is_elevated, default_install_directory, known_folder,
+        validate_install_scope,
+    },
+    windows_shortcuts::create_installed_shortcuts,
+};
+use windows::Win32::UI::Shell::FOLDERID_ProgramFiles;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WizardStep {
@@ -120,6 +127,8 @@ struct LocalInstaller {
     package_id: String,
     package_label: String,
     target: String,
+    program_files_root: PathBuf,
+    scope: InstallScope,
     entry_point: Option<String>,
     start_menu: bool,
     desktop: bool,
@@ -134,14 +143,10 @@ impl LocalInstaller {
     fn new(executable: PathBuf) -> Result<Self, String> {
         let identity =
             unsigned_local_identity(&executable).map_err(|e| format!("Paket okunamadı: {e}"))?;
-        let app_data = std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .ok_or("Windows kullanıcı LocalAppData yolu bulunamadı.")?;
-        let target = app_data
-            .join("Programs")
-            .join(&identity.package_id)
+        let target = default_install_directory(InstallScope::CurrentUser, &identity.package_id)?
             .to_string_lossy()
             .into_owned();
+        let program_files_root = known_folder(&FOLDERID_ProgramFiles)?;
 
         let entry_point = identity.entry_point.filter(|entry| {
             let path = Path::new(entry);
@@ -158,6 +163,8 @@ impl LocalInstaller {
             package_id: identity.package_id.clone(),
             package_label: format!("{} · v{}", identity.package_id, identity.version),
             target,
+            program_files_root,
+            scope: InstallScope::CurrentUser,
             entry_point,
             start_menu: supports_shortcuts,
             desktop: false,
@@ -169,12 +176,45 @@ impl LocalInstaller {
         })
     }
 
+    /// @dev-id BRK-WIN-SCOPE-WIZARD-001
+    /// @purpose Changing scope switches the default path immediately.
+    /// @contract Scope switches never create folders or silently keep an unsafe custom path.
+    fn select_scope(&mut self, scope: InstallScope) {
+        if self.scope != scope && self.busy.is_none() {
+            self.scope = scope;
+            self.target = match scope {
+                InstallScope::CurrentUser => {
+                    default_install_directory(scope, &self.package_id)
+                        .map(|path| path.to_string_lossy().into_owned())
+                        .unwrap_or_default()
+                }
+                InstallScope::AllUsers => self
+                    .program_files_root
+                    .join(&self.package_id)
+                    .to_string_lossy()
+                    .into_owned(),
+            };
+            self.path_error = None;
+        }
+    }
+
+    fn validated_target(&self) -> Result<PathBuf, String> {
+        let path = preflight_destination(&self.target)?;
+        validate_install_scope(
+            self.scope,
+            &path,
+            &self.program_files_root,
+            current_process_is_elevated(),
+        )?;
+        Ok(path)
+    }
+
     fn advance(&mut self) {
         if self.busy.is_some() {
             return;
         }
         if self.step == WizardStep::Destination {
-            match preflight_destination(&self.target) {
+            match self.validated_target() {
                 Ok(_) => self.path_error = None,
                 Err(error) => {
                     self.path_error = Some(error);
@@ -204,7 +244,7 @@ impl LocalInstaller {
         if self.busy.is_some() || self.step != WizardStep::Review {
             return;
         }
-        let target = match preflight_destination(&self.target) {
+        let target = match self.validated_target() {
             Ok(target) => target,
             Err(error) => {
                 self.path_error = Some(error);
@@ -215,6 +255,8 @@ impl LocalInstaller {
         let executable = self.executable.clone();
         let start_menu = self.start_menu;
         let desktop = self.desktop;
+        let scope = self.scope;
+        let program_files_root = self.program_files_root.clone();
         let (sender, receiver) = mpsc::channel();
         self.busy = Some(receiver);
         self.status = None;
@@ -227,9 +269,16 @@ impl LocalInstaller {
             let mut on_phase = move |phase| {
                 let _ = phase_sender.send(WorkerEvent::Phase(phase));
             };
-            let result =
-                install_unsigned_local_setup_with_progress(executable, &target, &mut on_phase)
-                    .map_err(|error| error.to_string())
+            let result = validate_install_scope(
+                scope,
+                &target,
+                &program_files_root,
+                current_process_is_elevated(),
+            )
+                .and_then(|_| {
+                    install_unsigned_local_setup_with_progress(executable, &target, &mut on_phase)
+                        .map_err(|error| error.to_string())
+                })
                     .map(|identity| {
                         let mut message = format!(
                             "{} v{} kuruldu: {}",
@@ -247,6 +296,7 @@ impl LocalInstaller {
                                     &identity.package_id,
                                     start_menu,
                                     desktop,
+                                    scope,
                                 ) {
                                     Ok(report) => {
                                         if !report.created.is_empty() {
@@ -334,7 +384,34 @@ impl LocalInstaller {
             }
             WizardStep::Destination => {
                 ui.label("Uygulamanın kurulacağı yeni klasörü seçin.");
-                ui.add_space(12.0);
+                ui.add_space(14.0);
+                ui.strong("Kurulum kapsamı");
+                ui.add_space(6.0);
+                let mut selected = self.scope;
+                ui.horizontal(|ui| {
+                    ui.radio_value(
+                        &mut selected,
+                        InstallScope::CurrentUser,
+                        InstallScope::CurrentUser.label(),
+                    );
+                    ui.add_space(18.0);
+                    ui.radio_value(
+                        &mut selected,
+                        InstallScope::AllUsers,
+                        InstallScope::AllUsers.label(),
+                    );
+                });
+                self.select_scope(selected);
+                ui.add_space(8.0);
+                if self.scope == InstallScope::AllUsers {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(170, 95, 32),
+                        "Tüm kullanıcılar için yönetici yetkisi gerekir; otomatik UAC yükseltmesi henüz eklenmedi.",
+                    );
+                } else {
+                    ui.label("Kurulum yalnızca oturum açmış kullanıcıya ait olacaktır.");
+                }
+                ui.add_space(16.0);
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::TextEdit::singleline(&mut self.target)
@@ -380,6 +457,10 @@ impl LocalInstaller {
                     .show(ui, |ui| {
                         ui.strong("Uygulama");
                         ui.label(&self.package_label);
+                        ui.end_row();
+
+                        ui.strong("Kurulum kapsamı");
+                        ui.label(self.scope.label());
                         ui.end_row();
 
                         ui.strong("Kurulum klasörü");
