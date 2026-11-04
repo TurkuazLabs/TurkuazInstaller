@@ -102,7 +102,9 @@ pub(super) fn validate_install_scope(
         return Ok(());
     }
     if !inside_program_files(target, program_files) {
-        return Err("Tüm kullanıcılar kurulumu yalnızca Windows Program Files altında yapılabilir.".into());
+        return Err(
+            "Tüm kullanıcılar kurulumu yalnızca Windows Program Files altında yapılabilir.".into(),
+        );
     }
     if !elevated {
         return Err(
@@ -125,13 +127,15 @@ mod tests {
 
     #[test]
     fn current_user_is_allowed_without_admin_privileges() {
-        assert!(validate_install_scope(
-            InstallScope::CurrentUser,
-            Path::new(r"C:\Users\Demo\AppData\Local\Programs\demo"),
-            Path::new(r"C:\Program Files"),
-            false
-        )
-        .is_ok());
+        assert!(
+            validate_install_scope(
+                InstallScope::CurrentUser,
+                Path::new(r"C:\Users\Demo\AppData\Local\Programs\demo"),
+                Path::new(r"C:\Program Files"),
+                false
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -140,20 +144,24 @@ mod tests {
         let app = Path::new(r"C:\Program Files\demo");
         assert!(validate_install_scope(InstallScope::AllUsers, app, program_files, false).is_err());
         assert!(validate_install_scope(InstallScope::AllUsers, app, program_files, true).is_ok());
-        assert!(validate_install_scope(
-            InstallScope::AllUsers,
-            Path::new(r"C:\Users\Demo\Desktop\demo"),
-            program_files,
-            true,
-        )
-        .is_err());
-        assert!(validate_install_scope(
-            InstallScope::AllUsers,
-            Path::new(r"C:\Program Files\..\Windows"),
-            program_files,
-            true,
-        )
-        .is_err());
+        assert!(
+            validate_install_scope(
+                InstallScope::AllUsers,
+                Path::new(r"C:\Users\Demo\Desktop\demo"),
+                program_files,
+                true,
+            )
+            .is_err()
+        );
+        assert!(
+            validate_install_scope(
+                InstallScope::AllUsers,
+                Path::new(r"C:\Program Files\..\Windows"),
+                program_files,
+                true,
+            )
+            .is_err()
+        );
     }
 
     #[test]
@@ -171,6 +179,9 @@ mod tests {
 
     #[test]
     fn scope_labels_are_distinct() {
-        assert_ne!(InstallScope::CurrentUser.label(), InstallScope::AllUsers.label());
+        assert_ne!(
+            InstallScope::CurrentUser.label(),
+            InstallScope::AllUsers.label()
+        );
     }
 }
