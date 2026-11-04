@@ -131,6 +131,15 @@ Kuruluyor -> Kurulum sonucu**.
 
 - Ilk dort sayfada `Geri`/`Ileri` bulunur; son kontrol onayi olmadan
   dosya kurulumu baslamaz.
+- Kurulum konumu sayfasinda tek kullanici / tum kullanicilar secimi bulunur.
+  Varsayilan hedef yolu secime gore Windows `UserProgramFiles` veya
+  `ProgramFiles` known-folder API uzerinden otomatik degisir.
+  Tum kullanicilar icin yalnizca `ProgramFiles` kokunun altina kurulum
+  yapilir, tam yonetici tokeni gerekir. Bu gelistirme surumu otomatik
+  UAC elevation baslatmaz; yetki yoksa dosya yazilmadan acik hata verir.
+  Calisan bir islemi gizlice yukseltilmis saymaz veya current-user
+  kisayoluna sessizce donmez. Ortak masaustu/Start menu icin
+  `PublicDesktop` ve `CommonPrograms` klasorleri kullanilir.
 - Hedef klasor secimi sadece on denetim yapar. Gercek yol/reparse,
   dosya butunlugu ve mevcut klasor korumasi paket motorundadir.
   `Gozat` secilen ust klasore `package-id` adinda yeni hedef ekler.
@@ -138,6 +147,9 @@ Kuruluyor -> Kurulum sonucu**.
   `Baslat menusu` ve `Masaustu` kisayollarini ayri secer.
   Ana EXE yoksa gereksiz kisayol sayfasi atlanir; hazirlik adim sayisi
   4 yerine 3 olur.
+- Alt navigasyon duğmeleri sagda konumlandirilir, kademeli
+  Segoe UI sistem fontu (varsa) ve daha okunur tipografi kullanilir.
+  Kurulum engelli ise mesaj kullaniciya acikca gosterilir.
 - Son kontrolde secilen hedef ve kisayollar gorunur. Kurulum baslayinca
   navigasyon kapanir. Paket motoru dogrudan `LocalInstallPhase`
   olaylarini yayimlar: gomulu paket dogrulama, arsiv cikarma ve
