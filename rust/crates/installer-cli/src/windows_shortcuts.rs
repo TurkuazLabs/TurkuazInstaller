@@ -22,8 +22,8 @@ use windows::{
             CoUninitialize, IPersistFile,
         },
         UI::Shell::{
-            FOLDERID_CommonPrograms, FOLDERID_Desktop, FOLDERID_Programs,
-            FOLDERID_PublicDesktop, IShellLinkW, ShellLink,
+            FOLDERID_CommonPrograms, FOLDERID_Desktop, FOLDERID_Programs, FOLDERID_PublicDesktop,
+            IShellLinkW, ShellLink,
         },
     },
     core::{Interface, PCWSTR},
