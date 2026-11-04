@@ -166,6 +166,12 @@ jobs:
       - name: Test Windows per-user shortcut adapter
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_shortcuts::tests
 
+      - name: Test UAC argument escaping without requesting elevation
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_elevation::tests
+
+      - name: Test setup wizard language switching
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui wizard_language::tests
+
       - name: Test current-user and all-users scope guard
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_install_scope::tests
 
