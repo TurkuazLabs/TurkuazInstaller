@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.4.2
+// Version: 0.4.3
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -21,6 +21,7 @@ use turkuaz_installer_package_engine::{
 use crate::{
     wizard_language::WizardLanguage,
     windows_elevation::{parse_resumed_arguments, request_elevated_setup},
+    windows_local_registration::register_local_install,
     windows_install_scope::{
         InstallScope, current_process_is_elevated, default_install_directory, known_folder,
         validate_install_scope,
@@ -110,6 +111,7 @@ fn preflight_destination(value: &str) -> Result<PathBuf, String> {
 enum WorkerEvent {
     Phase(LocalInstallPhase),
     CreatingShortcuts,
+    RegisteringUninstaller,
     Finished(Result<(String, bool), String>),
 }
 
@@ -302,6 +304,7 @@ impl LocalInstaller {
             }
         };
         let executable = self.executable.clone();
+        let source_uninstaller = executable.clone();
         let start_menu = self.start_menu;
         let desktop = self.desktop;
         let scope = self.scope;
@@ -341,6 +344,7 @@ impl LocalInstaller {
                     target.display()
                 );
                 let mut warning = false;
+                let mut owned_links = Vec::new();
                 if start_menu || desktop {
                     let _ = sender.send(WorkerEvent::CreatingShortcuts);
                     match identity.entry_point.as_deref() {
@@ -353,10 +357,11 @@ impl LocalInstaller {
                             scope,
                         ) {
                             Ok(report) => {
-                                if !report.created.is_empty() {
+                                owned_links = report.created;
+                                if !owned_links.is_empty() {
                                     message.push_str(&format!(
                                         "\n{} {}",
-                                        report.created.len(),
+                                        owned_links.len(),
                                         language.text(
                                             "Windows kısayolu oluşturuldu.",
                                             "Windows shortcut(s) created."
@@ -393,6 +398,37 @@ impl LocalInstaller {
                         }
                     }
                 }
+                let _ = sender.send(WorkerEvent::RegisteringUninstaller);
+                match register_local_install(
+                    &source_uninstaller,
+                    &identity.package_id,
+                    &identity.version,
+                    &target,
+                    scope,
+                    &owned_links,
+                ) {
+                    Ok(warnings) => {
+                        message.push_str(language.text(
+                            "\nWindows Yüklü Uygulamalar kaydı oluşturuldu.",
+                            "\nRegistered in Windows Installed Apps.",
+                        ));
+                        if !warnings.is_empty() {
+                            warning = true;
+                            message.push_str("\n");
+                            message.push_str(&warnings.join("; "));
+                        }
+                    }
+                    Err(error) => {
+                        warning = true;
+                        message.push_str(&format!(
+                            "{}: {error}",
+                            language.text(
+                                "\nWindows kaldırma kaydı oluşturulamadı",
+                                "\nWindows uninstall registration failed"
+                            )
+                        ));
+                    }
+                }
                 (message, warning)
             });
             let _ = sender.send(WorkerEvent::Finished(result));
@@ -412,6 +448,12 @@ impl LocalInstaller {
                         self.progress_label = self.language.text(
                             "Windows kısayolları oluşturuluyor…",
                             "Creating Windows shortcuts…",
+                        );
+                    }
+                    Ok(WorkerEvent::RegisteringUninstaller) => {
+                        self.progress_label = self.language.text(
+                            "Windows kaldırma kaydı hazırlanıyor…",
+                            "Registering the Windows uninstaller…",
                         );
                     }
                     Ok(WorkerEvent::Finished(result)) => {
