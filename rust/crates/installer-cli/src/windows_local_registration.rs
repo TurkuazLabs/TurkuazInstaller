@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.2
+// Version: 0.1.3
 // Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -25,7 +25,7 @@ use windows::{
             REG_SZ, RegCloseKey, RegCreateKeyExW, RegDeleteKeyW, RegOpenKeyExW, RegQueryValueExW,
             RegSetValueExW,
         },
-        UI::Shell::{FOLDERID_LocalAppData, FOLDERID_ProgramData},
+        UI::Shell::{FOLDERID_LocalAppData, FOLDERID_ProgramFiles},
     },
     core::PCWSTR,
 };
@@ -184,7 +184,10 @@ fn registration_name(package_id: &str, target: &Path) -> Result<String, String> 
 fn owned_root(scope: InstallScope) -> Result<PathBuf, String> {
     let system_root = match scope {
         InstallScope::CurrentUser => known_folder(&FOLDERID_LocalAppData)?,
-        InstallScope::AllUsers => known_folder(&FOLDERID_ProgramData)?,
+        // Use the administrator-protected Program Files root. ProgramData
+        // subdirectories are commonly creatable by standard users and must
+        // not become an elevated executable planting location.
+        InstallScope::AllUsers => known_folder(&FOLDERID_ProgramFiles)?,
     };
     Ok(system_root.join("TurkuazInstaller").join("Uninstallers"))
 }
