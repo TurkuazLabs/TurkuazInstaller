@@ -109,7 +109,9 @@ fn phase_label(phase: LocalInstallPhase) -> &'static str {
         LocalInstallPhase::ExtractingPayload => {
             "Uygulama dosyaları çıkartılıyor ve dosya envanteri hazırlanıyor…"
         }
-        LocalInstallPhase::PublishingInstall => "Doğrulanan dosyalar kurulum klasörüne aktarılıyor…",
+        LocalInstallPhase::PublishingInstall => {
+            "Doğrulanan dosyalar kurulum klasörüne aktarılıyor…"
+        }
     }
 }
 
@@ -225,62 +227,59 @@ impl LocalInstaller {
             let mut on_phase = move |phase| {
                 let _ = phase_sender.send(WorkerEvent::Phase(phase));
             };
-            let result = install_unsigned_local_setup_with_progress(
-                executable,
-                &target,
-                &mut on_phase,
-            )
-                .map_err(|error| error.to_string())
-                .map(|identity| {
-                    let mut message = format!(
-                        "{} v{} kuruldu: {}",
-                        identity.package_id,
-                        identity.version,
-                        target.display()
-                    );
-                    let mut warning = false;
-                    if start_menu || desktop {
-                        let _ = sender.send(WorkerEvent::CreatingShortcuts);
-                        match identity.entry_point.as_deref() {
-                            Some(entry) => match create_installed_shortcuts(
-                                &target,
-                                entry,
-                                &identity.package_id,
-                                start_menu,
-                                desktop,
-                            ) {
-                                Ok(report) => {
-                                    if !report.created.is_empty() {
-                                        message.push_str(&format!(
-                                            "\n{} Windows kısayolu oluşturuldu.",
-                                            report.created.len()
-                                        ));
+            let result =
+                install_unsigned_local_setup_with_progress(executable, &target, &mut on_phase)
+                    .map_err(|error| error.to_string())
+                    .map(|identity| {
+                        let mut message = format!(
+                            "{} v{} kuruldu: {}",
+                            identity.package_id,
+                            identity.version,
+                            target.display()
+                        );
+                        let mut warning = false;
+                        if start_menu || desktop {
+                            let _ = sender.send(WorkerEvent::CreatingShortcuts);
+                            match identity.entry_point.as_deref() {
+                                Some(entry) => match create_installed_shortcuts(
+                                    &target,
+                                    entry,
+                                    &identity.package_id,
+                                    start_menu,
+                                    desktop,
+                                ) {
+                                    Ok(report) => {
+                                        if !report.created.is_empty() {
+                                            message.push_str(&format!(
+                                                "\n{} Windows kısayolu oluşturuldu.",
+                                                report.created.len()
+                                            ));
+                                        }
+                                        if !report.warnings.is_empty() {
+                                            warning = true;
+                                            message.push_str(&format!(
+                                                "\nKısayol uyarısı: {}",
+                                                report.warnings.join("; ")
+                                            ));
+                                        }
                                     }
-                                    if !report.warnings.is_empty() {
+                                    Err(error) => {
                                         warning = true;
                                         message.push_str(&format!(
-                                            "\nKısayol uyarısı: {}",
-                                            report.warnings.join("; ")
-                                        ));
-                                    }
-                                }
-                                Err(error) => {
-                                    warning = true;
-                                    message.push_str(&format!(
                                         "\nDosyalar kuruldu ancak kısayol oluşturulamadı: {error}"
                                     ));
+                                    }
+                                },
+                                None => {
+                                    warning = true;
+                                    message.push_str(
+                                        "\nPakette ana EXE tanımı yok; kısayol oluşturulamadı.",
+                                    );
                                 }
-                            },
-                            None => {
-                                warning = true;
-                                message.push_str(
-                                    "\nPakette ana EXE tanımı yok; kısayol oluşturulamadı.",
-                                );
                             }
                         }
-                    }
-                    (message, warning)
-                });
+                        (message, warning)
+                    });
             let _ = sender.send(WorkerEvent::Finished(result));
         });
     }
@@ -575,9 +574,18 @@ mod tests {
 
     #[test]
     fn wizard_skips_shortcut_page_when_package_has_no_exe() {
-        assert_eq!(WizardStep::Welcome.next(false), Some(WizardStep::Destination));
-        assert_eq!(WizardStep::Destination.next(false), Some(WizardStep::Review));
-        assert_eq!(WizardStep::Review.previous(false), Some(WizardStep::Destination));
+        assert_eq!(
+            WizardStep::Welcome.next(false),
+            Some(WizardStep::Destination)
+        );
+        assert_eq!(
+            WizardStep::Destination.next(false),
+            Some(WizardStep::Review)
+        );
+        assert_eq!(
+            WizardStep::Review.previous(false),
+            Some(WizardStep::Destination)
+        );
         assert_eq!(WizardStep::Review.decision_index(false), Some((3, 3)));
         assert_eq!(WizardStep::Shortcuts.decision_index(false), None);
     }
