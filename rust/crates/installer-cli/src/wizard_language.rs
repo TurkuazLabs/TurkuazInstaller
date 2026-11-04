@@ -38,8 +38,17 @@ mod tests {
     #[test]
     fn language_can_be_switched_without_losing_turkish_default() {
         assert_eq!(WizardLanguage::default(), WizardLanguage::Turkish);
-        assert_eq!(WizardLanguage::Turkish.text("Kurulum", "Installation"), "Kurulum");
-        assert_eq!(WizardLanguage::English.text("Kurulum", "Installation"), "Installation");
-        assert_ne!(WizardLanguage::Turkish.label(), WizardLanguage::English.label());
+        assert_eq!(
+            WizardLanguage::Turkish.text("Kurulum", "Installation"),
+            "Kurulum"
+        );
+        assert_eq!(
+            WizardLanguage::English.text("Kurulum", "Installation"),
+            "Installation"
+        );
+        assert_ne!(
+            WizardLanguage::Turkish.label(),
+            WizardLanguage::English.label()
+        );
     }
 }
