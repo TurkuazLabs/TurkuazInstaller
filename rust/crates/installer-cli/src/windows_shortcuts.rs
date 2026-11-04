@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: OS known folder, guvenli entry point ve yabanci LNK korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -13,18 +13,20 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use crate::windows_install_scope::{InstallScope, known_folder};
+
 use windows::{
     Win32::{
         System::Com::{
             CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
-            CoTaskMemFree, CoUninitialize, IPersistFile,
+            CoUninitialize, IPersistFile,
         },
         UI::Shell::{
-            FOLDERID_Desktop, FOLDERID_Programs, IShellLinkW, KNOWN_FOLDER_FLAG,
-            SHGetKnownFolderPath, ShellLink,
+            FOLDERID_CommonPrograms, FOLDERID_Desktop, FOLDERID_Programs,
+            FOLDERID_PublicDesktop, IShellLinkW, ShellLink,
         },
     },
-    core::{GUID, Interface, PCWSTR},
+    core::{Interface, PCWSTR},
 };
 
 fn safe_relative_executable(root: &Path, relative: &str) -> Result<PathBuf, String> {
@@ -57,18 +59,8 @@ fn windows_reparse(meta: &fs::Metadata) -> bool {
     meta.file_attributes() & 0x0400 != 0
 }
 
-fn folder_path(id: &GUID) -> Result<PathBuf, String> {
-    // BRK-WIN-SHORTCUT-001: Resolve actual redirected Windows folders through
-    // known-folder API; never compose paths from USERPROFILE or process CWD.
-    let wide = unsafe { SHGetKnownFolderPath(id, KNOWN_FOLDER_FLAG(0), None) }
-        .map_err(|e| format!("Windows sistem klasörü bulunamadı: {e}"))?;
-    let text = unsafe { wide.to_string() };
-    unsafe { CoTaskMemFree(Some(wide.0.cast())) };
-    let folder = text.map_err(|e| format!("Windows klasör yolu geçersiz: {e}"))?;
-    let path = PathBuf::from(folder);
-    fs::canonicalize(path).map_err(|e| format!("Windows klasörüne erişilemiyor: {e}"))
-}
-
+// BRK-WIN-SHORTCUT-001: Common and per-user paths are supplied by
+// the OS known-folder adapter, never by the process environment.
 // BRK-WIN-SHORTCUT-004: fs::canonicalize returns Win32 verbatim paths;
 // keep those for security validation, but pass ordinary paths to ShellLink.
 // The Shell API may reject the "\\?\" prefix with E_INVALIDARG.
@@ -198,12 +190,17 @@ pub(super) fn create_installed_shortcuts(
     package_id: &str,
     start_menu: bool,
     desktop: bool,
+    scope: InstallScope,
 ) -> Result<ShortcutReport, String> {
     let exe = safe_relative_executable(install_root, entry_point)?;
     let _apartment = ComApartment::enter()?;
     let mut report = ShortcutReport::default();
     if start_menu {
-        let parent = folder_path(&FOLDERID_Programs)?;
+        let folder = match scope {
+            InstallScope::CurrentUser => &FOLDERID_Programs,
+            InstallScope::AllUsers => &FOLDERID_CommonPrograms,
+        };
+        let parent = known_folder(folder)?;
         let group = parent.join(package_id);
         match fs::create_dir(&group) {
             Ok(()) => {
@@ -225,7 +222,11 @@ pub(super) fn create_installed_shortcuts(
         }
     }
     if desktop {
-        let parent = folder_path(&FOLDERID_Desktop)?;
+        let folder = match scope {
+            InstallScope::CurrentUser => &FOLDERID_Desktop,
+            InstallScope::AllUsers => &FOLDERID_PublicDesktop,
+        };
+        let parent = known_folder(folder)?;
         let shortcut = parent.join(format!("{package_id}.lnk"));
         match create_link_file(&exe, &shortcut, package_id) {
             Ok(()) => report.created.push(shortcut),
