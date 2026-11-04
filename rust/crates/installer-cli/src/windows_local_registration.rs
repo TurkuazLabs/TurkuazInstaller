@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.4
+// Version: 0.1.5
 // Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -654,6 +654,66 @@ mod tests {
         let path = wide(OsStr::new(&key_path(&name)));
         let result = unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, PCWSTR(path.as_ptr())) };
         assert_eq!(result, ERROR_SUCCESS);
+    }
+
+    #[test]
+    fn disposable_hkcu_install_registration_and_receipt_uninstall_roundtrip() {
+        use turkuaz_installer_package_engine::uninstall_local_install;
+
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let id = format!("qa.native.{}.{}", std::process::id(), unique);
+        let base = std::env::temp_dir().join(format!("turkuaz-local-lifecycle-{unique}"));
+        let target = base.join("installed");
+        fs::create_dir_all(&target).expect("fixture target");
+        let payload = b"installed fixture data";
+        fs::write(target.join("hello.txt"), payload).expect("fixture payload");
+        let receipt = serde_json::json!({
+            "formatVersion": 1,
+            "packageId": id,
+            "version": "1.0.0",
+            "files": [{
+                "path": "hello.txt",
+                "sizeBytes": payload.len(),
+                "sha256": hash_bytes(payload),
+            }],
+        });
+        fs::write(
+            target.join(".turkuaz-local-install.json"),
+            serde_json::to_vec(&receipt).expect("receipt JSON"),
+        )
+        .expect("receipt");
+
+        let source = std::env::current_exe().expect("test exe");
+        let warnings = register_local_install(
+            &source,
+            &id,
+            "1.0.0",
+            &target,
+            InstallScope::CurrentUser,
+            &[],
+        )
+        .expect("register standalone install");
+        assert!(warnings.is_empty(), "Start menu uninstall link: {warnings:?}");
+        let name = registration_name(&id, &target).expect("owner key");
+        let root = owned_root(InstallScope::CurrentUser).expect("installer root");
+        let manifest = root.join(format!("{name}.json"));
+        let record = read_registration(&manifest).expect("registered identity");
+        assert_eq!(record.target(), target.as_path());
+        assert_eq!(record.package_id(), id);
+
+        let removed = uninstall_local_install(&target, &id).expect("receipt-guarded removal");
+        assert_eq!(removed.removed_files, 1);
+        assert!(!removed.retained_unknown_files);
+        let cleanup = cleanup_after_uninstall(&record);
+        assert!(cleanup.registry_removed, "Registry cleanup: {:?}", cleanup.warnings);
+        assert!(cleanup.warnings.is_empty(), "Shortcut cleanup: {:?}", cleanup.warnings);
+        assert!(open_key(InstallScope::CurrentUser, &name).is_err());
+        fs::remove_file(&manifest).expect("remove fixture manifest");
+        fs::remove_file(&record.uninstaller).expect("remove unused fixture binary");
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]
