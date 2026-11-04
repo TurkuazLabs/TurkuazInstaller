@@ -573,7 +573,13 @@ impl eframe::App for LocalInstaller {
                 match self.step {
                     WizardStep::Welcome | WizardStep::Destination | WizardStep::Shortcuts => {
                         if ui
-                            .add_sized([110.0, 38.0], egui::Button::new(egui::RichText::new("İleri  ›").color(egui::Color32::WHITE)).fill(primary))
+                            .add_sized(
+                                [110.0, 38.0],
+                                egui::Button::new(
+                                    egui::RichText::new("İleri  ›").color(egui::Color32::WHITE),
+                                )
+                                .fill(primary),
+                            )
                             .clicked()
                         {
                             self.advance();
@@ -596,7 +602,11 @@ impl eframe::App for LocalInstaller {
                         if ui
                             .add_sized(
                                 [175.0, 38.0],
-                                egui::Button::new(egui::RichText::new("Kurulumu başlat").color(egui::Color32::WHITE)).fill(primary),
+                                egui::Button::new(
+                                    egui::RichText::new("Kurulumu başlat")
+                                        .color(egui::Color32::WHITE),
+                                )
+                                .fill(primary),
                             )
                             .clicked()
                         {
