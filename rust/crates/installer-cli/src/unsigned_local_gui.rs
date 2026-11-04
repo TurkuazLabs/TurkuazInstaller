@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.3.0
+// Version: 0.3.1
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -14,7 +14,9 @@ use std::{
 };
 
 use eframe::egui;
-use turkuaz_installer_package_engine::{install_unsigned_local_setup, unsigned_local_identity};
+use turkuaz_installer_package_engine::{
+    LocalInstallPhase, install_unsigned_local_setup_with_progress, unsigned_local_identity,
+};
 
 use crate::windows_shortcuts::create_installed_shortcuts;
 
@@ -29,20 +31,22 @@ enum WizardStep {
 }
 
 impl WizardStep {
-    fn next(self) -> Option<Self> {
+    fn next(self, has_shortcuts: bool) -> Option<Self> {
         match self {
             Self::Welcome => Some(Self::Destination),
-            Self::Destination => Some(Self::Shortcuts),
+            Self::Destination if has_shortcuts => Some(Self::Shortcuts),
+            Self::Destination => Some(Self::Review),
             Self::Shortcuts => Some(Self::Review),
             Self::Review | Self::Installing | Self::Finished => None,
         }
     }
 
-    fn previous(self) -> Option<Self> {
+    fn previous(self, has_shortcuts: bool) -> Option<Self> {
         match self {
             Self::Destination => Some(Self::Welcome),
             Self::Shortcuts => Some(Self::Destination),
-            Self::Review => Some(Self::Shortcuts),
+            Self::Review if has_shortcuts => Some(Self::Shortcuts),
+            Self::Review => Some(Self::Destination),
             Self::Welcome | Self::Installing | Self::Finished => None,
         }
     }
@@ -58,13 +62,14 @@ impl WizardStep {
         }
     }
 
-    fn decision_index(self) -> Option<usize> {
+    fn decision_index(self, has_shortcuts: bool) -> Option<(usize, usize)> {
+        let count = if has_shortcuts { 4 } else { 3 };
         match self {
-            Self::Welcome => Some(1),
-            Self::Destination => Some(2),
-            Self::Shortcuts => Some(3),
-            Self::Review => Some(4),
-            Self::Installing | Self::Finished => None,
+            Self::Welcome => Some((1, count)),
+            Self::Destination => Some((2, count)),
+            Self::Shortcuts if has_shortcuts => Some((3, count)),
+            Self::Review => Some((count, count)),
+            Self::Shortcuts | Self::Installing | Self::Finished => None,
         }
     }
 }
@@ -91,6 +96,23 @@ fn preflight_destination(value: &str) -> Result<PathBuf, String> {
     }
 }
 
+/// Work events are delivered by the real package engine, not a fabricated timer.
+enum WorkerEvent {
+    Phase(LocalInstallPhase),
+    CreatingShortcuts,
+    Finished(Result<(String, bool), String>),
+}
+
+fn phase_label(phase: LocalInstallPhase) -> &'static str {
+    match phase {
+        LocalInstallPhase::VerifyingPackage => "Gömülü paket doğrulanıyor…",
+        LocalInstallPhase::ExtractingPayload => {
+            "Uygulama dosyaları çıkartılıyor ve dosya envanteri hazırlanıyor…"
+        }
+        LocalInstallPhase::PublishingInstall => "Doğrulanan dosyalar kurulum klasörüne aktarılıyor…",
+    }
+}
+
 struct LocalInstaller {
     executable: PathBuf,
     package_id: String,
@@ -101,7 +123,8 @@ struct LocalInstaller {
     desktop: bool,
     step: WizardStep,
     path_error: Option<String>,
-    busy: Option<Receiver<Result<(String, bool), String>>>,
+    busy: Option<Receiver<WorkerEvent>>,
+    progress_label: &'static str,
     status: Option<Result<(String, bool), String>>,
 }
 
@@ -139,6 +162,7 @@ impl LocalInstaller {
             step: WizardStep::Welcome,
             path_error: None,
             busy: None,
+            progress_label: "Kurulum hazırlanıyor…",
             status: None,
         })
     }
@@ -156,14 +180,14 @@ impl LocalInstaller {
                 }
             }
         }
-        if let Some(next) = self.step.next() {
+        if let Some(next) = self.step.next(self.entry_point.is_some()) {
             self.step = next;
         }
     }
 
     fn back(&mut self) {
         if self.busy.is_none() {
-            if let Some(previous) = self.step.previous() {
+            if let Some(previous) = self.step.previous(self.entry_point.is_some()) {
                 self.step = previous;
                 self.path_error = None;
             }
@@ -193,10 +217,19 @@ impl LocalInstaller {
         self.busy = Some(receiver);
         self.status = None;
         self.path_error = None;
+        self.progress_label = "Kurulum hazırlanıyor…";
         self.step = WizardStep::Installing;
 
         thread::spawn(move || {
-            let result = install_unsigned_local_setup(executable, &target)
+            let phase_sender = sender.clone();
+            let mut on_phase = move |phase| {
+                let _ = phase_sender.send(WorkerEvent::Phase(phase));
+            };
+            let result = install_unsigned_local_setup_with_progress(
+                executable,
+                &target,
+                &mut on_phase,
+            )
                 .map_err(|error| error.to_string())
                 .map(|identity| {
                     let mut message = format!(
@@ -207,6 +240,7 @@ impl LocalInstaller {
                     );
                     let mut warning = false;
                     if start_menu || desktop {
+                        let _ = sender.send(WorkerEvent::CreatingShortcuts);
                         match identity.entry_point.as_deref() {
                             Some(entry) => match create_installed_shortcuts(
                                 &target,
@@ -247,25 +281,38 @@ impl LocalInstaller {
                     }
                     (message, warning)
                 });
-            let _ = sender.send(result);
+            let _ = sender.send(WorkerEvent::Finished(result));
         });
     }
 
     fn poll(&mut self, ctx: &egui::Context) {
+        let mut finished = None;
         if let Some(receiver) = &self.busy {
-            match receiver.try_recv() {
-                Ok(result) => {
-                    self.status = Some(result);
-                    self.busy = None;
-                    self.step = WizardStep::Finished;
+            loop {
+                match receiver.try_recv() {
+                    Ok(WorkerEvent::Phase(phase)) => self.progress_label = phase_label(phase),
+                    Ok(WorkerEvent::CreatingShortcuts) => {
+                        self.progress_label = "Windows kısayolları oluşturuluyor…";
+                    }
+                    Ok(WorkerEvent::Finished(result)) => {
+                        finished = Some(result);
+                        break;
+                    }
+                    Err(TryRecvError::Disconnected) => {
+                        finished = Some(Err("Kurulum işi beklenmedik şekilde durdu.".to_owned()));
+                        break;
+                    }
+                    Err(TryRecvError::Empty) => {
+                        ctx.request_repaint_after(Duration::from_millis(100));
+                        break;
+                    }
                 }
-                Err(TryRecvError::Disconnected) => {
-                    self.status = Some(Err("Kurulum işi beklenmedik şekilde durdu.".to_owned()));
-                    self.busy = None;
-                    self.step = WizardStep::Finished;
-                }
-                Err(TryRecvError::Empty) => ctx.request_repaint_after(Duration::from_millis(100)),
             }
+        }
+        if let Some(result) = finished {
+            self.status = Some(result);
+            self.busy = None;
+            self.step = WizardStep::Finished;
         }
     }
 
@@ -363,13 +410,11 @@ impl LocalInstaller {
             WizardStep::Installing => {
                 ui.horizontal(|ui| {
                     ui.spinner();
-                    ui.strong("Paket doğrulanıyor ve uygulama dosyaları kuruluyor…");
+                    ui.strong(self.progress_label);
                 });
                 ui.add_space(12.0);
-                ui.label("İşlem, mevcut Rust kurulum motoruyla arka planda yürütülüyor.");
-                ui.small(
-                    "Motor dosya bazlı ilerleme yayımlamadığı için yanıltıcı bir yüzde gösterilmez.",
-                );
+                ui.label("Kurulum aşamaları Rust paket motorundan alınan gerçek olaylara dayanır.");
+                ui.small("Dosya bazlı yüzde ölçülmediği için yanıltıcı bir ilerleme yüzdesi gösterilmez.");
                 ui.small(
                     "Kurulum sırasında güvenli iptal henüz desteklenmiyor. İşlem tamamlanana kadar pencere açık kalır.",
                 );
@@ -422,8 +467,8 @@ impl eframe::App for LocalInstaller {
             ui.add_space(12.0);
             ui.heading(self.step.heading());
             ui.label(&self.package_label);
-            if let Some(index) = self.step.decision_index() {
-                ui.small(format!("Hazırlık adımı {index}/4"));
+            if let Some((index, total)) = self.step.decision_index(self.entry_point.is_some()) {
+                ui.small(format!("Hazırlık adımı {index}/{total}"));
             }
             ui.add_space(10.0);
             ui.separator();
@@ -440,7 +485,9 @@ impl eframe::App for LocalInstaller {
 
                 match self.step {
                     WizardStep::Welcome | WizardStep::Destination | WizardStep::Shortcuts => {
-                        if self.step.previous().is_some() && ui.button("Geri").clicked() {
+                        if self.step.previous(self.entry_point.is_some()).is_some()
+                            && ui.button("Geri").clicked()
+                        {
                             self.back();
                         }
                         if ui.button("İptal").clicked() {
@@ -514,16 +561,32 @@ mod tests {
     #[test]
     fn wizard_requires_explicit_install_after_review() {
         let mut step = WizardStep::Welcome;
-        assert_eq!(step.next(), Some(WizardStep::Destination));
-        step = step.next().unwrap();
-        assert_eq!(step.previous(), Some(WizardStep::Welcome));
-        step = step.next().unwrap();
+        assert_eq!(step.next(true), Some(WizardStep::Destination));
+        step = step.next(true).unwrap();
+        assert_eq!(step.previous(true), Some(WizardStep::Welcome));
+        step = step.next(true).unwrap();
         assert_eq!(step, WizardStep::Shortcuts);
-        step = step.next().unwrap();
+        step = step.next(true).unwrap();
         assert_eq!(step, WizardStep::Review);
-        assert_eq!(step.next(), None, "next must not trigger installation");
-        assert_eq!(WizardStep::Installing.previous(), None);
-        assert_eq!(WizardStep::Finished.next(), None);
+        assert_eq!(step.next(true), None, "next must not trigger installation");
+        assert_eq!(WizardStep::Installing.previous(true), None);
+        assert_eq!(WizardStep::Finished.next(true), None);
+    }
+
+    #[test]
+    fn wizard_skips_shortcut_page_when_package_has_no_exe() {
+        assert_eq!(WizardStep::Welcome.next(false), Some(WizardStep::Destination));
+        assert_eq!(WizardStep::Destination.next(false), Some(WizardStep::Review));
+        assert_eq!(WizardStep::Review.previous(false), Some(WizardStep::Destination));
+        assert_eq!(WizardStep::Review.decision_index(false), Some((3, 3)));
+        assert_eq!(WizardStep::Shortcuts.decision_index(false), None);
+    }
+
+    #[test]
+    fn worker_stage_labels_are_real_operation_names() {
+        assert!(phase_label(LocalInstallPhase::VerifyingPackage).contains("doğrulanıyor"));
+        assert!(phase_label(LocalInstallPhase::ExtractingPayload).contains("envanteri"));
+        assert!(phase_label(LocalInstallPhase::PublishingInstall).contains("aktarılıyor"));
     }
 
     #[test]
