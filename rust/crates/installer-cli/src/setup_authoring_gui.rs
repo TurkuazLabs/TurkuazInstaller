@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.15
+// Version: 0.6.16
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -20,7 +20,8 @@ use rfd::FileDialog;
 use serde::{Deserialize, Serialize};
 use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 use turkuaz_installer_package_engine::{
-    SetupThemeConfig, SetupThemePreset, create_unsigned_local_setup,
+    SetupThemeConfig, SetupThemePreset, WizardConfig, WizardPageId,
+    create_unsigned_local_setup_with_wizard,
 };
 use url::Url;
 
@@ -134,6 +135,8 @@ struct SavedProject {
     subtitle: String,
     accent_color: String,
     #[serde(default)]
+    wizard: WizardConfig,
+    #[serde(default)]
     signed_manifest_path: String,
     #[serde(default)]
     signature_path: String,
@@ -191,6 +194,7 @@ impl Default for SavedProject {
             brand_name: "Uygulamam Kurulumu".to_owned(),
             subtitle: "Kurulum sihirbazına hoş geldiniz".to_owned(),
             accent_color: String::new(),
+            wizard: WizardConfig::default(),
             signed_manifest_path: String::new(),
             signature_path: String::new(),
             trust_store_path: String::new(),
@@ -230,6 +234,7 @@ struct BuilderApp {
     dialog_open: bool,
     appearance: AppearancePreference,
     preview_dark: bool,
+    selected_wizard_page: WizardPageId,
     status: Option<(bool, String)>,
     build_receiver: Option<Receiver<Result<String, String>>>,
     source_check_receiver: Option<Receiver<SourceCheckResponse>>,
@@ -249,6 +254,7 @@ impl Default for BuilderApp {
             dialog_open: false,
             appearance: AppearancePreference::System,
             preview_dark: false,
+            selected_wizard_page: WizardPageId::License,
             status: None,
             build_receiver: None,
             source_check_receiver: None,
@@ -1421,6 +1427,14 @@ impl BuilderApp {
                 ui.small(
                     "Seçilen kurulum teması setup-theme.json olarak paketleme klasörüne yazılır.",
                 );
+                ui.add_space(15.0);
+                studio_card(ui, |ui| {
+                    draw_wizard_pages_editor(
+                        ui,
+                        &mut self.project.wizard,
+                        &mut self.selected_wizard_page,
+                    );
+                });
             }
             _ => {
                 ui.label(match self.project.installer_kind {
@@ -2208,6 +2222,132 @@ fn open_output_directory(directory: &Path) -> Result<(), String> {
         .map_err(|error| format!("Windows Dosya Gezgini açılamadı: {error}"))
 }
 
+/// @dev-id BRK-STUDIO-WIZARD-PAGES-001
+/// @purpose Let authors enable, disable, reorder and edit safe wizard pages
+/// without giving them control over mandatory install/security phases.
+fn draw_wizard_pages_editor(
+    ui: &mut egui::Ui,
+    config: &mut WizardConfig,
+    selected: &mut WizardPageId,
+) {
+    ui.heading("Kurulum sihirbazı sayfaları");
+    ui.label("Sayfaları seçin, ekleyin/kaldırın veya sıralayın. Zorunlu kurulum aşamaları kilitlidir.");
+    ui.add_space(9.0);
+    let mut move_delta = 0;
+    let mut toggle_selected = None;
+    ui.columns(2, |columns| {
+        columns[0].set_min_width(300.0);
+        columns[0].label(egui::RichText::new("Sayfa sırası").strong());
+        columns[0].add_space(7.0);
+        for (index, page) in config.pages.iter_mut().enumerate() {
+            columns[0].horizontal(|ui| {
+                if ui
+                    .selectable_label(*selected == page.page, format!(
+                        "{}  {}{}",
+                        index + 1,
+                        page.page.label(),
+                        if page.page.required() { "  🔒" } else { "" },
+                    ))
+                    .clicked()
+                {
+                    *selected = page.page;
+                }
+                if page.page.required() {
+                    ui.add_enabled(false, egui::Checkbox::new(&mut page.enabled, ""));
+                } else {
+                    ui.checkbox(&mut page.enabled, "");
+                }
+            });
+        }
+        columns[0].add_space(10.0);
+        columns[0].horizontal_wrapped(|ui| {
+            if ui.button("Ekle / aç").clicked() {
+                toggle_selected = Some(true);
+            }
+            if ui.button("Kaldır / gizle").clicked() {
+                toggle_selected = Some(false);
+            }
+        });
+        columns[0].horizontal(|ui| {
+            if ui.button("↑ Yukarı").clicked() {
+                move_delta = -1;
+            }
+            if ui.button("↓ Aşağı").clicked() {
+                move_delta = 1;
+            }
+        });
+        columns[1].label(
+            egui::RichText::new(format!("Sayfa özellikleri — {}", selected.label())).strong()
+        );
+        columns[1].add_space(7.0);
+        if let Some(page) = config.page_mut(*selected) {
+            ui_for_wizard_field(&mut columns[1], "Türkçe başlık", &mut page.title_tr);
+            ui_for_wizard_field(&mut columns[1], "English title", &mut page.title_en);
+            ui_for_wizard_field(
+                &mut columns[1],
+                "Türkçe açıklama",
+                &mut page.description_tr,
+            );
+            ui_for_wizard_field(
+                &mut columns[1],
+                "English description",
+                &mut page.description_en,
+            );
+        }
+    });
+    if let Some(enabled) = toggle_selected {
+        if let Some(page) = config.page_mut(*selected) {
+            if !page.page.required() {
+                page.enabled = enabled;
+            }
+        }
+    }
+    if move_delta != 0 {
+        // Reject invalid rearrangements without losing the previous order.
+        let mut candidate = config.clone();
+        if candidate.move_optional(*selected, move_delta).is_ok() {
+            *config = candidate;
+        }
+    }
+    if *selected == WizardPageId::License {
+        ui.separator();
+        ui.label(
+            egui::RichText::new("EULA — Son Kullanıcı Lisans Sözleşmesi").strong().size(17.0)
+        );
+        ui.small("Aşağıdaki metinleri yayıncı sağlamalıdır. Örnek veya otomatik hukuk metni kullanılmaz.");
+        ui.add_space(6.0);
+        ui.label("Türkçe sözleşme metni");
+        ui.add(
+            egui::TextEdit::multiline(&mut config.license_text_tr)
+                .desired_width(f32::INFINITY)
+                .desired_rows(8)
+                .hint_text("Lisans sözleşmesinin gerçek Türkçe metnini buraya girin."),
+        );
+        ui.add_space(6.0);
+        ui.label("English license agreement");
+        ui.add(
+            egui::TextEdit::multiline(&mut config.license_text_en)
+                .desired_width(f32::INFINITY)
+                .desired_rows(8)
+                .hint_text("Insert the actual English license terms here."),
+        );
+        ui.small("EULA etkinse her iki dilin metni zorunludur. Kabul edilmeden İleri etkinleşmez.");
+    }
+    if let Err(error) = config.validate() {
+        ui.add_space(10.0);
+        ui.colored_label(egui::Color32::from_rgb(180, 75, 30), error);
+    }
+}
+
+fn ui_for_wizard_field(ui: &mut egui::Ui, label: &str, value: &mut String) {
+    ui.label(label);
+    ui.add(
+        egui::TextEdit::singleline(value)
+            .desired_width(f32::INFINITY),
+    );
+    ui.add_space(3.0);
+}
+
 fn navigation_item(ui: &mut egui::Ui, selected: bool, label: &str) -> egui::Response {
     let width = ui.available_width();
     ui.add_sized(
@@ -2350,6 +2490,7 @@ fn validate_project_step(project: &SavedProject, step: usize) -> Result<(), Stri
             );
         }
         theme_config_from_project(project)?;
+        project.wizard.validate()?;
     }
 
     if step == 3 {
@@ -2947,8 +3088,12 @@ fn build_native_standard_setup(project: SavedProject) -> Result<String, String> 
     let output = directory.join("TurkuazSetup.exe");
     let stub = std::env::current_exe()
         .map_err(|error| format!("Rust kurulum motoru yolu okunamadı: {error}"))?;
-    if let Err(error) = create_unsigned_local_setup(&stub, root.join("application.tzpkg"), &output)
-    {
+    if let Err(error) = create_unsigned_local_setup_with_wizard(
+        &stub,
+        root.join("application.tzpkg"),
+        &output,
+        &project.wizard,
+    ) {
         let _ = fs::remove_dir(&directory);
         return Err(format!("Standart Kurulum EXE oluşturulamadı: {error}"));
     }
