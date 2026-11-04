@@ -183,11 +183,9 @@ impl LocalInstaller {
         if self.scope != scope && self.busy.is_none() {
             self.scope = scope;
             self.target = match scope {
-                InstallScope::CurrentUser => {
-                    default_install_directory(scope, &self.package_id)
-                        .map(|path| path.to_string_lossy().into_owned())
-                        .unwrap_or_default()
-                }
+                InstallScope::CurrentUser => default_install_directory(scope, &self.package_id)
+                    .map(|path| path.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
                 InstallScope::AllUsers => self
                     .program_files_root
                     .join(&self.package_id)
@@ -275,61 +273,60 @@ impl LocalInstaller {
                 &program_files_root,
                 current_process_is_elevated(),
             )
-                .and_then(|_| {
-                    install_unsigned_local_setup_with_progress(executable, &target, &mut on_phase)
-                        .map_err(|error| error.to_string())
-                })
-                    .map(|identity| {
-                        let mut message = format!(
-                            "{} v{} kuruldu: {}",
-                            identity.package_id,
-                            identity.version,
-                            target.display()
-                        );
-                        let mut warning = false;
-                        if start_menu || desktop {
-                            let _ = sender.send(WorkerEvent::CreatingShortcuts);
-                            match identity.entry_point.as_deref() {
-                                Some(entry) => match create_installed_shortcuts(
-                                    &target,
-                                    entry,
-                                    &identity.package_id,
-                                    start_menu,
-                                    desktop,
-                                    scope,
-                                ) {
-                                    Ok(report) => {
-                                        if !report.created.is_empty() {
-                                            message.push_str(&format!(
-                                                "\n{} Windows kısayolu oluşturuldu.",
-                                                report.created.len()
-                                            ));
-                                        }
-                                        if !report.warnings.is_empty() {
-                                            warning = true;
-                                            message.push_str(&format!(
-                                                "\nKısayol uyarısı: {}",
-                                                report.warnings.join("; ")
-                                            ));
-                                        }
-                                    }
-                                    Err(error) => {
-                                        warning = true;
-                                        message.push_str(&format!(
-                                        "\nDosyalar kuruldu ancak kısayol oluşturulamadı: {error}"
+            .and_then(|_| {
+                install_unsigned_local_setup_with_progress(executable, &target, &mut on_phase)
+                    .map_err(|error| error.to_string())
+            })
+            .map(|identity| {
+                let mut message = format!(
+                    "{} v{} kuruldu: {}",
+                    identity.package_id,
+                    identity.version,
+                    target.display()
+                );
+                let mut warning = false;
+                if start_menu || desktop {
+                    let _ = sender.send(WorkerEvent::CreatingShortcuts);
+                    match identity.entry_point.as_deref() {
+                        Some(entry) => match create_installed_shortcuts(
+                            &target,
+                            entry,
+                            &identity.package_id,
+                            start_menu,
+                            desktop,
+                            scope,
+                        ) {
+                            Ok(report) => {
+                                if !report.created.is_empty() {
+                                    message.push_str(&format!(
+                                        "\n{} Windows kısayolu oluşturuldu.",
+                                        report.created.len()
                                     ));
-                                    }
-                                },
-                                None => {
+                                }
+                                if !report.warnings.is_empty() {
                                     warning = true;
-                                    message.push_str(
-                                        "\nPakette ana EXE tanımı yok; kısayol oluşturulamadı.",
-                                    );
+                                    message.push_str(&format!(
+                                        "\nKısayol uyarısı: {}",
+                                        report.warnings.join("; ")
+                                    ));
                                 }
                             }
+                            Err(error) => {
+                                warning = true;
+                                message.push_str(&format!(
+                                    "\nDosyalar kuruldu ancak kısayol oluşturulamadı: {error}"
+                                ));
+                            }
+                        },
+                        None => {
+                            warning = true;
+                            message
+                                .push_str("\nPakette ana EXE tanımı yok; kısayol oluşturulamadı.");
                         }
-                        (message, warning)
-                    });
+                    }
+                }
+                (message, warning)
+            });
             let _ = sender.send(WorkerEvent::Finished(result));
         });
     }
@@ -545,11 +542,7 @@ impl eframe::App for LocalInstaller {
 
         egui::TopBottomPanel::top("local_setup_header").show(ctx, |ui| {
             ui.add_space(12.0);
-            ui.heading(
-                egui::RichText::new(self.step.heading())
-                    .size(25.0)
-                    .strong(),
-            );
+            ui.heading(egui::RichText::new(self.step.heading()).size(25.0).strong());
             ui.label(egui::RichText::new(&self.package_label).size(15.0));
             if let Some((index, total)) = self.step.decision_index(self.entry_point.is_some()) {
                 ui.small(format!("Hazırlık adımı {index}/{total}"));
@@ -572,19 +565,21 @@ impl eframe::App for LocalInstaller {
                 match self.step {
                     WizardStep::Welcome | WizardStep::Destination | WizardStep::Shortcuts => {
                         if ui
-                            .add_sized(
-                                [110.0, 38.0],
-                                egui::Button::new("İleri  ›").fill(primary),
-                            )
+                            .add_sized([110.0, 38.0], egui::Button::new("İleri  ›").fill(primary))
                             .clicked()
                         {
                             self.advance();
                         }
-                        if ui.add_sized([95.0, 38.0], egui::Button::new("İptal")).clicked() {
+                        if ui
+                            .add_sized([95.0, 38.0], egui::Button::new("İptal"))
+                            .clicked()
+                        {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                         if self.step.previous(self.entry_point.is_some()).is_some()
-                            && ui.add_sized([95.0, 38.0], egui::Button::new("‹  Geri")).clicked()
+                            && ui
+                                .add_sized([95.0, 38.0], egui::Button::new("‹  Geri"))
+                                .clicked()
                         {
                             self.back();
                         }
@@ -599,24 +594,30 @@ impl eframe::App for LocalInstaller {
                         {
                             self.begin_install();
                         }
-                        if ui.add_sized([95.0, 38.0], egui::Button::new("İptal")).clicked() {
+                        if ui
+                            .add_sized([95.0, 38.0], egui::Button::new("İptal"))
+                            .clicked()
+                        {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
-                        if ui.add_sized([95.0, 38.0], egui::Button::new("‹  Geri")).clicked() {
+                        if ui
+                            .add_sized([95.0, 38.0], egui::Button::new("‹  Geri"))
+                            .clicked()
+                        {
                             self.back();
                         }
                     }
                     WizardStep::Installing => {}
                     WizardStep::Finished => {
-                        if ui.add_sized([105.0, 38.0], egui::Button::new("Kapat")).clicked() {
+                        if ui
+                            .add_sized([105.0, 38.0], egui::Button::new("Kapat"))
+                            .clicked()
+                        {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                         if self.status.as_ref().is_some_and(Result::is_err)
                             && ui
-                                .add_sized(
-                                    [165.0, 38.0],
-                                    egui::Button::new("Seçimleri düzenle"),
-                                )
+                                .add_sized([165.0, 38.0], egui::Button::new("Seçimleri düzenle"))
                                 .clicked()
                         {
                             self.step = WizardStep::Destination;
