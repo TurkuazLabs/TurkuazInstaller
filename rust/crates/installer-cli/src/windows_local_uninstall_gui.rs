@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_uninstall_gui.rs
 // Amac: Windows yuklu uygulamalar kaydindan cagirilabilen guvenli kaldirma sihirbazi
 // Modul - Rust Windows Uninstall Presentation
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Acik onay, envanter on kontrolu ve degistirilmis dosyalari koruma
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -22,7 +22,7 @@ use crate::{
         InstallScope, current_process_is_elevated, known_folder, validate_install_scope,
     },
     windows_local_registration::{
-        LocalRegistration, cleanup_after_uninstall, read_registration,
+        LocalRegistration, cleanup_after_uninstall, finalize_uninstaller, read_registration,
     },
 };
 
@@ -89,7 +89,11 @@ impl UninstallApp {
                 }
                 let summary = uninstall_local_install(latest.target(), latest.package_id())
                     .map_err(|e| format!("Dosyalar güvenli biçimde kaldırılamadı: {e}"))?;
-                let warnings = cleanup_after_uninstall(&latest);
+                let cleanup = cleanup_after_uninstall(&latest);
+                let mut warnings = cleanup.warnings;
+                if cleanup.registry_removed {
+                    warnings.extend(finalize_uninstaller(&latest, &manifest));
+                }
                 let mut message = format!(
                     "{}: {} uygulama dosyası kaldırıldı.",
                     latest.package_id(), summary.removed_files
@@ -153,9 +157,13 @@ impl eframe::App for UninstallApp {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 match self.phase {
                     UninstallPhase::Confirm => {
-                        if ui.add_sized([175.0, 40.0], egui::Button::new("Uygulamayı kaldır"))
-                            .on_disabled_hover_text("Kaldırma için onay kutusunu işaretleyin.")
-                            .clicked() && self.confirmed
+                        if ui
+                            .add_enabled(
+                                self.confirmed,
+                                egui::Button::new("Uygulamayı kaldır")
+                                    .min_size(egui::vec2(175.0, 40.0)),
+                            )
+                            .clicked()
                         {
                             self.begin(context);
                         }
