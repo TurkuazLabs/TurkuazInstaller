@@ -301,9 +301,10 @@ impl LocalInstaller {
             })
             .map(|identity| {
                 let mut message = format!(
-                    "{} v{} kuruldu: {}",
+                    "{} v{} {}: {}",
                     identity.package_id,
                     identity.version,
+                    language.text("kuruldu", "installed"),
                     target.display()
                 );
                 let mut warning = false;
@@ -321,14 +322,19 @@ impl LocalInstaller {
                             Ok(report) => {
                                 if !report.created.is_empty() {
                                     message.push_str(&format!(
-                                        "\n{} Windows kısayolu oluşturuldu.",
-                                        report.created.len()
+                                        "\n{} {}",
+                                        report.created.len(),
+                                        language.text(
+                                            "Windows kısayolu oluşturuldu.",
+                                            "Windows shortcut(s) created."
+                                        )
                                     ));
                                 }
                                 if !report.warnings.is_empty() {
                                     warning = true;
                                     message.push_str(&format!(
-                                        "\nKısayol uyarısı: {}",
+                                        "\n{}: {}",
+                                        language.text("Kısayol uyarısı", "Shortcut warning"),
                                         report.warnings.join("; ")
                                     ));
                                 }
@@ -336,14 +342,21 @@ impl LocalInstaller {
                             Err(error) => {
                                 warning = true;
                                 message.push_str(&format!(
-                                    "\nDosyalar kuruldu ancak kısayol oluşturulamadı: {error}"
+                                    "{}: {error}",
+                                    language.text(
+                                        "\nDosyalar kuruldu ancak kısayol oluşturulamadı",
+                                        "\nFiles installed, but shortcuts could not be created"
+                                    )
                                 ));
                             }
                         },
                         None => {
                             warning = true;
                             message
-                                .push_str("\nPakette ana EXE tanımı yok; kısayol oluşturulamadı.");
+                                .push_str(language.text(
+                                    "\nPakette ana EXE tanımı yok; kısayol oluşturulamadı.",
+                                    "\nNo main EXE is defined in the package; shortcuts were not created."
+                                ));
                         }
                     }
                 }
@@ -389,6 +402,17 @@ impl LocalInstaller {
         }
     }
 
+    fn scope_label(&self) -> &'static str {
+        match self.scope {
+            InstallScope::CurrentUser => self
+                .language
+                .text("Yalnızca bu kullanıcı", "Only for this user"),
+            InstallScope::AllUsers => self
+                .language
+                .text("Bu bilgisayardaki tüm kullanıcılar", "For all users of this computer"),
+        }
+    }
+
     fn page(&mut self, ui: &mut egui::Ui) {
         let language = self.language;
         match self.step {
@@ -413,7 +437,11 @@ impl LocalInstaller {
                 ui.add_space(18.0);
                 ui.heading(language.text("Turkuaz Standart Kurulum", "Turkuaz Standard Setup"));
                 ui.add_space(12.0);
-                ui.label(format!(language.text("Kurulacak paket: {}", "Package to install: {}"), self.package_label));
+                ui.label(format!(
+                    "{} {}",
+                    language.text("Kurulacak paket:", "Package to install:"),
+                    self.package_label
+                ));
                 ui.add_space(8.0);
                 ui.label(
                     language.text("Bu sihirbaz kurulum klasörünü ve Windows kısayol tercihlerini seçmenize yardımcı olur.", "This wizard lets you choose the destination and Windows shortcut options."),
@@ -435,13 +463,13 @@ impl LocalInstaller {
                     ui.radio_value(
                         &mut selected,
                         InstallScope::CurrentUser,
-                        InstallScope::CurrentUser.label(),
+                        language.text("Yalnızca bu kullanıcı", "Only for this user"),
                     );
                     ui.add_space(18.0);
                     ui.radio_value(
                         &mut selected,
                         InstallScope::AllUsers,
-                        InstallScope::AllUsers.label(),
+                        language.text("Bu bilgisayardaki tüm kullanıcılar", "For all users of this computer"),
                     );
                 });
                 self.select_scope(selected);
@@ -503,7 +531,7 @@ impl LocalInstaller {
                         ui.end_row();
 
                         ui.strong(language.text("Kurulum kapsamı", "Installation scope"));
-                        ui.label(self.scope.label());
+                        ui.label(self.scope_label());
                         ui.end_row();
 
                         ui.strong(language.text("Kurulum klasörü", "Installation folder"));
