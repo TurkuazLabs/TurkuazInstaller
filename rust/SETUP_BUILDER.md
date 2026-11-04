@@ -135,11 +135,12 @@ Kuruluyor -> Kurulum sonucu**.
   Varsayilan hedef yolu secime gore Windows `UserProgramFiles` veya
   `ProgramFiles` known-folder API uzerinden otomatik degisir.
   Tum kullanicilar icin yalnizca `ProgramFiles` kokunun altina kurulum
-  yapilir, tam yonetici tokeni gerekir. Bu gelistirme surumu otomatik
-  UAC elevation baslatmaz; yetki yoksa dosya yazilmadan acik hata verir.
-  Calisan bir islemi gizlice yukseltilmis saymaz veya current-user
-  kisayoluna sessizce donmez. Ortak masaustu/Start menu icin
-  `PublicDesktop` ve `CommonPrograms` klasorleri kullanilir.
+  yapilir, tam yonetici tokeni gerekir. Bu gelistirme dalinda UAC onayi
+  `ShellExecuteW(runas)` ile istenir; yeniden acilan yukseltilmis setup,
+  paket kimligini ve hedef yolu tekrar dogrular ve son kontrol ekraninda
+  ikinci acik kuruluma onay alir. UAC reddedilirse dosya yazilmaz.
+  Sessizce current-user kurulumuna donulmez. Ortak masaustu/Start menu
+  icin `PublicDesktop` ve `CommonPrograms` klasorleri kullanilir.
 - Hedef klasor secimi sadece on denetim yapar. Gercek yol/reparse,
   dosya butunlugu ve mevcut klasor korumasi paket motorundadir.
   `Gozat` secilen ust klasore `package-id` adinda yeni hedef ekler.
@@ -201,10 +202,26 @@ tasir. `turkuaz-installer uninstall-local --package-id ID --target DIR
 taninmayan/degistirilen klasor ve dosyalara dokunulmaz. Onceki
 v0.2.19 kurulumlarinda kayit olmadigi icin otomatik kaldirma reddedilir.
 
-**Windows Kaldir kisayolu, Windows Uygulamalar kaydi, kisayollarin
-sahiplik kaydina baglanmasi ve imzali installer kisayol parity'si henuz
-uygulanmadi.** Yerel receipt kriptografik imza degildir; dis kullanici
-verilerini otomatik silecek bir yol acilmaz.
+Yeni kurulumda uygulama dosyalari yayinlandiktan sonra,
+Windows `HKCU` (tek kullanici) veya `HKLM` (tum kullanicilar)
+`Uninstall` kaydi olusturulur. Kalici kaldirici setup EXE'si kurulu
+uygulama kokunun **disinda** `LocalAppData` / `ProgramData` altinda
+saklanir. Baslat menusu `Kaldir` kisayolu ve kayitli uygulama
+kisayollari SHA-256 ile sahiplik envanterine alinir. Kaldirma ayri bir
+onay ekrani ile baslatilir ve paket motorunun degistirilmemis dosyalar
+kontrolu kullanilir. Degistirilmis veya yabanci kisayollar korunur.
+Kaldirici EXE calisirken silinemeyebileceginden Windows'un yeniden
+baslangicta silme mekanizmasi denenir; yetki yoksa kalici kaldirici
+dosyasi kalabilir ve kullaniciya raporlanir.
+
+Kurulum dili hos geldiniz ekraninda `Turkce` veya `English` olarak
+secilir. Degistirilme yalnizca gorunum metinlerini etkiler; paket
+kimligi, dosya yolu, guvenlik kararlari ve imzali yayim degismez.
+
+**Kalan kabul:** Tum kullanicilar UAC baslatma ve HKLM kaydinin gercek
+Windows 10/11 PC testleri, iptal/onarim parity, Studio'dan dili varsayilan
+secme ve imzali installer kisayol parity'si. Yerel receipt kriptografik
+imza degildir.
 Bu kalan guvenlik ve kabul kapsami GitHub issue #64'te izlenir.
 Kisayol birlestirme testleri Windows hosted CI'da calisir; manuel temiz
 VM ve signed lifecycle kabul testleri ayridir.
