@@ -461,10 +461,7 @@ pub(super) fn register_local_install(
     ensure_managed_directory(&root)?;
     let uninstaller = root.join(format!("{name}.exe"));
     let manifest = root.join(format!("{name}.json"));
-    if uninstaller.starts_with(target)
-        || target.starts_with(&root)
-        || !target.is_absolute()
-    {
+    if uninstaller.starts_with(target) || target.starts_with(&root) || !target.is_absolute() {
         return Err("Kaldırıcı çalışma dizini kurulum hedefiyle çakışıyor.".into());
     }
     if fs::symlink_metadata(&manifest).is_ok() || fs::symlink_metadata(&uninstaller).is_ok() {
