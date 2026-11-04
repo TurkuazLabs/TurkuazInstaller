@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_elevation.rs
 // Amac: Tum kullanicilar kurulumunu Windows UAC ile yeniden baslatmak
 // Modul - Rust Windows Elevation Adapter
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: runas, komut satiri kacis kodlamasi, onayli yeniden acilis
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -109,6 +109,36 @@ pub(super) fn request_elevated_setup(
             "Windows yönetici izni verilmedi veya işlem başlatılamadı. Kurulum yapılmadı."
                 .to_string(),
         );
+    }
+    Ok(())
+}
+
+/// The user has already chosen Uninstall in the Windows Apps entry.
+/// Reopen the same uninstaller with UAC consent. It still presents its own
+/// confirmation screen before touching installed files.
+pub(super) fn request_elevated_uninstall(
+    executable: &Path,
+    registration: &Path,
+) -> Result<(), String> {
+    let registration = registration
+        .to_str()
+        .ok_or("Kaldırma envanteri yolu Unicode olmalıdır.")?;
+    let params = format!("uninstall-local-gui --registration {}", quote_arg(registration)?);
+    let exe_w = wide(executable.as_os_str());
+    let params_w = wide(OsStr::new(&params));
+    let verb_w = wide(OsStr::new("runas"));
+    let handle = unsafe {
+        ShellExecuteW(
+            None,
+            PCWSTR(verb_w.as_ptr()),
+            PCWSTR(exe_w.as_ptr()),
+            PCWSTR(params_w.as_ptr()),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    if (handle.0 as isize) <= 32 {
+        return Err("Yönetici izni reddedildi. Hiçbir dosya kaldırılmadı.".into());
     }
     Ok(())
 }
