@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/unsigned_setup.rs
 // Amac: NSIS olmadan yalniz yerel standart kurulum icin .tzpkg gomulu EXE uretmek
 // Modul - Rust Package Engine
-// Version: 0.2.5
+// Version: 0.2.6
 // Aciklama: Imzasiz yerel EXE butunluk kontrolu; imzali release/trust asla atlanmaz
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -352,7 +352,28 @@ pub fn install_unsigned_local_setup(
     executable: impl AsRef<Path>,
     target: impl AsRef<Path>,
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
-    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), None)
+    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), None, None)
+}
+
+/// Named milestones from the real installer operations; not a percentage or
+/// an estimate of bytes transferred.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalInstallPhase {
+    VerifyingPackage,
+    ExtractingPayload,
+    PublishingInstall,
+}
+
+/// @dev-id BRK-LOCAL-SETUP-PROGRESS-001
+/// @purpose Let the Windows wizard show actual installer operations.
+/// @contract Callbacks are informational and never bypass install validation,
+/// scanning policy, receipt creation, or no-overwrite publishing.
+pub fn install_unsigned_local_setup_with_progress(
+    executable: impl AsRef<Path>,
+    target: impl AsRef<Path>,
+    on_phase: &mut dyn FnMut(LocalInstallPhase),
+) -> Result<UnsignedLocalIdentity, PackageEngineError> {
+    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), None, Some(on_phase))
 }
 
 /// @dev-id BRK-LOCAL-SETUP-006
@@ -365,13 +386,14 @@ pub fn install_unsigned_local_setup_scanned(
     target: impl AsRef<Path>,
     scanner: &dyn MalwareScanner,
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
-    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), Some(scanner))
+    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), Some(scanner), None)
 }
 
 fn install_unsigned_local_setup_inner(
     executable: &Path,
     target: &Path,
     scanner: Option<&dyn MalwareScanner>,
+    mut on_phase: Option<&mut dyn FnMut(LocalInstallPhase)>,
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
     let parent = target
         .parent()
@@ -386,11 +408,17 @@ fn install_unsigned_local_setup_inner(
         Err(err) if err.kind() == io::ErrorKind::NotFound => {}
         Err(err) => return Err(PackageEngineError::Io(err)),
     }
+    if let Some(callback) = &mut on_phase {
+        callback(LocalInstallPhase::VerifyingPackage);
+    }
     let mut guard = TemporaryFiles(Vec::new());
     let package = embedded_to_temporary_package(executable, parent, &mut guard)?;
     let identity = read_identity(&package)?;
     let stage = parent.join(format!(".turkuaz-native-stage-{}", Uuid::new_v4()));
     guard.0.push(stage.clone());
+    if let Some(callback) = &mut on_phase {
+        callback(LocalInstallPhase::ExtractingPayload);
+    }
     extract_archive(
         &package,
         &stage,
@@ -405,6 +433,9 @@ fn install_unsigned_local_setup_inner(
     // Record the exact staged payload before it becomes an installed tree.
     // Untracked older installs have no receipt and are never auto-uninstalled.
     write_local_install_record(&stage, &identity.package_id, &identity.version)?;
+    if let Some(callback) = &mut on_phase {
+        callback(LocalInstallPhase::PublishingInstall);
+    }
     // Existing target directories must never be overwritten. Windows rename is
     // fail-if-exists; this precheck is retained for clear cross-platform behavior.
     if fs::symlink_metadata(target).is_ok() {
