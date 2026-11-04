@@ -696,7 +696,10 @@ mod tests {
             &[],
         )
         .expect("register standalone install");
-        assert!(warnings.is_empty(), "Start menu uninstall link: {warnings:?}");
+        assert!(
+            warnings.is_empty(),
+            "Start menu uninstall link: {warnings:?}"
+        );
         let name = registration_name(&id, &target).expect("owner key");
         let root = owned_root(InstallScope::CurrentUser).expect("installer root");
         let manifest = root.join(format!("{name}.json"));
@@ -708,8 +711,16 @@ mod tests {
         assert_eq!(removed.removed_files, 1);
         assert!(!removed.retained_unknown_files);
         let cleanup = cleanup_after_uninstall(&record);
-        assert!(cleanup.registry_removed, "Registry cleanup: {:?}", cleanup.warnings);
-        assert!(cleanup.warnings.is_empty(), "Shortcut cleanup: {:?}", cleanup.warnings);
+        assert!(
+            cleanup.registry_removed,
+            "Registry cleanup: {:?}",
+            cleanup.warnings
+        );
+        assert!(
+            cleanup.warnings.is_empty(),
+            "Shortcut cleanup: {:?}",
+            cleanup.warnings
+        );
         assert!(open_key(InstallScope::CurrentUser, &name).is_err());
         fs::remove_file(&manifest).expect("remove fixture manifest");
         fs::remove_file(&record.uninstaller).expect("remove unused fixture binary");
