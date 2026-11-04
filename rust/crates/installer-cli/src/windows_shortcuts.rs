@@ -363,7 +363,7 @@ mod tests {
         let bytes = fs::read(&link).expect("read LNK");
         assert!(bytes.len() > 76);
         assert_eq!(&bytes[..4], &[0x4c, 0x00, 0x00, 0x00]);
-        assert!(create_link_file(&exe, &link, "Test").is_err());
+        assert!(create_link_file(&exe, &link, "Test", None).is_err());
         assert_eq!(fs::read(&link).expect("unchanged"), bytes);
         fs::remove_dir_all(&root).expect("fixture cleanup");
     }
