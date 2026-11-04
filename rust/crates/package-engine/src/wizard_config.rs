@@ -205,8 +205,7 @@ impl WizardConfig {
                 &item.description_tr,
                 &item.description_en,
             ] {
-                if value.contains('\0') || value.chars().any(|ch| ch.is_control() && ch != '\n')
-                {
+                if value.contains('\0') || value.chars().any(|ch| ch.is_control() && ch != '\n') {
                     return Err("Sihirbaz başlıklarında geçersiz kontrol karakteri var.".into());
                 }
             }
@@ -232,8 +231,7 @@ impl WizardConfig {
             }
         }
         if self.is_enabled(WizardPageId::License)
-            && (self.license_text_tr.trim().is_empty()
-                || self.license_text_en.trim().is_empty())
+            && (self.license_text_tr.trim().is_empty() || self.license_text_en.trim().is_empty())
         {
             return Err("EULA açıkken Türkçe ve İngilizce sözleşme metinleri zorunludur.".into());
         }
@@ -262,10 +260,7 @@ impl WizardConfig {
     pub fn visible_pages(&self, has_exe: bool) -> Vec<WizardPageId> {
         self.pages
             .iter()
-            .filter(|item| {
-                item.enabled
-                    && (item.page != WizardPageId::Shortcuts || has_exe)
-            })
+            .filter(|item| item.enabled && (item.page != WizardPageId::Shortcuts || has_exe))
             .map(|item| item.page)
             .collect()
     }
