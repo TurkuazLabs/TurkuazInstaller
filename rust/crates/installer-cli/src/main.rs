@@ -62,6 +62,9 @@ mod setup_authoring_gui;
 mod unsigned_local_gui;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
+mod windows_install_scope;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod windows_shortcuts;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
