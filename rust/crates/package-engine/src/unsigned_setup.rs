@@ -570,12 +570,11 @@ mod tests {
 
         let target = root.join("installed");
         let mut phases = Vec::new();
-        let installed = install_unsigned_local_setup_with_progress(
-            &installer,
-            &target,
-            &mut |phase| phases.push(phase),
-        )
-        .expect("install with real phases");
+        let installed =
+            install_unsigned_local_setup_with_progress(&installer, &target, &mut |phase| {
+                phases.push(phase)
+            })
+            .expect("install with real phases");
         assert_eq!(
             phases,
             [
@@ -591,11 +590,9 @@ mod tests {
         );
         let mut retry_phases = Vec::new();
         assert!(
-            install_unsigned_local_setup_with_progress(
-                &installer,
-                &target,
-                &mut |phase| retry_phases.push(phase),
-            )
+            install_unsigned_local_setup_with_progress(&installer, &target, &mut |phase| {
+                retry_phases.push(phase)
+            },)
             .is_err()
         );
         assert!(retry_phases.is_empty(), "no events when target is occupied");
