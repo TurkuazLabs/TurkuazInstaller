@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.6
+// Version: 0.1.7
 // Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -25,7 +25,10 @@ use windows::{
             REG_SZ, RegCloseKey, RegCreateKeyExW, RegDeleteKeyW, RegOpenKeyExW, RegQueryValueExW,
             RegSetValueExW,
         },
-        UI::Shell::{FOLDERID_LocalAppData, FOLDERID_ProgramFiles},
+        UI::Shell::{
+            FOLDERID_CommonPrograms, FOLDERID_LocalAppData, FOLDERID_ProgramFiles,
+            FOLDERID_Programs,
+        },
     },
     core::PCWSTR,
 };
@@ -483,7 +486,22 @@ pub(super) fn register_local_install(
             });
         }
     }
-    match create_owned_uninstaller_link(&uninstaller, &manifest, package_id, scope) {
+    let programs = match scope {
+        InstallScope::CurrentUser => &FOLDERID_Programs,
+        InstallScope::AllUsers => &FOLDERID_CommonPrograms,
+    };
+    let group = known_folder(programs)?.join(package_id);
+    let expected_application_link = group.join(format!("{package_id}.lnk"));
+    let owns_start_group = previously_created_shortcuts
+        .iter()
+        .any(|path| path == &expected_application_link);
+    match create_owned_uninstaller_link(
+        &uninstaller,
+        &manifest,
+        package_id,
+        scope,
+        owns_start_group,
+    ) {
         Ok(path) => {
             let digest = digest_file(&path)?;
             uninstall_link = Some((path.clone(), digest.clone()));
