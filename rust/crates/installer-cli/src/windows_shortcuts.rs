@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.3
+// Version: 0.1.4
 // Aciklama: OS known folder, guvenli entry point ve yabanci LNK korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -289,6 +289,13 @@ pub(super) fn create_owned_uninstaller_link(
     };
     let directory = known_folder(programs)?.join(package_id);
     fs::create_dir_all(&directory).map_err(|e| format!("Kaldır kısayolu klasörü: {e}"))?;
+    let folder_meta = fs::symlink_metadata(&directory).map_err(|e| e.to_string())?;
+    if !folder_meta.is_dir()
+        || folder_meta.file_type().is_symlink()
+        || windows_reparse(&folder_meta)
+    {
+        return Err("Kaldır kısayolu klasörü bir bağlantı veya junction içeriyor.".into());
+    }
     let link = directory.join("Kaldır.lnk");
     let arguments = format!(
         "uninstall-local-gui --registration \"{}\"",
