@@ -577,13 +577,13 @@ impl LocalInstaller {
 
     fn page(&mut self, ui: &mut egui::Ui) {
         let language = self.language;
+        if let Some(settings) = self.wizard.page(self.step.page_id()) {
+            ui.label(settings.description(self.language == WizardLanguage::English));
+            ui.add_space(12.0);
+        }
         match self.step {
             WizardStep::License => {
                 let english = self.language == WizardLanguage::English;
-                if let Some(page) = self.wizard.page(WizardPageId::License) {
-                    ui.label(page.description(english));
-                }
-                ui.add_space(12.0);
                 egui::Frame::group(ui.style()).show(ui, |ui| {
                     egui::ScrollArea::vertical()
                         .id_salt("local-eula-scroll")
@@ -614,24 +614,6 @@ impl LocalInstaller {
                 }
             }
             WizardStep::Welcome => {
-                ui.horizontal(|ui| {
-                    ui.label("Dil / Language");
-                    egui::ComboBox::from_id_salt("setup-language")
-                        .selected_text(self.language.label())
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(
-                                &mut self.language,
-                                WizardLanguage::Turkish,
-                                WizardLanguage::Turkish.label(),
-                            );
-                            ui.selectable_value(
-                                &mut self.language,
-                                WizardLanguage::English,
-                                WizardLanguage::English.label(),
-                            );
-                        });
-                });
-                ui.add_space(18.0);
                 ui.heading(language.text("Turkuaz Standart Kurulum", "Turkuaz Standard Setup"));
                 ui.add_space(12.0);
                 ui.label(format!(
