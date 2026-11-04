@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_install_scope.rs
 // Amac: Windows kurulum kapsamlarini ve guvenilir OS klasorlerini yonetmek
 // Modul - Rust Windows Installation Scope Adapter
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: Kullanici / tum kullanicilar kurulum kapsami, known-folder yolu, yetki korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -11,8 +11,8 @@ use windows::{
     Win32::{
         System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoTaskMemFree, CoUninitialize},
         UI::Shell::{
-            FOLDERID_ProgramFiles, FOLDERID_UserProgramFiles, IsUserAnAdmin, KNOWN_FOLDER_FLAG,
-            SHGetKnownFolderPath,
+            FOLDERID_ProgramFiles, FOLDERID_UserProgramFiles, IsUserAnAdmin,
+            KF_FLAG_DONT_VERIFY, SHGetKnownFolderPath,
         },
     },
     core::GUID,
@@ -53,7 +53,9 @@ impl Drop for ComGuard {
 /// @contract Failure never falls back to a hard-coded absolute directory.
 pub(super) fn known_folder(id: &GUID) -> Result<PathBuf, String> {
     let _com = ComGuard::new()?;
-    let ptr = unsafe { SHGetKnownFolderPath(id, KNOWN_FOLDER_FLAG(0), None) }
+    // Do not require/create the directory just to show a default target.
+    // On clean Windows profiles UserProgramFiles may not yet physically exist.
+    let ptr = unsafe { SHGetKnownFolderPath(id, KF_FLAG_DONT_VERIFY, None) }
         .map_err(|e| format!("Windows sistem klasörü çözümlenemedi: {e}"))?;
     let text = unsafe { ptr.to_string() };
     unsafe { CoTaskMemFree(Some(ptr.0.cast())) };
