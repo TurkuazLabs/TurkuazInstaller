@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.3
+// Version: 0.1.4
 // Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -130,6 +130,9 @@ fn key_path(name: &str) -> String {
 fn valid_id(package_id: &str) -> bool {
     !package_id.is_empty()
         && package_id.len() <= 120
+        && !package_id.starts_with('.')
+        && !package_id.ends_with('.')
+        && !package_id.contains("..")
         && package_id
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
@@ -324,11 +327,21 @@ fn create_key(scope: InstallScope, name: &str) -> Result<RegistryKey, String> {
     Ok(key)
 }
 
+fn uninstall_command(record: &LocalRegistration, manifest: &Path) -> String {
+    format!(
+        "\"{}\" uninstall-local-gui --registration \"{}\"",
+        record.uninstaller.display(),
+        manifest.display()
+    )
+}
+
 fn remove_key(record: &LocalRegistration) -> Result<(), String> {
     // An unexpected key or a user-modified InstallLocation is never deleted.
     let key = open_key(record.scope(), &record.key)?;
     if read_value(key.0, MARKER)? != record.marker
         || read_value(key.0, "InstallLocation")? != record.target.to_string_lossy()
+        || read_value(key.0, "UninstallString")?
+            != uninstall_command(record, &registration_path(record)?)
     {
         return Err("Windows uygulama kaydı artık bu kurulumla eşleşmiyor.".into());
     }
@@ -383,11 +396,7 @@ pub(super) fn read_registration(source: &Path) -> Result<LocalRegistration, Stri
 
 fn register_key(record: &LocalRegistration, manifest: &Path) -> Result<(), String> {
     let key = create_key(record.scope(), &record.key)?;
-    let arguments = format!(
-        "\"{}\" uninstall-local-gui --registration \"{}\"",
-        record.uninstaller.display(),
-        manifest.display(),
-    );
+    let arguments = uninstall_command(record, manifest);
     let result = (|| {
         write_string(key.0, MARKER, &record.marker)?;
         write_string(key.0, "DisplayName", &record.package_id)?;
@@ -418,8 +427,14 @@ fn create_copy_no_clobber(source: &Path, destination: &Path) -> Result<(), Strin
         .create_new(true)
         .open(destination)
         .map_err(|e| format!("Mevcut kaldırıcı üzerine yazılmadı: {e}"))?;
-    io::copy(&mut source, &mut dest).map_err(|e| e.to_string())?;
-    dest.sync_all().map_err(|e| e.to_string())
+    let result = io::copy(&mut source, &mut dest)
+        .and_then(|_| dest.sync_all())
+        .map_err(|e| e.to_string());
+    drop(dest);
+    if result.is_err() {
+        let _ = fs::remove_file(destination);
+    }
+    result
 }
 
 /// @dev-id BRK-WIN-UNINSTALL-001
@@ -446,10 +461,14 @@ pub(super) fn register_local_install(
     if fs::symlink_metadata(&manifest).is_ok() || fs::symlink_metadata(&uninstaller).is_ok() {
         return Err("Bu kuruluma ait kaldırıcı kaydı zaten var; mevcut dosyalar korunuyor.".into());
     }
+    if open_key(scope, &name).is_ok() {
+        return Err("Mevcut Windows uygulama kaydının üzerine yazılmadı.".into());
+    }
     create_copy_no_clobber(source_setup, &uninstaller)?;
 
     let mut warnings = Vec::new();
     let mut shortcuts = Vec::new();
+    let mut uninstall_link = None;
     for path in previously_created_shortcuts {
         if shortcut_location_is_owned(path, scope, package_id, false)? {
             shortcuts.push(OwnedShortcut {
@@ -459,10 +478,14 @@ pub(super) fn register_local_install(
         }
     }
     match create_owned_uninstaller_link(&uninstaller, &manifest, package_id, scope) {
-        Ok(path) => shortcuts.push(OwnedShortcut {
-            sha256: digest_file(&path)?,
-            path,
-        }),
+        Ok(path) => {
+            let digest = digest_file(&path)?;
+            uninstall_link = Some((path.clone(), digest.clone()));
+            shortcuts.push(OwnedShortcut {
+                sha256: digest,
+                path,
+            });
+        },
         Err(error) => warnings.push(format!("Kaldır kısayolu oluşturulamadı: {error}")),
     }
     let marker = hash_bytes(
@@ -500,8 +523,14 @@ pub(super) fn register_local_install(
         register_key(&record, &manifest)
     })();
     if let Err(error) = registration_result {
-        // Do not delete shortcuts here; a partial install is explicitly
-        // reported and may be repaired after reviewing the files.
+        if let Some((path, digest)) = uninstall_link {
+            if digest_file(&path).ok().as_deref() == Some(&digest) {
+                let _ = fs::remove_file(&path);
+            }
+        }
+        let _ = fs::remove_file(&manifest);
+        let _ = fs::remove_file(&record.uninstaller);
+        // Payload and user-selected shortcuts remain untouched.
         return Err(format!(
             "Windows Yüklü Uygulamalar kaydı tamamlanamadı: {error}"
         ));
