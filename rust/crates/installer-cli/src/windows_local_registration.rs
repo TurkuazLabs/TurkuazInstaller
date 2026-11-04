@@ -485,7 +485,7 @@ pub(super) fn register_local_install(
                 sha256: digest,
                 path,
             });
-        },
+        }
         Err(error) => warnings.push(format!("Kaldır kısayolu oluşturulamadı: {error}")),
     }
     let marker = hash_bytes(
