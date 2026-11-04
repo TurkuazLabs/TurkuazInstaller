@@ -178,6 +178,35 @@ Kaynaklar:
 - https://www.advancedinstaller.com/user-guide/user-interface-dialogs.html
 - https://learn.microsoft.com/en-us/windows/win32/uxguide/exper-setup
 
+### Yapilandirilabilir kurulum sayfalari ve EULA
+
+`03 Kurulum tasarimi` sayfasindaki **Sihirbaz sayfalari** editoru,
+sayfalari secme, acip kapama, yeniden siralama, Turkce/English baslik
+ve aciklama belirleme imkani verir. Istege bagli asamalar: Karsilama,
+Lisans sozlesmesi, Kurulum klasoru, Kisayol secimi. `Kuruluma hazir`,
+`Kuruluyor` ve `Tamamlandi` sayfalari guvenlik akisi icin zorunludur;
+kaldirilamaz ve siralari degistirilemez.
+
+Lisans sozlesmesi (EULA) varsayilan olarak **kapali** gelir; mevcut
+`.tzproj` projeleri `wizard` alani olmadan acilir. EULA acilinca
+gercek urune ait Turkce ve Ingilizce sozlesme metinleri gerekir.
+Metinler **proje sahibi tarafindan** girilir; ornek/hukuki sozlesme
+uydurulmaz. Setup ekraninda metin kaydirilabilir; "Lisans kosullarini
+kabul ediyorum" onay kutusu isaretlenmeden Ileri etkinlesmez.
+Dil degistirilince onay sifirlanir. Tum-kullanicilar UAC ile
+yeniden baslatmada EULA etkinse yeni surecte yeniden onay gerekir.
+
+Proje `schemaVersion=1` korunur ve `wizard` alani istege baglidir.
+Rust `TZLOCAL1` paket son ekinin dosya cikarma sozlesmesi korunur;
+yeni EXE'de EULA/sayfa JSON'u paket baytlarindan hemen once ayri bir
+SHA-256 kontrollu ve uzunlugu sinirli `TZWIZR01` blogunda tasinir.
+Eski EXE'ler varsayilan sayfalarla acilir. Yanlis veya bozulmus blok
+reddedilir; SHA-256 tek basina yayinci kimlik dogrulamasi degildir.
+Degisen sihirbaz ayarlari ile kurulum EXE'si yeniden olusturulurken
+eski taninabilir `standard/TurkuazSetup.exe` dosyasi silinmez,
+`standard.backup-...` altina tasinir. Bilinmeyen cikti klasorune
+dokunulmaz.
+
 ### Windows kisayollari (gelistirme, imzasiz standart kurulum)
 
 `02 Uygulama dosyalari` bolumunde **ana uygulama EXE'si** (kaynak
