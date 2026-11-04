@@ -122,6 +122,44 @@ Kullanici hedef klasoru degistirebilir. Mevcut hedef asla uzerine
 yazilmaz. Paket ZIP path, symlink, normal dosya ve boyut denetimleri
 ile SHA-256 butunluk kontrolunden gecer.
 
+### Windows standart kurulum sihirbazi (Rust, gelistirme)
+
+Turkuaz Setup Studio tarafindan `standard/TurkuazSetup.exe` icine
+gomulen `.tzpkg` paketinin yerel GUI'si altı asamadan olusur:
+**Hos geldiniz -> Kurulum konumu -> Ek secenekler -> Son kontrol ->
+Kuruluyor -> Kurulum sonucu**.
+
+- Ilk dort sayfada `Geri`/`Ileri` bulunur; son kontrol onayi olmadan
+  dosya kurulumu baslamaz.
+- Hedef klasor secimi sadece on denetim yapar. Gercek yol/reparse,
+  dosya butunlugu ve mevcut klasor korumasi paket motorundadir.
+  `Gozat` secilen ust klasore `package-id` adinda yeni hedef ekler.
+- Ek seceneklerde, pakette guvenli ana `.exe` bulunursa kullanici
+  `Baslat menusu` ve `Masaustu` kisayollarini ayri secer.
+- Son kontrolde secilen hedef ve kisayollar gorunur. Kurulum baslayinca
+  navigasyon kapanir. Paket motoru ilerleme olaylari vermedigi icin
+  uydurma yuzde yerine gercek calisma gostergesi kullanilir.
+- Kurulum tamamlandiginda basari / kisayol uyarisi / hata ayrilir.
+  Hatadan sonra yeni hedef secmek icin duzenleme sayfasina donulebilir.
+- Kurulum sirasinda guvenli iptal destegi olmadigindan pencere
+  kapatilma istegi ertelenir. `CancelClose` arayuz denetimidir;
+  guc kesintisi veya zorla proses kapatma durumunda ayri recovery
+  testleri gerekir.
+
+Ekran akisi Inno Setup ve NSIS Modern UI'nin geleneksel sihirbaz
+gorunumunden, WiX WixUI InstallDir ve Advanced Installer'in gercek
+konfigurasyon sayfalarindan esinlenir. Microsoft Windows arayuz
+rehberine gore gereksiz lisans/bilesen secim sayfalari sahte
+secenek olarak eklenmedi; bu alanlar gercek proje gereksinimi olunca
+ayri veri modeli ile gelistirilmelidir.
+
+Kaynaklar:
+- https://documentation.help/Inno-Setup/topic_wizardpages.htm
+- https://nsis.sourceforge.io/Docs/Modern%20UI%202/Readme.html
+- https://docs.firegiant.com/wix/tools/wixext/wixui/
+- https://www.advancedinstaller.com/user-guide/user-interface-dialogs.html
+- https://learn.microsoft.com/en-us/windows/win32/uxguide/exper-setup
+
 ### Windows kisayollari (gelistirme, imzasiz standart kurulum)
 
 `02 Uygulama dosyalari` bolumunde **ana uygulama EXE'si** (kaynak
