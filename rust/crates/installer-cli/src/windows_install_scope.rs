@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_install_scope.rs
 // Amac: Windows kurulum kapsamlarini ve guvenilir OS klasorlerini yonetmek
 // Modul - Rust Windows Installation Scope Adapter
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Kullanici / tum kullanicilar kurulum kapsami, known-folder yolu, yetki korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -154,6 +154,19 @@ mod tests {
             true,
         )
         .is_err());
+    }
+
+    #[test]
+    fn default_roots_follow_windows_known_folders_without_creating_files() {
+        let current = default_install_directory(InstallScope::CurrentUser, "qa.scope")
+            .expect("current-user known folder");
+        let shared = default_install_directory(InstallScope::AllUsers, "qa.scope")
+            .expect("machine known folder");
+        assert!(current.is_absolute());
+        assert!(shared.is_absolute());
+        assert_ne!(current, shared);
+        assert_eq!(current.file_name().unwrap(), "qa.scope");
+        assert_eq!(shared.file_name().unwrap(), "qa.scope");
     }
 
     #[test]
