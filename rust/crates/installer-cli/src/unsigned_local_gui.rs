@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.4.3
+// Version: 0.5.0
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -15,7 +15,9 @@ use std::{
 
 use eframe::egui;
 use turkuaz_installer_package_engine::{
-    LocalInstallPhase, install_unsigned_local_setup_with_progress, unsigned_local_identity,
+    LocalInstallPhase, WizardConfig, WizardPageId,
+    install_unsigned_local_setup_with_progress, read_unsigned_local_wizard_config,
+    unsigned_local_identity,
 };
 
 use crate::{
@@ -33,6 +35,7 @@ use windows::Win32::UI::Shell::FOLDERID_ProgramFiles;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WizardStep {
     Welcome,
+    License,
     Destination,
     Shortcuts,
     Review,
@@ -41,9 +44,34 @@ enum WizardStep {
 }
 
 impl WizardStep {
+    fn from_page(page: WizardPageId) -> Self {
+        match page {
+            WizardPageId::Welcome => Self::Welcome,
+            WizardPageId::License => Self::License,
+            WizardPageId::Destination => Self::Destination,
+            WizardPageId::Shortcuts => Self::Shortcuts,
+            WizardPageId::Review => Self::Review,
+            WizardPageId::Installing => Self::Installing,
+            WizardPageId::Finished => Self::Finished,
+        }
+    }
+
+    fn page_id(self) -> WizardPageId {
+        match self {
+            Self::Welcome => WizardPageId::Welcome,
+            Self::License => WizardPageId::License,
+            Self::Destination => WizardPageId::Destination,
+            Self::Shortcuts => WizardPageId::Shortcuts,
+            Self::Review => WizardPageId::Review,
+            Self::Installing => WizardPageId::Installing,
+            Self::Finished => WizardPageId::Finished,
+        }
+    }
+
     fn next(self, has_shortcuts: bool) -> Option<Self> {
         match self {
             Self::Welcome => Some(Self::Destination),
+            Self::License => Some(Self::Destination),
             Self::Destination if has_shortcuts => Some(Self::Shortcuts),
             Self::Destination => Some(Self::Review),
             Self::Shortcuts => Some(Self::Review),
@@ -54,6 +82,7 @@ impl WizardStep {
     fn previous(self, has_shortcuts: bool) -> Option<Self> {
         match self {
             Self::Destination => Some(Self::Welcome),
+            Self::License => Some(Self::Welcome),
             Self::Shortcuts => Some(Self::Destination),
             Self::Review if has_shortcuts => Some(Self::Shortcuts),
             Self::Review => Some(Self::Destination),
@@ -64,6 +93,7 @@ impl WizardStep {
     fn heading(self, language: WizardLanguage) -> &'static str {
         let (tr, en) = match self {
             Self::Welcome => ("Hoş geldiniz", "Welcome"),
+            Self::License => ("Lisans sözleşmesi", "License agreement"),
             Self::Destination => ("Kurulum konumu", "Installation folder"),
             Self::Shortcuts => ("Ek seçenekler", "Additional tasks"),
             Self::Review => ("Kuruluma hazır", "Ready to install"),
@@ -77,6 +107,7 @@ impl WizardStep {
         let count = if has_shortcuts { 4 } else { 3 };
         match self {
             Self::Welcome => Some((1, count)),
+            Self::License => None,
             Self::Destination => Some((2, count)),
             Self::Shortcuts if has_shortcuts => Some((3, count)),
             Self::Review => Some((count, count)),
@@ -141,6 +172,8 @@ struct LocalInstaller {
     current_user_root: PathBuf,
     scope: InstallScope,
     language: WizardLanguage,
+    wizard: WizardConfig,
+    license_accepted: bool,
     entry_point: Option<String>,
     start_menu: bool,
     desktop: bool,
@@ -155,6 +188,8 @@ impl LocalInstaller {
     fn new(executable: PathBuf) -> Result<Self, String> {
         let identity =
             unsigned_local_identity(&executable).map_err(|e| format!("Paket okunamadı: {e}"))?;
+        let wizard = read_unsigned_local_wizard_config(&executable)
+            .map_err(|e| format!("Kurulum sayfaları doğrulanamadı: {e}"))?;
         let current_user_path =
             default_install_directory(InstallScope::CurrentUser, &identity.package_id)?;
         let current_user_root = current_user_path
@@ -173,6 +208,13 @@ impl LocalInstaller {
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
         });
         let supports_shortcuts = entry_point.is_some();
+        let first_page = wizard
+            .visible_pages(supports_shortcuts)
+            .into_iter()
+            .next()
+            .ok_or("Kurulumda gösterilecek sayfa bulunamadı.")?;
+        let shortcut_default =
+            supports_shortcuts && wizard.is_enabled(WizardPageId::Shortcuts);
 
         Ok(Self {
             executable,
@@ -183,15 +225,49 @@ impl LocalInstaller {
             current_user_root,
             scope: InstallScope::CurrentUser,
             language: WizardLanguage::default(),
+            wizard,
+            license_accepted: false,
             entry_point,
-            start_menu: supports_shortcuts,
+            start_menu: shortcut_default,
             desktop: false,
-            step: WizardStep::Welcome,
+            step: WizardStep::from_page(first_page),
             path_error: None,
             busy: None,
             progress_label: "Kurulum hazırlanıyor…",
             status: None,
         })
+    }
+
+    fn flow(&self) -> Vec<WizardStep> {
+        self.wizard
+            .visible_pages(self.entry_point.is_some())
+            .into_iter()
+            .map(WizardStep::from_page)
+            .collect()
+    }
+
+    fn next_step(&self) -> Option<WizardStep> {
+        let flow = self.flow();
+        let index = flow.iter().position(|step| *step == self.step)?;
+        flow.get(index + 1)
+            .copied()
+            .filter(|step| *step != WizardStep::Installing)
+    }
+
+    fn previous_step(&self) -> Option<WizardStep> {
+        let flow = self.flow();
+        let index = flow.iter().position(|step| *step == self.step)?;
+        index.checked_sub(1).and_then(|idx| flow.get(idx).copied())
+    }
+
+    fn step_counter(&self) -> Option<(usize, usize)> {
+        if matches!(self.step, WizardStep::Installing | WizardStep::Finished) {
+            return None;
+        }
+        let flow = self.flow();
+        let end = flow.iter().position(|step| *step == WizardStep::Review)? + 1;
+        let index = flow[..end].iter().position(|step| *step == self.step)?;
+        Some((index + 1, end))
     }
 
     /// @dev-id BRK-WIN-SCOPE-WIZARD-001
@@ -231,6 +307,9 @@ impl LocalInstaller {
         if self.busy.is_some() {
             return;
         }
+        if self.step == WizardStep::License && !self.license_accepted {
+            return;
+        }
         if self.step == WizardStep::Destination {
             // Let the user choose shortcuts before the UAC prompt; we still
             // validate the protected root now, and the token at installation.
@@ -246,14 +325,14 @@ impl LocalInstaller {
                 }
             }
         }
-        if let Some(next) = self.step.next(self.entry_point.is_some()) {
+        if let Some(next) = self.next_step() {
             self.step = next;
         }
     }
 
     fn back(&mut self) {
         if self.busy.is_none() {
-            if let Some(previous) = self.step.previous(self.entry_point.is_some()) {
+            if let Some(previous) = self.previous_step() {
                 self.step = previous;
                 self.path_error = None;
             }
@@ -266,6 +345,14 @@ impl LocalInstaller {
     /// remain the only side-effecting implementation, on a worker thread.
     fn begin_install(&mut self) -> bool {
         if self.busy.is_some() || self.step != WizardStep::Review {
+            return false;
+        }
+        if self.wizard.is_enabled(WizardPageId::License) && !self.license_accepted {
+            self.step = WizardStep::License;
+            self.path_error = Some(self.language.text(
+                "Lisans sözleşmesini kabul etmeden kurulum başlatılamaz.",
+                "You must accept the license agreement before installing.",
+            ).to_owned());
             return false;
         }
         if self.scope == InstallScope::AllUsers && !current_process_is_elevated() {
