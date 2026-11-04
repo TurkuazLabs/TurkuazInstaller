@@ -21,7 +21,7 @@ use windows::{
         Storage::FileSystem::{MOVEFILE_DELAY_UNTIL_REBOOT, MoveFileExW},
         System::Registry::{
             HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, KEY_SET_VALUE,
-            REG_CREATED_NEW_KEY, REG_CREATE_KEY_DISPOSITION, REG_DWORD, REG_OPTION_NON_VOLATILE,
+            REG_CREATE_KEY_DISPOSITION, REG_CREATED_NEW_KEY, REG_DWORD, REG_OPTION_NON_VOLATILE,
             REG_SZ, RegCloseKey, RegCreateKeyExW, RegDeleteKeyW, RegOpenKeyExW, RegQueryValueExW,
             RegSetValueExW,
         },
@@ -173,9 +173,7 @@ fn registration_name(package_id: &str, target: &Path) -> Result<String, String> 
     if !valid_id(package_id) {
         return Err("Paket kimliği Windows kayıt defteri için güvenli değil.".into());
     }
-    let target_string = target
-        .to_str()
-        .ok_or("Kurulum hedefi Unicode olmalıdır.")?;
+    let target_string = target.to_str().ok_or("Kurulum hedefi Unicode olmalıdır.")?;
     let short_hash = hash_bytes(target_string.to_ascii_lowercase().as_bytes());
     Ok(format!(
         "TurkuazInstaller.{package_id}.{}",
@@ -230,7 +228,11 @@ fn read_value(key: HKEY, name: &str) -> Result<String, String> {
             Some(&mut needed),
         )
     };
-    if second != ERROR_SUCCESS || needed as usize > bytes.len() || needed % 2 != 0 || value_type != REG_SZ {
+    if second != ERROR_SUCCESS
+        || needed as usize > bytes.len()
+        || needed % 2 != 0
+        || value_type != REG_SZ
+    {
         return Err(format!("Windows kayıt değeri değişti: {name}"));
     }
     let words = bytes[..needed as usize]
@@ -248,15 +250,8 @@ fn write_string(key: HKEY, name: &str, value: &str) -> Result<(), String> {
         .iter()
         .flat_map(|unit| unit.to_le_bytes())
         .collect::<Vec<u8>>();
-    let status = unsafe {
-        RegSetValueExW(
-            key,
-            PCWSTR(name_w.as_ptr()),
-            None,
-            REG_SZ,
-            Some(&bytes),
-        )
-    };
+    let status =
+        unsafe { RegSetValueExW(key, PCWSTR(name_w.as_ptr()), None, REG_SZ, Some(&bytes)) };
     if status != ERROR_SUCCESS {
         return Err(failure("Windows uygulama kaydı yazılamadı", status));
     }
@@ -267,7 +262,13 @@ fn write_u32(key: HKEY, name: &str, value: u32) -> Result<(), String> {
     let name_w = wide(OsStr::new(name));
     let value_bytes = value.to_le_bytes();
     let status = unsafe {
-        RegSetValueExW(key, PCWSTR(name_w.as_ptr()), None, REG_DWORD, Some(&value_bytes))
+        RegSetValueExW(
+            key,
+            PCWSTR(name_w.as_ptr()),
+            None,
+            REG_DWORD,
+            Some(&value_bytes),
+        )
     };
     if status != ERROR_SUCCESS {
         return Err(failure("Windows uygulama bayrağı yazılamadı", status));
@@ -324,8 +325,7 @@ fn remove_key(record: &LocalRegistration) -> Result<(), String> {
     // An unexpected key or a user-modified InstallLocation is never deleted.
     let key = open_key(record.scope(), &record.key)?;
     if read_value(key.0, MARKER)? != record.marker
-        || read_value(key.0, "InstallLocation")?
-            != record.target.to_string_lossy()
+        || read_value(key.0, "InstallLocation")? != record.target.to_string_lossy()
     {
         return Err("Windows uygulama kaydı artık bu kurulumla eşleşmiyor.".into());
     }
@@ -371,8 +371,7 @@ pub(super) fn read_registration(source: &Path) -> Result<LocalRegistration, Stri
     }
     let key = open_key(record.scope(), &record.key)?;
     if read_value(key.0, MARKER)? != record.marker
-        || read_value(key.0, "InstallLocation")?
-            != record.target.to_string_lossy()
+        || read_value(key.0, "InstallLocation")? != record.target.to_string_lossy()
     {
         return Err("Windows uygulama kaydı/kurulum eşleşmiyor.".into());
     }
@@ -463,7 +462,15 @@ pub(super) fn register_local_install(
         }),
         Err(error) => warnings.push(format!("Kaldır kısayolu oluşturulamadı: {error}")),
     }
-    let marker = hash_bytes(format!("{}\n{}\n{}", package_id, target.display(), uninstaller.display()).as_bytes());
+    let marker = hash_bytes(
+        format!(
+            "{}\n{}\n{}",
+            package_id,
+            target.display(),
+            uninstaller.display()
+        )
+        .as_bytes(),
+    );
     let record = LocalRegistration {
         version: 1,
         package_id: package_id.to_owned(),
@@ -480,7 +487,10 @@ pub(super) fn register_local_install(
         return Err("Kaldırma envanteri boyut sınırını aştı.".into());
     }
     let registration_result = (|| {
-        let mut file = OpenOptions::new().write(true).create_new(true).open(&manifest)
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&manifest)
             .map_err(|e| e.to_string())?;
         file.write_all(&manifest_data).map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())?;
@@ -489,7 +499,9 @@ pub(super) fn register_local_install(
     if let Err(error) = registration_result {
         // Do not delete shortcuts here; a partial install is explicitly
         // reported and may be repaired after reviewing the files.
-        return Err(format!("Windows Yüklü Uygulamalar kaydı tamamlanamadı: {error}"));
+        return Err(format!(
+            "Windows Yüklü Uygulamalar kaydı tamamlanamadı: {error}"
+        ));
     }
     Ok(warnings)
 }
@@ -506,14 +518,14 @@ pub(super) struct CleanupReport {
 pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupReport {
     let mut warnings = Vec::new();
     for owned in &record.shortcuts {
-        let allowed = shortcut_location_is_owned(
-            &owned.path,
-            record.scope(),
-            &record.package_id,
-            true,
-        ).unwrap_or(false);
+        let allowed =
+            shortcut_location_is_owned(&owned.path, record.scope(), &record.package_id, true)
+                .unwrap_or(false);
         if !allowed || digest_file(&owned.path).ok().as_deref() != Some(&owned.sha256) {
-            warnings.push(format!("Değiştirilmiş veya yabancı kısayol korundu: {}", owned.path.display()));
+            warnings.push(format!(
+                "Değiştirilmiş veya yabancı kısayol korundu: {}",
+                owned.path.display()
+            ));
             continue;
         }
         if let Err(error) = fs::remove_file(&owned.path) {
@@ -550,12 +562,14 @@ pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupRepo
 /// @purpose Dispose of the owner receipt and request deferred uninstaller
 /// removal once the program is no longer running. No untrusted commands.
 /// @contract Only called after the owned registry entry was removed.
-pub(super) fn finalize_uninstaller(
-    record: &LocalRegistration,
-    manifest: &Path,
-) -> Vec<String> {
+pub(super) fn finalize_uninstaller(record: &LocalRegistration, manifest: &Path) -> Vec<String> {
     let mut warnings = Vec::new();
-    if manifest != registration_path(record).ok().as_deref().unwrap_or(Path::new("")) {
+    if manifest
+        != registration_path(record)
+            .ok()
+            .as_deref()
+            .unwrap_or(Path::new(""))
+    {
         return vec!["Kaldırıcı konum doğrulaması başarısız oldu.".into()];
     }
     if let Err(error) = fs::remove_file(manifest) {
@@ -606,9 +620,7 @@ mod tests {
         assert!(create_key(InstallScope::CurrentUser, &name).is_err());
         drop(key);
         let path = wide(OsStr::new(&key_path(&name)));
-        let result = unsafe {
-            RegDeleteKeyW(HKEY_CURRENT_USER, PCWSTR(path.as_ptr()))
-        };
+        let result = unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, PCWSTR(path.as_ptr())) };
         assert_eq!(result, ERROR_SUCCESS);
     }
 
