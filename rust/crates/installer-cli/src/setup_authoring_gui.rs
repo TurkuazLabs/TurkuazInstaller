@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 use turkuaz_installer_package_engine::{
     SetupThemeConfig, SetupThemePreset, WizardConfig, WizardPageId,
-    create_unsigned_local_setup_with_wizard,
+    create_unsigned_local_setup_with_wizard, has_unsigned_local_setup,
 };
 use url::Url;
 
@@ -1105,15 +1105,9 @@ impl BuilderApp {
                         next_requested = true;
                     } else if self.active_step == 3 {
                         if self.project.installer_kind == InstallerKind::Offline {
-                            let already_built = prepared_package_is_current(&self.project)
-                                && package_output_directory(&self.project).is_ok_and(|directory| {
-                                    regular_file_exists(
-                                        &directory.join("standard/TurkuazSetup.exe"),
-                                    )
-                                });
                             if ui
                                 .add_enabled(
-                                    !is_building && !already_built,
+                                    !is_building,
                                     egui::Button::new("Kurulum EXE'sini oluştur")
                                         .fill(egui::Color32::from_rgb(18, 121, 132)),
                                 )
@@ -3105,6 +3099,49 @@ fn require_regular_file(label: &str, value: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// @dev-id BRK-WIZARD-REBUILD-001
+/// @purpose Preserve an old recognized Studio setup while rebuilding with
+/// changed wizard pages, without silently deleting or overwriting files.
+/// @contract Unknown or altered output directories must never be renamed.
+fn backup_existing_standard_setup(directory: &Path) -> Result<Option<PathBuf>, String> {
+    let meta = match fs::symlink_metadata(directory) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("Standart Kurulum klasörü okunamadı: {e}")),
+        Ok(meta) => meta,
+    };
+    if !meta.is_dir() || meta.file_type().is_symlink() || is_windows_reparse_point(&meta) {
+        return Err("Mevcut standart çıktı klasörü güvenli değil; korunuyor.".into());
+    }
+    let mut entries = fs::read_dir(directory)
+        .map_err(|e| format!("Mevcut çıktı klasörü okunamadı: {e}"))?;
+    let only_entry = entries
+        .next()
+        .ok_or("Eski standart klasör boş veya tanınmıyor; korunuyor.")?
+        .map_err(|e| e.to_string())?
+        .path();
+    if entries.next().is_some()
+        || only_entry.file_name() != Some(std::ffi::OsStr::new("TurkuazSetup.exe"))
+        || !regular_file_exists(&only_entry)
+        || !has_unsigned_local_setup(&only_entry).unwrap_or(false)
+    {
+        return Err("Mevcut Standart Kurulum klasörü Studio çıktısı olarak doğrulanamadı; korunuyor.".into());
+    }
+    let epoch = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_secs();
+    for attempt in 0..100 {
+        let backup = directory.with_file_name(format!("standard.backup-{epoch}-{attempt}"));
+        if fs::symlink_metadata(&backup).is_ok() {
+            continue;
+        }
+        fs::rename(directory, &backup)
+            .map_err(|e| format!("Önceki kurulum yedeklenemedi: {e}"))?;
+        return Ok(Some(backup));
+    }
+    Err("Standart Kurulum yedeği için boş klasör adı bulunamadı.".into())
+}
+
 // BRK-STUDIO-STANDARD-002: Create-new native EXE without external build tools.
 fn build_native_standard_setup(project: SavedProject) -> Result<String, String> {
     if project.installer_kind != InstallerKind::Offline {
@@ -3117,13 +3154,13 @@ fn build_native_standard_setup(project: SavedProject) -> Result<String, String> 
     }
     let root = ensure_prepared_package_is_current(&project)?;
     let directory = root.join("standard");
-    match fs::symlink_metadata(&directory) {
-        Ok(_) => return Err("Standart Kurulum klasörü zaten var; üzerine yazılmadı.".to_owned()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => return Err(format!("Çıktı klasörü doğrulanamadı: {error}")),
+    let backup = backup_existing_standard_setup(&directory)?;
+    if let Err(error) = fs::create_dir(&directory) {
+        if let Some(old) = &backup {
+            let _ = fs::rename(old, &directory);
+        }
+        return Err(format!("Standart Kurulum klasörü oluşturulamadı: {error}"));
     }
-    fs::create_dir(&directory)
-        .map_err(|error| format!("Standart Kurulum klasörü oluşturulamadı: {error}"))?;
     let output = directory.join("TurkuazSetup.exe");
     let stub = std::env::current_exe()
         .map_err(|error| format!("Rust kurulum motoru yolu okunamadı: {error}"))?;
@@ -3134,6 +3171,9 @@ fn build_native_standard_setup(project: SavedProject) -> Result<String, String> 
         &project.wizard,
     ) {
         let _ = fs::remove_dir(&directory);
+        if let Some(old) = &backup {
+            let _ = fs::rename(old, &directory);
+        }
         return Err(format!("Standart Kurulum EXE oluşturulamadı: {error}"));
     }
     Ok(format!(
