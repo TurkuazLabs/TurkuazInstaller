@@ -149,9 +149,6 @@ fn create_unsigned_local_setup_inner(
         }
         None => None,
     };
-    let stub = stub;
-    let package = package.as_ref();
-    let output = output.as_ref();
     let stub_len = regular_file(stub)?.len();
     let package_len = regular_file(package)?.len();
     if stub_len < 2 || package_len == 0 || package_len > MAXIMUM_PACKAGE_BYTES {
