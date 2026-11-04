@@ -569,13 +569,36 @@ mod tests {
         assert_eq!(inspected.version, "1.0.0");
 
         let target = root.join("installed");
-        let installed = install_unsigned_local_setup(&installer, &target).expect("install");
+        let mut phases = Vec::new();
+        let installed = install_unsigned_local_setup_with_progress(
+            &installer,
+            &target,
+            &mut |phase| phases.push(phase),
+        )
+        .expect("install with real phases");
+        assert_eq!(
+            phases,
+            [
+                LocalInstallPhase::VerifyingPackage,
+                LocalInstallPhase::ExtractingPayload,
+                LocalInstallPhase::PublishingInstall,
+            ]
+        );
         assert_eq!(installed.package_id, "qa.native");
         assert_eq!(
             fs::read(target.join("hello.txt")).expect("read installed payload"),
             "Türkçe test payload".as_bytes()
         );
-        assert!(install_unsigned_local_setup(&installer, &target).is_err());
+        let mut retry_phases = Vec::new();
+        assert!(
+            install_unsigned_local_setup_with_progress(
+                &installer,
+                &target,
+                &mut |phase| retry_phases.push(phase),
+            )
+            .is_err()
+        );
+        assert!(retry_phases.is_empty(), "no events when target is occupied");
         assert_eq!(
             fs::read(target.join("hello.txt")).expect("still preserved"),
             "Türkçe test payload".as_bytes()
