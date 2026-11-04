@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/unsigned_setup.rs
 // Amac: NSIS olmadan yalniz yerel standart kurulum icin .tzpkg gomulu EXE uretmek
 // Modul - Rust Package Engine
-// Version: 0.2.6
+// Version: 0.3.0
 // Aciklama: Imzasiz yerel EXE butunluk kontrolu; imzali release/trust asla atlanmaz
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -21,12 +21,15 @@ use crate::{
     },
     local_install_receipt::write_local_install_record,
     scan_directory,
+    wizard_config::{MAX_WIZARD_CONFIG_BYTES, WizardConfig},
 };
 use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
 use uuid::Uuid;
 use zip::ZipArchive;
 
 const MAGIC: [u8; 8] = *b"TZLOCAL1";
+const WIZARD_MAGIC: [u8; 8] = *b"TZWIZR01";
+const WIZARD_FOOTER_BYTES: u64 = 8 + 8 + 32;
 const FOOTER_BYTES: u64 = 8 + 8 + 32;
 const MAXIMUM_PACKAGE_BYTES: u64 = 32 * 1024 * 1024 * 1024;
 const COPY_BYTES: usize = 64 * 1024;
@@ -104,7 +107,47 @@ pub fn create_unsigned_local_setup(
     package: impl AsRef<Path>,
     output: impl AsRef<Path>,
 ) -> Result<(), PackageEngineError> {
-    let stub = stub.as_ref();
+    create_unsigned_local_setup_inner(stub.as_ref(), package.as_ref(), output.as_ref(), None)
+}
+
+/// @dev-id BRK-WIZARD-EMBED-001
+/// @purpose Embed bounded wizard options before the TZLOCAL1 package payload,
+/// preserving compatibility with existing archive footer and signed setup APIs.
+/// @contract Validated EULA text and page order only; unsigned integrity is not
+/// publisher authentication. Existing TZLOCAL1 readers can still extract.
+pub fn create_unsigned_local_setup_with_wizard(
+    stub: impl AsRef<Path>,
+    package: impl AsRef<Path>,
+    output: impl AsRef<Path>,
+    config: &WizardConfig,
+) -> Result<(), PackageEngineError> {
+    config.validate().map_err(|_| invalid("local wizard configuration is invalid"))?;
+    create_unsigned_local_setup_inner(
+        stub.as_ref(),
+        package.as_ref(),
+        output.as_ref(),
+        Some(config),
+    )
+}
+
+fn create_unsigned_local_setup_inner(
+    stub: &Path,
+    package: &Path,
+    output: &Path,
+    config: Option<&WizardConfig>,
+) -> Result<(), PackageEngineError> {
+    let wizard_bytes = match config {
+        Some(config) => {
+            let bytes = serde_json::to_vec(config)
+                .map_err(|_| invalid("local wizard JSON cannot be serialized"))?;
+            if bytes.is_empty() || bytes.len() > MAX_WIZARD_CONFIG_BYTES {
+                return Err(invalid("local wizard configuration size is invalid"));
+            }
+            Some(bytes)
+        }
+        None => None,
+    };
+    let stub = stub;
     let package = package.as_ref();
     let output = output.as_ref();
     let stub_len = regular_file(stub)?.len();
@@ -143,6 +186,14 @@ pub fn create_unsigned_local_setup(
         .map_err(PackageEngineError::Io)?;
     let result = (|| {
         io::copy(&mut stub_reader, &mut out).map_err(PackageEngineError::Io)?;
+        if let Some(bytes) = &wizard_bytes {
+            out.write_all(bytes).map_err(PackageEngineError::Io)?;
+            out.write_all(&WIZARD_MAGIC).map_err(PackageEngineError::Io)?;
+            out.write_all(&(bytes.len() as u64).to_le_bytes())
+                .map_err(PackageEngineError::Io)?;
+            let config_digest: [u8; 32] = Sha256::digest(bytes).into();
+            out.write_all(&config_digest).map_err(PackageEngineError::Io)?;
+        }
         let digest = copy_hashed(&mut pkg_reader, &mut out, package_len)?;
         out.write_all(&MAGIC).map_err(PackageEngineError::Io)?;
         out.write_all(&package_len.to_le_bytes())
@@ -210,6 +261,58 @@ pub fn extract_unsigned_local_package(
         let _ = fs::remove_file(output);
     }
     result
+}
+
+/// @dev-id BRK-WIZARD-EMBED-002
+/// @purpose Read optional wizard settings from an unsigned native setup.
+/// @contract Legacy EXEs without a wizard footer retain the existing defaults.
+/// Damaged or unsupported settings fail closed, never silently skip a license.
+pub fn read_unsigned_local_wizard_config(
+    executable: impl AsRef<Path>,
+) -> Result<WizardConfig, PackageEngineError> {
+    let mut file = fs::File::open(executable).map_err(PackageEngineError::Io)?;
+    let len = file.metadata().map_err(PackageEngineError::Io)?.len();
+    let (package_len, _) =
+        footer(&mut file)?.ok_or(invalid("executable is not an unsigned local setup"))?;
+    let package_start = len
+        .checked_sub(FOOTER_BYTES + package_len)
+        .ok_or(invalid("local setup package offsets are invalid"))?;
+    if package_start < WIZARD_FOOTER_BYTES {
+        return Ok(WizardConfig::default());
+    }
+    file.seek(SeekFrom::Start(package_start - WIZARD_FOOTER_BYTES))
+        .map_err(PackageEngineError::Io)?;
+    let mut magic = [0u8; 8];
+    file.read_exact(&mut magic).map_err(PackageEngineError::Io)?;
+    if magic != WIZARD_MAGIC {
+        return Ok(WizardConfig::default());
+    }
+    let mut size_bytes = [0u8; 8];
+    file.read_exact(&mut size_bytes).map_err(PackageEngineError::Io)?;
+    let config_len = u64::from_le_bytes(size_bytes);
+    if config_len == 0
+        || config_len > MAX_WIZARD_CONFIG_BYTES as u64
+        || config_len > package_start - WIZARD_FOOTER_BYTES
+    {
+        return Err(invalid("local wizard data size is invalid"));
+    }
+    let mut expected = [0u8; 32];
+    file.read_exact(&mut expected).map_err(PackageEngineError::Io)?;
+    let start = package_start - WIZARD_FOOTER_BYTES - config_len;
+    file.seek(SeekFrom::Start(start))
+        .map_err(PackageEngineError::Io)?;
+    let mut bytes = vec![0u8; config_len as usize];
+    file.read_exact(&mut bytes).map_err(PackageEngineError::Io)?;
+    let actual: [u8; 32] = Sha256::digest(&bytes).into();
+    if actual != expected {
+        return Err(invalid("local wizard configuration digest mismatch"));
+    }
+    let config: WizardConfig = serde_json::from_slice(&bytes)
+        .map_err(|_| invalid("local wizard configuration JSON is invalid"))?;
+    config
+        .validate()
+        .map_err(|_| invalid("local wizard pages or EULA are invalid"))?;
+    Ok(config)
 }
 
 /// Only local installer metadata; no publisher authentication is asserted.
@@ -539,6 +642,45 @@ mod tests {
         assert!(extract_unsigned_local_package(&installer, &extracted).is_err());
         assert!(!extracted.exists());
         fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn optional_eula_embeds_and_roundtrips_without_changing_payload_extraction() {
+        let root = std::env::temp_dir().join(format!("tz-wizard-{}", Uuid::new_v4()));
+        fs::create_dir(&root).expect("root");
+        let stub = root.join("stub.exe");
+        let pkg = root.join("app.tzpkg");
+        let setup = root.join("setup.exe");
+        let extracted = root.join("extracted.tzpkg");
+        fs::write(&stub, b"MZ-local-setup-test").expect("stub");
+        let source = root.join("source");
+        fs::create_dir(&source).expect("source");
+        fs::write(source.join("hello.txt"), b"safe fixture").expect("payload");
+        let id = PackageId::parse("qa.wizard").expect("id");
+        let version = SemanticVersion::parse("1.0.0").expect("version");
+        crate::build_full_package(
+            &source,
+            &id,
+            &version,
+            &pkg,
+            PackageExtractionLimits::default(),
+        )
+        .expect("package");
+        let mut config = WizardConfig::default();
+        config.page_mut(crate::WizardPageId::License).unwrap().enabled = true;
+        config.license_text_tr = "Test sözleşmesidir".into();
+        config.license_text_en = "Test agreement".into();
+        create_unsigned_local_setup_with_wizard(&stub, &pkg, &setup, &config)
+            .expect("configured installer");
+        assert_eq!(read_unsigned_local_wizard_config(&setup).unwrap(), config);
+        extract_unsigned_local_package(&setup, &extracted).expect("extract");
+        assert_eq!(fs::read(&pkg).unwrap(), fs::read(&extracted).unwrap());
+        let mut bytes = fs::read(&setup).expect("bytes");
+        let start = bytes.len() - FOOTER_BYTES as usize - fs::metadata(&pkg).unwrap().len() as usize;
+        bytes[start - WIZARD_FOOTER_BYTES as usize - 1] ^= 1;
+        fs::write(&setup, bytes).expect("tamper");
+        assert!(read_unsigned_local_wizard_config(&setup).is_err());
+        fs::remove_dir_all(root).expect("clean");
     }
 
     #[test]
