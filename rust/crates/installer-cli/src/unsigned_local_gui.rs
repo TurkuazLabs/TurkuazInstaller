@@ -284,9 +284,7 @@ impl LocalInstaller {
                     egui::Color32::from_rgb(170, 95, 32),
                     "Bu imzasız yerel paket yalnızca dosya bütünlüğünü denetler; yayıncı kimliğini doğrulamaz.",
                 );
-                ui.small(
-                    "Güvenli güncelleme ve geri alma için imzalı dağıtım akışı ayrı tutulur.",
-                );
+                ui.small("Güvenli güncelleme ve geri alma için imzalı dağıtım akışı ayrı tutulur.");
             }
             WizardStep::Destination => {
                 ui.label("Uygulamanın kurulacağı yeni klasörü seçin.");
@@ -298,10 +296,8 @@ impl LocalInstaller {
                     );
                     if ui.button("Gözat…").clicked() {
                         if let Some(parent) = rfd::FileDialog::new().pick_folder() {
-                            self.target = parent
-                                .join(&self.package_id)
-                                .to_string_lossy()
-                                .into_owned();
+                            self.target =
+                                parent.join(&self.package_id).to_string_lossy().into_owned();
                         }
                     }
                 });
@@ -322,7 +318,9 @@ impl LocalInstaller {
                     ui.small("Kısayollar yalnızca pakette tanımlı uygulama EXE'sine bağlanır.");
                     ui.small("Var olan başka uygulama kısayollarının üzerine yazılmaz.");
                 } else {
-                    ui.label("Bu pakette ana EXE tanımlı olmadığı için uygulama kısayolu oluşturulamaz.");
+                    ui.label(
+                        "Bu pakette ana EXE tanımlı olmadığı için uygulama kısayolu oluşturulamaz.",
+                    );
                     ui.add_space(10.0);
                     ui.small("Yeni paket oluştururken Studio / 02 Uygulama dosyaları bölümünden ana EXE seçebilirsiniz.");
                 }
@@ -395,7 +393,9 @@ impl LocalInstaller {
                                 message,
                             );
                             ui.add_space(12.0);
-                            ui.small("Bu imzasız paket için güvenli güncelleme/rollback desteği yoktur.");
+                            ui.small(
+                                "Bu imzasız paket için güvenli güncelleme/rollback desteği yoktur.",
+                            );
                         }
                         Err(message) => {
                             ui.heading("Kurulum tamamlanamadı");
