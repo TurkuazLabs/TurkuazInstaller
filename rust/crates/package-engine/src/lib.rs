@@ -17,6 +17,7 @@ mod setup_executable;
 mod setup_theme;
 mod turkuaz_av_adapter;
 mod unsigned_setup;
+mod wizard_config;
 
 pub use builder::{PackageBuildError, build_full_package, build_full_package_with_entry_point};
 pub use clamav_adapter::ClamAvScanner;
@@ -42,10 +43,14 @@ pub use setup_theme::{
 };
 pub use turkuaz_av_adapter::{NoMatchPolicy, TurkuazAvScanner};
 pub use unsigned_setup::{
-    LocalInstallPhase, UnsignedLocalIdentity, create_unsigned_local_setup,
+    LocalInstallPhase, UnsignedLocalIdentity, create_unsigned_local_setup, create_unsigned_local_setup_with_wizard,
+    read_unsigned_local_wizard_config,
     extract_unsigned_local_package, has_unsigned_local_setup, install_unsigned_local_setup,
     install_unsigned_local_setup_scanned, install_unsigned_local_setup_with_progress,
     unsigned_local_identity,
+};
+pub use wizard_config::{
+    MAX_WIZARD_CONFIG_BYTES, WizardConfig, WizardPageId, WizardPageSettings,
 };
 
 use std::{
