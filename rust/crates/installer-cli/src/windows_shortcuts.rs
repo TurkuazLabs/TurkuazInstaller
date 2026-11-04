@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.2
+// Version: 0.1.3
 // Aciklama: OS known folder, guvenli entry point ve yabanci LNK korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -122,7 +122,12 @@ impl Drop for TemporaryShortcut {
 /// @purpose Persist a shell link and atomically publish it only if no
 /// existing shortcut occupies the requested path.
 /// @contract Never replace third-party links, even after a failed save.
-fn create_link_file(target: &Path, destination: &Path, name: &str) -> Result<(), String> {
+fn create_link_file(
+    target: &Path,
+    destination: &Path,
+    name: &str,
+    args: Option<&str>,
+) -> Result<(), String> {
     let parent = destination
         .parent()
         .ok_or("Kısayol hedef klasörü bulunamadı.")?;
@@ -154,6 +159,7 @@ fn create_link_file(target: &Path, destination: &Path, name: &str) -> Result<(),
     let working_w = wide(shell_working.as_os_str());
     let description = format!("{name} uygulamasını aç");
     let description_w = wide(OsStr::new(&description));
+    let arguments_w = args.map(|args| wide(OsStr::new(args)));
     unsafe {
         link.SetPath(PCWSTR(target_w.as_ptr()))
             .map_err(|e| format!("Kısayol EXE hedefi atanamadı: {e}"))?;
@@ -161,6 +167,10 @@ fn create_link_file(target: &Path, destination: &Path, name: &str) -> Result<(),
             .map_err(|e| format!("Kısayol çalışma klasörü atanamadı: {e}"))?;
         link.SetDescription(PCWSTR(description_w.as_ptr()))
             .map_err(|e| format!("Kısayol açıklaması atanamadı: {e}"))?;
+        if let Some(arguments) = &arguments_w {
+            link.SetArguments(PCWSTR(arguments.as_ptr()))
+                .map_err(|e| format!("Kısayol parametresi atanamadı: {e}"))?;
+        }
     }
     let persist: IPersistFile = link
         .cast()
@@ -205,7 +215,7 @@ pub(super) fn create_installed_shortcuts(
         match fs::create_dir(&group) {
             Ok(()) => {
                 let shortcut = group.join(format!("{package_id}.lnk"));
-                match create_link_file(&exe, &shortcut, package_id) {
+                match create_link_file(&exe, &shortcut, package_id, None) {
                     Ok(()) => report.created.push(shortcut),
                     Err(error) => {
                         let _ = fs::remove_dir(&group);
@@ -234,6 +244,62 @@ pub(super) fn create_installed_shortcuts(
         }
     }
     Ok(report)
+}
+
+/// @dev-id BRK-WIN-UNINSTALL-LNK-001
+/// @purpose Verify that a shortcut belongs to the expected Windows shell
+/// locations without accepting arbitrary file paths from JSON.
+pub(super) fn shortcut_location_is_owned(
+    path: &Path,
+    scope: InstallScope,
+    package_id: &str,
+    allow_uninstall: bool,
+) -> Result<bool, String> {
+    let programs = match scope {
+        InstallScope::CurrentUser => &FOLDERID_Programs,
+        InstallScope::AllUsers => &FOLDERID_CommonPrograms,
+    };
+    let desktop = match scope {
+        InstallScope::CurrentUser => &FOLDERID_Desktop,
+        InstallScope::AllUsers => &FOLDERID_PublicDesktop,
+    };
+    let start_dir = known_folder(programs)?.join(package_id);
+    let app_link = start_dir.join(format!("{package_id}.lnk"));
+    let desktop_link = known_folder(desktop)?.join(format!("{package_id}.lnk"));
+    let uninstall_link = start_dir.join("Kaldır.lnk");
+    Ok(path == app_link || path == desktop_link || (allow_uninstall && path == uninstall_link))
+}
+
+/// @dev-id BRK-WIN-UNINSTALL-LNK-002
+/// @purpose Provide a no-overwrite Start menu uninstall shortcut pointing to
+/// the independent registered uninstaller, never to an installed payload EXE.
+pub(super) fn create_owned_uninstaller_link(
+    executable: &Path,
+    manifest: &Path,
+    package_id: &str,
+    scope: InstallScope,
+) -> Result<PathBuf, String> {
+    let metadata = fs::symlink_metadata(executable).map_err(|e| e.to_string())?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() || windows_reparse(&metadata) {
+        return Err("Kaldırıcı EXE normal bir dosya değil.".into());
+    }
+    let programs = match scope {
+        InstallScope::CurrentUser => &FOLDERID_Programs,
+        InstallScope::AllUsers => &FOLDERID_CommonPrograms,
+    };
+    let directory = known_folder(programs)?.join(package_id);
+    fs::create_dir_all(&directory).map_err(|e| format!("Kaldır kısayolu klasörü: {e}"))?;
+    let link = directory.join("Kaldır.lnk");
+    let arguments = format!(
+        "uninstall-local-gui --registration \"{}\"",
+        manifest.display()
+    );
+    if manifest.to_string_lossy().contains('"') {
+        return Err("Kaldırıcı parametre yolu geçersiz.".into());
+    }
+    let _com = ComApartment::enter()?;
+    create_link_file(executable, &link, "Uygulamayı Kaldır", Some(&arguments))?;
+    Ok(link)
 }
 
 #[cfg(test)]
@@ -278,7 +344,7 @@ mod tests {
         let exe = std::env::current_exe().expect("running Windows test executable");
         let _com = ComApartment::enter().expect("COM");
         let link = root.join("Kisayol.lnk");
-        create_link_file(&exe, &link, "Test").expect("create shell link");
+        create_link_file(&exe, &link, "Test", None).expect("create shell link");
         let bytes = fs::read(&link).expect("read LNK");
         assert!(bytes.len() > 76);
         assert_eq!(&bytes[..4], &[0x4c, 0x00, 0x00, 0x00]);
