@@ -42,9 +42,10 @@ pub use setup_theme::{
 };
 pub use turkuaz_av_adapter::{NoMatchPolicy, TurkuazAvScanner};
 pub use unsigned_setup::{
-    UnsignedLocalIdentity, create_unsigned_local_setup, extract_unsigned_local_package,
-    has_unsigned_local_setup, install_unsigned_local_setup, install_unsigned_local_setup_scanned,
-    install_unsigned_local_setup_with_progress, unsigned_local_identity, LocalInstallPhase,
+    LocalInstallPhase, UnsignedLocalIdentity, create_unsigned_local_setup,
+    extract_unsigned_local_package, has_unsigned_local_setup, install_unsigned_local_setup,
+    install_unsigned_local_setup_scanned, install_unsigned_local_setup_with_progress,
+    unsigned_local_identity,
 };
 
 use std::{
