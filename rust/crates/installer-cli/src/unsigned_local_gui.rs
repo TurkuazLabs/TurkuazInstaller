@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.4.1
+// Version: 0.4.2
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -20,6 +20,7 @@ use turkuaz_installer_package_engine::{
 
 use crate::{
     wizard_language::WizardLanguage,
+    windows_elevation::{parse_resumed_arguments, request_elevated_setup},
     windows_install_scope::{
         InstallScope, current_process_is_elevated, default_install_directory, known_folder,
         validate_install_scope,
@@ -230,7 +231,13 @@ impl LocalInstaller {
             return;
         }
         if self.step == WizardStep::Destination {
-            match self.validated_target() {
+            // Let the user choose shortcuts before the UAC prompt; we still
+            // validate the protected root now, and the token at installation.
+            let choice = preflight_destination(&self.target).and_then(|path| {
+                validate_install_scope(self.scope, &path, &self.program_files_root, true)
+                    .map(|_| path)
+            });
+            match choice {
                 Ok(_) => self.path_error = None,
                 Err(error) => {
                     self.path_error = Some(error);
@@ -256,16 +263,42 @@ impl LocalInstaller {
     /// @purpose Install only after explicit review-page confirmation.
     /// @contract Existing safe Rust package extraction and shortcut policy
     /// remain the only side-effecting implementation, on a worker thread.
-    fn begin_install(&mut self) {
+    fn begin_install(&mut self) -> bool {
         if self.busy.is_some() || self.step != WizardStep::Review {
-            return;
+            return false;
+        }
+        if self.scope == InstallScope::AllUsers && !current_process_is_elevated() {
+            let target = match preflight_destination(&self.target).and_then(|target| {
+                validate_install_scope(self.scope, &target, &self.program_files_root, true)
+                    .map(|_| target)
+            }) {
+                Ok(path) => path,
+                Err(error) => {
+                    self.path_error = Some(error);
+                    return false;
+                }
+            };
+            match request_elevated_setup(
+                &self.executable,
+                &self.package_id,
+                &target,
+                self.start_menu,
+                self.desktop,
+                self.language,
+            ) {
+                Ok(()) => return true,
+                Err(error) => {
+                    self.path_error = Some(error);
+                    return false;
+                }
+            }
         }
         let target = match self.validated_target() {
             Ok(target) => target,
             Err(error) => {
                 self.path_error = Some(error);
                 self.step = WizardStep::Destination;
-                return;
+                return false;
             }
         };
         let executable = self.executable.clone();
@@ -364,6 +397,7 @@ impl LocalInstaller {
             });
             let _ = sender.send(WorkerEvent::Finished(result));
         });
+        false
     }
 
     fn poll(&mut self, ctx: &egui::Context) {
@@ -477,7 +511,7 @@ impl LocalInstaller {
                 if self.scope == InstallScope::AllUsers {
                     ui.colored_label(
                         egui::Color32::from_rgb(170, 95, 32),
-                        language.text("Tüm kullanıcılar için yönetici yetkisi gerekir; otomatik UAC yükseltmesi henüz eklenmedi.", "Installing for all users requires administrator privileges; automatic UAC elevation is not yet available."),
+                        language.text("Tüm kullanıcılar kurulumu başlatılırken Windows yönetici onayı isteyecektir.", "Windows will request administrator consent before an all-users installation begins."),
                     );
                 } else {
                     ui.label(language.text("Kurulum yalnızca oturum açmış kullanıcıya ait olacaktır.", "Installation will be available only for the current user."));
@@ -557,6 +591,10 @@ impl LocalInstaller {
                 ui.add_space(16.0);
                 ui.small(language.text("Kurulumu başlat düğmesiyle onay verdiğinizde dosyalar hazırlanır.", "Files will be prepared after you confirm with Install."));
                 ui.small(language.text("Mevcut klasörler değiştirilmez; yeni klasör gereklidir.", "A new destination folder is required; existing folders are not changed."));
+                if let Some(error) = &self.path_error {
+                    ui.add_space(10.0);
+                    ui.colored_label(egui::Color32::RED, error);
+                }
             }
             WizardStep::Installing => {
                 ui.horizontal(|ui| {
@@ -679,7 +717,9 @@ impl eframe::App for LocalInstaller {
                             )
                             .clicked()
                         {
-                            self.begin_install();
+                            if self.begin_install() {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
                         }
                         if ui
                             .add_sized([95.0, 38.0], egui::Button::new(language.text("İptal", "Cancel")))
@@ -764,9 +804,40 @@ fn configure_local_style(context: &egui::Context) {
     });
 }
 
+/// @dev-id BRK-UAC-002
+/// @purpose Resume exactly the chosen all-users setup after the OS UAC dialog.
+/// @contract The elevated process checks its embedded identity, path and token;
+/// the review page requires explicit confirmation before any file is installed.
+pub fn run_resumed() -> Result<(), Box<dyn std::error::Error>> {
+    let args = parse_resumed_arguments()?;
+    let executable = std::env::current_exe()?;
+    let mut app = LocalInstaller::new(executable)?;
+    if args.package_id != app.package_id {
+        return Err("UAC paket kimliği doğrulanamadı.".into());
+    }
+    let path = preflight_destination(&args.target)?;
+    validate_install_scope(
+        InstallScope::AllUsers,
+        &path,
+        &app.program_files_root,
+        current_process_is_elevated(),
+    )?;
+    app.scope = InstallScope::AllUsers;
+    app.target = path.to_string_lossy().into_owned();
+    app.language = args.language;
+    app.start_menu = app.entry_point.is_some() && args.start_menu;
+    app.desktop = app.entry_point.is_some() && args.desktop;
+    app.step = WizardStep::Review;
+    launch(app)
+}
+
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let executable = std::env::current_exe()?;
     let app = LocalInstaller::new(executable)?;
+    launch(app)
+}
+
+fn launch(app: LocalInstaller) -> Result<(), Box<dyn std::error::Error>> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([860.0, 550.0])
