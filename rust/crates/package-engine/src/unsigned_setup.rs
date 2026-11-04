@@ -121,7 +121,9 @@ pub fn create_unsigned_local_setup_with_wizard(
     output: impl AsRef<Path>,
     config: &WizardConfig,
 ) -> Result<(), PackageEngineError> {
-    config.validate().map_err(|_| invalid("local wizard configuration is invalid"))?;
+    config
+        .validate()
+        .map_err(|_| invalid("local wizard configuration is invalid"))?;
     create_unsigned_local_setup_inner(
         stub.as_ref(),
         package.as_ref(),
@@ -188,11 +190,13 @@ fn create_unsigned_local_setup_inner(
         io::copy(&mut stub_reader, &mut out).map_err(PackageEngineError::Io)?;
         if let Some(bytes) = &wizard_bytes {
             out.write_all(bytes).map_err(PackageEngineError::Io)?;
-            out.write_all(&WIZARD_MAGIC).map_err(PackageEngineError::Io)?;
+            out.write_all(&WIZARD_MAGIC)
+                .map_err(PackageEngineError::Io)?;
             out.write_all(&(bytes.len() as u64).to_le_bytes())
                 .map_err(PackageEngineError::Io)?;
             let config_digest: [u8; 32] = Sha256::digest(bytes).into();
-            out.write_all(&config_digest).map_err(PackageEngineError::Io)?;
+            out.write_all(&config_digest)
+                .map_err(PackageEngineError::Io)?;
         }
         let digest = copy_hashed(&mut pkg_reader, &mut out, package_len)?;
         out.write_all(&MAGIC).map_err(PackageEngineError::Io)?;
@@ -283,12 +287,14 @@ pub fn read_unsigned_local_wizard_config(
     file.seek(SeekFrom::Start(package_start - WIZARD_FOOTER_BYTES))
         .map_err(PackageEngineError::Io)?;
     let mut magic = [0u8; 8];
-    file.read_exact(&mut magic).map_err(PackageEngineError::Io)?;
+    file.read_exact(&mut magic)
+        .map_err(PackageEngineError::Io)?;
     if magic != WIZARD_MAGIC {
         return Ok(WizardConfig::default());
     }
     let mut size_bytes = [0u8; 8];
-    file.read_exact(&mut size_bytes).map_err(PackageEngineError::Io)?;
+    file.read_exact(&mut size_bytes)
+        .map_err(PackageEngineError::Io)?;
     let config_len = u64::from_le_bytes(size_bytes);
     if config_len == 0
         || config_len > MAX_WIZARD_CONFIG_BYTES as u64
@@ -297,12 +303,14 @@ pub fn read_unsigned_local_wizard_config(
         return Err(invalid("local wizard data size is invalid"));
     }
     let mut expected = [0u8; 32];
-    file.read_exact(&mut expected).map_err(PackageEngineError::Io)?;
+    file.read_exact(&mut expected)
+        .map_err(PackageEngineError::Io)?;
     let start = package_start - WIZARD_FOOTER_BYTES - config_len;
     file.seek(SeekFrom::Start(start))
         .map_err(PackageEngineError::Io)?;
     let mut bytes = vec![0u8; config_len as usize];
-    file.read_exact(&mut bytes).map_err(PackageEngineError::Io)?;
+    file.read_exact(&mut bytes)
+        .map_err(PackageEngineError::Io)?;
     let actual: [u8; 32] = Sha256::digest(&bytes).into();
     if actual != expected {
         return Err(invalid("local wizard configuration digest mismatch"));
@@ -667,7 +675,10 @@ mod tests {
         )
         .expect("package");
         let mut config = WizardConfig::default();
-        config.page_mut(crate::WizardPageId::License).unwrap().enabled = true;
+        config
+            .page_mut(crate::WizardPageId::License)
+            .unwrap()
+            .enabled = true;
         config.license_text_tr = "Test sözleşmesidir".into();
         config.license_text_en = "Test agreement".into();
         create_unsigned_local_setup_with_wizard(&stub, &pkg, &setup, &config)
@@ -676,7 +687,8 @@ mod tests {
         extract_unsigned_local_package(&setup, &extracted).expect("extract");
         assert_eq!(fs::read(&pkg).unwrap(), fs::read(&extracted).unwrap());
         let mut bytes = fs::read(&setup).expect("bytes");
-        let start = bytes.len() - FOOTER_BYTES as usize - fs::metadata(&pkg).unwrap().len() as usize;
+        let start =
+            bytes.len() - FOOTER_BYTES as usize - fs::metadata(&pkg).unwrap().len() as usize;
         bytes[start - WIZARD_FOOTER_BYTES as usize - 1] ^= 1;
         fs::write(&setup, bytes).expect("tamper");
         assert!(read_unsigned_local_wizard_config(&setup).is_err());
