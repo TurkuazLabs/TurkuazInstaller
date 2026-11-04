@@ -5,19 +5,10 @@
 // Aciklama: runas, komut satiri kacis kodlamasi, onayli yeniden acilis
 // Bagimli Oldugu Katman: Adapter | Security
 
-use std::{
-    ffi::OsStr,
-    os::windows::ffi::OsStrExt,
-    path::Path,
-};
+use std::{ffi::OsStr, os::windows::ffi::OsStrExt, path::Path};
 
 use windows::{
-    Win32::{
-        UI::{
-            Shell::ShellExecuteW,
-            WindowsAndMessaging::SW_SHOWNORMAL,
-        },
-    },
+    Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
     core::PCWSTR,
 };
 
@@ -62,7 +53,9 @@ fn resumed_arguments(
     desktop: bool,
     language: WizardLanguage,
 ) -> Result<String, String> {
-    let target = target.to_str().ok_or("UAC için hedef klasör yolu Unicode olmalıdır.")?;
+    let target = target
+        .to_str()
+        .ok_or("UAC için hedef klasör yolu Unicode olmalıdır.")?;
     let language = match language {
         WizardLanguage::Turkish => "tr",
         WizardLanguage::English => "en",
@@ -123,7 +116,10 @@ pub(super) fn request_elevated_uninstall(
     let registration = registration
         .to_str()
         .ok_or("Kaldırma envanteri yolu Unicode olmalıdır.")?;
-    let params = format!("uninstall-local-gui --registration {}", quote_arg(registration)?);
+    let params = format!(
+        "uninstall-local-gui --registration {}",
+        quote_arg(registration)?
+    );
     let exe_w = wide(executable.as_os_str());
     let params_w = wide(OsStr::new(&params));
     let verb_w = wide(OsStr::new("runas"));
@@ -197,7 +193,10 @@ mod tests {
     use super::*;
     #[test]
     fn quoted_windows_arguments_never_break_out_of_one_value() {
-        assert_eq!(quote_arg(r#"C:\Program Files\Türkçe"#).unwrap(), r#""C:\Program Files\Türkçe""#);
+        assert_eq!(
+            quote_arg(r#"C:\Program Files\Türkçe"#).unwrap(),
+            r#""C:\Program Files\Türkçe""#
+        );
         assert_eq!(quote_arg("a\"b").unwrap(), r#""a\"b""#);
         assert_eq!(quote_arg("ends\\").unwrap(), r#""ends\\""#);
         assert!(quote_arg("evil\0arg").is_err());
@@ -211,7 +210,8 @@ mod tests {
             true,
             false,
             WizardLanguage::English,
-        ).unwrap();
+        )
+        .unwrap();
         assert!(args.starts_with("resume-local-wizard --package-id "));
         assert!(args.contains(r#"--target "C:\Program Files\örnek""#));
         assert!(args.contains("--start-menu 1 --desktop 0 --language en"));
