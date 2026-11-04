@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -591,6 +591,25 @@ mod tests {
         assert_ne!(a, b);
         assert!(registration_name("../bad", Path::new(r"C:\Apps")).is_err());
         assert!(registration_name("name\\bad", Path::new(r"C:\Apps")).is_err());
+    }
+
+    #[test]
+    fn hkcu_record_is_created_read_and_deleted_without_touching_other_keys() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let name = format!("TurkuazInstaller.qa.ci.{}.{}", std::process::id(), unique);
+        let key = create_key(InstallScope::CurrentUser, &name).expect("new CI-only key");
+        write_string(key.0, MARKER, "test-owner").expect("write marker");
+        assert_eq!(read_value(key.0, MARKER).unwrap(), "test-owner");
+        assert!(create_key(InstallScope::CurrentUser, &name).is_err());
+        drop(key);
+        let path = wide(OsStr::new(&key_path(&name)));
+        let result = unsafe {
+            RegDeleteKeyW(HKEY_CURRENT_USER, PCWSTR(path.as_ptr()))
+        };
+        assert_eq!(result, ERROR_SUCCESS);
     }
 
     #[test]
