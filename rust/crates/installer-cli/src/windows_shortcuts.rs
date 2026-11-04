@@ -238,7 +238,7 @@ pub(super) fn create_installed_shortcuts(
         };
         let parent = known_folder(folder)?;
         let shortcut = parent.join(format!("{package_id}.lnk"));
-        match create_link_file(&exe, &shortcut, package_id) {
+        match create_link_file(&exe, &shortcut, package_id, None) {
             Ok(()) => report.created.push(shortcut),
             Err(error) => report.warnings.push(format!("Masaüstü: {error}")),
         }
