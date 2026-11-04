@@ -1751,6 +1751,45 @@ impl BuilderApp {
                                         .strong()
                                         .color(text),
                                 );
+                                ui.add_space(12.0);
+                                ui.separator();
+                                if let Some(page) = self.project.wizard.page(self.selected_wizard_page) {
+                                    ui.strong(format!("Önizleme: {}", page.title_tr));
+                                    ui.label(&page.description_tr);
+                                    if self.selected_wizard_page == WizardPageId::License {
+                                        ui.add_space(6.0);
+                                        egui::Frame::group(ui.style()).show(ui, |ui| {
+                                            egui::ScrollArea::vertical()
+                                                .id_salt("studio-eula-preview")
+                                                .max_height(140.0)
+                                                .show(ui, |ui| {
+                                                    if self.project.wizard.license_text_tr.is_empty() {
+                                                        ui.weak("EULA metni henüz eklenmedi.");
+                                                    } else {
+                                                        ui.add(
+                                                            egui::Label::new(
+                                                                &self.project.wizard.license_text_tr,
+                                                            )
+                                                            .wrap(),
+                                                        );
+                                                    }
+                                                });
+                                        });
+                                        let mut preview_accepted = false;
+                                        ui.add_enabled_ui(false, |ui| {
+                                            ui.checkbox(
+                                                &mut preview_accepted,
+                                                "Lisans koşullarını kabul ediyorum",
+                                            );
+                                        });
+                                    }
+                                    if !page.enabled {
+                                        ui.colored_label(
+                                            egui::Color32::from_rgb(175, 105, 30),
+                                            "Bu sayfa kurulumda gizlenecek.",
+                                        );
+                                    }
+                                }
                                 ui.add_space(10.0);
                                 let button_width = ui.available_width();
                                 ui.add_enabled_ui(false, |ui| {
