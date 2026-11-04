@@ -41,7 +41,7 @@ url = "2"
 [target.'cfg(windows)'.dependencies]
 eframe = { version = "0.33.3", default-features = false, features = ["default_fonts", "glow"], optional = true }
 rfd = { version = "0.17.2", default-features = false, features = ["common-controls-v6"], optional = true }
-windows = { version = "0.62.2", optional = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62.2", optional = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [[bin]]
 name = "turkuaz-installer"
