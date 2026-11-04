@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.29
+# Version: 0.2.30
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -171,6 +171,9 @@ jobs:
 
       - name: Test setup wizard language switching
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui wizard_language::tests
+
+      - name: Test Windows installed-app registry ownership
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_local_registration::tests
 
       - name: Test current-user and all-users scope guard
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_install_scope::tests
