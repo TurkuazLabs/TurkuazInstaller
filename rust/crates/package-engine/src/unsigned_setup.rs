@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/unsigned_setup.rs
 // Amac: NSIS olmadan yalniz yerel standart kurulum icin .tzpkg gomulu EXE uretmek
 // Modul - Rust Package Engine
-// Version: 0.3.0
+// Version: 0.3.1
 // Aciklama: Imzasiz yerel EXE butunluk kontrolu; imzali release/trust asla atlanmaz
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -28,6 +28,7 @@ use uuid::Uuid;
 use zip::ZipArchive;
 
 const MAGIC: [u8; 8] = *b"TZLOCAL1";
+const CONFIGURED_MAGIC: [u8; 8] = *b"TZLOCAL2";
 const WIZARD_MAGIC: [u8; 8] = *b"TZWIZR01";
 const WIZARD_FOOTER_BYTES: u64 = 8 + 8 + 32;
 const FOOTER_BYTES: u64 = 8 + 8 + 32;
@@ -46,7 +47,7 @@ fn regular_file(path: &Path) -> Result<fs::Metadata, PackageEngineError> {
     Ok(metadata)
 }
 
-fn footer(file: &mut fs::File) -> Result<Option<(u64, [u8; 32])>, PackageEngineError> {
+fn footer(file: &mut fs::File) -> Result<Option<(u64, [u8; 32], bool)>, PackageEngineError> {
     let len = file.metadata().map_err(PackageEngineError::Io)?.len();
     if len < FOOTER_BYTES {
         return Ok(None);
@@ -56,7 +57,7 @@ fn footer(file: &mut fs::File) -> Result<Option<(u64, [u8; 32])>, PackageEngineE
     let mut magic = [0; 8];
     file.read_exact(&mut magic)
         .map_err(PackageEngineError::Io)?;
-    if magic != MAGIC {
+    if magic != MAGIC && magic != CONFIGURED_MAGIC {
         return Ok(None);
     }
     let mut encoded = [0; 8];
@@ -72,7 +73,7 @@ fn footer(file: &mut fs::File) -> Result<Option<(u64, [u8; 32])>, PackageEngineE
     let mut digest = [0; 32];
     file.read_exact(&mut digest)
         .map_err(PackageEngineError::Io)?;
-    Ok(Some((package_length, digest)))
+    Ok(Some((package_length, digest, magic == CONFIGURED_MAGIC)))
 }
 
 fn copy_hashed<R: Read, W: Write>(
@@ -196,7 +197,12 @@ fn create_unsigned_local_setup_inner(
                 .map_err(PackageEngineError::Io)?;
         }
         let digest = copy_hashed(&mut pkg_reader, &mut out, package_len)?;
-        out.write_all(&MAGIC).map_err(PackageEngineError::Io)?;
+        out.write_all(if wizard_bytes.is_some() {
+            &CONFIGURED_MAGIC
+        } else {
+            &MAGIC
+        })
+        .map_err(PackageEngineError::Io)?;
         out.write_all(&package_len.to_le_bytes())
             .map_err(PackageEngineError::Io)?;
         out.write_all(&digest).map_err(PackageEngineError::Io)?;
@@ -235,7 +241,7 @@ pub fn extract_unsigned_local_package(
         return Err(invalid("unsigned local payload output must be .tzpkg"));
     }
     let mut input = fs::File::open(executable).map_err(PackageEngineError::Io)?;
-    let (pkg_len, expected) =
+    let (pkg_len, expected, _) =
         footer(&mut input)?.ok_or(invalid("executable is not an unsigned local setup"))?;
     let start = metadata
         .len()
@@ -273,13 +279,16 @@ pub fn read_unsigned_local_wizard_config(
 ) -> Result<WizardConfig, PackageEngineError> {
     let mut file = fs::File::open(executable).map_err(PackageEngineError::Io)?;
     let len = file.metadata().map_err(PackageEngineError::Io)?.len();
-    let (package_len, _) =
+    let (package_len, _, has_config) =
         footer(&mut file)?.ok_or(invalid("executable is not an unsigned local setup"))?;
+    if !has_config {
+        return Ok(WizardConfig::default());
+    }
     let package_start = len
         .checked_sub(FOOTER_BYTES + package_len)
         .ok_or(invalid("local setup package offsets are invalid"))?;
     if package_start < WIZARD_FOOTER_BYTES {
-        return Ok(WizardConfig::default());
+        return Err(invalid("configured setup has no wizard footer"));
     }
     file.seek(SeekFrom::Start(package_start - WIZARD_FOOTER_BYTES))
         .map_err(PackageEngineError::Io)?;
@@ -287,7 +296,7 @@ pub fn read_unsigned_local_wizard_config(
     file.read_exact(&mut magic)
         .map_err(PackageEngineError::Io)?;
     if magic != WIZARD_MAGIC {
-        return Ok(WizardConfig::default());
+        return Err(invalid("configured setup wizard marker is missing"));
     }
     let mut size_bytes = [0u8; 8];
     file.read_exact(&mut size_bytes)
@@ -686,6 +695,10 @@ mod tests {
         let mut bytes = fs::read(&setup).expect("bytes");
         let start =
             bytes.len() - FOOTER_BYTES as usize - fs::metadata(&pkg).unwrap().len() as usize;
+        let mut tampered_marker = bytes.clone();
+        tampered_marker[start - WIZARD_FOOTER_BYTES as usize] ^= 1;
+        fs::write(&setup, tampered_marker).expect("tamper marker");
+        assert!(read_unsigned_local_wizard_config(&setup).is_err());
         bytes[start - WIZARD_FOOTER_BYTES as usize - 1] ^= 1;
         fs::write(&setup, bytes).expect("tamper");
         assert!(read_unsigned_local_wizard_config(&setup).is_err());
