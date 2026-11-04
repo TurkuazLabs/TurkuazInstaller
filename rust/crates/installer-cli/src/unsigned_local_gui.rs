@@ -15,9 +15,8 @@ use std::{
 
 use eframe::egui;
 use turkuaz_installer_package_engine::{
-    LocalInstallPhase, WizardConfig, WizardPageId,
-    install_unsigned_local_setup_with_progress, read_unsigned_local_wizard_config,
-    unsigned_local_identity,
+    LocalInstallPhase, WizardConfig, WizardPageId, install_unsigned_local_setup_with_progress,
+    read_unsigned_local_wizard_config, unsigned_local_identity,
 };
 
 use crate::{
@@ -213,8 +212,7 @@ impl LocalInstaller {
             .into_iter()
             .next()
             .ok_or("Kurulumda gösterilecek sayfa bulunamadı.")?;
-        let shortcut_default =
-            supports_shortcuts && wizard.is_enabled(WizardPageId::Shortcuts);
+        let shortcut_default = supports_shortcuts && wizard.is_enabled(WizardPageId::Shortcuts);
 
         Ok(Self {
             executable,
@@ -349,10 +347,14 @@ impl LocalInstaller {
         }
         if self.wizard.is_enabled(WizardPageId::License) && !self.license_accepted {
             self.step = WizardStep::License;
-            self.path_error = Some(self.language.text(
-                "Lisans sözleşmesini kabul etmeden kurulum başlatılamaz.",
-                "You must accept the license agreement before installing.",
-            ).to_owned());
+            self.path_error = Some(
+                self.language
+                    .text(
+                        "Lisans sözleşmesini kabul etmeden kurulum başlatılamaz.",
+                        "You must accept the license agreement before installing.",
+                    )
+                    .to_owned(),
+            );
             return false;
         }
         if self.scope == InstallScope::AllUsers && !current_process_is_elevated() {
@@ -589,9 +591,7 @@ impl LocalInstaller {
                         .id_salt("local-eula-scroll")
                         .max_height(275.0)
                         .show(ui, |ui| {
-                            ui.add(
-                                egui::Label::new(self.wizard.license_text(english)).wrap(),
-                            );
+                            ui.add(egui::Label::new(self.wizard.license_text(english)).wrap());
                         });
                 });
                 ui.add_space(14.0);
@@ -857,9 +857,7 @@ impl eframe::App for LocalInstaller {
             let title = self
                 .wizard
                 .page(self.step.page_id())
-                .map(|settings| {
-                    settings.title(self.language == WizardLanguage::English)
-                })
+                .map(|settings| settings.title(self.language == WizardLanguage::English))
                 .unwrap_or(self.step.heading(self.language));
             ui.heading(egui::RichText::new(title).size(25.0).strong());
             ui.label(egui::RichText::new(&self.package_label).size(15.0));
