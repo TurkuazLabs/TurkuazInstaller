@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.4.0
+// Version: 0.4.1
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -19,6 +19,7 @@ use turkuaz_installer_package_engine::{
 };
 
 use crate::{
+    wizard_language::WizardLanguage,
     windows_install_scope::{
         InstallScope, current_process_is_elevated, default_install_directory, known_folder,
         validate_install_scope,
@@ -58,15 +59,16 @@ impl WizardStep {
         }
     }
 
-    fn heading(self) -> &'static str {
-        match self {
-            Self::Welcome => "Hoş geldiniz",
-            Self::Destination => "Kurulum konumu",
-            Self::Shortcuts => "Ek seçenekler",
-            Self::Review => "Kuruluma hazır",
-            Self::Installing => "Uygulama kuruluyor",
-            Self::Finished => "Kurulum sonucu",
-        }
+    fn heading(self, language: WizardLanguage) -> &'static str {
+        let (tr, en) = match self {
+            Self::Welcome => ("Hoş geldiniz", "Welcome"),
+            Self::Destination => ("Kurulum konumu", "Installation folder"),
+            Self::Shortcuts => ("Ek seçenekler", "Additional tasks"),
+            Self::Review => ("Kuruluma hazır", "Ready to install"),
+            Self::Installing => ("Uygulama kuruluyor", "Installing"),
+            Self::Finished => ("Kurulum sonucu", "Installation result"),
+        };
+        language.text(tr, en)
     }
 
     fn decision_index(self, has_shortcuts: bool) -> Option<(usize, usize)> {
@@ -110,16 +112,22 @@ enum WorkerEvent {
     Finished(Result<(String, bool), String>),
 }
 
-fn phase_label(phase: LocalInstallPhase) -> &'static str {
-    match phase {
-        LocalInstallPhase::VerifyingPackage => "Gömülü paket doğrulanıyor…",
-        LocalInstallPhase::ExtractingPayload => {
-            "Uygulama dosyaları çıkartılıyor ve dosya envanteri hazırlanıyor…"
-        }
-        LocalInstallPhase::PublishingInstall => {
-            "Doğrulanan dosyalar kurulum klasörüne aktarılıyor…"
-        }
-    }
+fn phase_label(phase: LocalInstallPhase, language: WizardLanguage) -> &'static str {
+    let (tr, en) = match phase {
+        LocalInstallPhase::VerifyingPackage => (
+            "Gömülü paket doğrulanıyor…",
+            "Verifying embedded package…",
+        ),
+        LocalInstallPhase::ExtractingPayload => (
+            "Uygulama dosyaları çıkartılıyor ve dosya envanteri hazırlanıyor…",
+            "Extracting application files and recording the file inventory…",
+        ),
+        LocalInstallPhase::PublishingInstall => (
+            "Doğrulanan dosyalar kurulum klasörüne aktarılıyor…",
+            "Publishing verified files into the installation folder…",
+        ),
+    };
+    language.text(tr, en)
 }
 
 struct LocalInstaller {
@@ -130,6 +138,7 @@ struct LocalInstaller {
     program_files_root: PathBuf,
     current_user_root: PathBuf,
     scope: InstallScope,
+    language: WizardLanguage,
     entry_point: Option<String>,
     start_menu: bool,
     desktop: bool,
@@ -171,6 +180,7 @@ impl LocalInstaller {
             program_files_root,
             current_user_root,
             scope: InstallScope::CurrentUser,
+            language: WizardLanguage::default(),
             entry_point,
             start_menu: supports_shortcuts,
             desktop: false,
@@ -262,12 +272,16 @@ impl LocalInstaller {
         let start_menu = self.start_menu;
         let desktop = self.desktop;
         let scope = self.scope;
+        let language = self.language;
         let program_files_root = self.program_files_root.clone();
         let (sender, receiver) = mpsc::channel();
         self.busy = Some(receiver);
         self.status = None;
         self.path_error = None;
-        self.progress_label = "Kurulum hazırlanıyor…";
+        self.progress_label = self.language.text(
+            "Kurulum hazırlanıyor…",
+            "Preparing installation…",
+        );
         self.step = WizardStep::Installing;
 
         thread::spawn(move || {
@@ -344,9 +358,14 @@ impl LocalInstaller {
         if let Some(receiver) = &self.busy {
             loop {
                 match receiver.try_recv() {
-                    Ok(WorkerEvent::Phase(phase)) => self.progress_label = phase_label(phase),
+                    Ok(WorkerEvent::Phase(phase)) => {
+                        self.progress_label = phase_label(phase, self.language);
+                    }
                     Ok(WorkerEvent::CreatingShortcuts) => {
-                        self.progress_label = "Windows kısayolları oluşturuluyor…";
+                        self.progress_label = self.language.text(
+                            "Windows kısayolları oluşturuluyor…",
+                            "Creating Windows shortcuts…",
+                        );
                     }
                     Ok(WorkerEvent::Finished(result)) => {
                         finished = Some(result);
@@ -371,26 +390,45 @@ impl LocalInstaller {
     }
 
     fn page(&mut self, ui: &mut egui::Ui) {
+        let language = self.language;
         match self.step {
             WizardStep::Welcome => {
-                ui.heading("Turkuaz Standart Kurulum");
+                ui.horizontal(|ui| {
+                    ui.label("Dil / Language");
+                    egui::ComboBox::from_id_salt("setup-language")
+                        .selected_text(self.language.label())
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(
+                                &mut self.language,
+                                WizardLanguage::Turkish,
+                                WizardLanguage::Turkish.label(),
+                            );
+                            ui.selectable_value(
+                                &mut self.language,
+                                WizardLanguage::English,
+                                WizardLanguage::English.label(),
+                            );
+                        });
+                });
+                ui.add_space(18.0);
+                ui.heading(language.text("Turkuaz Standart Kurulum", "Turkuaz Standard Setup"));
                 ui.add_space(12.0);
-                ui.label(format!("Kurulacak paket: {}", self.package_label));
+                ui.label(format!(language.text("Kurulacak paket: {}", "Package to install: {}"), self.package_label));
                 ui.add_space(8.0);
                 ui.label(
-                    "Bu sihirbaz kurulum klasörünü ve Windows kısayol tercihlerini seçmenize yardımcı olur.",
+                    language.text("Bu sihirbaz kurulum klasörünü ve Windows kısayol tercihlerini seçmenize yardımcı olur.", "This wizard lets you choose the destination and Windows shortcut options."),
                 );
                 ui.add_space(12.0);
                 ui.colored_label(
                     egui::Color32::from_rgb(170, 95, 32),
-                    "Bu imzasız yerel paket yalnızca dosya bütünlüğünü denetler; yayıncı kimliğini doğrulamaz.",
+                    language.text("Bu imzasız yerel paket yalnızca dosya bütünlüğünü denetler; yayıncı kimliğini doğrulamaz.", "This unsigned local package checks file integrity only; it cannot verify the publisher."),
                 );
-                ui.small("Güvenli güncelleme ve geri alma için imzalı dağıtım akışı ayrı tutulur.");
+                ui.small(language.text("Güvenli güncelleme ve geri alma için imzalı dağıtım akışı ayrı tutulur.", "Signed distribution is required for trusted updates and rollback."));
             }
             WizardStep::Destination => {
-                ui.label("Uygulamanın kurulacağı yeni klasörü seçin.");
+                ui.label(language.text("Uygulamanın kurulacağı yeni klasörü seçin.", "Choose a new folder for this application."));
                 ui.add_space(14.0);
-                ui.strong("Kurulum kapsamı");
+                ui.strong(language.text("Kurulum kapsamı", "Installation scope"));
                 ui.add_space(6.0);
                 let mut selected = self.scope;
                 ui.horizontal(|ui| {
@@ -411,10 +449,10 @@ impl LocalInstaller {
                 if self.scope == InstallScope::AllUsers {
                     ui.colored_label(
                         egui::Color32::from_rgb(170, 95, 32),
-                        "Tüm kullanıcılar için yönetici yetkisi gerekir; otomatik UAC yükseltmesi henüz eklenmedi.",
+                        language.text("Tüm kullanıcılar için yönetici yetkisi gerekir; otomatik UAC yükseltmesi henüz eklenmedi.", "Installing for all users requires administrator privileges; automatic UAC elevation is not yet available."),
                     );
                 } else {
-                    ui.label("Kurulum yalnızca oturum açmış kullanıcıya ait olacaktır.");
+                    ui.label(language.text("Kurulum yalnızca oturum açmış kullanıcıya ait olacaktır.", "Installation will be available only for the current user."));
                 }
                 ui.add_space(16.0);
                 ui.horizontal(|ui| {
@@ -422,15 +460,15 @@ impl LocalInstaller {
                         egui::TextEdit::singleline(&mut self.target)
                             .desired_width((ui.available_width() - 94.0).max(240.0)),
                     );
-                    if ui.button("Gözat…").clicked() {
+                    if ui.button(language.text("Gözat…", "Browse…")).clicked() {
                         if let Some(parent) = rfd::FileDialog::new().pick_folder() {
                             self.target =
                                 parent.join(&self.package_id).to_string_lossy().into_owned();
                         }
                     }
                 });
-                ui.small("Gözat seçilen klasörün içine uygulama kimliğiyle yeni bir klasör ekler.");
-                ui.small("Mevcut bir klasörün üzerine yazılmaz; eski kurulum korunur.");
+                ui.small(language.text("Gözat seçilen klasörün içine uygulama kimliğiyle yeni bir klasör ekler.", "Browse adds a new folder named after the application identifier."));
+                ui.small(language.text("Mevcut bir klasörün üzerine yazılmaz; eski kurulum korunur.", "Existing folders are not overwritten; previous installations remain intact."));
                 if let Some(error) = &self.path_error {
                     ui.add_space(10.0);
                     ui.colored_label(egui::Color32::RED, error);
@@ -438,59 +476,59 @@ impl LocalInstaller {
             }
             WizardStep::Shortcuts => {
                 if self.entry_point.is_some() {
-                    ui.label("Kurulumdan sonra oluşturulacak Windows kısayollarını seçin.");
+                    ui.label(language.text("Kurulumdan sonra oluşturulacak Windows kısayollarını seçin.", "Choose Windows shortcuts to create after installation."));
                     ui.add_space(12.0);
-                    ui.checkbox(&mut self.start_menu, "Başlat menüsünde kısayol oluştur");
-                    ui.checkbox(&mut self.desktop, "Masaüstünde kısayol oluştur");
+                    ui.checkbox(&mut self.start_menu, language.text("Başlat menüsünde kısayol oluştur", "Create Start menu shortcut"));
+                    ui.checkbox(&mut self.desktop, language.text("Masaüstünde kısayol oluştur", "Create Desktop shortcut"));
                     ui.add_space(12.0);
-                    ui.small("Kısayollar yalnızca pakette tanımlı uygulama EXE'sine bağlanır.");
-                    ui.small("Var olan başka uygulama kısayollarının üzerine yazılmaz.");
+                    ui.small(language.text("Kısayollar yalnızca pakette tanımlı uygulama EXE'sine bağlanır.", "Shortcuts are created only for the EXE declared in the package."));
+                    ui.small(language.text("Var olan başka uygulama kısayollarının üzerine yazılmaz.", "Existing shortcuts are never overwritten."));
                 } else {
                     ui.label(
-                        "Bu pakette ana EXE tanımlı olmadığı için uygulama kısayolu oluşturulamaz.",
+                        language.text("Bu pakette ana EXE tanımlı olmadığı için uygulama kısayolu oluşturulamaz.", "No main EXE is defined in the package, so application shortcuts are unavailable."),
                     );
                     ui.add_space(10.0);
-                    ui.small("Yeni paket oluştururken Studio / 02 Uygulama dosyaları bölümünden ana EXE seçebilirsiniz.");
+                    ui.small(language.text("Yeni paket oluştururken Studio / 02 Uygulama dosyaları bölümünden ana EXE seçebilirsiniz.", "Choose the main EXE in Studio / 02 Application files when building a new package."));
                 }
             }
             WizardStep::Review => {
-                ui.label("Dosyalar henüz kurulmadı. Seçimlerinizi kontrol edin.");
+                ui.label(language.text("Dosyalar henüz kurulmadı. Seçimlerinizi kontrol edin.", "No files have been installed. Review your choices."));
                 ui.add_space(12.0);
                 egui::Grid::new("local_setup_review")
                     .num_columns(2)
                     .spacing([14.0, 12.0])
                     .show(ui, |ui| {
-                        ui.strong("Uygulama");
+                        ui.strong(language.text("Uygulama", "Application"));
                         ui.label(&self.package_label);
                         ui.end_row();
 
-                        ui.strong("Kurulum kapsamı");
+                        ui.strong(language.text("Kurulum kapsamı", "Installation scope"));
                         ui.label(self.scope.label());
                         ui.end_row();
 
-                        ui.strong("Kurulum klasörü");
+                        ui.strong(language.text("Kurulum klasörü", "Installation folder"));
                         ui.add(egui::Label::new(&self.target).wrap());
                         ui.end_row();
 
-                        ui.strong("Başlat menüsü");
+                        ui.strong(language.text("Başlat menüsü", "Start menu"));
                         ui.label(if self.entry_point.is_some() && self.start_menu {
-                            "Kısayol oluşturulacak"
+                            language.text("Kısayol oluşturulacak", "Shortcut will be created")
                         } else {
-                            "Oluşturulmayacak"
+                            language.text("Oluşturulmayacak", "No shortcut")
                         });
                         ui.end_row();
 
-                        ui.strong("Masaüstü");
+                        ui.strong(language.text("Masaüstü", "Desktop"));
                         ui.label(if self.entry_point.is_some() && self.desktop {
-                            "Kısayol oluşturulacak"
+                            language.text("Kısayol oluşturulacak", "Shortcut will be created")
                         } else {
-                            "Oluşturulmayacak"
+                            language.text("Oluşturulmayacak", "No shortcut")
                         });
                         ui.end_row();
                     });
                 ui.add_space(16.0);
-                ui.small("Kurulumu başlat düğmesiyle onay verdiğinizde dosyalar hazırlanır.");
-                ui.small("Mevcut klasörler değiştirilmez; yeni klasör gereklidir.");
+                ui.small(language.text("Kurulumu başlat düğmesiyle onay verdiğinizde dosyalar hazırlanır.", "Files will be prepared after you confirm with Install."));
+                ui.small(language.text("Mevcut klasörler değiştirilmez; yeni klasör gereklidir.", "A new destination folder is required; existing folders are not changed."));
             }
             WizardStep::Installing => {
                 ui.horizontal(|ui| {
@@ -498,10 +536,10 @@ impl LocalInstaller {
                     ui.strong(self.progress_label);
                 });
                 ui.add_space(12.0);
-                ui.label("Kurulum aşamaları Rust paket motorundan alınan gerçek olaylara dayanır.");
-                ui.small("Dosya bazlı yüzde ölçülmediği için yanıltıcı bir ilerleme yüzdesi gösterilmez.");
+                ui.label(language.text("Kurulum aşamaları Rust paket motorundan alınan gerçek olaylara dayanır.", "Installation stages reflect actual operations performed by the Rust package engine."));
+                ui.small(language.text("Dosya bazlı yüzde ölçülmediği için yanıltıcı bir ilerleme yüzdesi gösterilmez.", "An estimated completion percentage is not shown because exact byte-level progress is unavailable."));
                 ui.small(
-                    "Kurulum sırasında güvenli iptal henüz desteklenmiyor. İşlem tamamlanana kadar pencere açık kalır.",
+                    language.text("Kurulum sırasında güvenli iptal henüz desteklenmiyor. İşlem tamamlanana kadar pencere açık kalır.", "Safe cancellation during installation is not available yet. Keep the window open until completion."),
                 );
             }
             WizardStep::Finished => {
@@ -509,9 +547,9 @@ impl LocalInstaller {
                     match result {
                         Ok((message, warning)) => {
                             ui.heading(if *warning {
-                                "Dosyalar kuruldu; ek işlem uyarısı var"
+                                language.text("Dosyalar kuruldu; ek işlem uyarısı var", "Files installed with additional warnings")
                             } else {
-                                "Kurulum tamamlandı"
+                                language.text("Kurulum tamamlandı", "Installation complete")
                             });
                             ui.add_space(12.0);
                             ui.colored_label(
@@ -524,15 +562,15 @@ impl LocalInstaller {
                             );
                             ui.add_space(12.0);
                             ui.small(
-                                "Bu imzasız paket için güvenli güncelleme/rollback desteği yoktur.",
+                                language.text("Bu imzasız paket için güvenli güncelleme/rollback desteği yoktur.", "Trusted updates and rollback are not available for this unsigned package."),
                             );
                         }
                         Err(message) => {
-                            ui.heading("Kurulum tamamlanamadı");
+                            ui.heading(language.text("Kurulum tamamlanamadı", "Installation could not finish"));
                             ui.add_space(12.0);
                             ui.colored_label(egui::Color32::RED, message);
                             ui.add_space(12.0);
-                            ui.label("Kurulum konumunu değiştirip yeniden deneyebilirsiniz.");
+                            ui.label(language.text("Kurulum konumunu değiştirip yeniden deneyebilirsiniz.", "Change the destination folder and try again."));
                         }
                     }
                 }
@@ -543,6 +581,7 @@ impl LocalInstaller {
 
 impl eframe::App for LocalInstaller {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let language = self.language;
         self.poll(ctx);
         if self.busy.is_some() && ctx.input(|input| input.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -550,10 +589,12 @@ impl eframe::App for LocalInstaller {
 
         egui::TopBottomPanel::top("local_setup_header").show(ctx, |ui| {
             ui.add_space(12.0);
-            ui.heading(egui::RichText::new(self.step.heading()).size(25.0).strong());
+            ui.heading(egui::RichText::new(self.step.heading(self.language)).size(25.0).strong());
             ui.label(egui::RichText::new(&self.package_label).size(15.0));
             if let Some((index, total)) = self.step.decision_index(self.entry_point.is_some()) {
-                ui.small(format!("Hazırlık adımı {index}/{total}"));
+                ui.small(format!("{} {index}/{total}",
+                    self.language.text("Hazırlık adımı", "Preparation step")
+                ));
             }
             ui.add_space(10.0);
             ui.separator();
@@ -566,7 +607,7 @@ impl eframe::App for LocalInstaller {
             // the bottom-right edge; back remains to its left.
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if self.busy.is_some() {
-                    ui.label("Kurulum devam ediyor…");
+                    ui.label(self.language.text("Kurulum devam ediyor…", "Installation in progress…"));
                     return;
                 }
                 let primary = egui::Color32::from_rgb(6, 123, 134);
@@ -576,7 +617,7 @@ impl eframe::App for LocalInstaller {
                             .add_sized(
                                 [110.0, 38.0],
                                 egui::Button::new(
-                                    egui::RichText::new("İleri  ›").color(egui::Color32::WHITE),
+                                    egui::RichText::new(language.text("İleri  ›", "Next  ›")).color(egui::Color32::WHITE),
                                 )
                                 .fill(primary),
                             )
@@ -585,14 +626,14 @@ impl eframe::App for LocalInstaller {
                             self.advance();
                         }
                         if ui
-                            .add_sized([95.0, 38.0], egui::Button::new("İptal"))
+                            .add_sized([95.0, 38.0], egui::Button::new(language.text("İptal", "Cancel")))
                             .clicked()
                         {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                         if self.step.previous(self.entry_point.is_some()).is_some()
                             && ui
-                                .add_sized([95.0, 38.0], egui::Button::new("‹  Geri"))
+                                .add_sized([95.0, 38.0], egui::Button::new(language.text("‹  Geri", "‹  Back")))
                                 .clicked()
                         {
                             self.back();
@@ -603,7 +644,7 @@ impl eframe::App for LocalInstaller {
                             .add_sized(
                                 [175.0, 38.0],
                                 egui::Button::new(
-                                    egui::RichText::new("Kurulumu başlat")
+                                    egui::RichText::new(language.text("Kurulumu başlat", "Install"))
                                         .color(egui::Color32::WHITE),
                                 )
                                 .fill(primary),
@@ -613,13 +654,13 @@ impl eframe::App for LocalInstaller {
                             self.begin_install();
                         }
                         if ui
-                            .add_sized([95.0, 38.0], egui::Button::new("İptal"))
+                            .add_sized([95.0, 38.0], egui::Button::new(language.text("İptal", "Cancel")))
                             .clicked()
                         {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                         if ui
-                            .add_sized([95.0, 38.0], egui::Button::new("‹  Geri"))
+                            .add_sized([95.0, 38.0], egui::Button::new(language.text("‹  Geri", "‹  Back")))
                             .clicked()
                         {
                             self.back();
@@ -628,14 +669,14 @@ impl eframe::App for LocalInstaller {
                     WizardStep::Installing => {}
                     WizardStep::Finished => {
                         if ui
-                            .add_sized([105.0, 38.0], egui::Button::new("Kapat"))
+                            .add_sized([105.0, 38.0], egui::Button::new(language.text("Kapat", "Close")))
                             .clicked()
                         {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                         if self.status.as_ref().is_some_and(Result::is_err)
                             && ui
-                                .add_sized([165.0, 38.0], egui::Button::new("Seçimleri düzenle"))
+                                .add_sized([165.0, 38.0], egui::Button::new(language.text("Seçimleri düzenle", "Change settings")))
                                 .clicked()
                         {
                             self.step = WizardStep::Destination;
@@ -755,9 +796,9 @@ mod tests {
 
     #[test]
     fn worker_stage_labels_are_real_operation_names() {
-        assert!(phase_label(LocalInstallPhase::VerifyingPackage).contains("doğrulanıyor"));
-        assert!(phase_label(LocalInstallPhase::ExtractingPayload).contains("envanteri"));
-        assert!(phase_label(LocalInstallPhase::PublishingInstall).contains("aktarılıyor"));
+        assert!(phase_label(LocalInstallPhase::VerifyingPackage, WizardLanguage::Turkish).contains("doğrulanıyor"));
+        assert!(phase_label(LocalInstallPhase::ExtractingPayload, WizardLanguage::Turkish).contains("envanteri"));
+        assert!(phase_label(LocalInstallPhase::PublishingInstall, WizardLanguage::Turkish).contains("aktarılıyor"));
     }
 
     #[test]
@@ -772,6 +813,7 @@ mod tests {
             program_files_root: machine.clone(),
             current_user_root: user.clone(),
             scope: InstallScope::CurrentUser,
+            language: WizardLanguage::Turkish,
             entry_point: None,
             start_menu: false,
             desktop: false,
