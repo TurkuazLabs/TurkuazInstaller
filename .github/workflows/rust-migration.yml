@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.28
+# Version: 0.2.29
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -165,6 +165,9 @@ jobs:
       # Native ShellLink COM contract: LNK created, foreign LNK preserved.
       - name: Test Windows per-user shortcut adapter
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_shortcuts::tests
+
+      - name: Test multi-step unsigned local setup wizard navigation
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui unsigned_local_gui::tests
 
       - name: Test setup authoring GUI theme safety
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_typography_is_available_for_both_appearances
