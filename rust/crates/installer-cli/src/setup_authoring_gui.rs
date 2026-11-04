@@ -3434,6 +3434,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn legacy_tzproj_files_get_optional_disabled_license_by_default() {
+        let mut json = serde_json::to_value(SavedProject::default()).expect("project JSON");
+        json.as_object_mut().unwrap().remove("wizard");
+        let project: SavedProject =
+            serde_json::from_value(json).expect("legacy project compatibility");
+        assert!(!project.wizard.is_enabled(WizardPageId::License));
+        project.wizard.validate().expect("safe defaults");
+    }
+
+    #[test]
+    fn eula_editor_roundtrips_without_bypassing_license_validation() {
+        let mut project = SavedProject::default();
+        project.wizard.page_mut(WizardPageId::License).unwrap().enabled = true;
+        assert!(validate_project_step(&project, 2).is_err());
+        project.wizard.license_text_tr = "Ürüne özel gerçek koşullar".to_owned();
+        project.wizard.license_text_en = "Product-specific actual terms".to_owned();
+        project.wizard.move_optional(WizardPageId::License, 1).unwrap();
+        validate_project_step(&project, 2).expect("valid EULA and custom order");
+        let value = serde_json::to_vec(&project).expect("serialize");
+        let restored: SavedProject = serde_json::from_slice(&value).expect("parse");
+        assert_eq!(restored.wizard, project.wizard);
+    }
+
+    #[test]
     fn new_project_uses_os_data_root_instead_of_process_cwd() {
         let project = SavedProject::default();
         let output = Path::new(&project.output_directory);
