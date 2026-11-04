@@ -545,8 +545,12 @@ impl eframe::App for LocalInstaller {
 
         egui::TopBottomPanel::top("local_setup_header").show(ctx, |ui| {
             ui.add_space(12.0);
-            ui.heading(self.step.heading());
-            ui.label(&self.package_label);
+            ui.heading(
+                egui::RichText::new(self.step.heading())
+                    .size(25.0)
+                    .strong(),
+            );
+            ui.label(egui::RichText::new(&self.package_label).size(15.0));
             if let Some((index, total)) = self.step.decision_index(self.entry_point.is_some()) {
                 ui.small(format!("Hazırlık adımı {index}/{total}"));
             }
@@ -557,50 +561,67 @@ impl eframe::App for LocalInstaller {
         egui::TopBottomPanel::bottom("local_setup_footer").show(ctx, |ui| {
             ui.separator();
             ui.add_space(10.0);
-            ui.horizontal(|ui| {
+            // In right-to-left layout the primary action is anchored to
+            // the bottom-right edge; back remains to its left.
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if self.busy.is_some() {
                     ui.label("Kurulum devam ediyor…");
                     return;
                 }
-
+                let primary = egui::Color32::from_rgb(6, 123, 134);
                 match self.step {
                     WizardStep::Welcome | WizardStep::Destination | WizardStep::Shortcuts => {
+                        if ui
+                            .add_sized(
+                                [110.0, 38.0],
+                                egui::Button::new("İleri  ›").fill(primary),
+                            )
+                            .clicked()
+                        {
+                            self.advance();
+                        }
+                        if ui.add_sized([95.0, 38.0], egui::Button::new("İptal")).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
                         if self.step.previous(self.entry_point.is_some()).is_some()
-                            && ui.button("Geri").clicked()
+                            && ui.add_sized([95.0, 38.0], egui::Button::new("‹  Geri")).clicked()
                         {
                             self.back();
                         }
-                        if ui.button("İptal").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        ui.add_space(14.0);
-                        if ui.button("İleri").clicked() {
-                            self.advance();
-                        }
                     }
                     WizardStep::Review => {
-                        if ui.button("Geri").clicked() {
-                            self.back();
+                        if ui
+                            .add_sized(
+                                [175.0, 38.0],
+                                egui::Button::new("Kurulumu başlat").fill(primary),
+                            )
+                            .clicked()
+                        {
+                            self.begin_install();
                         }
-                        if ui.button("İptal").clicked() {
+                        if ui.add_sized([95.0, 38.0], egui::Button::new("İptal")).clicked() {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
-                        ui.add_space(14.0);
-                        if ui.button("Kurulumu başlat").clicked() {
-                            self.begin_install();
+                        if ui.add_sized([95.0, 38.0], egui::Button::new("‹  Geri")).clicked() {
+                            self.back();
                         }
                     }
                     WizardStep::Installing => {}
                     WizardStep::Finished => {
+                        if ui.add_sized([105.0, 38.0], egui::Button::new("Kapat")).clicked() {
+                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
                         if self.status.as_ref().is_some_and(Result::is_err)
-                            && ui.button("Seçimleri düzenle").clicked()
+                            && ui
+                                .add_sized(
+                                    [165.0, 38.0],
+                                    egui::Button::new("Seçimleri düzenle"),
+                                )
+                                .clicked()
                         {
                             self.step = WizardStep::Destination;
                             self.status = None;
                             self.path_error = None;
-                        }
-                        if ui.button("Kapat").clicked() {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                     }
                 }
@@ -616,20 +637,62 @@ impl eframe::App for LocalInstaller {
     }
 }
 
+/// @dev-id BRK-LOCAL-WIZARD-STYLE-001
+/// @purpose Use Windows' installed Segoe UI font when available; otherwise
+/// egui's bundled proportional font remains a safe Unicode fallback.
+fn configure_local_style(context: &egui::Context) {
+    if let Some(windows_dir) = std::env::var_os("WINDIR") {
+        let font_path = PathBuf::from(windows_dir).join("Fonts").join("segoeui.ttf");
+        if let Ok(font_bytes) = fs::read(&font_path) {
+            let mut fonts = egui::FontDefinitions::default();
+            fonts.font_data.insert(
+                "WindowsSegoeUI".to_owned(),
+                egui::FontData::from_owned(font_bytes).into(),
+            );
+            if let Some(family) = fonts.families.get_mut(&egui::FontFamily::Proportional) {
+                family.insert(0, "WindowsSegoeUI".to_owned());
+            }
+            context.set_fonts(fonts);
+        }
+    }
+    context.all_styles_mut(|style| {
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(14.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(17.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, egui::FontId::proportional(16.0));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, egui::FontId::proportional(26.0));
+        style.spacing.item_spacing = egui::vec2(12.0, 10.0);
+        style.spacing.button_padding = egui::vec2(14.0, 8.0);
+        style.spacing.interact_size = egui::vec2(40.0, 38.0);
+        style.spacing.window_margin = egui::Margin::same(18);
+        style.visuals.selection.bg_fill = egui::Color32::from_rgb(6, 123, 134);
+    });
+}
+
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let executable = std::env::current_exe()?;
     let app = LocalInstaller::new(executable)?;
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([740.0, 480.0])
-            .with_min_inner_size([640.0, 400.0])
+            .with_inner_size([860.0, 550.0])
+            .with_min_inner_size([760.0, 490.0])
             .with_title("Turkuaz Standart Kurulum"),
         ..Default::default()
     };
     eframe::run_native(
         "Turkuaz Standart Kurulum",
         options,
-        Box::new(move |_ctx| Ok(Box::new(app))),
+        Box::new(move |creation_context| {
+            configure_local_style(&creation_context.egui_ctx);
+            Ok(Box::new(app))
+        }),
     )?;
     Ok(())
 }
