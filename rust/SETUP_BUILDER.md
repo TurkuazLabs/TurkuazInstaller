@@ -205,7 +205,7 @@ v0.2.19 kurulumlarinda kayit olmadigi icin otomatik kaldirma reddedilir.
 Yeni kurulumda uygulama dosyalari yayinlandiktan sonra,
 Windows `HKCU` (tek kullanici) veya `HKLM` (tum kullanicilar)
 `Uninstall` kaydi olusturulur. Kalici kaldirici setup EXE'si kurulu
-uygulama kokunun **disinda** `LocalAppData` / `ProgramData` altinda
+uygulama kokunun **disinda** `LocalAppData` / korumali `ProgramFiles` altinda
 saklanir. Baslat menusu `Kaldir` kisayolu ve kayitli uygulama
 kisayollari SHA-256 ile sahiplik envanterine alinir. Kaldirma ayri bir
 onay ekrani ile baslatilir ve paket motorunun degistirilmemis dosyalar
