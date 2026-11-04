@@ -751,6 +751,36 @@ mod tests {
     }
 
     #[test]
+    fn changing_scope_recalculates_destination_without_writing_files() {
+        let user = PathBuf::from(r"C:\Users\Test\AppData\Local\Programs");
+        let machine = PathBuf::from(r"C:\Program Files");
+        let mut app = LocalInstaller {
+            executable: PathBuf::from("fixture.exe"),
+            package_id: "qa.scope".into(),
+            package_label: "qa.scope · 1.0.0".into(),
+            target: user.join("qa.scope").to_string_lossy().into_owned(),
+            program_files_root: machine.clone(),
+            current_user_root: user.clone(),
+            scope: InstallScope::CurrentUser,
+            entry_point: None,
+            start_menu: false,
+            desktop: false,
+            step: WizardStep::Destination,
+            path_error: Some("previous error".into()),
+            busy: None,
+            progress_label: "",
+            status: None,
+        };
+        app.select_scope(InstallScope::AllUsers);
+        assert_eq!(app.scope, InstallScope::AllUsers);
+        assert_eq!(PathBuf::from(&app.target), machine.join("qa.scope"));
+        assert!(app.path_error.is_none());
+        app.select_scope(InstallScope::CurrentUser);
+        assert_eq!(PathBuf::from(&app.target), user.join("qa.scope"));
+        assert_eq!(app.step, WizardStep::Destination);
+    }
+
+    #[test]
     fn preflight_rejects_existing_or_traversal_targets_without_writes() {
         let temp = std::env::temp_dir();
         assert!(preflight_destination(&temp.to_string_lossy()).is_err());
