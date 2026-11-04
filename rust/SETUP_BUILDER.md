@@ -136,9 +136,14 @@ Kuruluyor -> Kurulum sonucu**.
   `Gozat` secilen ust klasore `package-id` adinda yeni hedef ekler.
 - Ek seceneklerde, pakette guvenli ana `.exe` bulunursa kullanici
   `Baslat menusu` ve `Masaustu` kisayollarini ayri secer.
+  Ana EXE yoksa gereksiz kisayol sayfasi atlanir; hazirlik adim sayisi
+  4 yerine 3 olur.
 - Son kontrolde secilen hedef ve kisayollar gorunur. Kurulum baslayinca
-  navigasyon kapanir. Paket motoru ilerleme olaylari vermedigi icin
-  uydurma yuzde yerine gercek calisma gostergesi kullanilir.
+  navigasyon kapanir. Paket motoru dogrudan `LocalInstallPhase`
+  olaylarini yayimlar: gomulu paket dogrulama, arsiv cikarma ve
+  sahiplik envanteri hazirlama, son klasore yayinlama. Ardindan secili
+  Windows kisayollari yapilir. Olaylar gercek motor adimlaridir,
+  dosya bazli yuzde veya kesin sure vaadi degildir.
 - Kurulum tamamlandiginda basari / kisayol uyarisi / hata ayrilir.
   Hatadan sonra yeni hedef secmek icin duzenleme sayfasina donulebilir.
 - Kurulum sirasinda guvenli iptal destegi olmadigindan pencere
