@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.5
+// Version: 0.1.6
 // Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -458,6 +458,12 @@ pub(super) fn register_local_install(
     ensure_managed_directory(&root)?;
     let uninstaller = root.join(format!("{name}.exe"));
     let manifest = root.join(format!("{name}.json"));
+    if uninstaller.starts_with(target)
+        || target.starts_with(&root)
+        || !target.is_absolute()
+    {
+        return Err("Kaldırıcı çalışma dizini kurulum hedefiyle çakışıyor.".into());
+    }
     if fs::symlink_metadata(&manifest).is_ok() || fs::symlink_metadata(&uninstaller).is_ok() {
         return Err("Bu kuruluma ait kaldırıcı kaydı zaten var; mevcut dosyalar korunuyor.".into());
     }
