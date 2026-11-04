@@ -578,6 +578,41 @@ impl LocalInstaller {
     fn page(&mut self, ui: &mut egui::Ui) {
         let language = self.language;
         match self.step {
+            WizardStep::License => {
+                let english = self.language == WizardLanguage::English;
+                if let Some(page) = self.wizard.page(WizardPageId::License) {
+                    ui.label(page.description(english));
+                }
+                ui.add_space(12.0);
+                egui::Frame::group(ui.style()).show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("local-eula-scroll")
+                        .max_height(275.0)
+                        .show(ui, |ui| {
+                            ui.add(
+                                egui::Label::new(self.wizard.license_text(english)).wrap(),
+                            );
+                        });
+                });
+                ui.add_space(14.0);
+                ui.checkbox(
+                    &mut self.license_accepted,
+                    self.language.text(
+                        "Lisans sözleşmesinin koşullarını kabul ediyorum.",
+                        "I accept the terms in the License Agreement.",
+                    ),
+                );
+                ui.add_space(10.0);
+                if !self.license_accepted {
+                    ui.colored_label(
+                        egui::Color32::from_rgb(173, 101, 37),
+                        self.language.text(
+                            "Devam etmek için lisans koşullarını kabul etmelisiniz.",
+                            "Accept the license terms to enable Next.",
+                        ),
+                    );
+                }
+            }
             WizardStep::Welcome => {
                 ui.horizontal(|ui| {
                     ui.label("Dil / Language");
@@ -837,13 +872,37 @@ impl eframe::App for LocalInstaller {
 
         egui::TopBottomPanel::top("local_setup_header").show(ctx, |ui| {
             ui.add_space(12.0);
-            ui.heading(
-                egui::RichText::new(self.step.heading(self.language))
-                    .size(25.0)
-                    .strong(),
-            );
+            let title = self
+                .wizard
+                .page(self.step.page_id())
+                .map(|settings| {
+                    settings.title(self.language == WizardLanguage::English)
+                })
+                .unwrap_or(self.step.heading(self.language));
+            ui.heading(egui::RichText::new(title).size(25.0).strong());
             ui.label(egui::RichText::new(&self.package_label).size(15.0));
-            if let Some((index, total)) = self.step.decision_index(self.entry_point.is_some()) {
+            let before = self.language;
+            ui.horizontal(|ui| {
+                ui.label("Dil / Language");
+                egui::ComboBox::from_id_salt("native-wizard-language")
+                    .selected_text(self.language.label())
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut self.language,
+                            WizardLanguage::Turkish,
+                            WizardLanguage::Turkish.label(),
+                        );
+                        ui.selectable_value(
+                            &mut self.language,
+                            WizardLanguage::English,
+                            WizardLanguage::English.label(),
+                        );
+                    });
+            });
+            if self.language != before {
+                self.license_accepted = false;
+            }
+            if let Some((index, total)) = self.step_counter() {
                 ui.small(format!(
                     "{} {index}/{total}",
                     self.language.text("Hazırlık adımı", "Preparation step")
@@ -868,15 +927,19 @@ impl eframe::App for LocalInstaller {
                 }
                 let primary = egui::Color32::from_rgb(6, 123, 134);
                 match self.step {
-                    WizardStep::Welcome | WizardStep::Destination | WizardStep::Shortcuts => {
+                    WizardStep::Welcome
+                    | WizardStep::License
+                    | WizardStep::Destination
+                    | WizardStep::Shortcuts => {
                         if ui
-                            .add_sized(
-                                [110.0, 38.0],
+                            .add_enabled(
+                                self.step != WizardStep::License || self.license_accepted,
                                 egui::Button::new(
                                     egui::RichText::new(language.text("İleri  ›", "Next  ›"))
                                         .color(egui::Color32::WHITE),
                                 )
-                                .fill(primary),
+                                .fill(primary)
+                                .min_size(egui::vec2(110.0, 38.0)),
                             )
                             .clicked()
                         {
@@ -891,7 +954,7 @@ impl eframe::App for LocalInstaller {
                         {
                             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
-                        if self.step.previous(self.entry_point.is_some()).is_some()
+                        if self.previous_step().is_some()
                             && ui
                                 .add_sized(
                                     [95.0, 38.0],
@@ -1040,7 +1103,14 @@ pub fn run_resumed() -> Result<(), Box<dyn std::error::Error>> {
     app.language = args.language;
     app.start_menu = app.entry_point.is_some() && args.start_menu;
     app.desktop = app.entry_point.is_some() && args.desktop;
-    app.step = WizardStep::Review;
+    app.step = if app.wizard.is_enabled(WizardPageId::License) {
+        // An elevated restart must never inherit unsigned acceptance state
+        // from command-line arguments. Require consent in this process too.
+        WizardStep::License
+    } else {
+        WizardStep::Review
+    };
+    app.license_accepted = false;
     launch(app)
 }
 
@@ -1107,6 +1177,19 @@ mod tests {
     }
 
     #[test]
+    fn configured_eula_blocks_progress_until_explicit_acceptance() {
+        let mut wizard = WizardConfig::default();
+        wizard.page_mut(WizardPageId::License).unwrap().enabled = true;
+        wizard.license_text_tr = "Lisans koşulları".into();
+        wizard.license_text_en = "License terms".into();
+        let flow = wizard.visible_pages(true);
+        assert_eq!(flow[0], WizardPageId::Welcome);
+        assert_eq!(flow[1], WizardPageId::License);
+        assert_eq!(flow[2], WizardPageId::Destination);
+        assert_eq!(flow.last(), Some(&WizardPageId::Finished));
+    }
+
+    #[test]
     fn worker_stage_labels_are_real_operation_names() {
         assert!(
             phase_label(LocalInstallPhase::VerifyingPackage, WizardLanguage::Turkish)
@@ -1141,6 +1224,8 @@ mod tests {
             current_user_root: user.clone(),
             scope: InstallScope::CurrentUser,
             language: WizardLanguage::Turkish,
+            wizard: WizardConfig::default(),
+            license_accepted: false,
             entry_point: None,
             start_menu: false,
             desktop: false,
