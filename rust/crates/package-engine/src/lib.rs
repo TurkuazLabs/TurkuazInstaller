@@ -43,15 +43,13 @@ pub use setup_theme::{
 };
 pub use turkuaz_av_adapter::{NoMatchPolicy, TurkuazAvScanner};
 pub use unsigned_setup::{
-    LocalInstallPhase, UnsignedLocalIdentity, create_unsigned_local_setup, create_unsigned_local_setup_with_wizard,
-    read_unsigned_local_wizard_config,
-    extract_unsigned_local_package, has_unsigned_local_setup, install_unsigned_local_setup,
-    install_unsigned_local_setup_scanned, install_unsigned_local_setup_with_progress,
+    LocalInstallPhase, UnsignedLocalIdentity, create_unsigned_local_setup,
+    create_unsigned_local_setup_with_wizard, extract_unsigned_local_package,
+    has_unsigned_local_setup, install_unsigned_local_setup, install_unsigned_local_setup_scanned,
+    install_unsigned_local_setup_with_progress, read_unsigned_local_wizard_config,
     unsigned_local_identity,
 };
-pub use wizard_config::{
-    MAX_WIZARD_CONFIG_BYTES, WizardConfig, WizardPageId, WizardPageSettings,
-};
+pub use wizard_config::{MAX_WIZARD_CONFIG_BYTES, WizardConfig, WizardPageId, WizardPageSettings};
 
 use std::{
     collections::HashMap,
