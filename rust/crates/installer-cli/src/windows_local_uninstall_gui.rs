@@ -68,7 +68,10 @@ impl UninstallApp {
             return;
         }
         if self.record.scope() == InstallScope::AllUsers && !current_process_is_elevated() {
-            match request_elevated_uninstall(&std::env::current_exe().unwrap_or_default(), &self.manifest) {
+            match request_elevated_uninstall(
+                &std::env::current_exe().unwrap_or_default(),
+                &self.manifest,
+            ) {
                 Ok(()) => context.send_viewport_cmd(egui::ViewportCommand::Close),
                 Err(error) => self.result = Some(Err(error)),
             }
@@ -81,7 +84,8 @@ impl UninstallApp {
         self.phase = UninstallPhase::Running;
         thread::spawn(move || {
             let result = read_registration(&manifest).and_then(|latest| {
-                if latest.package_id() != record.package_id() || latest.target() != record.target() {
+                if latest.package_id() != record.package_id() || latest.target() != record.target()
+                {
                     return Err("Kaldırma envanteri işlem sırasında değişti.".into());
                 }
                 if latest.scope() == InstallScope::AllUsers && !current_process_is_elevated() {
@@ -96,7 +100,8 @@ impl UninstallApp {
                 }
                 let mut message = format!(
                     "{}: {} uygulama dosyası kaldırıldı.",
-                    latest.package_id(), summary.removed_files
+                    latest.package_id(),
+                    summary.removed_files
                 );
                 if summary.retained_unknown_files {
                     message.push_str("\nKullanıcıya ait veya tanınmayan diğer dosyalar korundu.");
@@ -154,8 +159,9 @@ impl eframe::App for UninstallApp {
         egui::TopBottomPanel::bottom("uninstall_actions").show(context, |ui| {
             ui.separator();
             ui.add_space(9.0);
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                match self.phase {
+            ui.with_layout(
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| match self.phase {
                     UninstallPhase::Confirm => {
                         if ui
                             .add_enabled(
@@ -167,7 +173,10 @@ impl eframe::App for UninstallApp {
                         {
                             self.begin(context);
                         }
-                        if ui.add_sized([95.0, 40.0], egui::Button::new("Vazgeç")).clicked() {
+                        if ui
+                            .add_sized([95.0, 40.0], egui::Button::new("Vazgeç"))
+                            .clicked()
+                        {
                             context.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                     }
@@ -175,12 +184,15 @@ impl eframe::App for UninstallApp {
                         ui.label("Güvenli kaldırma sürüyor…");
                     }
                     UninstallPhase::Result => {
-                        if ui.add_sized([110.0, 40.0], egui::Button::new("Kapat")).clicked() {
+                        if ui
+                            .add_sized([110.0, 40.0], egui::Button::new("Kapat"))
+                            .clicked()
+                        {
                             context.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
                     }
-                }
-            });
+                },
+            );
         });
         egui::CentralPanel::default().show(context, |ui| {
             ui.add_space(16.0);
