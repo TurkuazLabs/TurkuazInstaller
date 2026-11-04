@@ -11,8 +11,8 @@ use windows::{
     Win32::{
         System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoTaskMemFree, CoUninitialize},
         UI::Shell::{
-            FOLDERID_ProgramFiles, FOLDERID_UserProgramFiles, IsUserAnAdmin,
-            KF_FLAG_DONT_VERIFY, SHGetKnownFolderPath,
+            FOLDERID_ProgramFiles, FOLDERID_UserProgramFiles, IsUserAnAdmin, KF_FLAG_DONT_VERIFY,
+            SHGetKnownFolderPath,
         },
     },
     core::GUID,
