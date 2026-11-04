@@ -71,6 +71,12 @@ mod wizard_language;
 mod windows_install_scope;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
+mod windows_local_registration;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
+mod windows_local_uninstall_gui;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod windows_shortcuts;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
@@ -109,6 +115,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
     if std::env::args().nth(1).as_deref() == Some("install-self") {
         return install_self_setup_command().await;
+    }
+    #[cfg(all(windows, feature = "setup-authoring-gui"))]
+    if std::env::args().nth(1).as_deref() == Some("uninstall-local-gui") {
+        return windows_local_uninstall_gui::run();
     }
     #[cfg(all(windows, feature = "setup-authoring-gui"))]
     if std::env::args().nth(1).as_deref() == Some("resume-local-wizard") {
