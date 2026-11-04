@@ -198,10 +198,12 @@ yeniden baslatmada EULA etkinse yeni surecte yeniden onay gerekir.
 
 Proje `schemaVersion=1` korunur ve `wizard` alani istege baglidir.
 Rust `TZLOCAL1` paket son ekinin dosya cikarma sozlesmesi korunur;
-yeni EXE'de EULA/sayfa JSON'u paket baytlarindan hemen once ayri bir
-SHA-256 kontrollu ve uzunlugu sinirli `TZWIZR01` blogunda tasinir.
-Eski EXE'ler varsayilan sayfalarla acilir. Yanlis veya bozulmus blok
-reddedilir; SHA-256 tek basina yayinci kimlik dogrulamasi degildir.
+yeni EXE, `TZLOCAL2` son eki ile yapilandirilmis sihirbazi isaretler.
+EULA/sayfa JSON'u paket baytlarindan hemen once ayri bir SHA-256
+kontrollu, uzunlugu sinirli `TZWIZR01` blogunda tasinir. `TZLOCAL1`
+EXE'ler varsayilan sayfalarla acilir; `TZLOCAL2` icinde eksik veya
+bozuk sihirbaz blogu varsa EULA atlanmaz, dosya reddedilir. SHA-256
+tek basina yayinci kimlik dogrulamasi degildir.
 Degisen sihirbaz ayarlari ile kurulum EXE'si yeniden olusturulurken
 eski taninabilir `standard/TurkuazSetup.exe` dosyasi silinmez,
 `standard.backup-...` altina tasinir. Bilinmeyen cikti klasorune
