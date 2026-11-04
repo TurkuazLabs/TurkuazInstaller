@@ -429,11 +429,6 @@ impl eframe::App for LocalInstaller {
             ui.separator();
         });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add_space(22.0);
-            self.page(ui);
-        });
-
         egui::TopBottomPanel::bottom("local_setup_footer").show(ctx, |ui| {
             ui.separator();
             ui.add_space(10.0);
@@ -484,6 +479,12 @@ impl eframe::App for LocalInstaller {
                 }
             });
             ui.add_space(10.0);
+        });
+
+        // egui CentralPanel must come after all top/bottom panels.
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.add_space(22.0);
+            self.page(ui);
         });
     }
 }
