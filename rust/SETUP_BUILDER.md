@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.4
-Aciklama: Birlesik tam boy urun, dosya, kurulum tasarimi ve dagitim gorunumu
+Version: 0.9.5
+Aciklama: Birlesik Studio gorunumu, istege bagli bilgi paneli ve alan durumu gostergeleri
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -51,6 +51,26 @@ Gorsel CI derlemesi gercek ekran goruntusu testi yerine gecmez.
 Windows kabul testinde 01/02/03/04, Genel bakis, kaydirma,
 Turkce metinler, yeniden boyutlandirma ve acik/koyu tema
 ayrica karsilastirilir. Production release otomatik olusturulmaz.
+
+## Gelistirilmis Studio gezintisi ve bilgi paneli
+
+Rakip kurulum IDE'lerinden (Advanced Installer ve install4j) alinan
+bolum hiyerarsisi ilkesine gore 01, 02 ve 04 ana editorlerinde
+**Bilgi panelini gizle/goster** kontrolu vardir. Sag panel kapatildiginda
+ana form daha genis bir calisma yuzeyi kazanir. 03 tasariminda sayfa
+ozellikleri paneli bagimsizdir ve bu dugmeden etkilenmez.
+
+Sol gezinme ve Genel bakis kartlari yalnizca gerekli alanlara deger
+girilip girilmedigini yazar; onay/validasyon sonucu olduklarini
+iddia etmez. Sag paneldeki **Bolum kontrol listesi** secili bolume
+hizli gecis saglar. Mevcut proje verisi, .tzproj serilestirmesi,
+guvenlik dogrulamalari, dosya sistemi ve imzali dagitim mantigi
+degistirilmez. Bu gostergeler paket olusturuldu, imzalandi, guvenli
+veya Windows'ta denendi anlamina gelmez.
+
+CI'da form gorunumu/veri degismezligi ve girdi durumu helper testleri
+ayri dogrulanir. Gercek Windows GUI boyutlandirma ve kaydirma
+kontrolu manuel gorsel kabul adimidir.
 
 ## Tam boy kurulum tasarimi (Windows Studio)
 
