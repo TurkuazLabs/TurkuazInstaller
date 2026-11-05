@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
-// Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
+// Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.6.16
-// Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
+// Version: 0.7.0
+// Aciklama: IDE calisma alani, Windows kurulum simulasyonu ve tam boy adim editoru
 // Bagimli Oldugu Katman: View | Application
 
 use std::{
@@ -33,14 +33,17 @@ mod windows_documents;
 mod setup_av_options;
 use setup_av_options::{AvProvider, AvScanConfig};
 
+#[path = "setup_design_surface.rs"]
+mod setup_design_surface;
+
 const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
 const PROJECT_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum AppearancePreference {
-    #[default]
     System,
     Light,
+    #[default]
     Dark,
 }
 
@@ -235,6 +238,8 @@ struct BuilderApp {
     appearance: AppearancePreference,
     preview_dark: bool,
     selected_wizard_page: WizardPageId,
+    preview_english: bool,
+    preview_accepted: bool,
     status: Option<(bool, String)>,
     build_receiver: Option<Receiver<Result<String, String>>>,
     source_check_receiver: Option<Receiver<SourceCheckResponse>>,
@@ -252,9 +257,11 @@ impl Default for BuilderApp {
             pending_open_requested: false,
             active_step: 0,
             dialog_open: false,
-            appearance: AppearancePreference::System,
+            appearance: AppearancePreference::Dark,
             preview_dark: false,
             selected_wizard_page: WizardPageId::License,
+            preview_english: false,
+            preview_accepted: false,
             status: None,
             build_receiver: None,
             source_check_receiver: None,
@@ -279,12 +286,12 @@ fn studio_palette(dark: bool) -> StudioPalette {
     let rgb = egui::Color32::from_rgb;
     if dark {
         StudioPalette {
-            accent: rgb(61, 203, 198),
+            accent: rgb(47, 127, 225),
             canvas: rgb(16, 24, 35),
             surface: rgb(28, 39, 54),
             input: rgb(36, 50, 66),
             border: rgb(60, 77, 91),
-            hover: rgb(44, 65, 78),
+            hover: rgb(49, 76, 113),
         }
     } else {
         StudioPalette {
@@ -353,8 +360,8 @@ pub fn run() -> eframe::Result {
     let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1360.0, 860.0])
-            .with_min_inner_size([1024.0, 700.0])
+            .with_inner_size([1510.0, 850.0])
+            .with_min_inner_size([1100.0, 700.0])
             .with_title(title.clone()),
         ..Default::default()
     };
@@ -364,7 +371,7 @@ pub fn run() -> eframe::Result {
         options,
         Box::new(|creation_context| {
             let context = &creation_context.egui_ctx;
-            context.set_theme(AppearancePreference::System.preference());
+            context.set_theme(AppearancePreference::Dark.preference());
             configure_studio_style(context);
             Ok(Box::new(BuilderApp::default()))
         }),
@@ -601,21 +608,69 @@ impl eframe::App for BuilderApp {
                     );
                 });
 
-            egui::SidePanel::right("setup-builder-preview")
-                .resizable(false)
-                .default_width(310.0)
-                .show(context, |ui| self.draw_preview(ui));
+            // BRK-STUDIO-DESIGN-LAYOUT-001: editor and preview are peers.
+            // Product/files/distribution keep their existing modal editors;
+            // only installer design uses the full-height workspace.
+            if self.dialog_open && self.active_step == 2 {
+                egui::SidePanel::right("setup-designer-inspector")
+                    .resizable(true)
+                    .default_width(474.0)
+                    .min_width(350.0)
+                    .max_width(620.0)
+                    .show(context, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("studio-designer-inspector-scroll")
+                            .show(ui, |ui| {
+                                let selected_before = self.selected_wizard_page;
+                                setup_design_surface::draw_step_inspector(
+                                    ui,
+                                    &mut self.project.wizard,
+                                    &mut self.selected_wizard_page,
+                                    &mut self.preview_english,
+                                );
+                                if selected_before != self.selected_wizard_page {
+                                    self.preview_accepted = false;
+                                }
+                                setup_design_surface::draw_appearance_editor(
+                                    ui,
+                                    &mut self.project,
+                                );
+                                ui.add_space(18.0);
+                                if ui.button("← Genel bakışa dön").clicked() {
+                                    self.dialog_open = false;
+                                }
+                            });
+                    });
+                egui::CentralPanel::default().show(context, |ui| {
+                    egui::ScrollArea::vertical()
+                        .id_salt("studio-designer-preview-scroll")
+                        .show(ui, |ui| {
+                            setup_design_surface::draw_install_preview(
+                                ui,
+                                &self.project,
+                                &mut self.selected_wizard_page,
+                                &mut self.preview_english,
+                                &mut self.preview_accepted,
+                            );
+                        });
+                });
+            } else {
+                egui::SidePanel::right("setup-builder-preview")
+                    .resizable(false)
+                    .default_width(310.0)
+                    .show(context, |ui| self.draw_preview(ui));
 
-            egui::CentralPanel::default().show(context, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| self.draw_workspace(ui));
-            });
+                egui::CentralPanel::default().show(context, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| self.draw_workspace(ui));
+                });
+            }
         } else {
             egui::CentralPanel::default().show(context, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| self.draw_welcome(ui));
             });
         }
 
-        if self.dialog_open && !is_building {
+        if self.dialog_open && self.active_step != 2 && !is_building {
             self.show_editor_modal(context, false);
         }
         if self.pending_new_kind.is_some() {
@@ -1141,6 +1196,10 @@ impl BuilderApp {
     fn open_editor(&mut self, step: usize) {
         self.active_step = step.min(3);
         self.dialog_open = true;
+        if self.active_step == 2 {
+            self.selected_wizard_page = WizardPageId::License;
+            self.preview_accepted = false;
+        }
         self.status = None;
     }
 
