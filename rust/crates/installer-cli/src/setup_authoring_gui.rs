@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
-// Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
+// Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.6.16
-// Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
+// Version: 0.8.8
+// Aciklama: Tum bolumlerde secim durumlari, acilir bilgi paneli ve kurulumu etkilemeyen gorsel rehberlik
 // Bagimli Oldugu Katman: View | Application
 
 use std::{
@@ -33,14 +33,17 @@ mod windows_documents;
 mod setup_av_options;
 use setup_av_options::{AvProvider, AvScanConfig};
 
+#[path = "setup_design_surface.rs"]
+mod setup_design_surface;
+
 const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
 const PROJECT_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum AppearancePreference {
-    #[default]
     System,
     Light,
+    #[default]
     Dark,
 }
 
@@ -234,7 +237,11 @@ struct BuilderApp {
     dialog_open: bool,
     appearance: AppearancePreference,
     preview_dark: bool,
+    show_project_inspector: bool,
+    show_designer_inspector: bool,
     selected_wizard_page: WizardPageId,
+    preview_english: bool,
+    preview_accepted: bool,
     status: Option<(bool, String)>,
     build_receiver: Option<Receiver<Result<String, String>>>,
     source_check_receiver: Option<Receiver<SourceCheckResponse>>,
@@ -252,9 +259,13 @@ impl Default for BuilderApp {
             pending_open_requested: false,
             active_step: 0,
             dialog_open: false,
-            appearance: AppearancePreference::System,
+            appearance: AppearancePreference::Dark,
             preview_dark: false,
+            show_project_inspector: true,
+            show_designer_inspector: true,
             selected_wizard_page: WizardPageId::License,
+            preview_english: false,
+            preview_accepted: false,
             status: None,
             build_receiver: None,
             source_check_receiver: None,
@@ -279,12 +290,12 @@ fn studio_palette(dark: bool) -> StudioPalette {
     let rgb = egui::Color32::from_rgb;
     if dark {
         StudioPalette {
-            accent: rgb(61, 203, 198),
+            accent: rgb(47, 127, 225),
             canvas: rgb(16, 24, 35),
             surface: rgb(28, 39, 54),
             input: rgb(36, 50, 66),
             border: rgb(60, 77, 91),
-            hover: rgb(44, 65, 78),
+            hover: rgb(49, 76, 113),
         }
     } else {
         StudioPalette {
@@ -295,6 +306,20 @@ fn studio_palette(dark: bool) -> StudioPalette {
             border: rgb(211, 223, 233),
             hover: rgb(222, 239, 242),
         }
+    }
+}
+
+/// @dev-id BRK-STUDIO-RESPONSIVE-001
+/// @purpose Preserve meaningful wizard preview space at narrow Studio widths.
+/// @contract Inspector sizing changes presentation only and leaves user data intact.
+/// available_width is the UI width after the left navigation is laid out.
+fn studio_designer_inspector_widths(available_width: f32) -> (f32, f32) {
+    if available_width < 1040.0 {
+        (340.0, 370.0)
+    } else if available_width < 1360.0 {
+        (410.0, 490.0)
+    } else {
+        (474.0, 620.0)
     }
 }
 
@@ -353,8 +378,8 @@ pub fn run() -> eframe::Result {
     let title = format!("Turkuaz Setup Studio v{}", env!("CARGO_PKG_VERSION"));
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1360.0, 860.0])
-            .with_min_inner_size([1024.0, 700.0])
+            .with_inner_size([1510.0, 850.0])
+            .with_min_inner_size([1100.0, 700.0])
             .with_title(title.clone()),
         ..Default::default()
     };
@@ -364,7 +389,7 @@ pub fn run() -> eframe::Result {
         options,
         Box::new(|creation_context| {
             let context = &creation_context.egui_ctx;
-            context.set_theme(AppearancePreference::System.preference());
+            context.set_theme(AppearancePreference::Dark.preference());
             configure_studio_style(context);
             Ok(Box::new(BuilderApp::default()))
         }),
@@ -404,6 +429,11 @@ impl eframe::App for BuilderApp {
                     ui.label(egui::RichText::new("Windows kurulum paketi geliştirme").weak());
                     ui.small(format!("v{}", env!("CARGO_PKG_VERSION")));
                 });
+            });
+            // BRK-STUDIO-TOOLBAR-001: keep identity and project commands
+            // separate to avoid horizontal clipping at the minimum viewport.
+            ui.add_space(3.0);
+            ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let previous_appearance = self.appearance;
                     egui::ComboBox::from_id_salt("builder-app-appearance")
@@ -469,7 +499,10 @@ impl eframe::App for BuilderApp {
                 });
             egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
                 ui.separator();
-                ui.horizontal(|ui| {
+                // BRK-STUDIO-FOOTER-001: keep status and primary actions in
+                // separate rows so the long Turkish labels cannot collide
+                // when the Studio viewport is narrowed.
+                ui.horizontal_wrapped(|ui| {
                     if let Some((succeeded, message)) = &self.status {
                         ui.colored_label(
                             if *succeeded {
@@ -486,16 +519,18 @@ impl eframe::App for BuilderApp {
                         ui.spinner();
                         ui.label("Paket ve kurulum dosyaları hazırlanıyor…");
                     } else if !package_ready {
-                        ui.label("Paket güncel değil: 2. düğme önce paketi yenileyip sonra kurulum EXE'sini oluşturabilir.");
+                        ui.label("Paket hazırlanmadı veya proje ayarları değişti.");
                     } else if local_test_ready {
-                        ui.label("Standart Kurulum EXE'si hazır; çıktı klasöründen açabilirsiniz.");
+                        ui.label("Standart Kurulum EXE'si hazır.");
                     } else {
                         ui.label(format!(
                             "{} projesi · Paket hazır; kurulum EXE dosyasını oluşturabilirsiniz.",
                             self.project.installer_kind.label(),
                         ));
                     }
-
+                });
+                ui.add_space(3.0);
+                ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self.project.installer_kind == InstallerKind::Web {
                             if ui
@@ -537,7 +572,7 @@ impl eframe::App for BuilderApp {
                 .show(context, |ui| {
                     ui.label(egui::RichText::new("Proje adımları").size(19.0).strong());
                     ui.label(
-                        egui::RichText::new("Bölüm seçince düzenleme penceresi açılır.")
+                        egui::RichText::new("Bölüm seçince çalışma alanı değişir.")
                             .size(14.0)
                             .weak(),
                     );
@@ -572,6 +607,7 @@ impl eframe::App for BuilderApp {
                             InstallerKind::Web => "04   Çevrimiçi yayın",
                         },
                     ];
+                    // Navigation shows input presence, never package validation.
                     for (index, label) in sections.iter().enumerate() {
                         if navigation_item(ui, self.dialog_open && self.active_step == index, label)
                             .clicked()
@@ -579,6 +615,16 @@ impl eframe::App for BuilderApp {
                         {
                             self.open_editor(index);
                         }
+                        let (hint, filled) = studio_section_hint(&self.project, index);
+                        ui.colored_label(
+                            if filled {
+                                studio_palette(ui.visuals().dark_mode).accent
+                            } else {
+                                ui.visuals().weak_text_color()
+                            },
+                            egui::RichText::new(format!("      {hint}")).size(11.0),
+                        );
+                        ui.add_space(4.0);
                     }
 
                     ui.add_space(14.0);
@@ -601,23 +647,100 @@ impl eframe::App for BuilderApp {
                     );
                 });
 
-            egui::SidePanel::right("setup-builder-preview")
-                .resizable(false)
-                .default_width(310.0)
-                .show(context, |ui| self.draw_preview(ui));
+            // BRK-STUDIO-DESIGN-LAYOUT-002: all editors use the same
+            // full-height workspace. Keep the Windows wizard preview exclusive
+            // to section 03 and do not change the project/install contracts.
+            if self.dialog_open {
+                if self.active_step == 2 {
+                    if self.show_designer_inspector {
+                        let (default_width, maximum_width) =
+                            studio_designer_inspector_widths(context.available_rect().width());
+                        egui::SidePanel::right("setup-designer-inspector")
+                            .resizable(true)
+                            .default_width(default_width)
+                            .min_width(300.0)
+                            .max_width(maximum_width)
+                            .show(context, |ui| {
+                                egui::ScrollArea::vertical()
+                                    .id_salt("studio-designer-inspector-scroll")
+                                    .show(ui, |ui| {
+                                        let selected_before = self.selected_wizard_page;
+                                        let english_before = self.preview_english;
+                                        let license_changed =
+                                            setup_design_surface::draw_step_inspector(
+                                                ui,
+                                                &mut self.project.wizard,
+                                                &mut self.selected_wizard_page,
+                                                &mut self.preview_english,
+                                            );
+                                        setup_design_surface::invalidate_preview_consent(
+                                            &mut self.preview_accepted,
+                                            selected_before,
+                                            self.selected_wizard_page,
+                                            english_before,
+                                            self.preview_english,
+                                            license_changed,
+                                        );
+                                        setup_design_surface::draw_appearance_editor(
+                                            ui,
+                                            &mut self.project,
+                                        );
+                                        ui.add_space(18.0);
+                                        if ui.button("← Genel bakışa dön").clicked() {
+                                            self.dialog_open = false;
+                                        }
+                                    });
+                            });
+                    }
+                    egui::CentralPanel::default().show(context, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("studio-designer-preview-scroll")
+                            .show(ui, |ui| {
+                                setup_design_surface::draw_install_preview(
+                                    ui,
+                                    &self.project,
+                                    &mut self.selected_wizard_page,
+                                    &mut self.preview_english,
+                                    &mut self.preview_accepted,
+                                    &mut self.show_designer_inspector,
+                                );
+                            });
+                    });
+                } else {
+                    if self.show_project_inspector {
+                        egui::SidePanel::right("setup-studio-section-inspector")
+                            .resizable(true)
+                            .default_width(350.0)
+                            .min_width(290.0)
+                            .max_width(450.0)
+                            .show(context, |ui| {
+                                egui::ScrollArea::vertical()
+                                    .id_salt("studio-section-inspector-scroll")
+                                    .show(ui, |ui| self.draw_section_inspector(ui));
+                            });
+                    }
+                    egui::CentralPanel::default().show(context, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("studio-section-workspace-scroll")
+                            .show(ui, |ui| self.draw_section_workspace(ui, is_building));
+                    });
+                }
+            } else {
+                egui::SidePanel::right("setup-builder-preview")
+                    .resizable(false)
+                    .default_width(310.0)
+                    .show(context, |ui| self.draw_preview(ui));
 
-            egui::CentralPanel::default().show(context, |ui| {
-                egui::ScrollArea::vertical().show(ui, |ui| self.draw_workspace(ui));
-            });
+                egui::CentralPanel::default().show(context, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| self.draw_workspace(ui));
+                });
+            }
         } else {
             egui::CentralPanel::default().show(context, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| self.draw_welcome(ui));
             });
         }
 
-        if self.dialog_open && !is_building {
-            self.show_editor_modal(context, false);
-        }
         if self.pending_new_kind.is_some() {
             self.confirm_new_project(context);
         }
@@ -794,9 +917,11 @@ impl BuilderApp {
 
         ui.label(egui::RichText::new("Proje ayarları").size(21.0).strong());
         ui.label(
-            egui::RichText::new("Düzenle düğmesiyle istediğiniz bölüme geçebilirsiniz.")
-                .size(14.0)
-                .weak(),
+            egui::RichText::new(
+                "Bölümleri Studio çalışma alanında, yan yana panellerle düzenleyin.",
+            )
+            .size(14.0)
+            .weak(),
         );
         ui.add_space(8.0);
 
@@ -866,9 +991,21 @@ impl BuilderApp {
                 "Çıktı klasörü ve seçilen yükleyiciye ait yayın ayarları",
             ),
         ];
-        for (index, (title, summary, description)) in sections.iter().enumerate() {
-            self.draw_section_card(ui, index, title, summary, description);
-            ui.add_space(7.0);
+        // A compact two-column dashboard on roomy windows, one column on
+        // smaller layouts so long paths and editing buttons remain legible.
+        if ui.available_width() >= 820.0 {
+            ui.columns(2, |columns| {
+                for (index, (title, summary, description)) in sections.iter().enumerate() {
+                    let column = &mut columns[index % 2];
+                    self.draw_section_card(column, index, title, summary, description);
+                    column.add_space(12.0);
+                }
+            });
+        } else {
+            for (index, (title, summary, description)) in sections.iter().enumerate() {
+                self.draw_section_card(ui, index, title, summary, description);
+                ui.add_space(8.0);
+            }
         }
         ui.add_space(5.0);
         ui.label(
@@ -1040,6 +1177,16 @@ impl BuilderApp {
                     edit = ui.button("Düzenle").clicked();
                 });
             });
+            ui.add_space(6.0);
+            let (hint, filled) = studio_section_hint(&self.project, index);
+            ui.colored_label(
+                if filled {
+                    studio_palette(ui.visuals().dark_mode).accent
+                } else {
+                    ui.visuals().weak_text_color()
+                },
+                egui::RichText::new(hint).size(12.0).strong(),
+            );
             ui.add_space(5.0);
             ui.label(egui::RichText::new(summary).size(14.0));
         });
@@ -1048,99 +1195,296 @@ impl BuilderApp {
         }
     }
 
-    fn show_editor_modal(&mut self, context: &egui::Context, is_building: bool) {
-        const TITLES: [&str; 3] = ["Ürün bilgileri", "Uygulama dosyaları", "Kurulum tasarımı"];
-        let title = if self.active_step == 3 {
-            self.project.installer_kind.release_title()
-        } else {
-            TITLES[self.active_step]
+    /// @dev-id BRK-STUDIO-SECTION-EDITOR-001
+    /// @purpose Reuse the existing project fields and validation in an inline
+    /// full-height editor, aligned visually with section 03.
+    /// @contract Project serialization and all build callbacks stay unchanged.
+    fn draw_section_workspace(&mut self, ui: &mut egui::Ui, is_building: bool) {
+        let (title, description) = match self.active_step {
+            0 => (
+                "Ürün bilgileri",
+                "Uygulama kimliği, sürüm ve yayın kanalını yönetin.",
+            ),
+            1 => (
+                "Uygulama dosyaları",
+                "Kurulacak dosyaları ve paket öncesi güvenlik kontrollerini hazırlayın.",
+            ),
+            _ => (
+                self.project.installer_kind.release_title(),
+                "Paket çıktısını ve güvenli dağıtım seçeneklerini yapılandırın.",
+            ),
         };
-        let mut close_requested = false;
-        let mut next_requested = false;
-        let mut previous_requested = false;
-        let mut build_setup_requested = false;
+        let palette = studio_palette(ui.visuals().dark_mode);
+        ui.add_space(12.0);
+        ui.colored_label(
+            palette.accent,
+            egui::RichText::new(format!(
+                "PROJE STÜDYOSU  /  {:02} - 04",
+                self.active_step + 1
+            ))
+            .size(13.0)
+            .strong(),
+        );
+        // BRK-STUDIO-NARROW-HEADER-001: a separate action row avoids
+        // clipping long section titles and the inspector toggle at minimum
+        // window width or higher Windows text scaling.
+        ui.label(egui::RichText::new(title).size(28.0).strong());
+        let panel_label = if self.show_project_inspector {
+            "Bilgi panelini gizle"
+        } else {
+            "Bilgi panelini göster"
+        };
+        if ui.button(panel_label).clicked() {
+            self.show_project_inspector = !self.show_project_inspector;
+        }
+        ui.label(egui::RichText::new(description).size(15.0).weak());
+        let (hint, filled) = studio_section_hint(&self.project, self.active_step);
+        ui.colored_label(
+            if filled {
+                palette.accent
+            } else {
+                egui::Color32::from_rgb(235, 168, 89)
+            },
+            egui::RichText::new(format!("● {hint} · Doğrulama sonucu değildir")).size(12.0),
+        );
+        ui.add_space(16.0);
 
-        egui::Modal::new(egui::Id::new("setup-builder-section-editor")).show(context, |ui| {
-            ui.set_min_width(760.0);
+        studio_card(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(title).size(25.0).strong());
+                ui.strong("Bölüm konumu");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
-                        egui::RichText::new(format!("BÖLÜM {} / 4", self.active_step + 1))
-                            .size(13.0)
-                            .strong()
-                            .weak(),
+                        egui::RichText::new(format!("Bölüm {} / 4", self.active_step + 1))
+                            .color(palette.accent)
+                            .strong(),
                     );
                 });
             });
-            ui.label(
-                egui::RichText::new(format!(
-                    "{} projesi · Düzenlemeler çalışma alanına ve setup önizlemesine yansır.",
-                    self.project.installer_kind.label()
-                ))
-                .size(15.0)
-                .weak(),
-            );
-            ui.add_space(4.0);
+            ui.add_space(6.0);
             ui.add(
                 egui::ProgressBar::new((self.active_step + 1) as f32 / 4.0)
-                    .desired_height(6.0)
-                    .fill(egui::Color32::from_rgb(18, 121, 132)),
+                    .desired_height(7.0)
+                    .fill(palette.accent),
             );
-            ui.separator();
-            egui::ScrollArea::vertical()
-                .max_height(560.0)
-                .show(ui, |ui| self.draw_active_step(ui, is_building));
-            if let Some((false, message)) = &self.status {
-                ui.colored_label(egui::Color32::from_rgb(180, 45, 45), message);
-            }
-            ui.separator();
+            ui.label(
+                egui::RichText::new(
+                    "Bölüm sırasını gösterir; ayarların tamamlandığı anlamına gelmez.",
+                )
+                .size(12.0)
+                .weak(),
+            );
+        });
+        ui.add_space(17.0);
 
+        // Existing controls are rendered directly; no extra popup or
+        // duplicated form state is introduced by this presentation change.
+        self.draw_active_step(ui, is_building);
+        if let Some((false, message)) = &self.status {
+            ui.add_space(12.0);
+            ui.colored_label(egui::Color32::from_rgb(240, 124, 109), message);
+        }
+        ui.add_space(18.0);
+
+        let mut previous_requested = false;
+        let mut next_requested = false;
+        let mut close_requested = false;
+        let mut build_setup_requested = false;
+        studio_card(ui, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("Kapat").clicked() {
+                if ui.button("← Genel bakış").clicked() {
                     close_requested = true;
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if self.active_step < 3 && ui.button("Sonraki bölüm").clicked() {
-                        next_requested = true;
-                    } else if self.active_step == 3 {
-                        if self.project.installer_kind == InstallerKind::Offline {
-                            if ui
-                                .add_enabled(
-                                    !is_building,
-                                    egui::Button::new("Kurulum EXE'sini oluştur")
-                                        .fill(egui::Color32::from_rgb(18, 121, 132)),
-                                )
-                                .clicked()
-                            {
-                                build_setup_requested = true;
-                            }
-                        } else if ui.button("Tamam").clicked() {
-                            close_requested = true;
+                    if self.active_step < 3 {
+                        if ui
+                            .add_enabled(
+                                !is_building,
+                                egui::Button::new("Sonraki bölüm →").fill(palette.accent),
+                            )
+                            .clicked()
+                        {
+                            next_requested = true;
                         }
+                    } else if self.project.installer_kind == InstallerKind::Offline {
+                        if ui
+                            .add_enabled(
+                                !is_building,
+                                egui::Button::new("Kurulum EXE'sini oluştur").fill(palette.accent),
+                            )
+                            .clicked()
+                        {
+                            build_setup_requested = true;
+                        }
+                    } else if ui.button("Tamam").clicked() {
+                        close_requested = true;
                     }
-                    if self.active_step > 0 && ui.button("Önceki bölüm").clicked() {
+                    if self.active_step > 0 && ui.button("← Önceki bölüm").clicked() {
                         previous_requested = true;
                     }
                 });
             });
         });
+        ui.add_space(12.0);
 
         if build_setup_requested {
             self.start_standard_build();
         } else if close_requested {
             self.dialog_open = false;
         } else if previous_requested {
-            self.active_step = self.active_step.saturating_sub(1);
-            self.status = None;
+            self.open_editor(self.active_step.saturating_sub(1));
         } else if next_requested {
             self.advance_step();
+        }
+    }
+
+    /// @dev-id BRK-STUDIO-SECTION-INSPECTOR-001
+    /// @purpose Give identity, files and distribution sections a contextual
+    /// side panel and a safe setup preview, without filesystem side effects.
+    fn draw_section_inspector(&mut self, ui: &mut egui::Ui) {
+        let palette = studio_palette(ui.visuals().dark_mode);
+        ui.add_space(12.0);
+        ui.label(egui::RichText::new("Proje paneli").size(22.0).strong());
+        ui.label(
+            egui::RichText::new("Seçili bölümün özeti ve canlı kurulum görünümü")
+                .size(13.0)
+                .weak(),
+        );
+        ui.add_space(14.0);
+        studio_card(ui, |ui| {
+            ui.colored_label(
+                palette.accent,
+                egui::RichText::new("AKTİF PROJE").size(12.0).strong(),
+            );
+            ui.add_space(5.0);
+            ui.label(
+                egui::RichText::new(&self.project.product_name)
+                    .size(19.0)
+                    .strong(),
+            );
+            ui.label(format!(
+                "v{}  •  {}",
+                self.project.version, self.project.channel
+            ));
+            ui.separator();
+            match self.active_step {
+                0 => {
+                    ui.strong("Uygulama kimliği");
+                    ui.add(egui::Label::new(&self.project.package_id).wrap());
+                    ui.add_space(8.0);
+                    ui.small("Bu bilgiler paket manifestinde ve kurulum ekranında kullanılır.");
+                }
+                1 => {
+                    ui.strong("Kaynak dosyaları");
+                    if self.project.source_directory.trim().is_empty() {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(240, 179, 95),
+                            "Henüz kaynak klasörü seçilmedi.",
+                        );
+                    } else {
+                        ui.add(egui::Label::new(&self.project.source_directory).wrap());
+                    }
+                    ui.add_space(8.0);
+                    ui.label(format!(
+                        "Antivirüs kontrolü: {}",
+                        if self.project.av_scan.enabled {
+                            "Etkin"
+                        } else {
+                            "Kapalı"
+                        }
+                    ));
+                    ui.small("Paket bütünlüğü kontrolleri antivirüs ayarından bağımsızdır.");
+                }
+                _ => {
+                    ui.strong(self.project.installer_kind.release_title());
+                    ui.add(egui::Label::new(&self.project.output_directory).wrap());
+                    ui.add_space(8.0);
+                    ui.small("Paket derlemesi ve imzalı yayın güvenliği ayrı aşamalardır.");
+                }
+            }
+        });
+        ui.add_space(14.0);
+
+        let mut navigate_to = None;
+        studio_card(ui, |ui| {
+            ui.label(
+                egui::RichText::new("Bölüm kontrol listesi")
+                    .size(17.0)
+                    .strong(),
+            );
+            ui.label(
+                egui::RichText::new("Alanların doluluk görünümü")
+                    .size(12.0)
+                    .weak(),
+            );
+            for (index, name) in ["01  Ürün", "02  Dosyalar", "03  Tasarım", "04  Dağıtım"]
+                .into_iter()
+                .enumerate()
+            {
+                let (hint, filled) = studio_section_hint(&self.project, index);
+                ui.horizontal(|ui| {
+                    ui.colored_label(
+                        if filled {
+                            palette.accent
+                        } else {
+                            ui.visuals().weak_text_color()
+                        },
+                        if filled { "●" } else { "○" },
+                    );
+                    if ui.small_button(name).clicked() {
+                        navigate_to = Some(index);
+                    }
+                });
+                ui.label(egui::RichText::new(hint).size(12.0).weak());
+                if index < 3 {
+                    ui.add_space(5.0);
+                }
+            }
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new(
+                    "Alanların dolu olması doğrulama, imzalama veya paket hazır anlamına gelmez.",
+                )
+                .size(12.0)
+                .weak(),
+            );
+        });
+        ui.add_space(14.0);
+
+        let mut open_designer = false;
+        studio_card(ui, |ui| {
+            ui.label(
+                egui::RichText::new("Kurulum tasarımına geç")
+                    .size(17.0)
+                    .strong(),
+            );
+            ui.label("Son kullanıcının göreceği sayfaları ve EULA metnini düzenleyin.");
+            ui.add_space(8.0);
+            if ui
+                .add_sized(
+                    [ui.available_width(), 40.0],
+                    egui::Button::new("03  Kurulum tasarımını aç").fill(palette.accent),
+                )
+                .clicked()
+            {
+                open_designer = true;
+            }
+        });
+        ui.add_space(17.0);
+        self.draw_preview(ui);
+        if open_designer {
+            self.open_editor(2);
+        } else if let Some(index) = navigate_to {
+            self.open_editor(index);
         }
     }
 
     fn open_editor(&mut self, step: usize) {
         self.active_step = step.min(3);
         self.dialog_open = true;
+        if self.active_step == 2 {
+            self.selected_wizard_page = WizardPageId::License;
+            self.preview_accepted = false;
+        }
         self.status = None;
     }
 
@@ -2391,6 +2735,64 @@ fn ui_for_wizard_field(ui: &mut egui::Ui, label: &str, value: &mut String) {
     ui.add_space(3.0);
 }
 
+/// @dev-id BRK-STUDIO-INPUT-STATUS-001
+/// @purpose Describe whether inputs were entered without treating form
+/// completeness as validated project, secure publishing or built artifacts.
+/// @contract No filesystem, network, installer or .tzproj side effects.
+fn studio_section_hint(project: &SavedProject, index: usize) -> (&'static str, bool) {
+    match index {
+        0 => {
+            let filled = !project.product_name.trim().is_empty()
+                && !project.package_id.trim().is_empty()
+                && !project.version.trim().is_empty()
+                && !project.channel.trim().is_empty();
+            (
+                if filled {
+                    "Ürün alanları girildi"
+                } else {
+                    "Ürün bilgileri eksik"
+                },
+                filled,
+            )
+        }
+        1 => {
+            let filled = !project.source_directory.trim().is_empty();
+            (
+                if filled {
+                    "Kaynak yolu girildi"
+                } else {
+                    "Kaynak klasörü bekleniyor"
+                },
+                filled,
+            )
+        }
+        2 => {
+            let filled =
+                !project.brand_name.trim().is_empty() && !project.install_target.trim().is_empty();
+            (
+                if filled {
+                    "Tasarım alanları girildi"
+                } else {
+                    "Tasarım bilgileri eksik"
+                },
+                filled,
+            )
+        }
+        3 => {
+            let filled = !project.output_directory.trim().is_empty();
+            (
+                if filled {
+                    "Çıktı yolu girildi"
+                } else {
+                    "Çıktı yolu bekleniyor"
+                },
+                filled,
+            )
+        }
+        _ => ("Bilinmeyen bölüm", false),
+    }
+}
+
 fn navigation_item(ui: &mut egui::Ui, selected: bool, label: &str) -> egui::Response {
     let width = ui.available_width();
     ui.add_sized(
@@ -2402,8 +2804,9 @@ fn navigation_item(ui: &mut egui::Ui, selected: bool, label: &str) -> egui::Resp
 
 fn studio_card(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) {
     let palette = studio_palette(ui.visuals().dark_mode);
-    egui::Frame::group(ui.style())
+    egui::Frame::new()
         .inner_margin(egui::Margin::symmetric(18, 16))
+        .corner_radius(egui::CornerRadius::same(10))
         .fill(palette.surface)
         .stroke(egui::Stroke::new(1.0, palette.border))
         .show(ui, contents);
@@ -3726,8 +4129,53 @@ mod tests {
         fs::remove_file(&file).expect("clean test trust");
     }
 
+    /// @dev-id BRK-STUDIO-SECTION-RENDER-001
+    /// @purpose Exercise all inline Studio section editors in headless egui
+    /// frames; drawing must not mutate the project or invoke install/build.
     #[test]
-    fn welcome_selection_opens_mode_specific_modal_without_replacing_old_project_silently() {
+    fn studio_full_height_sections_render_without_mutating_project_data() {
+        let context = egui::Context::default();
+        configure_studio_style(&context);
+
+        for kind in [InstallerKind::Offline, InstallerKind::Web] {
+            let mut app = BuilderApp::default();
+            app.create_new_project(kind);
+            app.project.product_name = "Türkçe Studio testi".to_owned();
+            let before = serde_json::to_value(&app.project).expect("serialize initial project");
+
+            for section in [0, 1, 3] {
+                app.open_editor(section);
+                for inspector_visible in [true, false] {
+                    app.show_project_inspector = inspector_visible;
+                    let frame = context.run(egui::RawInput::default(), |context| {
+                        if inspector_visible {
+                            egui::SidePanel::right("test-section-inspector").show(context, |ui| {
+                                app.draw_section_inspector(ui);
+                            });
+                        }
+                        egui::CentralPanel::default().show(context, |ui| {
+                            app.draw_section_workspace(ui, false);
+                        });
+                    });
+                    assert!(
+                        !frame.shapes.is_empty(),
+                        "section {section} did not render for {kind:?}"
+                    );
+                    assert_eq!(app.active_step, section);
+                    assert!(app.dialog_open);
+                    assert_eq!(app.show_project_inspector, inspector_visible);
+                    assert_eq!(
+                        serde_json::to_value(&app.project).expect("serialize rendered project"),
+                        before,
+                        "section {section} mutated the project during preview"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn welcome_selection_opens_full_height_editor_without_replacing_old_project_silently() {
         let mut app = BuilderApp::default();
         assert!(!app.workspace_open);
         assert!(!app.has_project);
@@ -3866,6 +4314,103 @@ mod tests {
             project.product_name
         );
         fs::remove_dir_all(&root).expect("clean test project");
+    }
+
+    #[test]
+    fn studio_section_hints_report_input_only_not_validation() {
+        let mut project = SavedProject::default();
+        assert_eq!(
+            studio_section_hint(&project, 0),
+            ("Ürün alanları girildi", true)
+        );
+        assert_eq!(
+            studio_section_hint(&project, 1),
+            ("Kaynak klasörü bekleniyor", false)
+        );
+        project.source_directory = "relative/missing/source".to_owned();
+        assert_eq!(
+            studio_section_hint(&project, 1),
+            ("Kaynak yolu girildi", true)
+        );
+        assert!(validate_project_step(&project, 1).is_err());
+        project.product_name.clear();
+        assert_eq!(
+            studio_section_hint(&project, 0),
+            ("Ürün bilgileri eksik", false)
+        );
+        project.output_directory.clear();
+        assert_eq!(
+            studio_section_hint(&project, 3),
+            ("Çıktı yolu bekleniyor", false)
+        );
+        assert_eq!(
+            studio_section_hint(&project, 9),
+            ("Bilinmeyen bölüm", false)
+        );
+    }
+
+    /// @dev-id BRK-STUDIO-VIEWPORT-ACCEPTANCE-001
+    /// @purpose Verify realistic egui panel sizing at the minimum and
+    /// common desktop widths without opening a native OS window.
+    /// @contract Headless geometry is not a DPI or screenshot acceptance.
+    #[test]
+    fn studio_viewport_layout_preserves_minimum_center_workspace() {
+        for width in [1100.0, 1280.0, 1510.0] {
+            let context = egui::Context::default();
+            configure_studio_style(&context);
+            let mut central_width = 0.0;
+            let output = context.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(width, 700.0),
+                    )),
+                    ..Default::default()
+                },
+                |context| {
+                    egui::TopBottomPanel::top("test-studio-header").show(context, |ui| {
+                        ui.label("Turkuaz Setup Studio");
+                    });
+                    egui::SidePanel::left("test-studio-navigation")
+                        .resizable(false)
+                        .default_width(220.0)
+                        .show(context, |ui| {
+                            ui.label("Proje bölümleri");
+                        });
+                    let (default_width, max_width) =
+                        studio_designer_inspector_widths(context.available_rect().width());
+                    egui::SidePanel::right("test-studio-properties")
+                        .resizable(true)
+                        .default_width(default_width)
+                        .min_width(300.0)
+                        .max_width(max_width)
+                        .show(context, |ui| {
+                            ui.label("Kurulum adımları");
+                        });
+                    egui::CentralPanel::default().show(context, |ui| {
+                        central_width = ui.available_width();
+                        ui.label("Kurulum önizlemesi");
+                    });
+                },
+            );
+            assert!(!output.shapes.is_empty(), "viewport {width} did not render");
+            assert!(
+                central_width >= 400.0,
+                "viewport {width} left only {central_width} points for the preview"
+            );
+        }
+    }
+
+    #[test]
+    fn studio_designer_inspector_widths_leave_preview_room_at_small_sizes() {
+        let compact = studio_designer_inspector_widths(880.0);
+        let standard = studio_designer_inspector_widths(1290.0);
+        let spacious = studio_designer_inspector_widths(1440.0);
+        assert_eq!(compact, (340.0, 370.0));
+        assert_eq!(standard, (410.0, 490.0));
+        assert_eq!(spacious, (474.0, 620.0));
+        assert!(880.0 - compact.1 >= 500.0);
+        assert!(1290.0 - standard.1 >= 750.0);
     }
 
     #[test]
