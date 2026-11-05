@@ -7,6 +7,10 @@ Aciklama: Derleme kontrolunden gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
+# Windows smoke test ve kabul akisi
+
+Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde denemek icindir. GUI setup stub artifact'i yalniz arayuz kabugudur; release bundle eklenmeden kurulum yapmaz. Gercek imzali release paketi ve yayinlayici tarafindan saglanan guven politikasi olmadan lifecycle kabul testi yapilamaz.
+
 ## Yerel klasor degistirme ve Geri Donusum Kutusu kabulu
 
 Bu testleri yalnizca bos/dedike Windows 10/11 VM kullanarak yapin:
@@ -32,12 +36,6 @@ Bu testleri yalnizca bos/dedike Windows 10/11 VM kullanarak yapin:
 `install-local-self` CLI komutu onaysiz oldugu icin
 mevcut klasore kurulum yapmayi reddetmeye devam eder.
 Eski klasorun geri alinmasi otomatik degildir.
-
-## Windows kurulum kabul senaryolari
-
-# Windows smoke test ve kabul akisi
-
-Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde denemek icindir. GUI setup stub artifact'i yalniz arayuz kabugudur; release bundle eklenmeden kurulum yapmaz. Gercek imzali release paketi ve yayinlayici tarafindan saglanan guven politikasi olmadan lifecycle kabul testi yapilamaz.
 
 ## On kosullar
 
