@@ -1,9 +1,9 @@
 <!--
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
-Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
+Amac: Windows Setup Studio tasarim ekranini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.2
-Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
+Version: 0.9.3
+Aciklama: Koyu tam boy kurulum tasarimi, Windows onizlemesi ve dagitim akisi
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -28,6 +28,35 @@ Olusan dosya:
     rust/target/release/turkuaz-installer.exe
 
 Argumansiz acildiginda Setup Studio penceresini gosterir. Windows CI, ayni dosyanin surumlu turkuaz-setup-builder-vX.Y.Z-windows-x64.exe gelistirme artifact'ini de uretir.
+
+## Tam boy kurulum tasarimi (Windows Studio)
+
+Kullanici **03 Kurulum tasarimi** bolumunu actiginda artik kucuk
+bir modal form yerine, Studio'nun ana calisma alaninda uc sutunlu
+tasarim ekrani gorur:
+
+- **Sol:** proje gezintisi ve mevcut bolumler.
+- **Orta:** genis, klasik Windows penceresine benzeyen **canli
+  kurulum onizlemesi**. Secilen adimin gercek TR/EN basligi,
+  aciklamasi ve EULA metni gosterilir. Ornek Geri/Ileri/Iptal
+  dugmeleri yalnizca onizleme sayfasi degistirir, diske yazmaz.
+- **Sag:** dikey **Kurulum Adimlari** listesi. Istege bagli
+  sayfalari ekleme/gizleme, yukari/asagi tasima, tek sayfa
+  ozelliklerini duzenleme ve secilen dilin EULA metnini girme.
+  Kurulum ozeti, ilerleme ve sonuc adimlari kilitlidir.
+
+Studio varsayilan olarak koyu tema acilir, Windows kurulum
+onizlemesi her zaman acik renkli gorunur. Sistem/Acik/Koyu
+tercihi yine kullanilabilir. Tema, marka, varsayilan kurulum
+klasoru ve HEX vurgu rengi sagdaki katlanabilir bolumde
+duzenlenebilir. Onizleme bir **tasarim simulasyonu**dur:
+Windows icin hazirlanan EXE'nin tum piksel detaylarini veya
+gercek UAC, dosya yazma ve kaldirma davranisini canli olarak
+calistirmaz. Gercek EXE'nin gorunumu Windows kabul testinde
+ayrica dogrulanir.
+
+Bu tasarim degisikligi `.tzproj` alanlarini veya paket
+motorunun kurulum/kaldirma/guvenlik islemlerini degistirmez.
 
 ## UI seciciler ve proje kaydi
 
