@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-uac-resume-smoke.ps1
 # Amac: UAC yeniden acilis parametrelerinin onaysiz yetkili islemlere izin vermedigini dogrulamak
 # Modul - PowerShell QA Script
-# Version: 0.1.1
+# Version: 0.1.2
 # Aciklama: Gercek UAC penceresi acmadan reddedilen argumanlari process olarak test eder
 # Bagimli Oldugu Katman: QA | Tool
 
@@ -29,6 +29,7 @@ function Assert-UacResumeRejected {
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
     $startInfo.RedirectStandardError = $true
+    $startInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
     foreach ($argument in $Arguments) {
         [void]$startInfo.ArgumentList.Add($argument)
     }
