@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.33
+# Version: 0.2.34
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -198,6 +198,9 @@ jobs:
 
       - name: Test full-height Studio section rendering without mutating project data
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_full_height_sections_render_without_mutating_project_data
+
+      - name: Test Studio input hints without claiming project validation
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_section_hints_report_input_only_not_validation
 
       - name: Test full-height Studio editor opening for chosen installer type
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui welcome_selection_opens_full_height_editor_without_replacing_old_project_silently
