@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.8.2
+// Version: 0.8.3
 // Aciklama: Tum bolumlerde secim durumlari, acilir bilgi paneli ve kurulumu etkilemeyen gorsel rehberlik
 // Bagimli Oldugu Katman: View | Application
 
@@ -1208,7 +1208,7 @@ impl BuilderApp {
             } else {
                 egui::Color32::from_rgb(235, 168, 89)
             },
-            egui::RichText::new(format!("● {hint} · Henüz doğrulama yapılmadı")).size(12.0),
+            egui::RichText::new(format!("● {hint} · Doğrulama sonucu değildir")).size(12.0),
         );
         ui.add_space(16.0);
 
@@ -4101,22 +4101,31 @@ mod tests {
 
             for section in [0, 1, 3] {
                 app.open_editor(section);
-                let frame = context.run(egui::RawInput::default(), |context| {
-                    egui::CentralPanel::default().show(context, |ui| {
-                        app.draw_section_workspace(ui, false);
+                for inspector_visible in [true, false] {
+                    app.show_project_inspector = inspector_visible;
+                    let frame = context.run(egui::RawInput::default(), |context| {
+                        if inspector_visible {
+                            egui::SidePanel::right("test-section-inspector").show(context, |ui| {
+                                app.draw_section_inspector(ui);
+                            });
+                        }
+                        egui::CentralPanel::default().show(context, |ui| {
+                            app.draw_section_workspace(ui, false);
+                        });
                     });
-                });
-                assert!(
-                    !frame.shapes.is_empty(),
-                    "section {section} did not render for {kind:?}"
-                );
-                assert_eq!(app.active_step, section);
-                assert!(app.dialog_open);
-                assert_eq!(
-                    serde_json::to_value(&app.project).expect("serialize rendered project"),
-                    before,
-                    "section {section} mutated the project during preview"
-                );
+                    assert!(
+                        !frame.shapes.is_empty(),
+                        "section {section} did not render for {kind:?}"
+                    );
+                    assert_eq!(app.active_step, section);
+                    assert!(app.dialog_open);
+                    assert_eq!(app.show_project_inspector, inspector_visible);
+                    assert_eq!(
+                        serde_json::to_value(&app.project).expect("serialize rendered project"),
+                        before,
+                        "section {section} mutated the project during preview"
+                    );
+                }
             }
         }
     }
