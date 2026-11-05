@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio proje panelini, modal editorlerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.2
+Version: 0.9.3
 Aciklama: Setup Studio panelini, modal editorleri ve dagitim akisini belgeler
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -16,6 +16,35 @@ Turkuaz Setup Studio, uygulama dosyalarindan Turkuaz .tzpkg paketi, setup tema a
 Studio karsilama ekraninda proje turleri **Tam Kurulum** ve **Cevrimici Kurulum** olarak gorunur. Teknik literaturdeki *Full Installer* ve *Web Installer* ifadeleri UI ana basligi olarak kullanilmaz. Proje secimi kaydedilen `.tzproj` dosyasinda aynen `offline` ve `web` teknik kimlikleriyle korunur; dosya bicimi veya CLI komutlari yeniden adlandirilmaz.
 
 Sihirbazda **Kurulum tasarimi** (eski Setup tasarimi), **Kurulum motoru (EXE)** (eski GUI stub), **Yayinci guven dosyasi** (eski trust store), **Imzali yayin dosyasi (YAML)** (eski signed manifest), **Yayin imza dosyasi** (eski detached signature) ve **Uygulama paketi** (eski payload paketi) adlari tercih edilir. `application.tzpkg`, `TurkuazWebSetup.exe`, `manifest-trust.yaml` gibi gercek dosya adlari ve WebSetup CLI arayuzu degismez. NSIS icin kullanici etiketi **Yedek yukleyici araci (NSIS)** olur.
+
+## Mevcut klasorle temiz kurulum (yalnizca Windows native wizard)
+
+Windows Standard Setup GUI, hedef klasorun zaten bulundugunu son kontrol
+ekraninda gosterir. **Geri Donusum Kutusu'na tasiyarak temiz kurulum**
+secenegi varsayilan olarak **isaretsizdir**. Kullanici kutuyu acikca
+isaretleyip Kurulumu baslat derse yeni paket once guvenli staging
+klasorune dogrulanarak cikarilir, dosya envanteri kaydedilir; eski klasor
+ancak bundan sonra Windows Shell IFileOperation ile `FOFX_RECYCLEONDELETE`
+kullanilarak Geri Donusum Kutusu'na gonderilir.
+
+Yalnizca yerel surucudeki, sembolik baglanti/junction olmayan ve son
+klasor adi uygulama kimligiyle eslesen mevcut hedefler icin bu onay
+sunulur. Recycle basarisizsa veya Windows islemi yarida kesilirse
+kurulum **fail-closed** durur; kalici silme veya uzerine yazma
+fallback'i yoktur. Kullanici isaretlemezse eski klasore dokunulmaz.
+Windows UAC ile yeniden acilan tum kullanicilar kurulumu, onayi
+yeniden ister; CLI `install-local-self` eskisi gibi mevcut hedefi
+reddeder. Imzali kurulum/update/rollback, Studio project.tzproj ve
+package build ciktilari bu secenekten etkilenmez.
+
+Dikkat: Eskiden kalan klasorde **kullanici dosyalari da** bulunabilir;
+bu dosyalar klasorle beraber Geri Donusum Kutusu'na gidecektir.
+Kurulum daha sonra hata verirse eski klasor ancak kullanici
+tarafindan Geri Donusum Kutusu'ndan manuel geri alinabilir;
+otomatik restore ve kalici veri garantisi sunulmaz. Windows profilinin
+Recycle Bin ayarlarini, alan yetersizligini ve desteklenmeyen
+suruculeri test VM'inde ayri denetleyin. Pencere uyarisi
+ve bos/var klasor secimi Windows 10/11'de manuel kabul gerektirir.
 
 ## Windows GUI derlemesi
 
