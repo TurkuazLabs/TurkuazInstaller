@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.8.1
-// Aciklama: Tum bolumler icin tam boy Studio editoru, proje inspector'u ve kurulum simulasyonu
+// Version: 0.8.2
+// Aciklama: Tum bolumlerde secim durumlari, acilir bilgi paneli ve kurulumu etkilemeyen gorsel rehberlik
 // Bagimli Oldugu Katman: View | Application
 
 use std::{
@@ -237,6 +237,7 @@ struct BuilderApp {
     dialog_open: bool,
     appearance: AppearancePreference,
     preview_dark: bool,
+    show_project_inspector: bool,
     selected_wizard_page: WizardPageId,
     preview_english: bool,
     preview_accepted: bool,
@@ -259,6 +260,7 @@ impl Default for BuilderApp {
             dialog_open: false,
             appearance: AppearancePreference::Dark,
             preview_dark: false,
+            show_project_inspector: true,
             selected_wizard_page: WizardPageId::License,
             preview_english: false,
             preview_accepted: false,
@@ -579,6 +581,7 @@ impl eframe::App for BuilderApp {
                             InstallerKind::Web => "04   Çevrimiçi yayın",
                         },
                     ];
+                    // Navigation shows input presence, never package validation.
                     for (index, label) in sections.iter().enumerate() {
                         if navigation_item(ui, self.dialog_open && self.active_step == index, label)
                             .clicked()
@@ -586,6 +589,16 @@ impl eframe::App for BuilderApp {
                         {
                             self.open_editor(index);
                         }
+                        let (hint, filled) = studio_section_hint(&self.project, index);
+                        ui.colored_label(
+                            if filled {
+                                studio_palette(ui.visuals().dark_mode).accent
+                            } else {
+                                ui.visuals().weak_text_color()
+                            },
+                            egui::RichText::new(format!("      {hint}")).size(11.0),
+                        );
+                        ui.add_space(4.0);
                     }
 
                     ui.add_space(14.0);
@@ -656,16 +669,18 @@ impl eframe::App for BuilderApp {
                             });
                     });
                 } else {
-                    egui::SidePanel::right("setup-studio-section-inspector")
-                        .resizable(true)
-                        .default_width(350.0)
-                        .min_width(290.0)
-                        .max_width(450.0)
-                        .show(context, |ui| {
-                            egui::ScrollArea::vertical()
-                                .id_salt("studio-section-inspector-scroll")
-                                .show(ui, |ui| self.draw_section_inspector(ui));
-                        });
+                    if self.show_project_inspector {
+                        egui::SidePanel::right("setup-studio-section-inspector")
+                            .resizable(true)
+                            .default_width(350.0)
+                            .min_width(290.0)
+                            .max_width(450.0)
+                            .show(context, |ui| {
+                                egui::ScrollArea::vertical()
+                                    .id_salt("studio-section-inspector-scroll")
+                                    .show(ui, |ui| self.draw_section_inspector(ui));
+                            });
+                    }
                     egui::CentralPanel::default().show(context, |ui| {
                         egui::ScrollArea::vertical()
                             .id_salt("studio-section-workspace-scroll")
@@ -1124,6 +1139,16 @@ impl BuilderApp {
                     edit = ui.button("Düzenle").clicked();
                 });
             });
+            ui.add_space(6.0);
+            let (hint, filled) = studio_section_hint(&self.project, index);
+            ui.colored_label(
+                if filled {
+                    studio_palette(ui.visuals().dark_mode).accent
+                } else {
+                    ui.visuals().weak_text_color()
+                },
+                egui::RichText::new(hint).size(12.0).strong(),
+            );
             ui.add_space(5.0);
             ui.label(egui::RichText::new(summary).size(14.0));
         });
@@ -1162,8 +1187,30 @@ impl BuilderApp {
             .size(13.0)
             .strong(),
         );
-        ui.label(egui::RichText::new(title).size(28.0).strong());
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new(title).size(28.0).strong());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let label = if self.show_project_inspector {
+                    "Bilgi panelini gizle"
+                } else {
+                    "Bilgi panelini göster"
+                };
+                if ui.button(label).clicked() {
+                    self.show_project_inspector = !self.show_project_inspector;
+                }
+            });
+        });
         ui.label(egui::RichText::new(description).size(15.0).weak());
+        let (hint, filled) = studio_section_hint(&self.project, self.active_step);
+        ui.colored_label(
+            if filled {
+                palette.accent
+            } else {
+                egui::Color32::from_rgb(235, 168, 89)
+            },
+            egui::RichText::new(format!("● {hint} · Henüz doğrulama yapılmadı"))
+                .size(12.0),
+        );
         ui.add_space(16.0);
 
         studio_card(ui, |ui| {
@@ -1314,6 +1361,57 @@ impl BuilderApp {
         });
         ui.add_space(14.0);
 
+        let mut navigate_to = None;
+        studio_card(ui, |ui| {
+            ui.label(
+                egui::RichText::new("Bölüm kontrol listesi")
+                    .size(17.0)
+                    .strong(),
+            );
+            ui.label(
+                egui::RichText::new("Alanların doluluk görünümü")
+                    .size(12.0)
+                    .weak(),
+            );
+            for (index, name) in [
+                "01  Ürün",
+                "02  Dosyalar",
+                "03  Tasarım",
+                "04  Dağıtım",
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let (hint, filled) = studio_section_hint(&self.project, index);
+                ui.horizontal(|ui| {
+                    ui.colored_label(
+                        if filled {
+                            palette.accent
+                        } else {
+                            ui.visuals().weak_text_color()
+                        },
+                        if filled { "●" } else { "○" },
+                    );
+                    if ui.small_button(name).clicked() {
+                        navigate_to = Some(index);
+                    }
+                });
+                ui.label(egui::RichText::new(hint).size(12.0).weak());
+                if index < 3 {
+                    ui.add_space(5.0);
+                }
+            }
+            ui.add_space(8.0);
+            ui.label(
+                egui::RichText::new(
+                    "Alanların dolu olması doğrulama, imzalama veya paket hazır anlamına gelmez.",
+                )
+                .size(12.0)
+                .weak(),
+            );
+        });
+        ui.add_space(14.0);
+
         let mut open_designer = false;
         studio_card(ui, |ui| {
             ui.label(
@@ -1337,6 +1435,8 @@ impl BuilderApp {
         self.draw_preview(ui);
         if open_designer {
             self.open_editor(2);
+        } else if let Some(index) = navigate_to {
+            self.open_editor(index);
         }
     }
 
@@ -2595,6 +2695,48 @@ fn ui_for_wizard_field(ui: &mut egui::Ui, label: &str, value: &mut String) {
     ui.label(label);
     ui.add(egui::TextEdit::singleline(value).desired_width(f32::INFINITY));
     ui.add_space(3.0);
+}
+
+/// @dev-id BRK-STUDIO-INPUT-STATUS-001
+/// @purpose Describe whether inputs were entered without treating form
+/// completeness as validated project, secure publishing or built artifacts.
+/// @contract No filesystem, network, installer or .tzproj side effects.
+fn studio_section_hint(project: &SavedProject, index: usize) -> (&'static str, bool) {
+    match index {
+        0 => {
+            let filled = !project.product_name.trim().is_empty()
+                && !project.package_id.trim().is_empty()
+                && !project.version.trim().is_empty()
+                && !project.channel.trim().is_empty();
+            (
+                if filled { "Ürün alanları girildi" } else { "Ürün bilgileri eksik" },
+                filled,
+            )
+        }
+        1 => {
+            let filled = !project.source_directory.trim().is_empty();
+            (
+                if filled { "Kaynak yolu girildi" } else { "Kaynak klasörü bekleniyor" },
+                filled,
+            )
+        }
+        2 => {
+            let filled = !project.brand_name.trim().is_empty()
+                && !project.install_target.trim().is_empty();
+            (
+                if filled { "Tasarım alanları girildi" } else { "Tasarım bilgileri eksik" },
+                filled,
+            )
+        }
+        3 => {
+            let filled = !project.output_directory.trim().is_empty();
+            (
+                if filled { "Çıktı yolu girildi" } else { "Çıktı yolu bekleniyor" },
+                filled,
+            )
+        }
+        _ => ("Bilinmeyen bölüm", false),
+    }
 }
 
 fn navigation_item(ui: &mut egui::Ui, selected: bool, label: &str) -> egui::Response {
@@ -4109,6 +4251,24 @@ mod tests {
             project.product_name
         );
         fs::remove_dir_all(&root).expect("clean test project");
+    }
+
+    #[test]
+    fn studio_section_hints_report_input_only_not_validation() {
+        let mut project = SavedProject::default();
+        assert_eq!(studio_section_hint(&project, 0), ("Ürün alanları girildi", true));
+        assert_eq!(
+            studio_section_hint(&project, 1),
+            ("Kaynak klasörü bekleniyor", false)
+        );
+        project.source_directory = "relative/missing/source".to_owned();
+        assert_eq!(studio_section_hint(&project, 1), ("Kaynak yolu girildi", true));
+        assert!(validate_project_step(&project, 1).is_err());
+        project.product_name.clear();
+        assert_eq!(studio_section_hint(&project, 0), ("Ürün bilgileri eksik", false));
+        project.output_directory.clear();
+        assert_eq!(studio_section_hint(&project, 3), ("Çıktı yolu bekleniyor", false));
+        assert_eq!(studio_section_hint(&project, 9), ("Bilinmeyen bölüm", false));
     }
 
     #[test]
