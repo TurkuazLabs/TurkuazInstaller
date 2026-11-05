@@ -47,8 +47,7 @@ pub use unsigned_setup::{
     create_unsigned_local_setup_with_wizard, extract_unsigned_local_package,
     has_unsigned_local_setup, install_unsigned_local_setup, install_unsigned_local_setup_scanned,
     install_unsigned_local_setup_with_progress, install_unsigned_local_setup_with_replacement,
-    read_unsigned_local_wizard_config,
-    unsigned_local_identity,
+    read_unsigned_local_wizard_config, unsigned_local_identity,
 };
 pub use wizard_config::{MAX_WIZARD_CONFIG_BYTES, WizardConfig, WizardPageId, WizardPageSettings};
 
