@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_design_surface.rs
 // Amac: Studio'da gercek Windows kurulumuna benzeyen canli sayfa onizlemesi ve adim inspector'u
 // Modul - Rust Presentation
-// Version: 0.1.2
+// Version: 0.1.3
 // Aciklama: Koyu Studio paneli, acik Windows wizard onizlemesi, dogrulanan EULA ayarlari
 // Bagimli Oldugu Katman: View | Application
 
@@ -296,6 +296,74 @@ fn preview_neighbor(
     visible.get(target).copied()
 }
 
+/// @dev-id BRK-STUDIO-PREVIEW-LOCALE-001
+/// @purpose Keep simulated installer controls consistent with TR/EN selection.
+/// @contract Only Studio preview labels change; installed wizard behavior is unchanged.
+#[derive(Clone, Copy)]
+struct PreviewCopy {
+    empty_license: &'static str,
+    destination: &'static str,
+    browse: &'static str,
+    destination_hint: &'static str,
+    start_menu: &'static str,
+    desktop: &'static str,
+    shortcuts_hint: &'static str,
+    application: &'static str,
+    target: &'static str,
+    review_hint: &'static str,
+    installing: &'static str,
+    finished: &'static str,
+    finished_hint: &'static str,
+    cancel: &'static str,
+    cancel_hint: &'static str,
+    next: &'static str,
+    previous: &'static str,
+}
+
+fn preview_copy(english: bool) -> PreviewCopy {
+    if english {
+        PreviewCopy {
+            empty_license: "No license text entered yet. Edit it in the properties panel.",
+            destination: "Installation directory",
+            browse: "Browse…",
+            destination_hint: "Preview only. No folder will be created.",
+            start_menu: "Create Start menu shortcut",
+            desktop: "Create desktop shortcut",
+            shortcuts_hint: "These are examples. The user decides during installation.",
+            application: "Application",
+            target: "Destination",
+            review_hint: "No files are written in this preview.",
+            installing: "Installation progress (preview only)",
+            finished: "✓ Installation complete",
+            finished_hint: "This is an example result; no installation was performed.",
+            cancel: "Cancel",
+            cancel_hint: "Return the preview to its first page.",
+            next: "Next  ›",
+            previous: "‹  Back",
+        }
+    } else {
+        PreviewCopy {
+            empty_license: "Lisans metni henüz girilmedi. Sağdaki özellikler panelinden düzenleyin.",
+            destination: "Kurulum dizini",
+            browse: "Gözat…",
+            destination_hint: "Kurulum yalnızca önizleniyor. Klasör oluşturulmaz.",
+            start_menu: "Başlat menüsüne kısayol oluştur",
+            desktop: "Masaüstüne kısayol oluştur",
+            shortcuts_hint: "Bu seçimler örnektir; gerçek kurulumda kullanıcı karar verir.",
+            application: "Uygulama",
+            target: "Hedef",
+            review_hint: "Bu örnek ekranda dosya yazılmaz.",
+            installing: "Kurulum ilerleme görünümü (yalnızca önizleme)",
+            finished: "✓ Kurulum tamamlandı",
+            finished_hint: "Bu görünüm kurulum yapmadan sonucu örnekler.",
+            cancel: "İptal",
+            cancel_hint: "Önizlemeyi ilk sayfaya döndürür.",
+            next: "İleri  ›",
+            previous: "‹  Geri",
+        }
+    }
+}
+
 fn preview_page_body(
     ui: &mut egui::Ui,
     project: &SavedProject,
@@ -303,6 +371,7 @@ fn preview_page_body(
     english: bool,
     accepted: &mut bool,
 ) {
+    let copy = preview_copy(english);
     match selected {
         WizardPageId::License => {
             egui::Frame::new()
@@ -319,7 +388,7 @@ fn preview_page_body(
                                 ui.add(
                                     egui::Label::new(
                                         egui::RichText::new(
-                                            "Lisans metni henüz girilmedi. Sağdaki özellikler panelinden düzenleyin.",
+                                            copy.empty_license,
                                         )
                                         .color(egui::Color32::from_rgb(120, 130, 144)),
                                     )
@@ -350,7 +419,7 @@ fn preview_page_body(
             );
         }
         WizardPageId::Destination => {
-            ui.label("Kurulum dizini");
+            ui.label(copy.destination);
             ui.add_space(9.0);
             ui.horizontal(|ui| {
                 ui.add(
@@ -358,20 +427,20 @@ fn preview_page_body(
                         .desired_width((ui.available_width() - 80.0).max(130.0))
                         .interactive(false),
                 );
-                ui.add_enabled(false, egui::Button::new("Gözat…"));
+                ui.add_enabled(false, egui::Button::new(copy.browse));
             });
             ui.add_space(12.0);
-            ui.label("Kurulum yalnızca önizleniyor. Klasör oluşturulmaz.");
+            ui.label(copy.destination_hint);
         }
         WizardPageId::Shortcuts => {
             let mut start_menu = true;
             let mut desktop = false;
             ui.add_enabled_ui(false, |ui| {
-                ui.checkbox(&mut start_menu, "Başlat menüsüne kısayol oluştur");
-                ui.checkbox(&mut desktop, "Masaüstüne kısayol oluştur");
+                ui.checkbox(&mut start_menu, copy.start_menu);
+                ui.checkbox(&mut desktop, copy.desktop);
             });
             ui.add_space(12.0);
-            ui.label("Bu seçimler örnektir; gerçek kurulumda kullanıcı karar verir.");
+            ui.label(copy.shortcuts_hint);
         }
         WizardPageId::Welcome => {
             ui.label(
@@ -387,31 +456,31 @@ fn preview_page_body(
         }
         WizardPageId::Review => {
             ui.label(format!(
-                "Uygulama: {} v{}",
-                project.product_name, project.version
+                "{}: {} v{}",
+                copy.application, project.product_name, project.version
             ));
             ui.add_space(10.0);
-            ui.label(format!("Hedef: {}", project.install_target));
+            ui.label(format!("{}: {}", copy.target, project.install_target));
             ui.add_space(10.0);
-            ui.label("Bu örnek ekranda dosya yazılmaz.");
+            ui.label(copy.review_hint);
         }
         WizardPageId::Installing => {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.label("Kurulum ilerleme görünümü (yalnızca önizleme)");
+                ui.label(copy.installing);
             });
             ui.add_space(12.0);
             ui.add(egui::ProgressBar::new(0.48).desired_width(f32::INFINITY));
         }
         WizardPageId::Finished => {
             ui.label(
-                egui::RichText::new("✓ Kurulum tamamlandı")
+                egui::RichText::new(copy.finished)
                     .size(20.0)
                     .strong()
                     .color(egui::Color32::from_rgb(25, 130, 83)),
             );
             ui.add_space(12.0);
-            ui.label("Bu görünüm kurulum yapmadan sonucu örnekler.");
+            ui.label(copy.finished_hint);
         }
     }
 }
@@ -466,6 +535,7 @@ pub(super) fn draw_install_preview(
     }
     ui.add_space(14.0);
 
+    let copy = preview_copy(*english);
     egui::Frame::new()
         .fill(egui::Color32::from_rgb(20, 30, 45))
         .stroke(egui::Stroke::new(1.0, STUDIO_BORDER))
@@ -569,8 +639,8 @@ pub(super) fn draw_install_preview(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
                                         if ui
-                                            .add_sized([92.0, 34.0], egui::Button::new("İptal"))
-                                            .on_hover_text("Önizlemeyi ilk sayfaya döndürür.")
+                                            .add_sized([92.0, 34.0], egui::Button::new(copy.cancel))
+                                            .on_hover_text(copy.cancel_hint)
                                             .clicked()
                                         {
                                             selection =
@@ -579,7 +649,7 @@ pub(super) fn draw_install_preview(
                                         if ui
                                             .add_enabled(
                                                 next_enabled,
-                                                egui::Button::new("İleri  ›")
+                                                egui::Button::new(copy.next)
                                                     .min_size(egui::vec2(108.0, 34.0)),
                                             )
                                             .clicked()
@@ -589,7 +659,7 @@ pub(super) fn draw_install_preview(
                                         if ui
                                             .add_enabled(
                                                 previous.is_some(),
-                                                egui::Button::new("‹  Geri")
+                                                egui::Button::new(copy.previous)
                                                     .min_size(egui::vec2(108.0, 34.0)),
                                             )
                                             .clicked()
@@ -623,6 +693,20 @@ pub(super) fn draw_install_preview(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preview_language_switches_wizard_controls_without_changing_project_fields() {
+        let tr = preview_copy(false);
+        let en = preview_copy(true);
+        assert_eq!(tr.cancel, "İptal");
+        assert_eq!(en.cancel, "Cancel");
+        assert_eq!(en.next, "Next  ›");
+        assert_eq!(en.previous, "‹  Back");
+        assert_eq!(en.browse, "Browse…");
+        assert_eq!(en.destination, "Installation directory");
+        assert_ne!(tr.finished, en.finished);
+        assert_ne!(tr.shortcuts_hint, en.shortcuts_hint);
+    }
 
     #[test]
     fn preview_renders_with_inspector_visible_or_hidden_without_install_side_effects() {
