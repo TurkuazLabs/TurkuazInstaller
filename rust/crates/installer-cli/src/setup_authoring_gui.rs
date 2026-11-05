@@ -635,34 +635,34 @@ impl eframe::App for BuilderApp {
                 if self.active_step == 2 {
                     if self.show_designer_inspector {
                         egui::SidePanel::right("setup-designer-inspector")
-                        .resizable(true)
-                        .default_width(474.0)
-                        .min_width(350.0)
-                        .max_width(620.0)
-                        .show(context, |ui| {
-                            egui::ScrollArea::vertical()
-                                .id_salt("studio-designer-inspector-scroll")
-                                .show(ui, |ui| {
-                                    let selected_before = self.selected_wizard_page;
-                                    setup_design_surface::draw_step_inspector(
-                                        ui,
-                                        &mut self.project.wizard,
-                                        &mut self.selected_wizard_page,
-                                        &mut self.preview_english,
-                                    );
-                                    if selected_before != self.selected_wizard_page {
-                                        self.preview_accepted = false;
-                                    }
-                                    setup_design_surface::draw_appearance_editor(
-                                        ui,
-                                        &mut self.project,
-                                    );
-                                    ui.add_space(18.0);
-                                    if ui.button("← Genel bakışa dön").clicked() {
-                                        self.dialog_open = false;
-                                    }
-                                });
-                        });
+                            .resizable(true)
+                            .default_width(474.0)
+                            .min_width(350.0)
+                            .max_width(620.0)
+                            .show(context, |ui| {
+                                egui::ScrollArea::vertical()
+                                    .id_salt("studio-designer-inspector-scroll")
+                                    .show(ui, |ui| {
+                                        let selected_before = self.selected_wizard_page;
+                                        setup_design_surface::draw_step_inspector(
+                                            ui,
+                                            &mut self.project.wizard,
+                                            &mut self.selected_wizard_page,
+                                            &mut self.preview_english,
+                                        );
+                                        if selected_before != self.selected_wizard_page {
+                                            self.preview_accepted = false;
+                                        }
+                                        setup_design_surface::draw_appearance_editor(
+                                            ui,
+                                            &mut self.project,
+                                        );
+                                        ui.add_space(18.0);
+                                        if ui.button("← Genel bakışa dön").clicked() {
+                                            self.dialog_open = false;
+                                        }
+                                    });
+                            });
                     }
                     egui::CentralPanel::default().show(context, |ui| {
                         egui::ScrollArea::vertical()
