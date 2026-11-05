@@ -2,14 +2,14 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.5
-Aciklama: Birlesik Studio gorunumu, istege bagli bilgi paneli ve alan durumu gostergeleri
+Version: 0.9.6
+Aciklama: Birlesik Studio, 03 tam genislik onizleme ve uyarlanabilir alt eylem cubugu
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
 # Turkuaz Setup Studio
 
-Turkuaz Setup Studio, uygulama dosyalarindan Turkuaz .tzpkg paketi, setup tema ayarlari ve imzali yayin girdilerinden dagitim ciktilari hazirlayan Windows masaustu aracidir. Acilista IDE benzeri bir karsilama ekrani gorunur. Yeni Tam Kurulum veya Cevrimici Kurulum projesi secildiginde dort adimli modal proje sihirbazi acilir. Secim .tzproj icerisinde saklanir. Eski projeler varsayilan Tam Kurulum turuyle uyumlu acilir. Calisma alaninda solda bolum menusu, merkezde proje ozeti ve sagda son kullanici setup onizlemesi bulunur. Uygulama gorunumu secenegi yalnizca Setup Studio penceresini etkiler; setup tema preset'i, marka adi, alt baslik ve vurgu rengi son kullanici kurulum sihirbazina uygulanir. Sag kurulum onizlemesindeki devam dugmesi yalnizca goruntudur ve kurulum baslatmaz.
+Turkuaz Setup Studio, uygulama dosyalarindan Turkuaz .tzpkg paketi, setup tema ayarlari ve imzali yayin girdilerinden dagitim ciktilari hazirlayan Windows masaustu aracidir. Acilista IDE benzeri bir karsilama ekrani gorunur. Yeni Tam Kurulum veya Cevrimici Kurulum projesi secildiginde dort bolumlu tam boy Studio duzeni acilir. Secim .tzproj icerisinde saklanir. Eski projeler varsayilan Tam Kurulum turuyle uyumlu acilir. Calisma alaninda solda bolum menusu, merkezde proje ozeti ve sagda son kullanici setup onizlemesi bulunur. Uygulama gorunumu secenegi yalnizca Setup Studio penceresini etkiler; setup tema preset'i, marka adi, alt baslik ve vurgu rengi son kullanici kurulum sihirbazina uygulanir. Sag kurulum onizlemesindeki devam dugmesi yalnizca goruntudur ve kurulum baslatmaz.
 
 ## Kullaniciya gorunen adlandirma
 
@@ -51,6 +51,26 @@ Gorsel CI derlemesi gercek ekran goruntusu testi yerine gecmez.
 Windows kabul testinde 01/02/03/04, Genel bakis, kaydirma,
 Turkce metinler, yeniden boyutlandirma ve acik/koyu tema
 ayrica karsilastirilir. Production release otomatik olusturulmaz.
+
+## Dar pencere ve tam genislik kurulum onizlemesi
+
+03 Kurulum Tasarimi bolumunde **Ozellik panelini gizle/goster**
+dugmesi bulunur. Panel gizlenince Windows kurulum onizlemesi
+merkezde daha genis yer kaplar. Panel acildiginda sayfa/EULA
+editoru yeniden gorunur; ana proje alanlari ve secim kaybolmaz.
+Bunun yalnizca Studio gorunumunu degistirdigi, .tzproj
+serilestirmesini veya kurulum motoru davranisini degistirmedigi
+testlerle dogrulanir.
+
+Alt paketleme eylem cubugunda durum metni ve derleme dugmeleri
+ayri satirlarda gorunur. Bu sayede dar pencerede uzun Turkce
+bildirimlerin eylem dugmelerini itmesi onlenir. Ilerleme ve
+basarili paket durumu onceki gercek dosya kontrollerine dayanmaya
+devam eder.
+
+Windows kabulunde minimum pencere boyutu, 03 panel acik/kapali
+durumlari, 01/02/04 paneller, uzun metinler, klavye odagi ve
+kurulum olusturma dugmeleri manuel olarak da kontrol edilir.
 
 ## Gelistirilmis Studio gezintisi ve bilgi paneli
 
