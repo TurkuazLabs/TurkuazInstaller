@@ -252,7 +252,12 @@ mod tests {
         assert!(!options.desktop);
         assert_eq!(options.language, WizardLanguage::Turkish);
 
-        for flag in ["--recycle-approved", "--accept-license", "--quiet", "--scope"] {
+        for flag in [
+            "--recycle-approved",
+            "--accept-license",
+            "--quiet",
+            "--scope",
+        ] {
             let mut args = make();
             args.push(flag.to_owned());
             args.push("1".to_owned());
@@ -262,12 +267,20 @@ mod tests {
             let mut args = make();
             args[7] = invalid.into();
             if invalid == "0" {
-                assert!(!parse_resumed_values(&args).expect("explicit false").start_menu);
+                assert!(
+                    !parse_resumed_values(&args)
+                        .expect("explicit false")
+                        .start_menu
+                );
             } else {
                 assert!(parse_resumed_values(&args).is_err(), "accepted {invalid}");
             }
         }
-        for invalid in ["relative\\qa.uac", r"C:\Program Files\..\qa.uac", r"C:qa.uac"] {
+        for invalid in [
+            "relative\\qa.uac",
+            r"C:\Program Files\..\qa.uac",
+            r"C:qa.uac",
+        ] {
             let mut args = make();
             args[5] = invalid.into();
             assert!(parse_resumed_values(&args).is_err(), "accepted {invalid}");
