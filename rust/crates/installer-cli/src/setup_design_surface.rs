@@ -785,19 +785,30 @@ mod tests {
         assert!(accepted, "an unchanged preview must keep its checkmark");
 
         for (before, after, tr_before, tr_after, changed) in [
-            (WizardPageId::License, WizardPageId::Destination, false, false, false),
-            (WizardPageId::License, WizardPageId::License, false, true, false),
-            (WizardPageId::License, WizardPageId::License, false, false, true),
+            (
+                WizardPageId::License,
+                WizardPageId::Destination,
+                false,
+                false,
+                false,
+            ),
+            (
+                WizardPageId::License,
+                WizardPageId::License,
+                false,
+                true,
+                false,
+            ),
+            (
+                WizardPageId::License,
+                WizardPageId::License,
+                false,
+                false,
+                true,
+            ),
         ] {
             let mut checked = true;
-            invalidate_preview_consent(
-                &mut checked,
-                before,
-                after,
-                tr_before,
-                tr_after,
-                changed,
-            );
+            invalidate_preview_consent(&mut checked, before, after, tr_before, tr_after, changed);
             assert!(!checked, "stale EULA consent survived an editor change");
         }
     }
