@@ -387,10 +387,8 @@ fn preview_page_body(
                             if text.trim().is_empty() {
                                 ui.add(
                                     egui::Label::new(
-                                        egui::RichText::new(
-                                            copy.empty_license,
-                                        )
-                                        .color(egui::Color32::from_rgb(120, 130, 144)),
+                                        egui::RichText::new(copy.empty_license)
+                                            .color(egui::Color32::from_rgb(120, 130, 144)),
                                     )
                                     .wrap(),
                                 );
