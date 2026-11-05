@@ -650,7 +650,10 @@ mod tests {
             assert!(!output.shapes.is_empty());
             assert_eq!(show_inspector, panel_visible);
             assert_eq!(selected, WizardPageId::Welcome);
-            assert_eq!(serde_json::to_value(&project).expect("serialize after render"), before);
+            assert_eq!(
+                serde_json::to_value(&project).expect("serialize after render"),
+                before
+            );
         }
     }
 
