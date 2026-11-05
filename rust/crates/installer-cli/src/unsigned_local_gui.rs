@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.1
+// Version: 0.5.2
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -21,7 +21,7 @@ use turkuaz_installer_package_engine::{
 };
 
 use crate::{
-    windows_elevation::{parse_resumed_arguments, request_elevated_setup},
+    windows_elevation::{ResumeOptions, parse_resumed_arguments, request_elevated_setup},
     windows_install_scope::{
         InstallScope, current_process_is_elevated, default_install_directory, known_folder,
         validate_install_scope,
@@ -242,6 +242,25 @@ impl LocalInstaller {
             progress_label: "Kurulum hazırlanıyor…",
             status: None,
         })
+    }
+
+    /// @dev-id BRK-UAC-RECYCLE-CONSENT-001
+    /// @purpose Apply a validated UAC restart without inheriting any consent.
+    /// @contract The caller first verifies the embedded identity, install scope
+    /// and elevated token. No filesystem changes occur here.
+    fn apply_privileged_resume(&mut self, args: &ResumeOptions, path: &Path) {
+        self.scope = InstallScope::AllUsers;
+        self.target = path.to_string_lossy().into_owned();
+        self.language = args.language;
+        self.start_menu = self.entry_point.is_some() && args.start_menu;
+        self.desktop = self.entry_point.is_some() && args.desktop;
+        self.step = if self.wizard.is_enabled(WizardPageId::License) {
+            WizardStep::License
+        } else {
+            WizardStep::Review
+        };
+        self.license_accepted = false;
+        self.recycle_approved = false;
     }
 
     fn flow(&self) -> Vec<WizardStep> {
@@ -1150,20 +1169,7 @@ pub fn run_resumed() -> Result<(), Box<dyn std::error::Error>> {
         &app.program_files_root,
         current_process_is_elevated(),
     )?;
-    app.scope = InstallScope::AllUsers;
-    app.target = path.to_string_lossy().into_owned();
-    app.language = args.language;
-    app.start_menu = app.entry_point.is_some() && args.start_menu;
-    app.desktop = app.entry_point.is_some() && args.desktop;
-    app.step = if app.wizard.is_enabled(WizardPageId::License) {
-        // An elevated restart must never inherit unsigned acceptance state
-        // from command-line arguments. Require consent in this process too.
-        WizardStep::License
-    } else {
-        WizardStep::Review
-    };
-    app.license_accepted = false;
-    app.recycle_approved = false;
+    app.apply_privileged_resume(&args, &path);
     launch(app)
 }
 
@@ -1297,6 +1303,63 @@ mod tests {
         app.select_scope(InstallScope::CurrentUser);
         assert_eq!(PathBuf::from(&app.target), user.join("qa.scope"));
         assert_eq!(app.step, WizardStep::Destination);
+    }
+
+    /// @dev-id BRK-UAC-RECYCLE-TEST-001
+    /// @purpose Ensure UAC elevation drops both EULA and old-folder approval
+    /// regardless of the initial wizard selection.
+    #[test]
+    fn elevated_resume_requires_fresh_license_and_recycle_approval() {
+        let user = PathBuf::from(r"C:\Users\Test\AppData\Local\Programs");
+        let machine = PathBuf::from(r"C:\Program Files");
+        let target = machine.join("qa.consent");
+        let mut wizard = WizardConfig::default();
+        wizard.page_mut(WizardPageId::License).unwrap().enabled = true;
+        let mut app = LocalInstaller {
+            executable: PathBuf::from("fixture.exe"),
+            package_id: "qa.consent".into(),
+            package_label: "qa.consent · 1.0.0".into(),
+            target: user.join("qa.consent").to_string_lossy().into_owned(),
+            program_files_root: machine,
+            current_user_root: user,
+            scope: InstallScope::CurrentUser,
+            language: WizardLanguage::Turkish,
+            wizard,
+            license_accepted: true,
+            recycle_approved: true,
+            entry_point: None,
+            start_menu: false,
+            desktop: false,
+            step: WizardStep::Review,
+            path_error: None,
+            busy: None,
+            progress_label: "",
+            status: None,
+        };
+        let args = ResumeOptions {
+            package_id: "qa.consent".into(),
+            target: target.to_string_lossy().into_owned(),
+            start_menu: true,
+            desktop: true,
+            language: WizardLanguage::English,
+        };
+        app.apply_privileged_resume(&args, &target);
+        assert_eq!(app.scope, InstallScope::AllUsers);
+        assert_eq!(PathBuf::from(&app.target), target);
+        assert_eq!(app.language, WizardLanguage::English);
+        assert!(!app.license_accepted);
+        assert!(!app.recycle_approved);
+        assert_eq!(app.step, WizardStep::License);
+        assert!(!app.start_menu);
+        assert!(!app.desktop);
+
+        app.wizard.page_mut(WizardPageId::License).unwrap().enabled = false;
+        app.license_accepted = true;
+        app.recycle_approved = true;
+        app.apply_privileged_resume(&args, &target);
+        assert_eq!(app.step, WizardStep::Review);
+        assert!(!app.license_accepted);
+        assert!(!app.recycle_approved);
     }
 
     #[test]
