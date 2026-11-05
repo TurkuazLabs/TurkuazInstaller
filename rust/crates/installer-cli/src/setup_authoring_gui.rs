@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.8.6
+// Version: 0.8.7
 // Aciklama: Tum bolumlerde secim durumlari, acilir bilgi paneli ve kurulumu etkilemeyen gorsel rehberlik
 // Bagimli Oldugu Katman: View | Application
 
@@ -429,6 +429,11 @@ impl eframe::App for BuilderApp {
                     ui.label(egui::RichText::new("Windows kurulum paketi geliştirme").weak());
                     ui.small(format!("v{}", env!("CARGO_PKG_VERSION")));
                 });
+            });
+            // BRK-STUDIO-TOOLBAR-001: keep identity and project commands
+            // separate to avoid horizontal clipping at the minimum viewport.
+            ui.add_space(3.0);
+            ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let previous_appearance = self.appearance;
                     egui::ComboBox::from_id_salt("builder-app-appearance")
@@ -4335,6 +4340,59 @@ mod tests {
             studio_section_hint(&project, 9),
             ("Bilinmeyen bölüm", false)
         );
+    }
+
+    /// @dev-id BRK-STUDIO-VIEWPORT-ACCEPTANCE-001
+    /// @purpose Verify realistic egui panel sizing at the minimum and
+    /// common desktop widths without opening a native OS window.
+    /// @contract Headless geometry is not a DPI or screenshot acceptance.
+    #[test]
+    fn studio_viewport_layout_preserves_minimum_center_workspace() {
+        for width in [1100.0, 1280.0, 1510.0] {
+            let context = egui::Context::default();
+            configure_studio_style(&context);
+            let mut central_width = 0.0;
+            let output = context.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(width, 700.0),
+                    )),
+                    ..Default::default()
+                },
+                |context| {
+                    egui::TopBottomPanel::top("test-studio-header")
+                        .show(context, |ui| {
+                            ui.label("Turkuaz Setup Studio");
+                        });
+                    egui::SidePanel::left("test-studio-navigation")
+                        .resizable(false)
+                        .default_width(220.0)
+                        .show(context, |ui| {
+                            ui.label("Proje bölümleri");
+                        });
+                    let (default_width, max_width) =
+                        studio_designer_inspector_widths(context.available_rect().width());
+                    egui::SidePanel::right("test-studio-properties")
+                        .resizable(true)
+                        .default_width(default_width)
+                        .min_width(300.0)
+                        .max_width(max_width)
+                        .show(context, |ui| {
+                            ui.label("Kurulum adımları");
+                        });
+                    egui::CentralPanel::default().show(context, |ui| {
+                        central_width = ui.available_width();
+                        ui.label("Kurulum önizlemesi");
+                    });
+                },
+            );
+            assert!(!output.shapes.is_empty(), "viewport {width} did not render");
+            assert!(
+                central_width >= 400.0,
+                "viewport {width} left only {central_width} points for the preview"
+            );
+        }
     }
 
     #[test]
