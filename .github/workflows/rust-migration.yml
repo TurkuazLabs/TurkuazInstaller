@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.36
+# Version: 0.2.37
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -14,6 +14,7 @@ on:
       - rewrite/rust-community
       # Temporary integration acceptance branch only; never merged into main.
       - test/windows-uac-recycle-integration-20261105
+      - test/windows-full-installer-suite-20261106
     paths:
       - "rust/**"
       - ".github/workflows/rust-migration.yml"
@@ -249,6 +250,24 @@ jobs:
         with:
           name: turkuaz-setup-builder-v${{ env.RUST_CLI_VERSION }}-windows-x64
           path: rust/target/release/turkuaz-setup-builder-v${{ env.RUST_CLI_VERSION }}-windows-x64.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build and self-test real TurkuazInstaller Studio and CLI native installer
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File rust/scripts/windows-real-installer-uat.ps1 `
+            -CliPath "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe" `
+            -StudioPath "rust/target/release/turkuaz-setup-builder-v$env:RUST_CLI_VERSION-windows-x64.exe" `
+            -OutputDirectory (Join-Path $env:RUNNER_TEMP "turkuaz-installer-full-uat") `
+            -Version $env:RUST_CLI_VERSION
+
+      - name: Upload real TurkuazInstaller integrated Windows test setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: TurkuazInstaller-Full-UAT-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: ${{ runner.temp }}/turkuaz-installer-full-uat/**
           if-no-files-found: error
           retention-days: 7
 
