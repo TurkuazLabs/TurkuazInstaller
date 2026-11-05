@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.2.9
+Version: 0.3.0
 Aciklama: Derleme kontrolunden gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -13,11 +13,56 @@ Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde
 
 ## On kosullar
 
-- Guncel PR #63 Rust Migration CI calismasindan `turkuaz-installer-cli-v<surum>-windows-x64` ve `turkuaz-setup-gui-stub-v<surum>-windows-x64` artifact'larini indirin. Ikisi de yedi gun sonra silinir; kullanmadan once Actions tarihini ve CLI'nin `--version` ciktisini kontrol edin.
+- [GitHub Actions](https://github.com/TurkuazLabs/TurkuazInstaller/actions) uzerindeki en son **basarili** Rust CI calismasindan `turkuaz-setup-builder-v<surum>-windows-x64` ve gereken CLI/GUI test artifact'larini indirin. Artifact'lar gecicidir; kullanmadan once run'in commit SHA'sini, sonucunu ve uygulama surumunu dogrulayin. Referans: [#41913467340](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41913467340) (4 Kasim 2026, `ed272460`).
 - Testi tercihen geri alinabilir bir Windows sanal makinesinde ve yonetici olmayan kullanici ile yapin.
 - Test uygulamasi icin ayri, gercekten imzalanmis `.tzpkg`, bu paketi gosteren imzali manifest ve detached CMS imzasi kullanin.
 - Ayni paket kimligi icin yayinlayici tarafindan saglanmis gercek trust policy dosyasini ayri tutun. Ornek YAML icindeki sifir pin ve ornek sertifika kimligi guvenilir degildir; uretimde kullanilamaz.
 - Her komutta ayni paket kimligi, target ve data-root degerlerini kullanin. Asagidaki degerleri kendi paketinizle degistirin.
+
+## Studio, EULA ve Windows uygulama kaydi kabul senaryosu
+
+Bu bolumu geri alinabilir temiz Windows 10/11 test hesabinda,
+gercek uygulama verilerinden ayri bir paketle calistirin.
+`Turkuaz Setup Studio` artifact'ini acin:
+
+1. Tam Kurulum projesi olusturun; uygulama kimligi ve ana EXE
+   alanini doldurun. **03 Kurulum tasarimi** bolumune gecin.
+2. Lisans (EULA) sayfasini acin. Metinler bosken paketin EXE
+   olusmasinin engellendigini dogrulayin. Yayinciya ait gercek
+   Turkce ve English test metinlerini girin.
+3. Hos geldiniz ve EULA sayfasinin sirasini degistirin; kaydedip
+   projeyi yeniden acin. Metin ve ac/kapat durumlari kalmali.
+   Zorunlu Son kontrol/Kuruluyor/Tamamlandi sayfalari
+   gizlenememeli ve yanlis siraya tasinamamali.
+4. Ilk paketi ve Standart Kurulum EXE'sini olusturun.
+   Sonra sihirbaz metnini degistirip EXE'yi yeniden uretin:
+   taninan eski `standard/TurkuazSetup.exe` yedeklenmeli,
+   taninmayan klasor veya dosya silinmemeli.
+5. Bos hedefe yeni EXE'yi acin. EULA gorunmeli,
+   **Kabul ediyorum** isaretlenmeden **Ileri** pasif olmali.
+   Dili degistirdiginizde onay sifirlanmali.
+6. Tek kullanici kapsaminda kurun; kurulum yolu kullanici
+   profilinde olmali. Secilen kisa yollar ve Windows
+   **Yuklu Uygulamalar** kaydi kontrol edilmeli.
+7. Kaldirici penceresini acin: acik onay istenmeli.
+   Kurulum sonrasinda elle olusturulan kullanici dosyasi
+   silinmemeli. Degistirilmis paket dosyasi varsa kaldirma
+   fail-closed davranip veriyi korumali.
+8. Ayrica admin haklariyla **Tum kullanicilar** senaryosunu
+   test edin: UAC onayi reddedildiginde kurulum olmamali;
+   onaylandiginda Program Files, ortak kisa yol ve HKLM
+   butunlesmesi dogrulanmali. Yeni yukseltilmis GUI surecinde
+   EULA kabulunun yeniden istenmesini kontrol edin.
+
+Her senaryoda Windows build/surum, paket kimligi, cikti
+SHA-256, ekran goruntusu, islem sonucu ve hata mesaji
+kaydedin. Gercek dosya, private key, token, musterinin
+gizli uygulama verisi veya imzalama sertifikasini loglara
+eklemeyin.
+
+**Not:** Otomatik CI'nin PASS olmasi bu insan tarafindan
+yapilan GUI testlerinin PASS oldugu anlamina gelmez.
+Imzasiz yerel setup, publisher imzasini dogrulamaz.
 
 ## Cevrimici GUI modu (gelistirme kabulu)
 
@@ -83,7 +128,7 @@ Windows CI smoke betigi her dis process icin 300 saniyelik sure siniri uygular, 
 
 Bu rehber production kabul kaniti degildir; CI bunun bir kismini otomatik calistirir. Windows CI gecici test sertifikasi ile detached CMS imzali offline bundle olusturur; install, update, launch, tamper rejection, repair, rollback ve uninstall adimlarini calistirir. Ayrica paired distribution'i derler; primary setup ve NSIS backup'u test sertifikasi ile Authenticode imzalar, ikisinin digest ve signer kimligini dogrular, sonra imzali primary setup ile install-self akisini calistirir. Test gercek publisher sertifikasini veya temiz son kullanici VM kabulunu kapsamaz. Rust workspace, strict Clippy, Windows compile ve NSIS kontrolleri de CI'da surer. Argumansiz CLI/GUI acilisi varsayilan data root journal'larini tarayip kurtarmayi dener; bozuk veya belirsiz journal CLI'yi durdurur ya da GUI'de yeni kurulumu bloke eder. Son kullaniciya hazir dagitim icin gercek Authenticode imza dogrulamasi, Windows adapter'lari, production signing ve temiz VM kabul sonucu ayrica gereklidir. GUI iptali backend process'ini sonlandirip recovery'yi otomatik dener; recovery belirsiz durum bildirirse manuel adimlari izleyin.
 
-## PR #63 kucuk test kurulumu
+## Kucuk imzali ornek test kurulumu
 
 Rust Migration CI basarili tamamlandiginda `turkuaz-example-test-setup-v<surum>-windows-x64` adli ayri bir test artifact'i yuklenir. ZIP; `TurkuazSetup.exe`, NSIS yedegi, test icin pinlenmis `manifest-trust.yaml`, CLI ve kucuk bir Windows ornek uygulamasi icerir. Uygulama baslatilinca gorunur bir test mesaji acilir.
 
