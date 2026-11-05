@@ -1,9 +1,9 @@
 <!--
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
-Amac: Windows Setup Studio tasarim ekranini, modal editorlerini ve derleme akisini anlatmak
+Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.3
-Aciklama: Koyu tam boy kurulum tasarimi, Windows onizlemesi ve dagitim akisi
+Version: 0.9.4
+Aciklama: Birlesik tam boy urun, dosya, kurulum tasarimi ve dagitim gorunumu
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -28,6 +28,29 @@ Olusan dosya:
     rust/target/release/turkuaz-installer.exe
 
 Argumansiz acildiginda Setup Studio penceresini gosterir. Windows CI, ayni dosyanin surumlu turkuaz-setup-builder-vX.Y.Z-windows-x64.exe gelistirme artifact'ini de uretir.
+
+## Tum proje bolumlerinde tam boy Studio (Windows)
+
+**01 Urun bilgileri**, **02 Uygulama dosyalari** ve **04 Dagitim/Yayin**
+bolumleri de 03 tasarimindaki gibi ana calisma alaninda acilir;
+kucuk modal editorler kullanilmaz. Solda proje gezintisi, ortada
+bolumun gercek duzenleme alanlari ve ilerleme gostergesi, sagda
+baglamsal proje ozeti, kurulum tasarimina kisayol ve guvenli
+son kullanici setup onizlemesi vardir. Uzun AV ve imzali yayin
+formlari bagimsiz dikey kaydirma kullanir.
+
+**Genel bakis** sayfasi genis ekranlarda iki sutun, dar ekranlarda
+tek sutun proje kartlari sunar. Bolum sayfalarinin altinda **Genel
+bakis**, **Onceki bolum**, **Sonraki bolum** ve son bolumde mevcut
+kurulum olusturma eylemi bulunur. Onceki girdi alanlari, adim
+dogrulamasi, paket olusturma, .tzproj kaydi ve guvenlik davranislari
+degistirilmez. Tasarim panelindeki onizleme butonlari kurulum
+motorunu calistirmaz.
+
+Gorsel CI derlemesi gercek ekran goruntusu testi yerine gecmez.
+Windows kabul testinde 01/02/03/04, Genel bakis, kaydirma,
+Turkce metinler, yeniden boyutlandirma ve acik/koyu tema
+ayrica karsilastirilir. Production release otomatik olusturulmaz.
 
 ## Tam boy kurulum tasarimi (Windows Studio)
 
@@ -73,7 +96,7 @@ klasorunu bulur ve Belgeler/TurkuazInstaller/<urun adi>/project.tzproj
 
 ## Proje calisma alani
 
-Ilk acilista iki proje sablonu yer alir: Tam Kurulum (tum dosyalari iceren offline paket) veya Cevrimici Kurulum (HTTPS uzerinden indiren kucuk EXE). Ustteki Baslangic dugmesi yeni proje secimine doner; sol menudeki bolumler ve proje ayarlari kartlari mevcut projeyi duzenler. Tekrarlayan "Projeye basla" karti ve sol menudeki ikinci baslangic kisayolu kaldirildi. Secince modal sihirbaz acilir. Eski .tzproj dosyasi Proje ac ile yuklenebilir. Yeni proje secimi mevcut calisma verisini degistirecekse onay modal'i acilir; baslangica donuldugunde acik projeye geri donulebilir. Proje calisma alaninda solda numarali adimlar, ortada tek sutunlu duzenleme kartlari, sagda son kullanici setup onizlemesi bulunur. Modal sihirbaz urun bilgileri, uygulama dosyalari, setup tasarimi ve yalnizca secilen tipe ait yayin/cikti alanlarini gosterir. Alt kisimda her iki tur icin 1 Uygulama paketini hazirla ve yalnizca secilen tipe ait 2 Tam Kurulum olustur veya 2 Cevrimici yukleyici olustur dugmeleri yer alir. Studio arayuzu Sistem/Acik/Koyu ayariyla kendi paletini degistirir; sagdaki onizlemenin Acik/Koyu secimi ise olusturulacak setup temasinin onizlemesini etkiler.
+Ilk acilista iki proje sablonu yer alir: Tam Kurulum (tum dosyalari iceren offline paket) veya Cevrimici Kurulum (HTTPS uzerinden indiren kucuk EXE). Ustteki Baslangic dugmesi yeni proje secimine doner; sol menudeki bolumler ve proje ayarlari kartlari mevcut projeyi duzenler. Tekrarlayan "Projeye basla" karti ve sol menudeki ikinci baslangic kisayolu kaldirildi. Secince ilgili tam boy bolum calisma alani acilir. Eski .tzproj dosyasi Proje ac ile yuklenebilir. Yeni proje secimi mevcut calisma verisini degistirecekse onay modal'i acilir; baslangica donuldugunde acik projeye geri donulebilir. Proje calisma alaninda solda numarali adimlar, ortada tam boy bolum editleri, sagda proje bilgileri ve son kullanici setup onizlemesi bulunur. Her bolum kendi alanlarini ana calisma yuzeyinde gosterir. Alt kisimda her iki tur icin 1 Uygulama paketini hazirla ve yalnizca secilen tipe ait 2 Tam Kurulum olustur veya 2 Cevrimici yukleyici olustur dugmeleri yer alir. Studio arayuzu Sistem/Acik/Koyu ayariyla kendi paletini degistirir; sagdaki onizlemenin Acik/Koyu secimi ise olusturulacak setup temasinin onizlemesini etkiler.
 
 - Urun bilgileri: uygulama adi, paket kimligi, SemVer surumu ve stable/beta kanali.
 - Uygulama dosyalari: kaynak klasoru ve istege bagli goreli EXE yolu.
@@ -81,7 +104,7 @@ Ilk acilista iki proje sablonu yer alir: Tam Kurulum (tum dosyalari iceren offli
 - Cevrimdisi dagitim (Tam Kurulum): cikti klasoru, imzali manifest, detached imza, yayinci trust store'u, setup GUI stub'i ve istege bagli makensis.exe yolu.
 - Cevrimici yayin (Cevrimici Kurulum): cikti klasoru, HTTPS manifest/imza adresleri, yayinci trust store'u ve setup GUI stub'i.
 
-Uygulama paketi ve imzali dagitim cifti ana ekrandaki eylemlerden baslatilir. Gerekli bilgiler eksikse ilgili modal editor otomatik acilir.
+Uygulama paketi ve imzali dagitim cifti ana ekrandaki eylemlerden baslatilir. Gerekli bilgiler eksikse ilgili tam boy bolum otomatik acilir.
 
 Yeni projede varsayilan cikti klasoru Windows `LOCALAPPDATA/TurkuazInstaller/Projects`,
 uygulama kurulum hedefi ise `LOCALAPPDATA/Programs/Uygulamam` altindadir.
@@ -93,14 +116,14 @@ guvenli bir klasor secilmelidir. Kaydedilmis `.tzproj` dosyalarinin
 kullanici tarafindan secilmis cikti yollari korunur.
 
 Ilk paket olusturma isteginde, yeni projedeki varsayilan cikti ust klasoru
-henuz yoksa Setup Studio eksik alt klasorleri olusturur. Modal bolum
+henuz yoksa Setup Studio eksik alt klasorleri olusturur. Bolum
 dogrulamasi klasor olusturmaz; yalnizca paket olusturma asamasinda
 olusturulur. Dosya, sembolik baglanti/junction veya `..` gecisi iceren
 ust dizinler reddedilir. Yetki ve disk hatalari acikca raporlanir.
 Kullanici tarafindan secilmis cikti konumu degistirilmez; var olan
 `{package-id}-{version}` klasorunun ustune yazilmaz.
 
-Projeler .tzproj uzantisiyla kaydedilip Setup Studio icinde tekrar acilabilir. Acik bir proje varken baska proje secmek icin onay istenir; iptal edilen dosya secimi proje verisini korur. Modal sihirbazda dogrulama hatalari ilgili duzenleme penceresinin icinde gorunur. Her uygulama paketi derlemesi, 04 Yayin ve cikti bolumunde secilen cikti ust klasoru altinda yeni bir {package-id}-{version} klasoru olusturur; var olan klasorun ustune yazmaz. Uygulama dosyalari bolumundeki kaynak klasoru cikti konumu degildir. Ana ekrandaki Olusturulan dosyalar paneli hedef klasoru ve gercekten mevcut application.tzpkg ile distribution/TurkuazSetup.exe dosyalarinin durumunu ayri gosterir. Birinci asama paketi hazir sayilmasi icin `project.tzproj` anlik goruntusu guncel kaynak, urun, surum, kurulum hedefi ve tema ayarlariyla eslesmelidir. Bu alanlar degistiyse eski paket hazir gosterilmez ve ikinci asama devre disi kalir; imza, trust ve yayin URL alanlarinin sonradan girilmesi paketi gecersiz kilmaz. Dis kaynak dosyalarinin icerigi proje dosyasindan otomatik takip edilmez. Degisik kaynakla yeniden paket icin yeni surum veya baska guvenli cikti konumu kullanilir. Cikti klasorunu ac dugmesi Windows Dosya Gezgini ile mevcut klasoru acar; EXE dosyasini calistirmaz. Ilk adim yalnizca .tzpkg dosyasi olusturur, kurulum EXE'si degildir. Imzali dagitim ciftini hazirlama adimi ayni klasordeki package ve theme dosyalarini kullanir ve yeni bir distribution alt klasoru olusturur.
+Projeler .tzproj uzantisiyla kaydedilip Setup Studio icinde tekrar acilabilir. Acik bir proje varken baska proje secmek icin onay istenir; iptal edilen dosya secimi proje verisini korur. Adim dogrulama hatalari ilgili tam boy bolumun icinde gorunur. Her uygulama paketi derlemesi, 04 Yayin ve cikti bolumunde secilen cikti ust klasoru altinda yeni bir {package-id}-{version} klasoru olusturur; var olan klasorun ustune yazmaz. Uygulama dosyalari bolumundeki kaynak klasoru cikti konumu degildir. Ana ekrandaki Olusturulan dosyalar paneli hedef klasoru ve gercekten mevcut application.tzpkg ile distribution/TurkuazSetup.exe dosyalarinin durumunu ayri gosterir. Birinci asama paketi hazir sayilmasi icin `project.tzproj` anlik goruntusu guncel kaynak, urun, surum, kurulum hedefi ve tema ayarlariyla eslesmelidir. Bu alanlar degistiyse eski paket hazir gosterilmez ve ikinci asama devre disi kalir; imza, trust ve yayin URL alanlarinin sonradan girilmesi paketi gecersiz kilmaz. Dis kaynak dosyalarinin icerigi proje dosyasindan otomatik takip edilmez. Degisik kaynakla yeniden paket icin yeni surum veya baska guvenli cikti konumu kullanilir. Cikti klasorunu ac dugmesi Windows Dosya Gezgini ile mevcut klasoru acar; EXE dosyasini calistirmaz. Ilk adim yalnizca .tzpkg dosyasi olusturur, kurulum EXE'si degildir. Imzali dagitim ciftini hazirlama adimi ayni klasordeki package ve theme dosyalarini kullanir ve yeni bir distribution alt klasoru olusturur.
 
 ## Cevrimici yayin kaynagi
 
@@ -127,7 +150,7 @@ CLI birinci adimda gercek HTTPS sunucu baglantisi gerektirir. CI unit testleri U
 
 ## WebSetup EXE cikarmak
 
-Yeni **Cevrimici Kurulum** projesi secilir. Modal sihirbazin **04 Cevrimici yayin** bolumunde **GitHub Releases** veya **Ozel HTTPS** secilir; buna gore release etiketi ve asset adlari ya da iki dogrudan HTTPS URL'si girilir. Yayinci trust store (public policy) ve Windows setup GUI stub'i secilmis olmalidir. Once **1 Uygulama paketini hazirla**, sonra **2 Cevrimici yukleyici olustur** kullanilir. Studio, ayni versiyonlu proje klasorunun `web/TurkuazWebSetup.exe` dosyasina bir Windows WebSetup stub'i uretir.
+Yeni **Cevrimici Kurulum** projesi secilir. Tam boy Studio'nun **04 Cevrimici yayin** bolumunde **GitHub Releases** veya **Ozel HTTPS** secilir; buna gore release etiketi ve asset adlari ya da iki dogrudan HTTPS URL'si girilir. Yayinci trust store (public policy) ve Windows setup GUI stub'i secilmis olmalidir. Once **1 Uygulama paketini hazirla**, sonra **2 Cevrimici yukleyici olustur** kullanilir. Studio, ayni versiyonlu proje klasorunun `web/TurkuazWebSetup.exe` dosyasina bir Windows WebSetup stub'i uretir.
 
 WebSetup dosyasi .tzpkg uygulama verisini tasimaz. Icinde paket kimligi, imzali manifest ve imza HTTPS adresleri, hedef kurulum klasoru, secili setup temasi ve **public** yayinci trust store yer alir. Yayin private key'i, imzalama parolasi, kimlik dogrulama bilgisi veya paket verisi EXE icine eklenmez. Bu nedenle EXE genellikle full installer'dan kucuktur. Tek dosyadir; kullanicidan manuel manifest URL'si veya ayri trust-store dosyasi istemez.
 
