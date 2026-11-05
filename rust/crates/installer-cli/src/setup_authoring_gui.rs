@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.8.3
+// Version: 0.8.4
 // Aciklama: Tum bolumlerde secim durumlari, acilir bilgi paneli ve kurulumu etkilemeyen gorsel rehberlik
 // Bagimli Oldugu Katman: View | Application
 
@@ -238,6 +238,7 @@ struct BuilderApp {
     appearance: AppearancePreference,
     preview_dark: bool,
     show_project_inspector: bool,
+    show_designer_inspector: bool,
     selected_wizard_page: WizardPageId,
     preview_english: bool,
     preview_accepted: bool,
@@ -261,6 +262,7 @@ impl Default for BuilderApp {
             appearance: AppearancePreference::Dark,
             preview_dark: false,
             show_project_inspector: true,
+            show_designer_inspector: true,
             selected_wizard_page: WizardPageId::License,
             preview_english: false,
             preview_accepted: false,
@@ -478,7 +480,10 @@ impl eframe::App for BuilderApp {
                 });
             egui::TopBottomPanel::bottom("setup-builder-actions").show(context, |ui| {
                 ui.separator();
-                ui.horizontal(|ui| {
+                // BRK-STUDIO-FOOTER-001: keep status and primary actions in
+                // separate rows so the long Turkish labels cannot collide
+                // when the Studio viewport is narrowed.
+                ui.horizontal_wrapped(|ui| {
                     if let Some((succeeded, message)) = &self.status {
                         ui.colored_label(
                             if *succeeded {
@@ -495,16 +500,18 @@ impl eframe::App for BuilderApp {
                         ui.spinner();
                         ui.label("Paket ve kurulum dosyaları hazırlanıyor…");
                     } else if !package_ready {
-                        ui.label("Paket güncel değil: 2. düğme önce paketi yenileyip sonra kurulum EXE'sini oluşturabilir.");
+                        ui.label("Paket hazırlanmadı veya proje ayarları değişti.");
                     } else if local_test_ready {
-                        ui.label("Standart Kurulum EXE'si hazır; çıktı klasöründen açabilirsiniz.");
+                        ui.label("Standart Kurulum EXE'si hazır.");
                     } else {
                         ui.label(format!(
                             "{} projesi · Paket hazır; kurulum EXE dosyasını oluşturabilirsiniz.",
                             self.project.installer_kind.label(),
                         ));
                     }
-
+                });
+                ui.add_space(3.0);
+                ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if self.project.installer_kind == InstallerKind::Web {
                             if ui
@@ -626,7 +633,8 @@ impl eframe::App for BuilderApp {
             // to section 03 and do not change the project/install contracts.
             if self.dialog_open {
                 if self.active_step == 2 {
-                    egui::SidePanel::right("setup-designer-inspector")
+                    if self.show_designer_inspector {
+                        egui::SidePanel::right("setup-designer-inspector")
                         .resizable(true)
                         .default_width(474.0)
                         .min_width(350.0)
@@ -655,6 +663,7 @@ impl eframe::App for BuilderApp {
                                     }
                                 });
                         });
+                    }
                     egui::CentralPanel::default().show(context, |ui| {
                         egui::ScrollArea::vertical()
                             .id_salt("studio-designer-preview-scroll")
@@ -665,6 +674,7 @@ impl eframe::App for BuilderApp {
                                     &mut self.selected_wizard_page,
                                     &mut self.preview_english,
                                     &mut self.preview_accepted,
+                                    &mut self.show_designer_inspector,
                                 );
                             });
                     });
