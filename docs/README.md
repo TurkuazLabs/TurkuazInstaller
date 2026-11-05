@@ -1,69 +1,70 @@
 <!--
 Dosya Yolu: REPO_ROOT/docs/README.md
-Amac: Community Rust installer icin mevcut dokumantasyonun giris ve kaynak dizini
+Amac: Aktif Community Rust gelistirmesine ait belgeler ve tarihsel kaynaklar icin dizin
 Modul - Markdown
-Version: 1.0.1
-Aciklama: Gercek Rust kaynaklari, test kaniti, tarihsel kontratlar ve kabul sinirlari
+Version: 1.1.0
+Aciklama: Studio, EULA, CLI, QA, release sinirlari ve tarihsel kaynaklar
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Community Rust belge dizini
+# TurkuazInstaller Community belge dizini
 
-Bu dizin `rewrite/rust-community` gelistirme dali icindir.
-`main` ve onceki .NET/WinUI planlari burada tamamlanmis Rust
-ozelligi olarak anlatilmaz. TEST artifact'i release degildir.
+Aktif gelistirme Rust workspace (`rust/`) altindadir. Bu belge,
+hangi kaynagin gercek uygulamaya ait oldugunu ve hangi testin neyi
+kanitladigini ayirir. Onceki .NET/WinUI3/Velopack kaynak kodu Git
+gecmisindedir; Rust runtime sozlesmesi olarak kabul edilmez.
 
-## Baslangic ve teknik kaynaklar
+## Kurulum ve gelistirme
 
-| Ihtiyac | Kaynak |
+| Konu | Belge |
 | --- | --- |
-| Proje girisi ve hizli komutlar | [Kok README](../README.md) |
-| Rust crate mimarisi | [Rust README](../rust/README.md) |
-| CLI komutlari | [CLI](../rust/CLI.md) |
-| Windows Setup Studio ve WebSetup | [Setup Studio](../rust/SETUP_BUILDER.md) |
-| Paket formati (`.tzpkg`) | [Paket formati](../rust/PACKAGE_FORMAT.md) |
-| Kurulum/update/repair/rollback | [Kurulum akisi](../rust/INSTALL_WORKFLOW.md) |
-| Versioned deployment ve journal | [Deployment layout](../rust/DEPLOYMENT_LAYOUT.md) |
-| Publisher imzalama | [Release signing](../rust/RELEASE_SIGNING.md) |
-| Windows manuel kabul | [Smoke test](../rust/SMOKE_TEST.md) |
-| Guncel kabul ve eksik isler | [Rust readiness](../rust/RUST_READINESS.md) |
-| Guvenlik bildirimi | [Security policy](../SECURITY.md) |
+| Proje ozeti ve hizli kurulum | [Kok README](../README.md) |
+| Rust crate'leri, bagimlilik ve gelistirme | [Rust README](../rust/README.md) |
+| Setup Studio, yonetilebilir kurulum sayfalari ve EULA | [Setup Studio](../rust/SETUP_BUILDER.md) |
+| Rust CLI komutlari | [CLI](../rust/CLI.md) |
+| `.tzpkg` / native EXE ve sinirlar | [Paket formati](../rust/PACKAGE_FORMAT.md) |
+| Install/update/repair/rollback/uninstall | [Install workflow](../rust/INSTALL_WORKFLOW.md) |
+| Versioned deployment ve kurtarma | [Deployment layout](../rust/DEPLOYMENT_LAYOUT.md) |
+| Publisher imzalama ve dagitim guveni | [Release signing](../rust/RELEASE_SIGNING.md) |
+| Windows GUI manuel test ve olumsuz senaryolar | [Windows smoke](../rust/SMOKE_TEST.md) |
+| Production'a gecis ve kalan kapilar | [Rust readiness](../rust/RUST_READINESS.md) |
+| Guvenlik bildirimi | [SECURITY](../SECURITY.md) |
 
-## Dogrulanmis ile henuz onaylanmamis olanin farki
+## Dogrulama kaniti
 
-`rust/Cargo.lock` sabitlenmistir.
-[Community 41342571609](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41342571609)
-`203192d1` Rust kaynak ve docs revizyonunda Linux ve Windows
-`--locked` CI'yi **PASS** tamamladi. Onceki `7b0c2613` revizyonu
-da [41339318653](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41339318653)
-ile PASS idi. Yeni commit'ler kendi CI sonuclari gelmeden
-PASS sayilmaz.
+- [GitHub Actions #41913467340](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41913467340):
+  `ed272460` revizyonunda Linux ve Windows CI **SUCCESS** (4 Kasim 2026).
+  Windows Studio GUI build, kisa yol, Rust installer ve test paketi
+  otomatik kontrolleri calisti.
+- Bu sonucun kapsaminda temiz Windows 10/11 masaustunde tam
+  **elle kullanici kabul testi**, production Authenticode imzasi,
+  gercek publisher kimligi ve ilk musteri uygulamasi pilotu bulunmaz.
+- Belge guncellemesi veya `main` merge yeni kod/test basarisi
+  sayilmaz. Yeni commit'in kendi CI calismasina bakin.
 
-Rust installer, Studio/wizard, signed offline TEST setup ve WebSetup
-gelistirme artifact'lari uretilir. Gercek Windows GUI click,
-production Authenticode, dis publisher/release, temiz Windows VM
-installer lifecycle kabulu ve ilk gercek urun pilotu halen aciktir.
+## Uyumluluk ve guvenlik
 
-## Tarihsel dokumanlar ve uygulanan schema
+- `../contracts/` altindaki tarihsel YAML tasarimlari
+  `legacy-design-only` durumundadir. Gercek manifest dogrulamasi
+  `../rust/crates/manifest-parser` icindedir.
+- Eski `.tzproj` projeleri lisans sayfasi kapali olarak acilir.
+  EULA aciksa Turkce ve English metinler yayinci tarafindan girilir.
+  Metin bosken EXE uretilmez; onay kutusu isaretlenmeden kurulum
+  sonraki asamaya gecemez.
+- Imzasiz yerel EXE SHA-256 butunluk denetimi saglar,
+  publisher authentication saglamaz.
+- Test ZIP/artifact'lari ve production Release ayri tutulur. Imzalama
+  anahtari, parola veya gercek musteri verisi issue/CI artifact'ina
+  eklenmemelidir.
 
-`../contracts/` altindaki 11 YAML dosyasi
-`legacy-design-only` durumundadir; Rust runtime tarafindan
-otomatik yuklenmez. Gecerli signed manifest parser kodu
-`../rust/crates/manifest-parser/src/lib.rs`,
-domain kontrati `../rust/crates/domain/src/release.rs`
-dosyalarindadir. `../examples/` placeholder'lari production
-imzasi veya yayin guveni tasimaz.
+## Onceki .NET uygulamasi
 
-## Gelistirme ve yayin ayrimi
+Rust onceki .NET/WinUI3 uygulamasinin ustune eklenen bir runtime degil,
+ayri bir uygulama mimarisidir. Tarihsel `main` kaynaklarina ve
+belgelerine Git gecmisinden erisilebilir:
 
-Repo kokunden:
-```powershell
-cargo fmt --manifest-path rust/Cargo.toml --all -- --check
-cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
-cargo test --locked --manifest-path rust/Cargo.toml --workspace --all-targets
-```
+[Eski Community .NET kaynak durumu (1048931b)](https://github.com/TurkuazLabs/TurkuazInstaller/tree/1048931bf7498ab4d4440414c4463e6ee5e7421e)
 
-Windows gercek testlerinde [kabul rehberini](../rust/SMOKE_TEST.md)
-kullanin. Ozel sertifika/anahtar ve sifreleri issue veya artifact'a
-eklemeyin. [PR #63](https://github.com/TurkuazLabs/TurkuazInstaller/pull/63)
-Draft'tir; main merge ya da production release izni verilmemistir.
+Hangi dalda olursa olsun kodu production olarak dagitmadan once
+[Windows manuel kabul rehberini](../rust/SMOKE_TEST.md) ve
+[release kapilarini](../rust/RUST_READINESS.md) dogrulayin.
