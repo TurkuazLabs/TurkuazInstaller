@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_recycle.rs
 // Amac: Kullanici onayli temiz kurulum icin mevcut uygulama klasorunu geri donusume tasimak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: IFileOperation ile recycle-only; silme veya ustune yazma fallback'i yok
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -18,9 +18,9 @@ use windows::{
             CoUninitialize,
         },
         UI::Shell::{
-            FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FOFX_RECYCLEONDELETE,
-            FileOperation, IFileOperation, IFileOperationProgressSink, IShellItem,
-            SHCreateItemFromParsingName,
+            FOF_ALLOWUNDO, FOF_NOERRORUI, FOF_SILENT, FOFX_ADDUNDORECORD, FOFX_EARLYFAILURE,
+            FOFX_RECYCLEONDELETE, FileOperation, IFileOperation, IFileOperationProgressSink,
+            IShellItem, SHCreateItemFromParsingName,
         },
     },
     core::PCWSTR,
@@ -111,8 +111,14 @@ pub(super) fn recycle_existing_target(target: &Path, package_id: &str) -> Result
     let operation: IFileOperation =
         unsafe { CoCreateInstance(&FileOperation, None, CLSCTX_INPROC_SERVER) }
             .map_err(|error| format!("Windows Geri Dönüşüm Kutusu kullanılamıyor: {error}"))?;
-    let flags =
-        FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT | FOFX_RECYCLEONDELETE;
+    // Never use FOF_NOCONFIRMATION: it automatically answers Yes to
+    // prompts, which is unsafe when Windows cannot recycle a folder.
+    let flags = FOF_ALLOWUNDO
+        | FOF_NOERRORUI
+        | FOF_SILENT
+        | FOFX_EARLYFAILURE
+        | FOFX_ADDUNDORECORD
+        | FOFX_RECYCLEONDELETE;
     unsafe { operation.SetOperationFlags(flags) }
         .map_err(|error| format!("Windows recycle-only seçeneği uygulanamadı: {error}"))?;
 
