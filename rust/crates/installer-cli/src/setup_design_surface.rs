@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_design_surface.rs
 // Amac: Studio'da gercek Windows kurulumuna benzeyen canli sayfa onizlemesi ve adim inspector'u
 // Modul - Rust Presentation
-// Version: 0.1.3
+// Version: 0.1.4
 // Aciklama: Koyu Studio paneli, acik Windows wizard onizlemesi, dogrulanan EULA ayarlari
 // Bagimli Oldugu Katman: View | Application
 
@@ -301,6 +301,12 @@ fn preview_neighbor(
 /// @contract Only Studio preview labels change; installed wizard behavior is unchanged.
 #[derive(Clone, Copy)]
 struct PreviewCopy {
+    preview_heading: &'static str,
+    preview_subheading: &'static str,
+    hide_inspector: &'static str,
+    show_inspector: &'static str,
+    disabled_page: &'static str,
+    license_accept: &'static str,
     empty_license: &'static str,
     destination: &'static str,
     browse: &'static str,
@@ -323,6 +329,12 @@ struct PreviewCopy {
 fn preview_copy(english: bool) -> PreviewCopy {
     if english {
         PreviewCopy {
+            preview_heading: "Installer Preview",
+            preview_subheading: "Windows setup wizard simulation · no files will be installed",
+            hide_inspector: "Hide properties",
+            show_inspector: "Show properties",
+            disabled_page: "This page is disabled and appears only in the design preview.",
+            license_accept: "I accept the terms of the License Agreement",
             empty_license: "No license text entered yet. Edit it in the properties panel.",
             destination: "Installation directory",
             browse: "Browse…",
@@ -343,6 +355,12 @@ fn preview_copy(english: bool) -> PreviewCopy {
         }
     } else {
         PreviewCopy {
+            preview_heading: "Kurulum Önizlemesi",
+            preview_subheading: "Windows kurulum sihirbazının görsel simülasyonu · dosya kurulmaz",
+            hide_inspector: "Özellik panelini gizle",
+            show_inspector: "Özellik panelini göster",
+            disabled_page: "Bu sayfa kapalı: yalnızca tasarım önizlemesinde gösteriliyor.",
+            license_accept: "Lisans sözleşmesinin koşullarını kabul ediyorum",
             empty_license: "Lisans metni henüz girilmedi. Sağdaki özellikler panelinden düzenleyin.",
             destination: "Kurulum dizini",
             browse: "Gözat…",
@@ -407,14 +425,7 @@ fn preview_page_body(
                         });
                 });
             ui.add_space(13.0);
-            ui.checkbox(
-                accepted,
-                if english {
-                    "I accept the terms of the License Agreement"
-                } else {
-                    "Lisans sözleşmesinin koşullarını kabul ediyorum"
-                },
-            );
+            ui.checkbox(accepted, copy.license_accept);
         }
         WizardPageId::Destination => {
             ui.label(copy.destination);
@@ -497,7 +508,7 @@ pub(super) fn draw_install_preview(
     ui.add_space(12.0);
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new("Kurulum Önizlemesi")
+            egui::RichText::new(preview_copy(*english).preview_heading)
                 .size(23.0)
                 .strong(),
         );
@@ -515,7 +526,7 @@ pub(super) fn draw_install_preview(
         });
     });
     ui.label(
-        egui::RichText::new("Windows kurulum sihirbazının görsel simülasyonu · dosya kurulmaz")
+        egui::RichText::new(preview_copy(*english).preview_subheading)
             .color(MUTED_TEXT)
             .size(13.0),
     );
@@ -523,9 +534,9 @@ pub(super) fn draw_install_preview(
     // viewport width; this only changes Studio chrome, not WizardConfig.
     if ui
         .button(if *show_inspector {
-            "Özellik panelini gizle"
+            preview_copy(*english).hide_inspector
         } else {
-            "Özellik panelini göster"
+            preview_copy(*english).show_inspector
         })
         .clicked()
     {
@@ -680,10 +691,8 @@ pub(super) fn draw_install_preview(
     ui.add_space(13.0);
     if !project.wizard.is_enabled(*selected) {
         ui.label(
-            egui::RichText::new(
-                "Bu sayfa şu anda kapalı: yalnızca tasarım önizlemesinde gösteriliyor.",
-            )
-            .color(egui::Color32::from_rgb(255, 180, 109)),
+            egui::RichText::new(copy.disabled_page)
+                .color(egui::Color32::from_rgb(255, 180, 109)),
         );
     }
 }
@@ -704,6 +713,12 @@ mod tests {
         assert_eq!(en.destination, "Installation directory");
         assert_ne!(tr.finished, en.finished);
         assert_ne!(tr.shortcuts_hint, en.shortcuts_hint);
+        assert_eq!(en.preview_heading, "Installer Preview");
+        assert_eq!(tr.preview_heading, "Kurulum Önizlemesi");
+        assert_eq!(en.show_inspector, "Show properties");
+        assert_eq!(tr.hide_inspector, "Özellik panelini gizle");
+        assert_eq!(en.license_accept, "I accept the terms of the License Agreement");
+        assert_ne!(tr.disabled_page, en.disabled_page);
     }
 
     #[test]
