@@ -2,25 +2,47 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.21
+Version: 2.3.22
 Aciklama: Aktif Community Rust kaynak kodu ve kabul sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Rust Migration
+# Rust Community Workspace
 
-Bu workspace `rewrite/rust-community` dalinin aktif uygulama kodudur.
+Bu workspace TurkuazInstaller Community'nin aktif Rust uygulama kodudur.
 Rust kaynak kodu ve testleri tek workspace altinda gelistirilir.
 Fonksiyonel testler production GUI ve imzali kurulum kabulunun yerine gecmez.
 
 ## Kanitlanmis Rust CI siniri
 
 `rust/Cargo.lock` kaynak denetimindedir ve Linux/Windows CI cargo
-check/build/test/Clippy kapilari `--locked` ile calisir. Sabit `203192d1` revizyonundaki
-[CI 41342571609](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41342571609)
-iki platformda **PASS**. Bu gelistirme kanitidir; gercek temiz Windows
+check/build/test/Clippy kapilari `--locked` ile calisir.
+`ed272460` kod revizyonu icin
+[CI #41913467340](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41913467340)
+Linux ve Windows'ta **SUCCESS**. Bu gelistirme kanitidir; gercek temiz Windows
 masaustunde GUI tiklama veya production imza kabulu degildir. Belge
 navigasyonu icin [dokumantasyon dizinine](../docs/README.md) bakin.
+
+## Yapilandirilabilir Studio sihirbazi
+
+Setup Studio'nun **03 Kurulum tasarimi** ekraninda
+Hoş geldiniz, EULA, kurulum konumu ve kısayol sayfaları
+acilip kapatilabilir, siralanabilir; Turkce ve English baslik/aciklama
+duzenlenebilir. Son kontrol, kuruluyor ve tamamlandi sayfalari
+kaldirilamaz. EULA secilirse her iki dilde gercek lisans metinleri
+girilmelidir; kabul olmadan Ileri ilerlemez. `.tzproj` dosyalarinin
+eski surumleri EULA kapali varsayilir. Native EXE'de
+`TZLOCAL2` ve `TZWIZR01` kontrollu metadata ile tasinir;
+bozuk konfigurasyon fail-closed reddedilir.
+
+Yerel kurulumda tek kullanici / tum kullanicilar hedefi ve
+Windows kisa yol konumu secilebilir. Tum kullanicilar icin UAC
+onayi gerekir. Kaldirma, ayri EXE ve islem envanteriyle
+Windows Yuklu Uygulamalar kaydina baglanir. Testleri gecse bile
+gercek Windows 10/11 VM'de son kullanici kabulu ayri gereklidir.
+
+Ayrintilar: [SETUP_BUILDER.md](SETUP_BUILDER.md) ve
+[SMOKE_TEST.md](SMOKE_TEST.md).
 
 ## Boundary
 
@@ -38,7 +60,7 @@ navigasyonu icin [dokumantasyon dizinine](../docs/README.md) bakin.
 - `artifact-transfer`: HTTPS ve `file:` artifactlerini benzersiz staging dizinine stream eder; HTTPS redirect'lerinde HTTPS disina cikmaz, imzali boyut ust sinirini erkenden uygular, exact size kontroluyle `.partial` dosyayi basarili aktarim sonunda atomik adlandirir. Bu crate artifact'i apply etmez.
 - `artifact-validation`: download → tam boyut/SHA-256 → metadata varsa Authenticode siralamasini uygular. Yalniz tum uygulanabilir kapilar basariliysa opaque `VerifiedArtifact` dondurur; dogrulama hatasinda indirilmis dosyayi ve bos staging klasorlerini temizler. Install workflow bu token'i dogrulanmis release icin staging, versioned activation ve kurulu-state kaydina kadar tuketiyor; headless CLI install/update/rollback komutlari bagli, optional Windows setup GUI ayni CLI engine'i child process olarak cagiriyor.
 - `package-engine`: `.tzpkg` v1/v2 archive sozlesmesi, `turkuaz-package.json` release identity/version baglamasi, opsiyonel paket entrypoint'i, payload builder'i ve verified-artifact staging'i saglar. ZIP-slip, Windows path kurallari, buyuk/kucuk harf path cakismasi, duplicate entry, symlink/ozel dosya ve acilmis boyut/sayi sinirlari kontrol edilir. Ayrintilar: [PACKAGE_FORMAT.md](PACKAGE_FORMAT.md).
-- `setup-authoring-gui`: Windows Setup Studio opens a guided project wizard for package identity, payload directory, optional entry point, target folder, and end-user setup appearance. It saves and reopens bounded schema-versioned `.tzproj` documents, previews the selected setup theme, and produces an atomic output folder containing `.tzpkg`, a validated unsigned manifest draft, and theme JSON. For an ordinary local installation, Setup Studio now generates a native unsigned `standard/TurkuazSetup.exe` with embedded `.tzpkg` and an interactive Rust installer; it requires neither NSIS nor a signing certificate. This local mode checks archive integrity and refuses overwrites, but provides no authenticated publisher identity, secure updates, repair, rollback, or managed uninstall. A signed manifest and external publisher trust policy remain required for a trusted release/update setup executable; see [SETUP_BUILDER.md](SETUP_BUILDER.md).
+- `setup-authoring-gui`: Windows Setup Studio opens a guided project wizard for package identity, payload directory, optional entry point, target folder, and end-user setup appearance. It saves and reopens bounded schema-versioned `.tzproj` documents, previews the selected setup theme, and produces an atomic output folder containing `.tzpkg`, a validated unsigned manifest draft, and theme JSON. For an ordinary local installation, Setup Studio now generates a native unsigned `standard/TurkuazSetup.exe` with embedded `.tzpkg` and an interactive Rust installer; it requires neither NSIS nor a signing certificate. This local mode checks archive integrity and refuses overwrites, but provides no authenticated publisher identity or secure signed updates/rollback. Local receipt-based removal and Windows Installed Apps registration are implemented in the development setup, separately from the signed release lifecycle. A signed manifest and external publisher trust policy remain required for a trusted release/update setup executable; see [SETUP_BUILDER.md](SETUP_BUILDER.md).
 - `setup-bundle`: Signed manifest, detached signature, and the verified `.tzpkg` are stored in a bounded offline `.tzsetup` archive. The CLI can create it and install, update, repair, or policy-authorized rollback from it; the external signer trust policy is checked at install time and never embedded. A command-line self-extracting `.exe` can also be built from a CLI stub and bundle; extraction supports a final Authenticode certificate table appended after its payload footer. `build-distribution-pair` stages the primary Turkuaz setup and mandatory NSIS backup together from that bundle; the NSIS fallback offers install, update, repair, and policy-authorized rollback choices. A Windows `setup-gui` build opens a four-step Turkish desktop wizard for operation, package and publisher trust, install/data paths, and final review. The signed HTTPS online source can now be selected in the wizard alongside the original embedded offline bundle; online install/update/repair/rollback use the existing verified CLI workflow and require explicit HTTPS manifest/signature URLs plus the external publisher trust policy. Setup Studio can also generate an unsigned, preconfigured one-file WebSetup EXE carrying bounded, hash-checked HTTPS URLs, theme and public publisher trust policy (without the app payload). The GUI uses the existing verified HTTPS CLI; Windows CI validates config read-back and tamper rejection. Production Authenticode signing and clean-VM end-to-end online download acceptance are not yet complete. Operation choices appear as selectable cards; package IDs and required trust files are validated before continuing, and folders can be picked in native dialogs. Uninstall hides the trust-policy input and requires a separate confirmation on the review step. Every operation runs the existing CLI engine as a child process with an honest indeterminate working state; canceling stops the backend and attempts journal recovery. The default CLI artifact remains console based. Real signed-package VM acceptance, production Authenticode signing, and automated publishing remain pending.
 - `deployment-activation`: Staged payload'i immutable `versions/<version>` dizinine kopyalar; `integrity/<deployment-key>.json` envanterinde dosya boyutu ve SHA-256 kaydeder; `active.json` isaretcisini atomik degistirir ve etkin/onceki surum entrypoint'lerini saklar. Onarimda mevcut surume yeni bir immutable klasor hazirlayip etkinlestirir. `verify_current` tum dosyalari kayitli envanterle karsilastirir. Envanter yerel tutarlilik kontroludur, kriptografik guven koku degildir. Ayrintilar: [DEPLOYMENT_LAYOUT.md](DEPLOYMENT_LAYOUT.md).
 - `install-workflow`: Package lock altinda `VerifiedArtifact` eslesmesini kontrol eder, ilk install veya ileri SemVer update icin paketi stage eder, etkin deployment'i acar ve installed state'i yazar. Imzali ayni surum artifact'iyle onarim yeni immutable deployment hazirlayip etkin isaretciyi atomik gunceller. Ayni servis package lock ve journal altinda yalnizca bu paketin deployment klasorunu kaldiran recoverable uninstall akisini da saglar. State yazimi basarisizsa etkin surumu telafi eder; current signed release policy izin verirse bir onceki etkin surume rollback yapar. Sinirlar: [INSTALL_WORKFLOW.md](INSTALL_WORKFLOW.md).
@@ -54,7 +76,7 @@ navigasyonu icin [dokumantasyon dizinine](../docs/README.md) bakin.
 - `manifest-parser`: schema v1 YAML alanlarini domain invariant'lariyla eslestirir; bilinmeyen alanlari yok sayar ve taninmayan channel, install mode, shortcut location veya signature algorithm degerlerini reddeder.
 - Community Rust CI now also tests native unsigned setup extraction, tamper detection and clean Windows file installation, separately from the signed release path. Community Rust CI format, Clippy (uyarilar hata sayilir), workspace testleri, Linux/Windows compile, NSIS validation ve surumlenmis Windows x64 CLI/GUI setup stub/Setup Studio artifact'larini dogrular; artifact'lar yedi gun saklanir. CLI surumunu `--version` veya `-V` ile, GUI surumunu pencere basliginda gosterir. Bunlar development artifact'laridir; dagitilabilir Turkuaz setup ya da production release degildir.
 
-Rust gecisi halen migration foundation'dir; production veya end-user setup hazirliginda degildir ve production kabulunu kanitlamaz. CLI signed online install/update/repair/rollback, kurulu state listeleme/dogrulama/baslatma/uninstall, signed offline bundle ve self-extracting setup uretim akislarini icerir; no-argument CLI/GUI acilisi varsayilan data root journal'larini tarayip konservatif recovery dener. Ozel data root secilen paket isleminde denetlenir. Prerequisite ve Windows integration adapter'lari, production Authenticode signing/publishing ve gercek imzali paketlerle temiz Windows VM lifecycle kabul testi acik kalir. Windows CI gecici self-signed test sertifikasi ile detached CMS dogrulamasini, offline install/update/repair/rollback/launch/uninstall akisini ve Authenticode sertifikasi eklenmis self-extracting primary setup testini calistirir. Production yayinlayici sertifikasi ve temiz son kullanici VM kabul testi halen gereklidir.
+Aktif Rust uygulamasi gelistirme/test asamasindadir; build ve CI production kabulunun yerine gecmez. CLI signed online install/update/repair/rollback, kurulu state listeleme/dogrulama/baslatma/uninstall, signed offline bundle ve self-extracting setup uretim akislarini icerir; no-argument CLI/GUI acilisi varsayilan data root journal'larini tarayip konservatif recovery dener. Ozel data root secilen paket isleminde denetlenir. Prerequisite ve Windows integration adapter'lari, production Authenticode signing/publishing ve gercek imzali paketlerle temiz Windows VM lifecycle kabul testi acik kalir. Windows CI gecici self-signed test sertifikasi ile detached CMS dogrulamasini, offline install/update/repair/rollback/launch/uninstall akisini ve Authenticode sertifikasi eklenmis self-extracting primary setup testini calistirir. Production yayinlayici sertifikasi ve temiz son kullanici VM kabul testi halen gereklidir.
 
 ## Platform-independent antivirus integration foundation
 
@@ -93,4 +115,4 @@ gercek production kabulune kalmis islerdir. Durum/kanit
 7. Pro runtime entitlement, credentials ve signed rollout baglantisini
    Community install guven sinirini bozmadan bagla.
 
-Bu gelistirme dali signed production release kabulunu henuz tamamlamamistir.
+Bu workspace signed production release kabulunu henuz tamamlamamistir.
