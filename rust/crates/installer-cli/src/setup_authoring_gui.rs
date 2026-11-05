@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.8.4
+// Version: 0.8.5
 // Aciklama: Tum bolumlerde secim durumlari, acilir bilgi paneli ve kurulumu etkilemeyen gorsel rehberlik
 // Bagimli Oldugu Katman: View | Application
 
@@ -306,6 +306,20 @@ fn studio_palette(dark: bool) -> StudioPalette {
             border: rgb(211, 223, 233),
             hover: rgb(222, 239, 242),
         }
+    }
+}
+
+/// @dev-id BRK-STUDIO-RESPONSIVE-001
+/// @purpose Preserve meaningful wizard preview space at narrow Studio widths.
+/// @contract Inspector sizing changes presentation only and leaves user data intact.
+/// available_width is the UI width after the left navigation is laid out.
+fn studio_designer_inspector_widths(available_width: f32) -> (f32, f32) {
+    if available_width < 1040.0 {
+        (340.0, 370.0)
+    } else if available_width < 1360.0 {
+        (410.0, 490.0)
+    } else {
+        (474.0, 620.0)
     }
 }
 
@@ -634,11 +648,13 @@ impl eframe::App for BuilderApp {
             if self.dialog_open {
                 if self.active_step == 2 {
                     if self.show_designer_inspector {
+                        let (default_width, maximum_width) =
+                            studio_designer_inspector_widths(context.available_rect().width());
                         egui::SidePanel::right("setup-designer-inspector")
                             .resizable(true)
-                            .default_width(474.0)
-                            .min_width(350.0)
-                            .max_width(620.0)
+                            .default_width(default_width)
+                            .min_width(300.0)
+                            .max_width(maximum_width)
                             .show(context, |ui| {
                                 egui::ScrollArea::vertical()
                                     .id_salt("studio-designer-inspector-scroll")
@@ -4313,6 +4329,18 @@ mod tests {
             studio_section_hint(&project, 9),
             ("Bilinmeyen bölüm", false)
         );
+    }
+
+    #[test]
+    fn studio_designer_inspector_widths_leave_preview_room_at_small_sizes() {
+        let compact = studio_designer_inspector_widths(880.0);
+        let standard = studio_designer_inspector_widths(1290.0);
+        let spacious = studio_designer_inspector_widths(1440.0);
+        assert_eq!(compact, (340.0, 370.0));
+        assert_eq!(standard, (410.0, 490.0));
+        assert_eq!(spacious, (474.0, 620.0));
+        assert!(880.0 - compact.1 >= 500.0);
+        assert!(1290.0 - standard.1 >= 750.0);
     }
 
     #[test]
