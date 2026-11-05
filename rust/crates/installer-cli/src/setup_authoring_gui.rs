@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.8.5
+// Version: 0.8.6
 // Aciklama: Tum bolumlerde secim durumlari, acilir bilgi paneli ve kurulumu etkilemeyen gorsel rehberlik
 // Bagimli Oldugu Katman: View | Application
 
@@ -1213,19 +1213,18 @@ impl BuilderApp {
             .size(13.0)
             .strong(),
         );
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(title).size(28.0).strong());
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let label = if self.show_project_inspector {
-                    "Bilgi panelini gizle"
-                } else {
-                    "Bilgi panelini göster"
-                };
-                if ui.button(label).clicked() {
-                    self.show_project_inspector = !self.show_project_inspector;
-                }
-            });
-        });
+        // BRK-STUDIO-NARROW-HEADER-001: a separate action row avoids
+        // clipping long section titles and the inspector toggle at minimum
+        // window width or higher Windows text scaling.
+        ui.label(egui::RichText::new(title).size(28.0).strong());
+        let panel_label = if self.show_project_inspector {
+            "Bilgi panelini gizle"
+        } else {
+            "Bilgi panelini göster"
+        };
+        if ui.button(panel_label).clicked() {
+            self.show_project_inspector = !self.show_project_inspector;
+        }
         ui.label(egui::RichText::new(description).size(15.0).weak());
         let (hint, filled) = studio_section_hint(&self.project, self.active_step);
         ui.colored_label(
@@ -1240,7 +1239,7 @@ impl BuilderApp {
 
         studio_card(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.strong("Proje ilerlemesi");
+                ui.strong("Bölüm konumu");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
                         egui::RichText::new(format!("Bölüm {} / 4", self.active_step + 1))
@@ -1254,6 +1253,11 @@ impl BuilderApp {
                 egui::ProgressBar::new((self.active_step + 1) as f32 / 4.0)
                     .desired_height(7.0)
                     .fill(palette.accent),
+            );
+            ui.label(
+                egui::RichText::new("Bölüm sırasını gösterir; ayarların tamamlandığı anlamına gelmez.")
+                    .size(12.0)
+                    .weak(),
             );
         });
         ui.add_space(17.0);
