@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.3.0
+# Version: 0.3.1
 # Aciklama: Imzali lifecycle ve tek Rust TurkuazSetup EXE'yi test eder, opsiyonel QA ornegi
 # Bagimli Oldugu Katman: QA | Tool
 param(
@@ -11,8 +11,6 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
     [string]$GuiStubPath,
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullOrEmpty()]
     [Parameter(Mandatory = $false)]
     [ValidateNotNullOrEmpty()]
     [string]$RetainDistributionPath
