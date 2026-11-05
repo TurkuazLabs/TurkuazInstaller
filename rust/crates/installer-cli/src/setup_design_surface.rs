@@ -39,11 +39,7 @@ pub(super) fn draw_step_inspector(
     english: &mut bool,
 ) {
     ui.add_space(11.0);
-    ui.label(
-        egui::RichText::new("Kurulum Adımları")
-            .size(22.0)
-            .strong(),
-    );
+    ui.label(egui::RichText::new("Kurulum Adımları").size(22.0).strong());
     ui.label(
         egui::RichText::new("Görünen sayfaları açın, gizleyin ve sıralayın.")
             .color(MUTED_TEXT)
@@ -113,21 +109,33 @@ pub(super) fn draw_step_inspector(
         let mut move_delta = 0;
         ui.horizontal_wrapped(|ui| {
             if ui
-                .add_enabled(!selected.required() && !enabled, egui::Button::new("+ Ekle"))
+                .add_enabled(
+                    !selected.required() && !enabled,
+                    egui::Button::new("+ Ekle"),
+                )
                 .clicked()
             {
                 toggle_to = Some(true);
             }
             if ui
-                .add_enabled(!selected.required() && enabled, egui::Button::new("− Kaldır"))
+                .add_enabled(
+                    !selected.required() && enabled,
+                    egui::Button::new("− Kaldır"),
+                )
                 .clicked()
             {
                 toggle_to = Some(false);
             }
-            if ui.add_enabled(movable, egui::Button::new("↑ Yukarı")).clicked() {
+            if ui
+                .add_enabled(movable, egui::Button::new("↑ Yukarı"))
+                .clicked()
+            {
                 move_delta = -1;
             }
-            if ui.add_enabled(movable, egui::Button::new("↓ Aşağı")).clicked() {
+            if ui
+                .add_enabled(movable, egui::Button::new("↓ Aşağı"))
+                .clicked()
+            {
                 move_delta = 1;
             }
         });
@@ -171,21 +179,14 @@ pub(super) fn draw_step_inspector(
 
         if let Some(page) = config.page_mut(*selected) {
             ui.label("Başlık (Türkçe)");
-            ui.add(
-                egui::TextEdit::singleline(&mut page.title_tr)
-                    .desired_width(f32::INFINITY),
-            );
+            ui.add(egui::TextEdit::singleline(&mut page.title_tr).desired_width(f32::INFINITY));
             ui.label("Açıklama (Türkçe)");
             ui.add(
-                egui::TextEdit::singleline(&mut page.description_tr)
-                    .desired_width(f32::INFINITY),
+                egui::TextEdit::singleline(&mut page.description_tr).desired_width(f32::INFINITY),
             );
             ui.collapsing("English başlık ve açıklama", |ui| {
                 ui.label("Title");
-                ui.add(
-                    egui::TextEdit::singleline(&mut page.title_en)
-                        .desired_width(f32::INFINITY),
-                );
+                ui.add(egui::TextEdit::singleline(&mut page.title_en).desired_width(f32::INFINITY));
                 ui.label("Description");
                 ui.add(
                     egui::TextEdit::singleline(&mut page.description_en)
@@ -218,11 +219,9 @@ pub(super) fn draw_step_inspector(
                     .hint_text("Gerçek lisans sözleşmesi metnini girin."),
             );
             ui.label(
-                egui::RichText::new(
-                    "EULA etkinse her iki dilde gerçek sözleşme metni gereklidir.",
-                )
-                .color(MUTED_TEXT)
-                .size(12.0),
+                egui::RichText::new("EULA etkinse her iki dilde gerçek sözleşme metni gereklidir.")
+                    .color(MUTED_TEXT)
+                    .size(12.0),
             );
         }
     });
@@ -272,8 +271,7 @@ pub(super) fn draw_appearance_editor(ui: &mut egui::Ui, project: &mut SavedProje
                 );
                 ui.label("Alt başlık");
                 ui.add(
-                    egui::TextEdit::singleline(&mut project.subtitle)
-                        .desired_width(f32::INFINITY),
+                    egui::TextEdit::singleline(&mut project.subtitle).desired_width(f32::INFINITY),
                 );
                 ui.label("Vurgu rengi (HEX)");
                 ui.add(
@@ -386,7 +384,10 @@ fn preview_page_body(
             ui.label(format!("{} v{}", project.product_name, project.version));
         }
         WizardPageId::Review => {
-            ui.label(format!("Uygulama: {} v{}", project.product_name, project.version));
+            ui.label(format!(
+                "Uygulama: {} v{}",
+                project.product_name, project.version
+            ));
             ui.add_space(10.0);
             ui.label(format!("Hedef: {}", project.install_target));
             ui.add_space(10.0);
@@ -476,9 +477,7 @@ pub(super) fn draw_install_preview(
                             .show(ui, |ui| {
                                 ui.horizontal(|ui| {
                                     ui.label(
-                                        egui::RichText::new("▣")
-                                            .color(STUDIO_ACCENT)
-                                            .size(17.0),
+                                        egui::RichText::new("▣").color(STUDIO_ACCENT).size(17.0),
                                     );
                                     ui.label(
                                         egui::RichText::new(format!(
@@ -505,9 +504,8 @@ pub(super) fn draw_install_preview(
                                 let title = page
                                     .map(|page| page.title(*english))
                                     .unwrap_or_else(|| selected.label());
-                                let description = page
-                                    .map(|page| page.description(*english))
-                                    .unwrap_or("");
+                                let description =
+                                    page.map(|page| page.description(*english)).unwrap_or("");
                                 ui.horizontal(|ui| {
                                     ui.vertical(|ui| {
                                         ui.label(
@@ -547,16 +545,8 @@ pub(super) fn draw_install_preview(
                             .fill(egui::Color32::from_rgb(246, 247, 249))
                             .inner_margin(egui::Margin::symmetric(17, 12))
                             .show(ui, |ui| {
-                                let previous = preview_neighbor(
-                                    &project.wizard,
-                                    *selected,
-                                    -1,
-                                );
-                                let next = preview_neighbor(
-                                    &project.wizard,
-                                    *selected,
-                                    1,
-                                );
+                                let previous = preview_neighbor(&project.wizard, *selected, -1);
+                                let next = preview_neighbor(&project.wizard, *selected, 1);
                                 let next_enabled = next.is_some()
                                     && (*selected != WizardPageId::License || *accepted);
                                 let mut selection = None;
@@ -564,18 +554,12 @@ pub(super) fn draw_install_preview(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
                                         if ui
-                                            .add_sized(
-                                                [92.0, 34.0],
-                                                egui::Button::new("İptal"),
-                                            )
+                                            .add_sized([92.0, 34.0], egui::Button::new("İptal"))
                                             .on_hover_text("Önizlemeyi ilk sayfaya döndürür.")
                                             .clicked()
                                         {
-                                            selection = project
-                                                .wizard
-                                                .visible_pages(true)
-                                                .first()
-                                                .copied();
+                                            selection =
+                                                project.wizard.visible_pages(true).first().copied();
                                         }
                                         if ui
                                             .add_enabled(
@@ -637,9 +621,6 @@ mod tests {
             preview_neighbor(&config, WizardPageId::Welcome, 1),
             Some(WizardPageId::License)
         );
-        assert_eq!(
-            preview_neighbor(&config, WizardPageId::Finished, 1),
-            None
-        );
+        assert_eq!(preview_neighbor(&config, WizardPageId::Finished, 1), None);
     }
 }
