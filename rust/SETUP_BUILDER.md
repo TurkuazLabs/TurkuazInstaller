@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.6
-Aciklama: Birlesik Studio, 03 tam genislik onizleme ve uyarlanabilir alt eylem cubugu
+Version: 0.9.7
+Aciklama: Pencereye uyarlanan 03 onizlemesi, TR-EN preview kontrolleri ve Studio editoru
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -71,6 +71,27 @@ devam eder.
 Windows kabulunde minimum pencere boyutu, 03 panel acik/kapali
 durumlari, 01/02/04 paneller, uzun metinler, klavye odagi ve
 kurulum olusturma dugmeleri manuel olarak da kontrol edilir.
+
+## Studio onizleme genisligi ve TR/EN tutarliligi
+
+03 Kurulum Tasarimi sayfasindaki sag inspector genisligi Studio'nun
+sol navigasyondan arta kalan ekran genisligine gore uyarlanir.
+Dar gorunumde daha az yatay alan kaplar, genis gorunumde gelismis
+duzenleme alanini korur. Mevcut **Ozellik panelini gizle/goster**
+kontrolu hala kullanilabilir; panel kapatilsa bile EULA, marka,
+kurulum hedefi ve proje dosyalari degismez.
+
+Onizlemedeki **Turkce / English** secimi yalnizca sayfa basligi,
+aciklamasi ve EULA ile sinirli degildir: ornek Windows wizard'in
+Ileri/Geri/Iptal, Hedef, Gozat, kisayol, gozden gecirme,
+ilerleme ve bitis metinlerini de secili dilde gosterir.
+Yayincinin kendi girdigi marka adi ve alt baslik otomatik
+cevrilmez. Onizleme gercek Windows kurulumunu calistirmaz.
+
+Bu iyilestirmelerin panel genisligi ve TR/EN label secimi
+unit testlerle denetlenir. Gercek Windows minimum pencere
+boyutu, DPI ayari, kisayol tuşlari ve piksel gorunumu
+ayri manuel kabul kontrolu gerektirir.
 
 ## Gelistirilmis Studio gezintisi ve bilgi paneli
 
