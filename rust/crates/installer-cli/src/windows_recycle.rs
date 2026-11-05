@@ -18,9 +18,9 @@ use windows::{
             CoUninitialize,
         },
         UI::Shell::{
-            FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT,
-            FOFX_RECYCLEONDELETE, FileOperation, IFileOperation, IFileOperationProgressSink,
-            IShellItem, SHCreateItemFromParsingName,
+            FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FOFX_RECYCLEONDELETE,
+            FileOperation, IFileOperation, IFileOperationProgressSink, IShellItem,
+            SHCreateItemFromParsingName,
         },
     },
     core::PCWSTR,
@@ -108,15 +108,11 @@ pub(super) fn validate_recycle_target(target: &Path, package_id: &str) -> Result
 pub(super) fn recycle_existing_target(target: &Path, package_id: &str) -> Result<(), String> {
     validate_recycle_target(target, package_id)?;
     let _com = StaApartment::initialize()?;
-    let operation: IFileOperation = unsafe {
-        CoCreateInstance(&FileOperation, None, CLSCTX_INPROC_SERVER)
-    }
-    .map_err(|error| format!("Windows Geri Dönüşüm Kutusu kullanılamıyor: {error}"))?;
-    let flags = FOF_ALLOWUNDO
-        | FOF_NOCONFIRMATION
-        | FOF_NOERRORUI
-        | FOF_SILENT
-        | FOFX_RECYCLEONDELETE;
+    let operation: IFileOperation =
+        unsafe { CoCreateInstance(&FileOperation, None, CLSCTX_INPROC_SERVER) }
+            .map_err(|error| format!("Windows Geri Dönüşüm Kutusu kullanılamıyor: {error}"))?;
+    let flags =
+        FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT | FOFX_RECYCLEONDELETE;
     unsafe { operation.SetOperationFlags(flags) }
         .map_err(|error| format!("Windows recycle-only seçeneği uygulanamadı: {error}"))?;
 
@@ -140,7 +136,9 @@ pub(super) fn recycle_existing_target(target: &Path, package_id: &str) -> Result
     match fs::symlink_metadata(target) {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Ok(_) => Err("Eski klasör hâlâ mevcut; üzerine yazma reddedildi.".into()),
-        Err(error) => Err(format!("Geri dönüşüm sonrası klasör doğrulanamadı: {error}")),
+        Err(error) => Err(format!(
+            "Geri dönüşüm sonrası klasör doğrulanamadı: {error}"
+        )),
     }
 }
 
@@ -162,7 +160,9 @@ mod tests {
         assert!(validate_recycle_target(&target, "different.app").is_err());
         assert!(validate_recycle_target(&root, "qa.recycle").is_err());
         assert!(validate_recycle_target(Path::new(r"C:\"), "qa.recycle").is_err());
-        assert!(validate_recycle_target(Path::new(r"\\server\share\qa.recycle"), "qa.recycle").is_err());
+        assert!(
+            validate_recycle_target(Path::new(r"\\server\share\qa.recycle"), "qa.recycle").is_err()
+        );
         fs::remove_dir_all(root).expect("cleanup fixture");
     }
 }
