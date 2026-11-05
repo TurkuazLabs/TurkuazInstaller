@@ -3063,7 +3063,8 @@ fn build_distribution(project: SavedProject) -> Result<String, String> {
     run_child(single_command, "Tek Rust TurkuazSetup.exe oluşturma")?;
     let primary_metadata = fs::symlink_metadata(&primary_setup)
         .map_err(|error| format!("TurkuazSetup.exe oluşturulamadı: {error}"))?;
-    if !primary_metadata.is_file() || primary_metadata.file_type().is_symlink()
+    if !primary_metadata.is_file()
+        || primary_metadata.file_type().is_symlink()
         || primary_metadata.len() < 1024
     {
         return Err("TurkuazSetup.exe normal, boş olmayan bir EXE olmalıdır.".to_owned());
@@ -3438,7 +3439,10 @@ mod tests {
     fn retired_installer_compiler_field_is_read_once_and_never_saved() {
         let mut old = serde_json::to_value(SavedProject::default()).expect("serialize");
         let object = old.as_object_mut().expect("project object");
-        object.insert("makensisPath".to_owned(), serde_json::json!("C:/old/compiler.exe"));
+        object.insert(
+            "makensisPath".to_owned(),
+            serde_json::json!("C:/old/compiler.exe"),
+        );
         let restored: SavedProject =
             serde_json::from_value(old).expect("legacy project still loads");
         let serialized = serde_json::to_value(&restored).expect("serialize migrated project");
