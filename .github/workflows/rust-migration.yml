@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.32
+# Version: 0.2.33
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -196,8 +196,11 @@ jobs:
       - name: Test IDE welcome and saved project mode compatibility
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui saved_project_kind_preserves_legacy_offline_and_web_projects
 
-      - name: Test modal wizard opening for chosen installer type
-        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui welcome_selection_opens_mode_specific_modal_without_replacing_old_project_silently
+      - name: Test full-height Studio section rendering without mutating project data
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_full_height_sections_render_without_mutating_project_data
+
+      - name: Test full-height Studio editor opening for chosen installer type
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui welcome_selection_opens_full_height_editor_without_replacing_old_project_silently
 
       - name: Test GitHub Releases and existing HTTPS source migration
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui web_provider_preserves_legacy_https_projects_and_roundtrips_github_settings
