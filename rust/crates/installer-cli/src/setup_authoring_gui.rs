@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.8.0
+// Version: 0.8.1
 // Aciklama: Tum bolumler icin tam boy Studio editoru, proje inspector'u ve kurulum simulasyonu
 // Bagimli Oldugu Katman: View | Application
 
@@ -3933,8 +3933,44 @@ mod tests {
         fs::remove_file(&file).expect("clean test trust");
     }
 
+    /// @dev-id BRK-STUDIO-SECTION-RENDER-001
+    /// @purpose Exercise all inline Studio section editors in headless egui
+    /// frames; drawing must not mutate the project or invoke install/build.
     #[test]
-    fn welcome_selection_opens_mode_specific_modal_without_replacing_old_project_silently() {
+    fn studio_full_height_sections_render_without_mutating_project_data() {
+        let context = egui::Context::default();
+        configure_studio_style(&context);
+
+        for kind in [InstallerKind::Offline, InstallerKind::Web] {
+            let mut app = BuilderApp::default();
+            app.create_new_project(kind);
+            app.project.product_name = "Türkçe Studio testi".to_owned();
+            let before = serde_json::to_value(&app.project).expect("serialize initial project");
+
+            for section in [0, 1, 3] {
+                app.open_editor(section);
+                let frame = context.run(egui::RawInput::default(), |context| {
+                    egui::CentralPanel::default().show(context, |ui| {
+                        app.draw_section_workspace(ui, false);
+                    });
+                });
+                assert!(
+                    !frame.shapes.is_empty(),
+                    "section {section} did not render for {kind:?}"
+                );
+                assert_eq!(app.active_step, section);
+                assert!(app.dialog_open);
+                assert_eq!(
+                    serde_json::to_value(&app.project).expect("serialize rendered project"),
+                    before,
+                    "section {section} mutated the project during preview"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn welcome_selection_opens_full_height_editor_without_replacing_old_project_silently() {
         let mut app = BuilderApp::default();
         assert!(!app.workspace_open);
         assert!(!app.has_project);
