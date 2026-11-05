@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_design_surface.rs
 // Amac: Studio'da gercek Windows kurulumuna benzeyen canli sayfa onizlemesi ve adim inspector'u
 // Modul - Rust Presentation
-// Version: 0.1.6
+// Version: 0.1.7
 // Aciklama: Studio acik/koyu temasi, ayri acik Windows wizard onizlemesi ve EULA kontrolleri
 // Bagimli Oldugu Katman: View | Application
 
@@ -34,12 +34,15 @@ fn settings_card(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui)) {
 /// persistent full-height inspector instead of a small modal edit form.
 /// @contract Mandatory steps stay locked; actual order and enable flags are
 /// persisted in WizardConfig. License text is never generated automatically.
+/// Returns true when the license terms or enabled state changed this frame.
 pub(super) fn draw_step_inspector(
     ui: &mut egui::Ui,
     config: &mut WizardConfig,
     selected: &mut WizardPageId,
     english: &mut bool,
-) {
+) -> bool {
+    let license_enabled_before = config.is_enabled(WizardPageId::License);
+    let mut license_text_changed = false;
     let palette = studio_palette(ui.visuals().dark_mode);
     ui.add_space(11.0);
     ui.label(egui::RichText::new("Kurulum Adımları").size(22.0).strong());
@@ -219,12 +222,14 @@ pub(super) fn draw_step_inspector(
             } else {
                 &mut config.license_text_tr
             };
-            ui.add(
-                egui::TextEdit::multiline(license)
-                    .desired_width(f32::INFINITY)
-                    .desired_rows(7)
-                    .hint_text("Gerçek lisans sözleşmesi metnini girin."),
-            );
+            license_text_changed = ui
+                .add(
+                    egui::TextEdit::multiline(license)
+                        .desired_width(f32::INFINITY)
+                        .desired_rows(7)
+                        .hint_text("Gerçek lisans sözleşmesi metnini girin."),
+                )
+                .changed();
             ui.label(
                 egui::RichText::new("EULA etkinse her iki dilde gerçek sözleşme metni gereklidir.")
                     .color(ui.visuals().weak_text_color())
@@ -238,6 +243,23 @@ pub(super) fn draw_step_inspector(
             egui::Color32::from_rgb(255, 186, 107),
             format!("Doğrulama: {error}"),
         );
+    }
+    license_text_changed || license_enabled_before != config.is_enabled(WizardPageId::License)
+}
+
+/// @dev-id BRK-STUDIO-PREVIEW-CONSENT-001
+/// @purpose Prevent a stale simulated EULA checkmark after editor changes.
+/// @contract Changes Studio preview state only; never accepts installation terms.
+pub(super) fn invalidate_preview_consent(
+    accepted: &mut bool,
+    page_before: WizardPageId,
+    page_after: WizardPageId,
+    english_before: bool,
+    english_after: bool,
+    license_changed: bool,
+) {
+    if page_before != page_after || english_before != english_after || license_changed {
+        *accepted = false;
     }
 }
 
@@ -747,6 +769,37 @@ mod tests {
         assert_ne!(light.surface, dark.surface);
         assert_ne!(light.border, dark.border);
         assert_ne!(light.hover, dark.hover);
+    }
+
+    #[test]
+    fn preview_consent_resets_after_language_page_or_license_changes() {
+        let mut accepted = true;
+        invalidate_preview_consent(
+            &mut accepted,
+            WizardPageId::License,
+            WizardPageId::License,
+            false,
+            false,
+            false,
+        );
+        assert!(accepted, "an unchanged preview must keep its checkmark");
+
+        for (before, after, tr_before, tr_after, changed) in [
+            (WizardPageId::License, WizardPageId::Destination, false, false, false),
+            (WizardPageId::License, WizardPageId::License, false, true, false),
+            (WizardPageId::License, WizardPageId::License, false, false, true),
+        ] {
+            let mut checked = true;
+            invalidate_preview_consent(
+                &mut checked,
+                before,
+                after,
+                tr_before,
+                tr_after,
+                changed,
+            );
+            assert!(!checked, "stale EULA consent survived an editor change");
+        }
     }
 
     #[test]
