@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.9
-Aciklama: Studio dar pencere basliklari, adim konumu ve TR/EN onizleme regresyonu
+Version: 0.9.10
+Aciklama: Ust proje cubugu ve minimum pencere genisliginde Studio yerlesim testi
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -95,6 +95,24 @@ Bu iyilestirmelerin panel genisligi ve TR/EN label secimi
 unit testlerle denetlenir. Gercek Windows minimum pencere
 boyutu, DPI ayari, kisayol tuşlari ve piksel gorunumu
 ayri manuel kabul kontrolu gerektirir.
+
+## Minimum pencere ve proje ust cubugu
+
+Turkuaz Setup Studio ust cubugunda logo/urun adi/surum ilk
+satirda, Proje ac/Baslangic/Kaydet/Farkli kaydet ve gorunum
+denetimleri ikinci satirda gorunur. Bu duzen dar pencerede
+proje komutlarinin urun basligi ile yatay olarak carpisma
+riskini azaltir. Versiyon etiketi tek yetkili Cargo
+surum bilgisinden okunmaya devam eder.
+
+Windows CI icindeki headless egui yerlesim testi, 1100,
+1280 ve 1510 puanlik gorunum genisliklerinde sol gezinme,
+sag 03 ozellik paneli ve merkez onizleme alanini gercek
+egui panel duzenleyicileriyle cizer; merkezi alanin
+asgari 400 puan kalmasini denetler. Bunlar mantiksal
+egui puanlaridir: Windows DPI ve monitor olceklemesi
+ile bire bir piksel kabul testi degildir. Kontroller
+yeni bir release olusturmaz ve dosya yuklemez.
 
 ## Dar pencere yerlesimi ve onizleme regresyonu
 
