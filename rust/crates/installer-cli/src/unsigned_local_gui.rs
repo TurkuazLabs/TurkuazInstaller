@@ -321,10 +321,11 @@ impl LocalInstaller {
         if self.step == WizardStep::Destination {
             // Let the user choose shortcuts before the UAC prompt; we still
             // validate the protected root now, and the token at installation.
-            let choice = inspect_destination(&self.target, &self.package_id).and_then(|(path, _)| {
-                validate_install_scope(self.scope, &path, &self.program_files_root, true)
-                    .map(|_| path)
-            });
+            let choice =
+                inspect_destination(&self.target, &self.package_id).and_then(|(path, _)| {
+                    validate_install_scope(self.scope, &path, &self.program_files_root, true)
+                        .map(|_| path)
+                });
             match choice {
                 Ok(_) => self.path_error = None,
                 Err(error) => {
@@ -1316,9 +1317,11 @@ mod tests {
         assert_eq!(fs::read(old.join("user.txt")).unwrap(), b"user-owned");
         assert!(inspect_destination(&old.to_string_lossy(), "wrong.package").is_err());
         let fresh = root.join("new.qa");
-        assert!(!inspect_destination(&fresh.to_string_lossy(), "qa.recycle")
-            .expect("new path")
-            .1);
+        assert!(
+            !inspect_destination(&fresh.to_string_lossy(), "qa.recycle")
+                .expect("new path")
+                .1
+        );
         assert!(!fresh.exists(), "preflight must be read-only");
         fs::remove_dir_all(root).expect("test cleanup");
     }
