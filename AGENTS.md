@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/AGENTS.md
 Amac: TurkuazInstaller icin aktif BURAK DEV STANDARD v3.0.0 kurallari
 Modul - Documentation Markdown
-Version: 3.0.0
+Version: 3.0.1
 Aciklama: Pinli merkezi standarttan turetilen public katilimciya acik yerel kontrat
 Bagimli Oldugu Katman: Documentation
 -->
@@ -27,3 +27,12 @@ Bagimli Oldugu Katman: Documentation
 - Central repo is private and may be inaccessible to external contributors; this file is a usable standalone contract. An inaccessible document is never claimed read. New standards land here only after a separate project PR.
 
 No application code, active workflow or product release is modified by this document.
+
+## Rust-only single-installer policy (2026-11-06)
+
+- Active installer, authoring GUI, signed bundle and CI pipelines use Rust only.
+- Retired fallback source, compiler requirements and UI settings are not product features.
+- Old `.tzproj` options may be read for compatibility but must not be re-emitted.
+- Existing user installations and repository histories must not be automatically purged.
+- Real publisher signing and Windows 10/11 GUI acceptance remain open release gates.
+- Do not merge or create production releases without explicit approval.

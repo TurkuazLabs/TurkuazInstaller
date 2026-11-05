@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.10
-# Aciklama: Imzali lifecycle smoke'unu calistirir ve istenirse test dagitim ciftini saklar
+# Version: 0.3.0
+# Aciklama: Imzali lifecycle ve tek Rust TurkuazSetup EXE'yi test eder, opsiyonel QA ornegi
 # Bagimli Oldugu Katman: QA | Tool
 param(
     [Parameter(Mandatory = $true)]
@@ -13,7 +13,6 @@ param(
     [string]$GuiStubPath,
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$MakensisPath,
     [Parameter(Mandatory = $false)]
     [ValidateNotNullOrEmpty()]
     [string]$RetainDistributionPath
@@ -23,7 +22,6 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $script:InstallerPath = (Resolve-Path -LiteralPath $InstallerPath -ErrorAction Stop).ProviderPath
 $script:GuiStubPath = (Resolve-Path -LiteralPath $GuiStubPath -ErrorAction Stop).ProviderPath
-$script:MakensisPath = (Resolve-Path -LiteralPath $MakensisPath -ErrorAction Stop).ProviderPath
 $script:PackageId = 'ci.smoke'
 $script:TargetPath = Join-Path $env:RUNNER_TEMP ('turkuaz-ci-target-' + [Guid]::NewGuid().ToString('N'))
 $script:DataRoot = Join-Path $env:RUNNER_TEMP ('turkuaz-ci-data-' + [Guid]::NewGuid().ToString('N'))
@@ -450,22 +448,19 @@ fn main() {
     }
 
     $distributionDirectory = Join-Path $script:WorkDirectory 'distribution'
-    Invoke-Installer -Step 'build primary and NSIS backup distribution pair' -Arguments @(
-        'build-distribution-pair', '--package-id', $script:PackageId,
-        '--stub', $script:GuiStubPath, '--bundle', $versionTwo.Bundle,
-        '--trust-store', $script:TrustStorePath,
-        '--output-dir', $distributionDirectory, '--makensis', $script:MakensisPath
-    ) | Out-Null
-
+    New-Item -ItemType Directory -Path $distributionDirectory -Force | Out-Null
     $primarySetup = Join-Path $distributionDirectory 'TurkuazSetup.exe'
-    $backupSetup = Join-Path $distributionDirectory 'TurkuazInstallerBackup.exe'
-    if (!(Test-Path -LiteralPath $primarySetup -PathType Leaf) -or
-        !(Test-Path -LiteralPath $backupSetup -PathType Leaf)) {
-        throw 'The distribution pair did not produce both setup executables.'
+    Invoke-Installer -Step 'build single Rust primary self-extracting setup' -Arguments @(
+        'build-self-extracting-setup',
+        '--stub', $script:GuiStubPath, '--bundle', $versionTwo.Bundle,
+        '--output', $primarySetup
+    ) | Out-Null
+    if (!(Test-Path -LiteralPath $primarySetup -PathType Leaf)) {
+        throw 'Rust primary self-extracting setup is missing'
     }
-
-    Invoke-AuthenticodeSignCheck -Label 'primary setup' -SetupPath $primarySetup
-    Invoke-AuthenticodeSignCheck -Label 'NSIS backup' -SetupPath $backupSetup
+    Invoke-AuthenticodeSignCheck -Label 'single Rust primary setup' -SetupPath $primarySetup
+    # The public test trust policy is a sidecar, not another installer.
+    Copy-Item -LiteralPath $script:TrustStorePath -Destination (Join-Path $distributionDirectory 'manifest-trust.yaml')
 
     # BRK-WEB-SETUP-SIGNED-ACCEPTANCE: Authenticode appends a PE certificate table.
     # Verify signed WebSetup config survives the signing overlay and remains readable.
@@ -543,7 +538,6 @@ fn main() {
         New-Item -ItemType Directory -Path $retainedDirectory -Force | Out-Null
         foreach ($sourcePath in @(
             (Join-Path $distributionDirectory 'TurkuazSetup.exe'),
-            (Join-Path $distributionDirectory 'TurkuazInstallerBackup.exe'),
             $script:TrustStorePath,
             $script:InstallerPath
         )) {
@@ -586,7 +580,7 @@ Bu dagitim, CI tarafinda olusturulan gecici test sertifikasi ile imzalanmistir. 
         $readme = $readme.Replace('__CLI_FILE__', [IO.Path]::GetFileName($script:InstallerPath))
         [IO.File]::WriteAllText((Join-Path $retainedDirectory 'README-TR.txt'), $readme, [Text.UTF8Encoding]::new($false))
         Write-Host "Retained test-only distribution at: $retainedDirectory"
-        Write-Host 'The retained sample includes a test setup pair, pinned test trust policy, a CLI for launch/uninstall, and a visible demo app.'
+        Write-Host 'The retained sample contains ONE test-only Rust setup, public test trust policy and CLI for launch/uninstall.'
     }
 
     Write-Host 'Signed offline bundle and self-extracting distribution smoke passed.'
