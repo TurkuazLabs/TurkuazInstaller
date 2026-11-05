@@ -631,10 +631,7 @@ impl eframe::App for BuilderApp {
                                 if selected_before != self.selected_wizard_page {
                                     self.preview_accepted = false;
                                 }
-                                setup_design_surface::draw_appearance_editor(
-                                    ui,
-                                    &mut self.project,
-                                );
+                                setup_design_surface::draw_appearance_editor(ui, &mut self.project);
                                 ui.add_space(18.0);
                                 if ui.button("← Genel bakışa dön").clicked() {
                                     self.dialog_open = false;
