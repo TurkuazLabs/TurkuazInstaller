@@ -490,7 +490,13 @@ pub fn install_unsigned_local_setup_with_progress(
     target: impl AsRef<Path>,
     on_phase: &mut dyn FnMut(LocalInstallPhase),
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
-    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), None, Some(on_phase), None)
+    install_unsigned_local_setup_inner(
+        executable.as_ref(),
+        target.as_ref(),
+        None,
+        Some(on_phase),
+        None,
+    )
 }
 
 /// @dev-id BRK-LOCAL-SETUP-RECYCLE-001
@@ -524,7 +530,13 @@ pub fn install_unsigned_local_setup_scanned(
     target: impl AsRef<Path>,
     scanner: &dyn MalwareScanner,
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
-    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), Some(scanner), None, None)
+    install_unsigned_local_setup_inner(
+        executable.as_ref(),
+        target.as_ref(),
+        Some(scanner),
+        None,
+        None,
+    )
 }
 
 fn install_unsigned_local_setup_inner(
@@ -838,11 +850,19 @@ mod tests {
             &mut |path| {
                 called = true;
                 assert_eq!(path, target);
-                assert_eq!(fs::read(path.join("old.txt")).unwrap(), b"previous user data");
-                assert!(fs::read_dir(&root)
-                    .unwrap()
-                    .filter_map(Result::ok)
-                    .any(|item| item.file_name().to_string_lossy().starts_with(".turkuaz-native-stage-")));
+                assert_eq!(
+                    fs::read(path.join("old.txt")).unwrap(),
+                    b"previous user data"
+                );
+                assert!(
+                    fs::read_dir(&root)
+                        .unwrap()
+                        .filter_map(Result::ok)
+                        .any(|item| item
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(".turkuaz-native-stage-"))
+                );
                 Err(invalid("recycle request denied"))
             },
         );
