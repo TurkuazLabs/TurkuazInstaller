@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.27
+// Version: 0.2.28
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -235,7 +235,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let http_client = Client::builder()
         .timeout(std::time::Duration::from_secs(60))
         .redirect(Policy::custom(|attempt| {
-            if attempt.url().scheme() == "https" && attempt.previous().len() < 10 {
+            if safe_release_redirect(attempt.url(), attempt.previous().len()) {
                 attempt.follow()
             } else {
                 attempt.stop()
@@ -698,7 +698,7 @@ async fn check_release_source_command() -> Result<(), Box<dyn Error>> {
     let http_client = Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .redirect(Policy::custom(|attempt| {
-            if attempt.url().scheme() == "https" && attempt.previous().len() < 10 {
+            if safe_release_redirect(attempt.url(), attempt.previous().len()) {
                 attempt.follow()
             } else {
                 attempt.stop()
@@ -2179,6 +2179,10 @@ fn required<'a>(values: &'a HashMap<String, String>, key: &str) -> Result<&'a st
         })
 }
 
+/// @dev-id BRK-CLI-RELEASE-URL-001
+/// @purpose Reject URL userinfo and fragments before fetching signed metadata.
+/// @contract Query parameters remain supported by online install commands.
+/// check-release-source deliberately has a stricter query-free contract.
 fn parse_https_url(value: &str) -> Result<Url, io::Error> {
     let url = Url::parse(value)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "A source URL is invalid."))?;
@@ -2188,7 +2192,26 @@ fn parse_https_url(value: &str) -> Result<Url, io::Error> {
             "Manifest and signature URLs must use HTTPS.",
         ));
     }
+    if !url.username().is_empty() || url.password().is_some() || url.fragment().is_some() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Manifest and signature URLs must not contain credentials or fragments.",
+        ));
+    }
     Ok(url)
+}
+
+/// @dev-id BRK-CLI-HTTPS-REDIRECT-001
+/// @purpose Prevent signed metadata downloads from following credentialed
+/// or downgraded redirect URLs, with the existing ten-hop limit.
+/// @contract Other HTTPS redirects, including query strings, remain supported.
+fn safe_release_redirect(url: &Url, previous_hops: usize) -> bool {
+    previous_hops < 10
+        && url.scheme() == "https"
+        && url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.fragment().is_none()
 }
 
 async fn read_bounded_https(
@@ -2274,6 +2297,41 @@ impl Drop for DownloadedArtifactGuard {
 #[cfg(test)]
 mod web_release_source_tests {
     use super::*;
+
+    #[test]
+    fn online_manifest_url_validation_rejects_credentials_and_fragments() {
+        for invalid in [
+            "http://updates.example.test/channel.yaml",
+            "file:///tmp/channel.yaml",
+            "https://user@updates.example.test/channel.yaml",
+            "https://user:password@updates.example.test/channel.yaml",
+            "https://updates.example.test/channel.yaml#fragment",
+        ] {
+            assert!(parse_https_url(invalid).is_err(), "accepted {invalid}");
+        }
+
+        assert!(parse_https_url("https://updates.example.test/channel.yaml").is_ok());
+        // Do not silently break existing online releases with query-based URLs.
+        assert!(parse_https_url("https://updates.example.test/channel.yaml?version=2").is_ok());
+    }
+
+    #[test]
+    fn signed_metadata_redirect_policy_stays_https_and_credential_free() {
+        for rejected in [
+            "http://updates.example.test/next.yaml",
+            "https://user@updates.example.test/next.yaml",
+            "https://user:password@updates.example.test/next.yaml",
+            "https://updates.example.test/next.yaml#fragment",
+        ] {
+            let url = Url::parse(rejected).expect("parse test URL");
+            assert!(!safe_release_redirect(&url, 0), "followed {rejected}");
+        }
+        let safe = Url::parse("https://updates.example.test/next.yaml?version=2")
+            .expect("parse safe test URL");
+        assert!(safe_release_redirect(&safe, 0));
+        assert!(safe_release_redirect(&safe, 9));
+        assert!(!safe_release_redirect(&safe, 10));
+    }
 
     #[test]
     fn check_release_source_rejects_unsafe_urls_without_network_io() {
