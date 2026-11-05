@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-real-installer-uat.ps1
 # Amac: Guncel TurkuazInstaller Studio ve CLI icin gercek test kurulumu olusturmak
 # Modul - PowerShell Windows Integration QA
-# Version: 0.1.0
+# Version: 0.1.1
 # Aciklama: Ornek ci.smoke yerine ayni derlemenin Studio ve CLI ikilisini native setup'a paketler
 # Bagimli Oldugu Katman: QA | Tool
 
@@ -49,6 +49,7 @@ try {
     # Never touch any existing machine or user installation.
     & $setup install-local-self --target $testTarget
     if ($LASTEXITCODE -ne 0) { throw 'Integrated setup could not install the actual tools.' }
+    Write-Host 'FULL_SUITE_TEMP_INSTALL_PASS'
     foreach ($name in @('TurkuazInstallerCLI.exe', 'TurkuazInstallerStudio.exe')) {
         $expected = (Get-FileHash -LiteralPath (Join-Path $source $name) -Algorithm SHA256).Hash
         $actualPath = Join-Path $testTarget $name
@@ -57,12 +58,15 @@ try {
         }
         $actual = (Get-FileHash -LiteralPath $actualPath -Algorithm SHA256).Hash
         if ($actual -ne $expected) { throw "The installed tool differs from source build: $name" }
+        Write-Host "FULL_SUITE_INSTALLED_SHA256_PASS: $name"
     }
     if (!(Test-Path -LiteralPath (Join-Path $testTarget '.turkuaz-local-install.json') -PathType Leaf)) {
         throw 'The installed tools are missing their local install receipt.'
     }
+    Write-Host 'FULL_SUITE_RECEIPT_PASS'
     & (Join-Path $testTarget 'TurkuazInstallerStudio.exe') --version
     if ($LASTEXITCODE -ne 0) { throw 'Installed Studio version check failed.' }
+    Write-Host 'FULL_SUITE_STUDIO_VERSION_PASS'
 
     # Default CLI must not silently overwrite an occupied target.
     & $setup install-local-self --target $testTarget 2>&1 | Out-Null
@@ -157,6 +161,12 @@ kapsamındadır; CI testleri bunların yerine geçmez.
 }
 finally {
     if (Test-Path -LiteralPath $work) {
-        Remove-Item -LiteralPath $work -Recurse -Force
+        try {
+            Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop
+        } catch {
+            # CI's disposable RUNNER_TEMP will be removed after the job.
+            # Cleanup must not hide the original validation failure.
+            Write-Warning "Ephemeral test cleanup was deferred: $($_.Exception.Message)"
+        }
     }
 }
