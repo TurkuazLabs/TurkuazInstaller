@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_design_surface.rs
 // Amac: Studio'da gercek Windows kurulumuna benzeyen canli sayfa onizlemesi ve adim inspector'u
 // Modul - Rust Presentation
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: Koyu Studio paneli, acik Windows wizard onizlemesi, dogrulanan EULA ayarlari
 // Bagimli Oldugu Katman: View | Application
 
@@ -425,6 +425,7 @@ pub(super) fn draw_install_preview(
     selected: &mut WizardPageId,
     english: &mut bool,
     accepted: &mut bool,
+    show_inspector: &mut bool,
 ) {
     ui.add_space(12.0);
     ui.horizontal(|ui| {
@@ -451,7 +452,19 @@ pub(super) fn draw_install_preview(
             .color(MUTED_TEXT)
             .size(13.0),
     );
-    ui.add_space(16.0);
+    // BRK-STUDIO-DESIGNER-PANEL-003: the large preview can use the full
+    // viewport width; this only changes Studio chrome, not WizardConfig.
+    if ui
+        .button(if *show_inspector {
+            "Özellik panelini gizle"
+        } else {
+            "Özellik panelini göster"
+        })
+        .clicked()
+    {
+        *show_inspector = !*show_inspector;
+    }
+    ui.add_space(14.0);
 
     egui::Frame::new()
         .fill(egui::Color32::from_rgb(20, 30, 45))
@@ -610,6 +623,36 @@ pub(super) fn draw_install_preview(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preview_renders_with_inspector_visible_or_hidden_without_install_side_effects() {
+        let project = SavedProject::default();
+        let before = serde_json::to_value(&project).expect("serialize project");
+        let context = egui::Context::default();
+
+        for show_inspector in [true, false] {
+            let mut selected = WizardPageId::Welcome;
+            let mut english = false;
+            let mut accepted = false;
+            let mut panel_visible = show_inspector;
+            let output = context.run(egui::RawInput::default(), |context| {
+                egui::CentralPanel::default().show(context, |ui| {
+                    draw_install_preview(
+                        ui,
+                        &project,
+                        &mut selected,
+                        &mut english,
+                        &mut accepted,
+                        &mut panel_visible,
+                    );
+                });
+            });
+            assert!(!output.shapes.is_empty());
+            assert_eq!(show_inspector, panel_visible);
+            assert_eq!(selected, WizardPageId::Welcome);
+            assert_eq!(serde_json::to_value(&project).expect("serialize after render"), before);
+        }
+    }
 
     #[test]
     fn preview_navigation_skips_disabled_eula_and_keeps_required_finish() {
