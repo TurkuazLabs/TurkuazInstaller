@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.27
+// Version: 0.2.28
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -78,6 +78,9 @@ mod windows_local_uninstall_gui;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod windows_shortcuts;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
+mod windows_recycle;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
 use turkuaz_installer_package_engine::has_unsigned_local_setup;
