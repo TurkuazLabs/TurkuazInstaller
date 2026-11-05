@@ -691,8 +691,7 @@ pub(super) fn draw_install_preview(
     ui.add_space(13.0);
     if !project.wizard.is_enabled(*selected) {
         ui.label(
-            egui::RichText::new(copy.disabled_page)
-                .color(egui::Color32::from_rgb(255, 180, 109)),
+            egui::RichText::new(copy.disabled_page).color(egui::Color32::from_rgb(255, 180, 109)),
         );
     }
 }
@@ -717,7 +716,10 @@ mod tests {
         assert_eq!(tr.preview_heading, "Kurulum Önizlemesi");
         assert_eq!(en.show_inspector, "Show properties");
         assert_eq!(tr.hide_inspector, "Özellik panelini gizle");
-        assert_eq!(en.license_accept, "I accept the terms of the License Agreement");
+        assert_eq!(
+            en.license_accept,
+            "I accept the terms of the License Agreement"
+        );
         assert_ne!(tr.disabled_page, en.disabled_page);
     }
 
