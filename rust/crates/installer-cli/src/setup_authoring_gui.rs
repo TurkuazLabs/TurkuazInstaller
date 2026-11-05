@@ -1208,8 +1208,7 @@ impl BuilderApp {
             } else {
                 egui::Color32::from_rgb(235, 168, 89)
             },
-            egui::RichText::new(format!("● {hint} · Henüz doğrulama yapılmadı"))
-                .size(12.0),
+            egui::RichText::new(format!("● {hint} · Henüz doğrulama yapılmadı")).size(12.0),
         );
         ui.add_space(16.0);
 
@@ -1373,14 +1372,9 @@ impl BuilderApp {
                     .size(12.0)
                     .weak(),
             );
-            for (index, name) in [
-                "01  Ürün",
-                "02  Dosyalar",
-                "03  Tasarım",
-                "04  Dağıtım",
-            ]
-            .into_iter()
-            .enumerate()
+            for (index, name) in ["01  Ürün", "02  Dosyalar", "03  Tasarım", "04  Dağıtım"]
+                .into_iter()
+                .enumerate()
             {
                 let (hint, filled) = studio_section_hint(&self.project, index);
                 ui.horizontal(|ui| {
@@ -2709,29 +2703,45 @@ fn studio_section_hint(project: &SavedProject, index: usize) -> (&'static str, b
                 && !project.version.trim().is_empty()
                 && !project.channel.trim().is_empty();
             (
-                if filled { "Ürün alanları girildi" } else { "Ürün bilgileri eksik" },
+                if filled {
+                    "Ürün alanları girildi"
+                } else {
+                    "Ürün bilgileri eksik"
+                },
                 filled,
             )
         }
         1 => {
             let filled = !project.source_directory.trim().is_empty();
             (
-                if filled { "Kaynak yolu girildi" } else { "Kaynak klasörü bekleniyor" },
+                if filled {
+                    "Kaynak yolu girildi"
+                } else {
+                    "Kaynak klasörü bekleniyor"
+                },
                 filled,
             )
         }
         2 => {
-            let filled = !project.brand_name.trim().is_empty()
-                && !project.install_target.trim().is_empty();
+            let filled =
+                !project.brand_name.trim().is_empty() && !project.install_target.trim().is_empty();
             (
-                if filled { "Tasarım alanları girildi" } else { "Tasarım bilgileri eksik" },
+                if filled {
+                    "Tasarım alanları girildi"
+                } else {
+                    "Tasarım bilgileri eksik"
+                },
                 filled,
             )
         }
         3 => {
             let filled = !project.output_directory.trim().is_empty();
             (
-                if filled { "Çıktı yolu girildi" } else { "Çıktı yolu bekleniyor" },
+                if filled {
+                    "Çıktı yolu girildi"
+                } else {
+                    "Çıktı yolu bekleniyor"
+                },
                 filled,
             )
         }
@@ -4256,19 +4266,34 @@ mod tests {
     #[test]
     fn studio_section_hints_report_input_only_not_validation() {
         let mut project = SavedProject::default();
-        assert_eq!(studio_section_hint(&project, 0), ("Ürün alanları girildi", true));
+        assert_eq!(
+            studio_section_hint(&project, 0),
+            ("Ürün alanları girildi", true)
+        );
         assert_eq!(
             studio_section_hint(&project, 1),
             ("Kaynak klasörü bekleniyor", false)
         );
         project.source_directory = "relative/missing/source".to_owned();
-        assert_eq!(studio_section_hint(&project, 1), ("Kaynak yolu girildi", true));
+        assert_eq!(
+            studio_section_hint(&project, 1),
+            ("Kaynak yolu girildi", true)
+        );
         assert!(validate_project_step(&project, 1).is_err());
         project.product_name.clear();
-        assert_eq!(studio_section_hint(&project, 0), ("Ürün bilgileri eksik", false));
+        assert_eq!(
+            studio_section_hint(&project, 0),
+            ("Ürün bilgileri eksik", false)
+        );
         project.output_directory.clear();
-        assert_eq!(studio_section_hint(&project, 3), ("Çıktı yolu bekleniyor", false));
-        assert_eq!(studio_section_hint(&project, 9), ("Bilinmeyen bölüm", false));
+        assert_eq!(
+            studio_section_hint(&project, 3),
+            ("Çıktı yolu bekleniyor", false)
+        );
+        assert_eq!(
+            studio_section_hint(&project, 9),
+            ("Bilinmeyen bölüm", false)
+        );
     }
 
     #[test]
