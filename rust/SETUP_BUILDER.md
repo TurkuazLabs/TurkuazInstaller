@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.10
-Aciklama: Ust proje cubugu ve minimum pencere genisliginde Studio yerlesim testi
+Version: 0.9.11
+Aciklama: Studio temasina uyan tasarim inspector kartlari ve acik/koyu gorunum regresyonu
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -95,6 +95,22 @@ Bu iyilestirmelerin panel genisligi ve TR/EN label secimi
 unit testlerle denetlenir. Gercek Windows minimum pencere
 boyutu, DPI ayari, kisayol tuşlari ve piksel gorunumu
 ayri manuel kabul kontrolu gerektirir.
+
+## Acik ve koyu gorunumde ozellik paneli
+
+03 Kurulum Tasarimi sag ozellik panelindeki kart arka planlari,
+secili sihirbaz adimi, kart kenarliklari ve yardim metinleri
+artik Studio'nun gercek acik/koyu gorunum paletini izler.
+Acik modda koyu panel icinde koyu yazi gostermek yerine
+acik yuzeyler ve okunabilir ipucu renkleri kullanilir.
+Ortadaki Windows kurulum simulatörü ise Windows sihirbazi
+gibi her iki Studio temasinda da acik kalir.
+
+Regresyon testi hem acik hem koyu egui temasinda sayfa
+ozellikleri ve gorunum editorunu cizer; cizim sirasinda
+proje JSON verisinin degismedigini denetler. Gercek Windows
+renk, kontrast, DPI ve klavye odagi kabul testleri ayri
+yapilmalidir.
 
 ## Minimum pencere ve proje ust cubugu
 
