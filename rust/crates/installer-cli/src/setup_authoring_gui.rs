@@ -666,12 +666,13 @@ impl eframe::App for BuilderApp {
                                     .show(ui, |ui| {
                                         let selected_before = self.selected_wizard_page;
                                         let english_before = self.preview_english;
-                                        let license_changed = setup_design_surface::draw_step_inspector(
-                                            ui,
-                                            &mut self.project.wizard,
-                                            &mut self.selected_wizard_page,
-                                            &mut self.preview_english,
-                                        );
+                                        let license_changed =
+                                            setup_design_surface::draw_step_inspector(
+                                                ui,
+                                                &mut self.project.wizard,
+                                                &mut self.selected_wizard_page,
+                                                &mut self.preview_english,
+                                            );
                                         setup_design_surface::invalidate_preview_consent(
                                             &mut self.preview_accepted,
                                             selected_before,
