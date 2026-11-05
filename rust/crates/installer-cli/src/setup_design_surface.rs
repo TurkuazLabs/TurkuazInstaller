@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_design_surface.rs
 // Amac: Studio'da gercek Windows kurulumuna benzeyen canli sayfa onizlemesi ve adim inspector'u
 // Modul - Rust Presentation
-// Version: 0.1.4
+// Version: 0.1.5
 // Aciklama: Koyu Studio paneli, acik Windows wizard onizlemesi, dogrulanan EULA ayarlari
 // Bagimli Oldugu Katman: View | Application
 
@@ -335,7 +335,7 @@ fn preview_copy(english: bool) -> PreviewCopy {
             show_inspector: "Show properties",
             disabled_page: "This page is disabled and appears only in the design preview.",
             license_accept: "I accept the terms of the License Agreement",
-            empty_license: "No license text entered yet. Edit it in the properties panel.",
+            empty_license: "No license text entered yet. Show properties to add it.",
             destination: "Installation directory",
             browse: "Browse…",
             destination_hint: "Preview only. No folder will be created.",
@@ -361,7 +361,7 @@ fn preview_copy(english: bool) -> PreviewCopy {
             show_inspector: "Özellik panelini göster",
             disabled_page: "Bu sayfa kapalı: yalnızca tasarım önizlemesinde gösteriliyor.",
             license_accept: "Lisans sözleşmesinin koşullarını kabul ediyorum",
-            empty_license: "Lisans metni henüz girilmedi. Sağdaki özellikler panelinden düzenleyin.",
+            empty_license: "Lisans metni henüz girilmedi. Özellik panelini göstererek ekleyin.",
             destination: "Kurulum dizini",
             browse: "Gözat…",
             destination_hint: "Kurulum yalnızca önizleniyor. Klasör oluşturulmaz.",
@@ -729,30 +729,42 @@ mod tests {
         let before = serde_json::to_value(&project).expect("serialize project");
         let context = egui::Context::default();
 
+        // BRK-STUDIO-PREVIEW-MATRIX-001: Cover both languages, optional
+        // pages and the visible/hidden inspector without modifying .tzproj.
         for show_inspector in [true, false] {
-            let mut selected = WizardPageId::Welcome;
-            let mut english = false;
-            let mut accepted = false;
-            let mut panel_visible = show_inspector;
-            let output = context.run(egui::RawInput::default(), |context| {
-                egui::CentralPanel::default().show(context, |ui| {
-                    draw_install_preview(
-                        ui,
-                        &project,
-                        &mut selected,
-                        &mut english,
-                        &mut accepted,
-                        &mut panel_visible,
+            for english in [false, true] {
+                for page in [
+                    WizardPageId::Welcome,
+                    WizardPageId::License,
+                    WizardPageId::Destination,
+                    WizardPageId::Finished,
+                ] {
+                    let mut selected = page;
+                    let mut selected_english = english;
+                    let mut accepted = false;
+                    let mut panel_visible = show_inspector;
+                    let output = context.run(egui::RawInput::default(), |context| {
+                        egui::CentralPanel::default().show(context, |ui| {
+                            draw_install_preview(
+                                ui,
+                                &project,
+                                &mut selected,
+                                &mut selected_english,
+                                &mut accepted,
+                                &mut panel_visible,
+                            );
+                        });
+                    });
+                    assert!(!output.shapes.is_empty());
+                    assert_eq!(show_inspector, panel_visible);
+                    assert_eq!(selected_english, english);
+                    assert_eq!(selected, page);
+                    assert_eq!(
+                        serde_json::to_value(&project).expect("serialize after render"),
+                        before
                     );
-                });
-            });
-            assert!(!output.shapes.is_empty());
-            assert_eq!(show_inspector, panel_visible);
-            assert_eq!(selected, WizardPageId::Welcome);
-            assert_eq!(
-                serde_json::to_value(&project).expect("serialize after render"),
-                before
-            );
+                }
+            }
         }
     }
 
