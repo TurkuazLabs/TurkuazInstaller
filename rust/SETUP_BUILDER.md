@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.8
-Aciklama: 03 onizlemesi responsive boyut ve tam TR/EN simulasyon metinleri
+Version: 0.9.9
+Aciklama: Studio dar pencere basliklari, adim konumu ve TR/EN onizleme regresyonu
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -95,6 +95,26 @@ Bu iyilestirmelerin panel genisligi ve TR/EN label secimi
 unit testlerle denetlenir. Gercek Windows minimum pencere
 boyutu, DPI ayari, kisayol tuşlari ve piksel gorunumu
 ayri manuel kabul kontrolu gerektirir.
+
+## Dar pencere yerlesimi ve onizleme regresyonu
+
+01, 02 ve 04 bolumlerinin uzun basliklari ile **Bilgi panelini
+gizle/goster** dugmesi ayni yatay satira sikistirilmaz. Baslik ve
+dugme ayridir; Windows metin olcegi buyutuldugunde dugmenin
+erisebilir kalmasi hedeflenir. Bolum ekranlarindaki gostergenin
+adi **Bolum konumu** olarak guncellendi: cubuk sadece secili
+bolumun dort adim icindeki sirasini anlatir, ayarlarin
+tamamlandigini veya onaylandigini iddia etmez.
+
+03 kurulum sihirbazi onizlemesinde eksik EULA metni uyarisi
+ozellik paneli kapaliyken de dogru yonlendirme yapar. Headless
+test matrisi iki dil, ozellik paneli acik/kapali ve Karsilama,
+Lisans, Hedef, Bitis sayfalarini kapsar. Cizim, proje kaydini,
+gercek kurulum dosyalarini veya imzayi degistirmez.
+
+Headless arayuz testi ve CI Windows build sonucunun basarisi
+gercek Windows DPI/klavye/ekran goruntusu kabulunu tek basina
+tamamlamaz.
 
 ## Gelistirilmis Studio gezintisi ve bilgi paneli
 
