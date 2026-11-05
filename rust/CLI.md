@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.16
-Aciklama: Online CLI HTTPS URL ve redirect guvenlik kontratini ve komut kullanimini aciklar
+Version: 0.4.17
+Aciklama: Online CLI HTTPS URL, redirect ve guncel public komut yardimi kontrati
 Bagimli Oldugu Katman: Application | Documentation
 -->
 
@@ -26,6 +26,10 @@ Print the version recorded in Cargo package metadata with `--version` or `-V`:
 ```sh
 cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- --version
 ```
+
+Top-level `--help` documents the native unsigned setup, local uninstall
+and signed release-source diagnostic commands alongside core operations.
+Run `turkuaz-installer --help` to see the supported public command surface.
 
 ## Release source URL safety
 
