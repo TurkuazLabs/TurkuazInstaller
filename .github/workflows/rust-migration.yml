@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.31
+# Version: 0.2.32
 # Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -169,8 +169,12 @@ jobs:
       - name: Test Windows per-user shortcut adapter
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_shortcuts::tests
 
-      - name: Test UAC argument escaping without requesting elevation
+      - name: Test UAC argument escaping and strict resume policy
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_elevation::tests
+
+      - name: Reject invalid UAC resume processes without elevation
+        shell: pwsh
+        run: pwsh -NoProfile -File rust/scripts/windows-uac-resume-smoke.ps1 -SetupPath rust/target/release/turkuaz-installer.exe
 
       - name: Test setup wizard language switching
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui wizard_language::tests
