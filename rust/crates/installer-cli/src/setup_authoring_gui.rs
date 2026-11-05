@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.8.7
+// Version: 0.8.8
 // Aciklama: Tum bolumlerde secim durumlari, acilir bilgi paneli ve kurulumu etkilemeyen gorsel rehberlik
 // Bagimli Oldugu Katman: View | Application
 
@@ -665,15 +665,21 @@ impl eframe::App for BuilderApp {
                                     .id_salt("studio-designer-inspector-scroll")
                                     .show(ui, |ui| {
                                         let selected_before = self.selected_wizard_page;
-                                        setup_design_surface::draw_step_inspector(
+                                        let english_before = self.preview_english;
+                                        let license_changed = setup_design_surface::draw_step_inspector(
                                             ui,
                                             &mut self.project.wizard,
                                             &mut self.selected_wizard_page,
                                             &mut self.preview_english,
                                         );
-                                        if selected_before != self.selected_wizard_page {
-                                            self.preview_accepted = false;
-                                        }
+                                        setup_design_surface::invalidate_preview_consent(
+                                            &mut self.preview_accepted,
+                                            selected_before,
+                                            self.selected_wizard_page,
+                                            english_before,
+                                            self.preview_english,
+                                            license_changed,
+                                        );
                                         setup_design_surface::draw_appearance_editor(
                                             ui,
                                             &mut self.project,
