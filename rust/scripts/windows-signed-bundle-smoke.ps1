@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-signed-bundle-smoke.ps1
 # Amac: Windows CI'da detached CMS imzali offline bundle lifecycle'ini calistirmak
 # Modul - PowerShell Acceptance Script
-# Version: 0.2.10
+# Version: 0.2.11
 # Aciklama: Imzali lifecycle smoke'unu calistirir ve istenirse test dagitim ciftini saklar
 # Bagimli Oldugu Katman: QA | Tool
 param(
@@ -580,6 +580,12 @@ CLI ile kaldirmak icin alternatif komut:
 $root = Join-Path $env:LOCALAPPDATA 'TurkuazInstaller-Test'
 & '.\__CLI_FILE__' uninstall --package-id ci.smoke --target (Join-Path $root 'App') --data-root (Join-Path $root 'Data') --confirm-uninstall YES
 ```
+
+## Indirme guvenligi ve SHA-256
+
+Chrome "Bu dosya tehlikeli" diyorsa Chrome korumasini kapatmayin ve uyariyi zorla asmayin. Bu paket GitHub CI'da gecici self-signed test sertifikasiyla olusturulmustur; gercek yayinci itibari yoktur.
+
+CI sonrasinda paketle birlikte gelen `SHA256SUMS.txt` dosyasi ic dosyalarin SHA-256 degerlerini, `SECURITY-AUDIT.json` ise Authenticode ve Defender denetiminin yapilan/yapilamayan durumunu listeler. Beklenen SHA-256 degerleri GitHub Actions run ozetinde de gorunur. Hash'in eslesmesi tek basina dosyanin zararsiz oldugunu kanitlamaz. Guvenlik denetimi basarisizsa dosyayi calistirmayin.
 
 Bu dagitim, CI tarafinda olusturulan gecici test sertifikasi ile imzalanmistir. `manifest-trust.yaml` yalnizca test manifestinin dogrulanmasi icindir; production guven politikasi olarak kullanmayin ve sertifikayi Windows Trusted Root deposuna eklemeyin. Artifact yedi gun tutulur.
 '@
