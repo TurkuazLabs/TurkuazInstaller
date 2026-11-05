@@ -539,12 +539,14 @@ pub fn install_unsigned_local_setup_scanned(
     )
 }
 
+type ExistingTargetHook<'a> = &'a mut dyn FnMut(&Path) -> Result<(), PackageEngineError>;
+
 fn install_unsigned_local_setup_inner(
     executable: &Path,
     target: &Path,
     scanner: Option<&dyn MalwareScanner>,
     mut on_phase: Option<&mut dyn FnMut(LocalInstallPhase)>,
-    mut on_existing_target: Option<&mut dyn FnMut(&Path) -> Result<(), PackageEngineError>>,
+    mut on_existing_target: Option<ExistingTargetHook<'_>>,
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
     let parent = target
         .parent()
