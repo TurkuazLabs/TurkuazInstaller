@@ -1,50 +1,65 @@
 <!--
 Dosya Yolu: REPO_ROOT/README.md
-Amac: Community Rust kurulum sistemi icin guncel kaynak ve test kapsamini anlatmak
+Amac: TurkuazInstaller Community Rust projesi, kurulum ve dogrulama giris sayfasi
 Modul - Markdown
-Version: 2.2.2
-Aciklama: Rust Studio, installer CLI ve release guveni
+Version: 2.3.0
+Aciklama: Aktif Rust uygulamasi, test ciktisi, kaynak yapisi ve production sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
 
-# TurkuazInstaller Community — Rust
+# TurkuazInstaller Community
 
-Community installer, Setup Studio, setup wizard ve CLI Rust ile gelistirilir.
-Paket motoru, imzali manifest dogrulamasi, artifact kontrolu,
-kurulum/guncelleme/onarma/rollback ve kurtarma Rust crate'lerini kullanir.
+**TurkuazInstaller**, Windows uygulamalari icin Rust tabanli kurulum paketi ve
+kurulum sihirbazi gelistirme projesidir. **Turkuaz Setup Studio** bir uygulama
+klasorunden `.tzpkg` olusturur ve Windows icin tek dosyali
+`TurkuazSetup.exe` uretebilir. Ayri, imzali yayin altyapisi
+install / update / repair / rollback / uninstall islevlerini icerir.
 
-- [Belge dizini ve gelistirme kilavuzu](docs/README.md)
-- [Rust mimari](rust/README.md)
-- [CLI](rust/CLI.md)
-- [Setup Studio](rust/SETUP_BUILDER.md)
-- [Kurulum islemleri](rust/INSTALL_WORKFLOW.md)
-- [Paket formati](rust/PACKAGE_FORMAT.md)
-- [Windows kabul](rust/SMOKE_TEST.md)
+Bu depoda aktif Community gelistirmesi **Rust** kodudur (`rust/`).
+Eski .NET/WinUI3/Velopack uygulamasi ve belgeleri Git commit gecmisinde
+korunur; Rust runtime'inin parcasi degildir. Community kodu private Pro
+deposuna bagli degildir.
 
-Gelistirme artifact'lari production release degildir. Gercek Windows
-GUI smoke, production Authenticode imzalama ve temiz kurulum kabul
-testleri ayri kapilardir. Community, private Pro koduna bagli degildir.
+## Baslangic
 
-## Rust durumu ve destek siniri
+| Islem | Kaynak |
+| --- | --- |
+| Kurulum Studio ve tek dosyali EXE | [Setup Studio](rust/SETUP_BUILDER.md) |
+| Gercek Windows test adimlari | [Windows smoke test](rust/SMOKE_TEST.md) |
+| Komut satiri ve paket olusturma | [Rust CLI](rust/CLI.md) |
+| Paket formati ve guven sinirlari | [Paket formati](rust/PACKAGE_FORMAT.md) |
+| Imzali yayin ve guven | [Release signing](rust/RELEASE_SIGNING.md) |
+| Mimari ve workspace | [Rust README](rust/README.md) |
+| Production hazirlik kontrolu | [Rust readiness](rust/RUST_READINESS.md) |
+| Belge dizini | [docs/README.md](docs/README.md) |
 
-Aktif kod Rust crate'leri altindadir. Koken `contracts/` YAML
-dosyalari Rust runtime'a otomatik yuklenmez; bir bolumu onceki
-.NET/WinUI uygulamasinin **tasarim referansidir**. Gercek imzali
-manifest parser'i `rust/crates/manifest-parser` icindedir.
-Ornekler `examples/` klasorunde placeholder tasir ve production
-paketi degildir.
+### Studio'da standart kurulum hazirlama
 
-- [Rust kabul ve eksik isler](rust/RUST_READINESS.md)
-- [Guncel Windows test rehberi](rust/SMOKE_TEST.md)
-- [Imzali paket yayinlama](rust/RELEASE_SIGNING.md)
+1. Windows icin hazirlanmis **test artifact** ZIP'ini
+   [GitHub Actions](https://github.com/TurkuazLabs/TurkuazInstaller/actions)
+   sayfasindaki basarili `Rust Migration CI` calismasindan indirin.
+2. Studio'da **Tam Kurulum** projesi acin; urun kimligini, surumu,
+   uygulama dosyalarini ve varsa ana EXE'yi belirleyin.
+3. **03 Kurulum tasarimi** bolumunde kuruluma ait sayfalari ve
+   baslik/aciklamalari yonetin. EULA istege baglidir; aciksa gercek
+   Turkce ve English lisans metinlerini girin.
+4. `1 Uygulama paketini hazirla` ardindan
+   `2 Standart Kurulum EXE olustur` komutunu calistirin.
+   Taninan onceki standart EXE yedeklenerek korunur.
+5. Olusan `standard/TurkuazSetup.exe` dosyasini bos, gecici
+   hedef dizinde **test edin**. Kurulum konumu, kapsam
+   (tek kullanici / tum kullanicilar), EULA kabul zorunlulugu,
+   kisayollar, Windows Yuklu Uygulamalar kaydi ve kaldirmayi inceleyin.
 
-**Sinir:** Rust kodu ve Windows CI gecmis olsa da gercek
-signed publisher, temiz VM GUI smoke ve Windows prereq/shortcut/
-protocol/preserved-data adapter'lari henüz production kabulunu gecmedi.
-NSIS backup script'i halen Rust disi zorunlu fallback'tir;
-`%100 Rust dagitim araci` hedefi icin bu ayri giderilmelidir.
+**Onemli:** Imzasiz yerel setup, paket butunlugunu kontrol eder; yayinci
+kimligini kriptografik olarak dogrulamaz. Guvenli guncelleme ve rollback
+icin imzali manifest, dis yayinci guven politikasi ve release kontrolleri
+gerekir. Test artifact'ini production installer olarak dagitmayin.
 
-## Gelistirici dogrulama (repo kokunden)
+## Gelistirme (repo kokunden)
+
+Rust toolchain ve Cargo kurulu olmali. Komutlar `rust/Cargo.lock`
+dosyasini kullanir:
 
 ```powershell
 cargo fmt --manifest-path rust/Cargo.toml --all -- --check
@@ -52,13 +67,29 @@ cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --all-targets 
 cargo test --locked --manifest-path rust/Cargo.toml --workspace --all-targets
 ```
 
-`rust/Cargo.lock` commit edilmistir. Rust docs dahil
-`203192d1` revizyonunda
-[Linux ve Windows CI 41342571609](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41342571609)
-**PASS**; bu kanit yalniz o commit'e aittir. Rust Windows gelistirme
-artifact'lari (CLI, Setup Studio, GUI stub, WebSetup ve ornek TEST kurulum)
-Actions ciktilaridir, release degildir. Gercek Windows masaustu ve
-temiz VM kullanici kabulunu kanitlamaz.
+Windows Studio'yu yerel olarak derlemek icin:
 
-Aktif dal `rewrite/rust-community`, PR #63 Draft.
-Ana dal ve eski commit gecmisi bu calismada degistirilmedi.
+```powershell
+cargo build --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --features setup-authoring-gui
+.\rust\target\release\turkuaz-installer.exe
+```
+
+## Dogrulama: CI ile production kabulu ayni degil
+
+**4 Kasim 2026 kod referansi:** `ed2724609e311f6d31aefbfab9a0ec497179ed81`
+icin [Linux ve Windows CI #41913467340](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41913467340)
+**SUCCESS**. Bu calisma Rust fmt, build, Clippy, unit testleri, Windows
+Studio derlemesini ve otomatik paketleme/kurulum testlerini tamamlamistir.
+Bu kanit yalniz belirtilen commit icin gecerlidir; yeni commit veya
+merge testlerini otomatik olarak kanitlamaz.
+
+**Henuz production kabulune girmeyenler:** temiz Windows 10/11
+masaustunde tam sihirbaz / kaldirma / tum kullanicilar UAC elle kabul,
+gercek sertifikayla Authenticode ve publisher trust, ilk gercek urun
+pilotu, Windows imzali dagitim adapter parity'si ve NSIS yedeginden
+tam bagimsizlik. Acik kalemler
+[Rust readiness](rust/RUST_READINESS.md) belgesinde izlenir.
+
+`main` dalinda Rust kodunu birlestirmek ile GitHub **Release**
+olusturmak ayri islemlerdir. Kaynak birlestirme production imzali
+surum veya son kullanici kabulunun tamamlandigi anlamina gelmez.
