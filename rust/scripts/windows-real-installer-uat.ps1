@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-real-installer-uat.ps1
 # Amac: Guncel TurkuazInstaller Studio ve CLI icin gercek test kurulumu olusturmak
 # Modul - PowerShell Windows Integration QA
-# Version: 0.1.1
+# Version: 0.1.2
 # Aciklama: Ornek ci.smoke yerine ayni derlemenin Studio ve CLI ikilisini native setup'a paketler
 # Bagimli Oldugu Katman: QA | Tool
 
@@ -39,6 +39,19 @@ try {
 
     & $cli build-package --package-id $pkgId --version $Version --source $source --output $package --executable TurkuazInstallerStudio.exe
     if ($LASTEXITCODE -ne 0) { throw 'Packaging actual Studio and CLI binaries failed.' }
+    # Verify the actual archive contains BOTH tools before creating its setup.
+    $zip = [IO.Compression.ZipFile]::OpenRead($package)
+    try {
+        $archiveNames = @($zip.Entries | ForEach-Object { $_.FullName })
+        foreach ($name in @('TurkuazInstallerCLI.exe', 'TurkuazInstallerStudio.exe')) {
+            if ($archiveNames -notcontains "payload/$name") {
+                throw "Actual tools archive is missing payload/$name"
+            }
+        }
+        Write-Host 'FULL_SUITE_ARCHIVE_CONTAINS_BOTH_TOOLS_PASS'
+    } finally {
+        $zip.Dispose()
+    }
     & $cli build-native-setup --stub $studio --package $package --output $setup
     if ($LASTEXITCODE -ne 0) { throw 'Building actual TurkuazInstaller test setup failed.' }
     if (!(Test-Path -LiteralPath $setup -PathType Leaf) -or (Get-Item -LiteralPath $setup).Length -lt 1024) {
@@ -50,10 +63,26 @@ try {
     & $setup install-local-self --target $testTarget
     if ($LASTEXITCODE -ne 0) { throw 'Integrated setup could not install the actual tools.' }
     Write-Host 'FULL_SUITE_TEMP_INSTALL_PASS'
+    $deployedFiles = @(Get-ChildItem -LiteralPath $testTarget -File -Recurse |
+        ForEach-Object { $_.FullName.Substring($testTarget.Length).TrimStart('\') })
+    Write-Host "FULL_SUITE_DEPLOYED_FILE_COUNT=$($deployedFiles.Count)"
+    Write-Host "FULL_SUITE_DEPLOYED_NAMES=$($deployedFiles -join ',')"
     foreach ($name in @('TurkuazInstallerCLI.exe', 'TurkuazInstallerStudio.exe')) {
         $expected = (Get-FileHash -LiteralPath (Join-Path $source $name) -Algorithm SHA256).Hash
         $actualPath = Join-Path $testTarget $name
         if (!(Test-Path -LiteralPath $actualPath -PathType Leaf)) {
+            # Do not disable or bypass endpoint protection to pass the test.
+            if (Get-Command Get-MpThreatDetection -ErrorAction SilentlyContinue) {
+                try {
+                    $hits = @(Get-MpThreatDetection -ErrorAction Stop | Where-Object {
+                        $resources = [string]::Join(';', @($_.Resources))
+                        $resources.IndexOf($testTarget, [StringComparison]::OrdinalIgnoreCase) -ge 0
+                    })
+                    Write-Host "FULL_SUITE_DEFENDER_TARGET_DETECTION_COUNT=$($hits.Count)"
+                } catch {
+                    Write-Warning 'Defender detection status could not be read.'
+                }
+            }
             throw "The installed tool is missing: $name"
         }
         $actual = (Get-FileHash -LiteralPath $actualPath -Algorithm SHA256).Hash
