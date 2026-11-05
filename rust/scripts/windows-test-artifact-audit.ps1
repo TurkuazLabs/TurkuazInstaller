@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-test-artifact-audit.ps1
 # Amac: CI ornek kurulum paketinin SHA256, Authenticode ve Defender durumunu raporlamak
 # Modul - PowerShell Windows QA Adapter
-# Version: 0.1.0
+# Version: 0.1.1
 # Aciklama: Gecici self-signed sertifikayi guvenilir kabul etmeden dosya butunlugunu olcer
 # Bagimli Oldugu Katman: QA | Security
 
@@ -124,6 +124,30 @@ $utf8 = [Text.UTF8Encoding]::new($false)
 $sumLines = @($records | ForEach-Object { "$($_.SHA256) *$($_.Name)" })
 $sumLines += "$((Get-FileHash -LiteralPath $auditPath -Algorithm SHA256).Hash.ToLowerInvariant()) *SECURITY-AUDIT.json"
 [IO.File]::WriteAllText($sumsPath, (($sumLines -join [Environment]::NewLine) + [Environment]::NewLine), $utf8)
+# BRK-WINDOWS-ARTIFACT-SUMMARY-001: Make expected hashes visible on
+# GitHub without asking users to bypass Chrome's download protection.
+if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+    $summary = @(
+        '### Windows example test artifact audit'
+        ''
+        '**TEST-ONLY / UNTRUSTED CI SIGNER / NOT A PRODUCTION RELEASE**'
+        ''
+        "Commit: $($env:GITHUB_SHA)"
+        ''
+        "Defender: $defender"
+        ''
+        '| Filename | SHA-256 |'
+        '| --- | --- |'
+    )
+    $summary += @($records | ForEach-Object { "| $($_.Name) | $($_.SHA256) |" })
+    $summary += ''
+    $summary += 'SHA-256 proves file identity against this CI report, not malware safety. Chrome Safe Browsing may still warn.'
+    [IO.File]::AppendAllText(
+        $env:GITHUB_STEP_SUMMARY,
+        (($summary -join [Environment]::NewLine) + [Environment]::NewLine),
+        $utf8
+    )
+}
 Write-Host "TEST_ARTIFACT_SHA256_AUDIT_PASS ($($records.Count) input files)"
 Write-Host "TEST_ARTIFACT_AUTHENTICODE_EPHEMERAL_SIGNER_PASS"
 Write-Host "TEST_ARTIFACT_DEFENDER_STATUS=$defender"
