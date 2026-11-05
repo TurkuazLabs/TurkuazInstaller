@@ -632,7 +632,10 @@ impl eframe::App for BuilderApp {
                                     if selected_before != self.selected_wizard_page {
                                         self.preview_accepted = false;
                                     }
-                                    setup_design_surface::draw_appearance_editor(ui, &mut self.project);
+                                    setup_design_surface::draw_appearance_editor(
+                                        ui,
+                                        &mut self.project,
+                                    );
                                     ui.add_space(18.0);
                                     if ui.button("← Genel bakışa dön").clicked() {
                                         self.dialog_open = false;
@@ -861,9 +864,11 @@ impl BuilderApp {
 
         ui.label(egui::RichText::new("Proje ayarları").size(21.0).strong());
         ui.label(
-            egui::RichText::new("Bölümleri Studio çalışma alanında, yan yana panellerle düzenleyin.")
-                .size(14.0)
-                .weak(),
+            egui::RichText::new(
+                "Bölümleri Studio çalışma alanında, yan yana panellerle düzenleyin.",
+            )
+            .size(14.0)
+            .weak(),
         );
         ui.add_space(8.0);
 
@@ -1150,9 +1155,12 @@ impl BuilderApp {
         ui.add_space(12.0);
         ui.colored_label(
             palette.accent,
-            egui::RichText::new(format!("PROJE STÜDYOSU  /  {:02} - 04", self.active_step + 1))
-                .size(13.0)
-                .strong(),
+            egui::RichText::new(format!(
+                "PROJE STÜDYOSU  /  {:02} - 04",
+                self.active_step + 1
+            ))
+            .size(13.0)
+            .strong(),
         );
         ui.label(egui::RichText::new(title).size(28.0).strong());
         ui.label(egui::RichText::new(description).size(15.0).weak());
@@ -1199,7 +1207,10 @@ impl BuilderApp {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if self.active_step < 3 {
                         if ui
-                            .add_enabled(!is_building, egui::Button::new("Sonraki bölüm →").fill(palette.accent))
+                            .add_enabled(
+                                !is_building,
+                                egui::Button::new("Sonraki bölüm →").fill(palette.accent),
+                            )
                             .clicked()
                         {
                             next_requested = true;
@@ -1208,8 +1219,7 @@ impl BuilderApp {
                         if ui
                             .add_enabled(
                                 !is_building,
-                                egui::Button::new("Kurulum EXE'sini oluştur")
-                                    .fill(palette.accent),
+                                egui::Button::new("Kurulum EXE'sini oluştur").fill(palette.accent),
                             )
                             .clicked()
                         {
@@ -1218,9 +1228,7 @@ impl BuilderApp {
                     } else if ui.button("Tamam").clicked() {
                         close_requested = true;
                     }
-                    if self.active_step > 0
-                        && ui.button("← Önceki bölüm").clicked()
-                    {
+                    if self.active_step > 0 && ui.button("← Önceki bölüm").clicked() {
                         previous_requested = true;
                     }
                 });
@@ -1263,7 +1271,10 @@ impl BuilderApp {
                     .size(19.0)
                     .strong(),
             );
-            ui.label(format!("v{}  •  {}", self.project.version, self.project.channel));
+            ui.label(format!(
+                "v{}  •  {}",
+                self.project.version, self.project.channel
+            ));
             ui.separator();
             match self.active_step {
                 0 => {
@@ -1285,7 +1296,11 @@ impl BuilderApp {
                     ui.add_space(8.0);
                     ui.label(format!(
                         "Antivirüs kontrolü: {}",
-                        if self.project.av_scan.enabled { "Etkin" } else { "Kapalı" }
+                        if self.project.av_scan.enabled {
+                            "Etkin"
+                        } else {
+                            "Kapalı"
+                        }
                     ));
                     ui.small("Paket bütünlüğü kontrolleri antivirüs ayarından bağımsızdır.");
                 }
@@ -1293,9 +1308,7 @@ impl BuilderApp {
                     ui.strong(self.project.installer_kind.release_title());
                     ui.add(egui::Label::new(&self.project.output_directory).wrap());
                     ui.add_space(8.0);
-                    ui.small(
-                        "Paket derlemesi ve imzalı yayın güvenliği ayrı aşamalardır.",
-                    );
+                    ui.small("Paket derlemesi ve imzalı yayın güvenliği ayrı aşamalardır.");
                 }
             }
         });
@@ -1303,14 +1316,17 @@ impl BuilderApp {
 
         let mut open_designer = false;
         studio_card(ui, |ui| {
-            ui.label(egui::RichText::new("Kurulum tasarımına geç").size(17.0).strong());
+            ui.label(
+                egui::RichText::new("Kurulum tasarımına geç")
+                    .size(17.0)
+                    .strong(),
+            );
             ui.label("Son kullanıcının göreceği sayfaları ve EULA metnini düzenleyin.");
             ui.add_space(8.0);
             if ui
                 .add_sized(
                     [ui.available_width(), 40.0],
-                    egui::Button::new("03  Kurulum tasarımını aç")
-                        .fill(palette.accent),
+                    egui::Button::new("03  Kurulum tasarımını aç").fill(palette.accent),
                 )
                 .clicked()
             {
