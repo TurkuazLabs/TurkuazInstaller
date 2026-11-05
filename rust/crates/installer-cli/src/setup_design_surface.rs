@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_design_surface.rs
 // Amac: Studio'da gercek Windows kurulumuna benzeyen canli sayfa onizlemesi ve adim inspector'u
 // Modul - Rust Presentation
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Koyu Studio paneli, acik Windows wizard onizlemesi, dogrulanan EULA ayarlari
 // Bagimli Oldugu Katman: View | Application
 
@@ -366,8 +366,10 @@ fn preview_page_body(
         WizardPageId::Shortcuts => {
             let mut start_menu = true;
             let mut desktop = false;
-            ui.checkbox(&mut start_menu, "Başlat menüsüne kısayol oluştur");
-            ui.checkbox(&mut desktop, "Masaüstüne kısayol oluştur");
+            ui.add_enabled_ui(false, |ui| {
+                ui.checkbox(&mut start_menu, "Başlat menüsüne kısayol oluştur");
+                ui.checkbox(&mut desktop, "Masaüstüne kısayol oluştur");
+            });
             ui.add_space(12.0);
             ui.label("Bu seçimler örnektir; gerçek kurulumda kullanıcı karar verir.");
         }
