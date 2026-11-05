@@ -1255,9 +1255,11 @@ impl BuilderApp {
                     .fill(palette.accent),
             );
             ui.label(
-                egui::RichText::new("Bölüm sırasını gösterir; ayarların tamamlandığı anlamına gelmez.")
-                    .size(12.0)
-                    .weak(),
+                egui::RichText::new(
+                    "Bölüm sırasını gösterir; ayarların tamamlandığı anlamına gelmez.",
+                )
+                .size(12.0)
+                .weak(),
             );
         });
         ui.add_space(17.0);
