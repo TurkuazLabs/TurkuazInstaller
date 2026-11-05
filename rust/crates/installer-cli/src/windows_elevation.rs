@@ -1,11 +1,15 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_elevation.rs
 // Amac: Tum kullanicilar kurulumunu Windows UAC ile yeniden baslatmak
 // Modul - Rust Windows Elevation Adapter
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: runas, komut satiri kacis kodlamasi, onayli yeniden acilis
 // Bagimli Oldugu Katman: Adapter | Security
 
-use std::{ffi::OsStr, os::windows::ffi::OsStrExt, path::Path};
+use std::{
+    ffi::OsStr,
+    os::windows::ffi::OsStrExt,
+    path::{Component, Path},
+};
 
 use windows::{
     Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
@@ -21,8 +25,8 @@ fn wide(value: &OsStr) -> Vec<u16> {
 /// Quote exactly one Windows command-line argument following CommandLineToArgvW
 /// escaping rules, never concatenate an untrusted path as command syntax.
 fn quote_arg(value: &str) -> Result<String, String> {
-    if value.contains('\0') {
-        return Err("UAC komut satırında NUL karakteri geçersiz.".into());
+    if value.chars().any(char::is_control) {
+        return Err("UAC komut satırında kontrol karakterleri geçersiz.".into());
     }
     let mut output = String::from("\"");
     let mut backslashes = 0;
@@ -149,8 +153,16 @@ pub(super) struct ResumeOptions {
 }
 
 pub(super) fn parse_resumed_arguments() -> Result<ResumeOptions, String> {
+    parse_resumed_values(&std::env::args().collect::<Vec<_>>())
+}
+
+/// @dev-id BRK-UAC-RESUME-PARSER-001
+/// @purpose Reject malformed/extra UAC resume arguments before reading the
+/// embedded package and starting the privileged review window.
+/// @contract No implicit consent flags, path traversal or downgrade from
+/// AllUsers; the elevated wizard must re-ask EULA and recycle consent.
+fn parse_resumed_values(values: &[String]) -> Result<ResumeOptions, String> {
     // No optional unknown switches, no implicit defaults for privileged state.
-    let values = std::env::args().collect::<Vec<_>>();
     if values.len() != 12 || values[1] != "resume-local-wizard" {
         return Err("UAC yeniden başlatma parametreleri geçersiz.".into());
     }
@@ -179,6 +191,16 @@ pub(super) fn parse_resumed_arguments() -> Result<ResumeOptions, String> {
         "en" => WizardLanguage::English,
         _ => return Err("Geçersiz UAC dili.".into()),
     };
+    let target = Path::new(&values[5]);
+    if values[3].trim().is_empty()
+        || !target.is_absolute()
+        || target
+            .components()
+            .any(|part| matches!(part, Component::CurDir | Component::ParentDir))
+        || target.parent().is_none()
+    {
+        return Err("UAC paket kimliği veya hedef klasör yolu geçersiz.".into());
+    }
     Ok(ResumeOptions {
         package_id: values[3].clone(),
         target: values[5].clone(),
@@ -200,6 +222,73 @@ mod tests {
         assert_eq!(quote_arg("a\"b").unwrap(), r#""a\"b""#);
         assert_eq!(quote_arg("ends\\").unwrap(), r#""ends\\""#);
         assert!(quote_arg("evil\0arg").is_err());
+    }
+
+    /// @dev-id BRK-UAC-RESUME-TEST-001
+    /// @purpose Verify that UAC resume never accepts inherited consent,
+    /// unrecognized flags, relative/traversal targets or invalid booleans.
+    #[test]
+    fn privileged_resume_rejects_extra_consent_flags_and_unsafe_targets() {
+        let base = [
+            "setup.exe",
+            "resume-local-wizard",
+            "--package-id",
+            "qa.uac",
+            "--target",
+            r"C:\Program Files\qa.uac",
+            "--start-menu",
+            "1",
+            "--desktop",
+            "0",
+            "--language",
+            "tr",
+        ];
+        let make = || base.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>();
+        let valid = make();
+        let options = parse_resumed_values(&valid).expect("valid UAC resume");
+        assert_eq!(options.package_id, "qa.uac");
+        assert_eq!(options.target, r"C:\Program Files\qa.uac");
+        assert!(options.start_menu);
+        assert!(!options.desktop);
+        assert_eq!(options.language, WizardLanguage::Turkish);
+
+        for flag in ["--recycle-approved", "--accept-license", "--quiet", "--scope"] {
+            let mut args = make();
+            args.push(flag.to_owned());
+            args.push("1".to_owned());
+            assert!(parse_resumed_values(&args).is_err(), "accepted {flag}");
+        }
+        for invalid in ["0", "yes", "2", ""] {
+            let mut args = make();
+            args[7] = invalid.into();
+            if invalid == "0" {
+                assert!(!parse_resumed_values(&args).expect("explicit false").start_menu);
+            } else {
+                assert!(parse_resumed_values(&args).is_err(), "accepted {invalid}");
+            }
+        }
+        for invalid in ["relative\\qa.uac", r"C:\Program Files\..\qa.uac", r"C:qa.uac"] {
+            let mut args = make();
+            args[5] = invalid.into();
+            assert!(parse_resumed_values(&args).is_err(), "accepted {invalid}");
+        }
+        let mut swapped = make();
+        swapped[2] = "--target".into();
+        assert!(parse_resumed_values(&swapped).is_err());
+        let mut invalid_language = make();
+        invalid_language[11] = "de".into();
+        assert!(parse_resumed_values(&invalid_language).is_err());
+    }
+
+    #[test]
+    fn uac_command_argument_encoder_rejects_controls_and_keeps_unicode() {
+        for invalid in ["bad\rvalue", "bad\nvalue", "bad\0value", "bad\tvalue"] {
+            assert!(quote_arg(invalid).is_err());
+        }
+        assert_eq!(
+            quote_arg(r"C:\Program Files\İş Uygulaması\").unwrap(),
+            r#""C:\Program Files\İş Uygulaması\\""#
+        );
     }
 
     #[test]
