@@ -95,7 +95,11 @@ pub(super) fn draw_step_inspector(
                             picked = page.page;
                         }
                         if page.page.required() {
-                            ui.label(egui::RichText::new("Kilitli").color(ui.visuals().weak_text_color()).size(11.0));
+                            ui.label(
+                                egui::RichText::new("Kilitli")
+                                    .color(ui.visuals().weak_text_color())
+                                    .size(11.0),
+                            );
                         } else {
                             ui.checkbox(&mut page.enabled, "");
                         }
@@ -725,12 +729,7 @@ mod tests {
                 },
                 |context| {
                     egui::CentralPanel::default().show(context, |ui| {
-                        draw_step_inspector(
-                            ui,
-                            &mut project.wizard,
-                            &mut selected,
-                            &mut english,
-                        );
+                        draw_step_inspector(ui, &mut project.wizard, &mut selected, &mut english);
                         draw_appearance_editor(ui, &mut project);
                     });
                 },
