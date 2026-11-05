@@ -4361,10 +4361,9 @@ mod tests {
                     ..Default::default()
                 },
                 |context| {
-                    egui::TopBottomPanel::top("test-studio-header")
-                        .show(context, |ui| {
-                            ui.label("Turkuaz Setup Studio");
-                        });
+                    egui::TopBottomPanel::top("test-studio-header").show(context, |ui| {
+                        ui.label("Turkuaz Setup Studio");
+                    });
                     egui::SidePanel::left("test-studio-navigation")
                         .resizable(false)
                         .default_width(220.0)
