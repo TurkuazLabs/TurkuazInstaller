@@ -41,7 +41,10 @@ fn online_install_rejects_manifest_credentials_before_network_io() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("must not contain credentials or fragments"));
-    assert!(!stderr.contains("password"), "credentials leaked into error output");
+    assert!(
+        !stderr.contains("password"),
+        "credentials leaked into error output"
+    );
 }
 
 #[test]
