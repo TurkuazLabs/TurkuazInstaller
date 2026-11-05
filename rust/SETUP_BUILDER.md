@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.11
-Aciklama: Studio temasina uyan tasarim inspector kartlari ve acik/koyu gorunum regresyonu
+Version: 0.9.12
+Aciklama: Studio tasarim onizlemesi EULA kabul sifirlama ve tema regresyonu
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -95,6 +95,23 @@ Bu iyilestirmelerin panel genisligi ve TR/EN label secimi
 unit testlerle denetlenir. Gercek Windows minimum pencere
 boyutu, DPI ayari, kisayol tuşlari ve piksel gorunumu
 ayri manuel kabul kontrolu gerektirir.
+
+## Studio lisans onizlemesinde kabul durumunun gecerliligi
+
+03 Kurulum Tasarimi'nin canli onizlemesindeki EULA kabul
+kutusu sadece gecici bir gorsel secimdir; gercek kurulum
+onayi sayilmaz ve proje dosyasina kaydedilmez.
+
+Kullanici sag panelden sayfa degistirdiginde, lisans
+metnini duzenlediginde, Turkce/English secimini
+degistirdiginde veya lisans sayfasini acip kapattiginda
+eski onizleme kabul secimi sifirlanir. Degisiklik yoksa
+secim gereksiz yere silinmez. Dikkat: kurulum motorunun
+gercek EULA onay politikasi bu UI duzeltmesinden etkilenmez.
+
+Gelistirici testleri onizleme kabul durumunun sayfa, dil
+ve lisans degisikliklerinde sifirlanmasini denetler.
+Gercek Windows fare/klavye odagi ayrica manuel test edilir.
 
 ## Acik ve koyu gorunumde ozellik paneli
 
