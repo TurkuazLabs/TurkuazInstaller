@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.2
+Version: 0.3.3
 Aciklama: Derleme kontrolunden gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -36,6 +36,51 @@ Bu testleri yalnizca bos/dedike Windows 10/11 VM kullanarak yapin:
 `install-local-self` CLI komutu onaysiz oldugu icin
 mevcut klasore kurulum yapmayi reddetmeye devam eder.
 Eski klasorun geri alinmasi otomatik degildir.
+
+## Chrome tarafindan engellenen test ZIP'i ve dosya guvenligi
+
+`turkuaz-example-test-setup-v0.2.20-windows-x64.zip` bir **CI test
+artifact'idir**; production imzasi ve Google Safe Browsing itibari yoktur.
+Chrome `Bu dosya tehlikeli` diyorsa korumayi kapatmayin veya dosyayi
+zorla tutup calistirmayin. UAC/UAT testlerini gecmek, Chrome indirme
+uyarisini kaldirmaz.
+
+Test paketinin CI tarafinda olusturulan yeni surumunde
+`SHA256SUMS.txt` ve `SECURITY-AUDIT.json` dosyalari bulunur.
+GitHub Actions run sayfasindaki `Windows example test artifact audit`
+ozetinde beklenen **ic dosya** SHA-256'lari, commit SHA'si ve Defender
+durumu gorunur. Bu hash'ler ZIP'in kendisine degil icindeki dosyalara
+aittir. Rapor GitHub CI sonucuyla eslestirilir; tek basina guvenilir
+yayinci veya zararsizlik kaniti sayilmaz.
+
+Dosya kurumunuzun politikasiyla indirmeye uygun bulunmus ve izole
+test VM'ine normal yoldan elde edilmisse, cikardiktan sonra dosyalari
+**calistirmadan** PowerShell ile karsilastirin:
+
+```powershell
+$root = 'C:\Test\TurkuazInstaller-Example'
+Get-Content -LiteralPath (Join-Path $root 'SHA256SUMS.txt') | ForEach-Object {
+    $parts = $_ -split ' \*', 2
+    if ($parts.Count -ne 2) { throw 'Gecersiz SHA256SUMS satiri' }
+    $file = Join-Path $root $parts[1]
+    $actual = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash
+    if ($actual -ne $parts[0]) { throw "SHA256 eslesmedi: $($parts[1])" }
+}
+Get-AuthenticodeSignature -LiteralPath (Join-Path $root 'TurkuazSetup.exe') |
+    Select-Object Status, StatusMessage, SignerCertificate
+```
+
+CI EXE'leri gecici self-signed test sertifikasiyla imzalanir;
+`NotTrusted` olmasi beklenebilir. `manifest-trust.yaml` Windows
+Authenticode yayinci sertifikasinin yerine gecmez. Test sertifikasini
+Trusted Root/Trusted Publishers'a eklemeyin.
+
+Windows Defender taramasi destekleniyorsa CI onu ayrica denemeye
+calisir. Ortam izin vermezse rapor **not_run_unavailable** seklinde
+kalir; asla `temiz` olarak yazilmaz. Yerel Defender taramasinda
+tehdit bulunmamasi da Chrome'un alarmindan bagimsiz bir guvenlik
+garantisi degildir. Gercek Windows UAT yalnizca ayri bir test VM'inde
+ve izinli/dogrulanmis pakette uygulanmalidir.
 
 ## On kosullar
 
