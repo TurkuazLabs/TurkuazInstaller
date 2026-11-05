@@ -1,27 +1,29 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_design_surface.rs
 // Amac: Studio'da gercek Windows kurulumuna benzeyen canli sayfa onizlemesi ve adim inspector'u
 // Modul - Rust Presentation
-// Version: 0.1.5
-// Aciklama: Koyu Studio paneli, acik Windows wizard onizlemesi, dogrulanan EULA ayarlari
+// Version: 0.1.6
+// Aciklama: Studio acik/koyu temasi, ayri acik Windows wizard onizlemesi ve EULA kontrolleri
 // Bagimli Oldugu Katman: View | Application
 
 use eframe::egui;
 use turkuaz_installer_package_engine::{SetupThemePreset, WizardConfig, WizardPageId};
 
-use super::SavedProject;
+use super::{SavedProject, studio_palette};
 
 const STUDIO_ACCENT: egui::Color32 = egui::Color32::from_rgb(47, 127, 225);
-const STUDIO_CARD: egui::Color32 = egui::Color32::from_rgb(30, 43, 61);
 const STUDIO_BORDER: egui::Color32 = egui::Color32::from_rgb(64, 83, 108);
-const MUTED_TEXT: egui::Color32 = egui::Color32::from_rgb(162, 178, 196);
 const WINDOWS_TEXT: egui::Color32 = egui::Color32::from_rgb(31, 38, 47);
 const WINDOWS_BORDER: egui::Color32 = egui::Color32::from_rgb(184, 193, 207);
 const WINDOWS_BACKGROUND: egui::Color32 = egui::Color32::from_rgb(248, 249, 251);
 
+/// @dev-id BRK-STUDIO-THEME-CARD-001
+/// @purpose Match inspector card surfaces to the selected Studio appearance.
+/// @contract The simulated Windows wizard itself stays light in both modes.
 fn settings_card(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui)) {
+    let palette = studio_palette(ui.visuals().dark_mode);
     egui::Frame::new()
-        .fill(STUDIO_CARD)
-        .stroke(egui::Stroke::new(1.0, STUDIO_BORDER))
+        .fill(palette.surface)
+        .stroke(egui::Stroke::new(1.0, palette.border))
         .corner_radius(egui::CornerRadius::same(9))
         .inner_margin(egui::Margin::same(14))
         .show(ui, add_contents);
@@ -38,11 +40,12 @@ pub(super) fn draw_step_inspector(
     selected: &mut WizardPageId,
     english: &mut bool,
 ) {
+    let palette = studio_palette(ui.visuals().dark_mode);
     ui.add_space(11.0);
     ui.label(egui::RichText::new("Kurulum Adımları").size(22.0).strong());
     ui.label(
         egui::RichText::new("Görünen sayfaları açın, gizleyin ve sıralayın.")
-            .color(MUTED_TEXT)
+            .color(ui.visuals().weak_text_color())
             .size(13.0),
     );
     ui.add_space(12.0);
@@ -57,7 +60,7 @@ pub(super) fn draw_step_inspector(
                         config.pages.iter().filter(|p| p.enabled).count(),
                         config.pages.len()
                     ))
-                    .color(MUTED_TEXT)
+                    .color(ui.visuals().weak_text_color())
                     .size(12.0),
                 );
             });
@@ -69,9 +72,9 @@ pub(super) fn draw_step_inspector(
             let is_selected = picked == page.page;
             egui::Frame::new()
                 .fill(if is_selected {
-                    egui::Color32::from_rgb(36, 87, 151)
+                    palette.hover
                 } else {
-                    STUDIO_CARD
+                    palette.surface
                 })
                 .corner_radius(egui::CornerRadius::same(5))
                 .inner_margin(egui::Margin::symmetric(7, 2))
@@ -92,7 +95,7 @@ pub(super) fn draw_step_inspector(
                             picked = page.page;
                         }
                         if page.page.required() {
-                            ui.label(egui::RichText::new("Kilitli").color(MUTED_TEXT).size(11.0));
+                            ui.label(egui::RichText::new("Kilitli").color(ui.visuals().weak_text_color()).size(11.0));
                         } else {
                             ui.checkbox(&mut page.enabled, "");
                         }
@@ -169,7 +172,7 @@ pub(super) fn draw_step_inspector(
         if required {
             ui.label(
                 egui::RichText::new("Kurulum güvenliği için zorunlu aşama.")
-                    .color(MUTED_TEXT)
+                    .color(ui.visuals().weak_text_color())
                     .size(12.0),
             );
         } else if let Some(page) = config.page_mut(*selected) {
@@ -220,7 +223,7 @@ pub(super) fn draw_step_inspector(
             );
             ui.label(
                 egui::RichText::new("EULA etkinse her iki dilde gerçek sözleşme metni gereklidir.")
-                    .color(MUTED_TEXT)
+                    .color(ui.visuals().weak_text_color())
                     .size(12.0),
             );
         }
@@ -527,7 +530,7 @@ pub(super) fn draw_install_preview(
     });
     ui.label(
         egui::RichText::new(preview_copy(*english).preview_subheading)
-            .color(MUTED_TEXT)
+            .color(ui.visuals().weak_text_color())
             .size(13.0),
     );
     // BRK-STUDIO-DESIGNER-PANEL-003: the large preview can use the full
@@ -699,6 +702,53 @@ pub(super) fn draw_install_preview(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// @dev-id BRK-STUDIO-THEME-INSPECTOR-001
+    /// @purpose Cover light/dark editor rendering without changing project data.
+    #[test]
+    fn inspector_cards_follow_studio_appearance_without_project_mutation() {
+        let mut project = SavedProject::default();
+        let project_before = serde_json::to_value(&project).expect("before render");
+
+        for theme in [egui::ThemePreference::Light, egui::ThemePreference::Dark] {
+            let context = egui::Context::default();
+            context.set_theme(theme);
+            let mut selected = WizardPageId::Welcome;
+            let mut english = false;
+            let output = context.run(
+                egui::RawInput {
+                    screen_rect: Some(egui::Rect::from_min_size(
+                        egui::Pos2::ZERO,
+                        egui::vec2(760.0, 800.0),
+                    )),
+                    ..Default::default()
+                },
+                |context| {
+                    egui::CentralPanel::default().show(context, |ui| {
+                        draw_step_inspector(
+                            ui,
+                            &mut project.wizard,
+                            &mut selected,
+                            &mut english,
+                        );
+                        draw_appearance_editor(ui, &mut project);
+                    });
+                },
+            );
+            assert!(!output.shapes.is_empty());
+            assert_eq!(selected, WizardPageId::Welcome);
+            assert!(!english);
+            assert_eq!(
+                serde_json::to_value(&project).expect("after render"),
+                project_before
+            );
+        }
+        let light = studio_palette(false);
+        let dark = studio_palette(true);
+        assert_ne!(light.surface, dark.surface);
+        assert_ne!(light.border, dark.border);
+        assert_ne!(light.hover, dark.hover);
+    }
 
     #[test]
     fn preview_language_switches_wizard_controls_without_changing_project_fields() {
