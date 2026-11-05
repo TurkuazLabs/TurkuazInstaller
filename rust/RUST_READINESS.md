@@ -1,96 +1,101 @@
 <!--
 Dosya Yolu: REPO_ROOT/rust/RUST_READINESS.md
-Amac: Community Rust gelistirme kaniti ve production kabul eksiklerini ayri kaydetmek
+Amac: Community Rust test kaniti ve production kabul eksiklerini ayri izlemek
 Modul - Markdown
-Version: 1.0.4
-Aciklama: Sabit commit/CI dogrulamasi, gercek runtime siniri ve kalici kabul kapilari
+Version: 1.1.0
+Aciklama: CI kaniti, yerel installer, signed workflow ve acik Windows kabul kapilari
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
 
-# Rust Installer - Dogrulanmis durum ve acik kabul kapilari
+# Rust Installer - Kanitlanmis durum ve production sinirlari
 
-Bu belgedeki CI kaniti **2026-11-01** itibariyla incelenen sabit
-Community revizyonu `203192d1e9649eb22cf502ff3fe947d4e5a002ba`
-ve [taslak PR #63](https://github.com/TurkuazLabs/TurkuazInstaller/pull/63)
-icin gecerlidir. Yeni docs commit'leri otomatik olarak test edilmis sayilmaz.
-Pro icin [taslak PR #10](https://github.com/TurkuazSoft/TurkuazInstaller-Pro/pull/10)
-ayri kaynak ve kabul surecidir.
+Bu belge, **4 Kasim 2026** tarihinde `ed2724609e311f6d31aefbfab9a0ec497179ed81`
+revizyonunda [CI #41913467340](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41913467340)
+ile dogrulanan Rust Community kodunu anlatir. Belge commit'leri,
+`main` merge islemi ve test artifact'lari yeni bir production kabul
+kaniti olusturmaz.
 
-## Aktif Rust gelistirme islevleri
+## Aktif islevler
 
-- `rust/crates/installer-cli`: CLI; Windows Setup Studio, setup wizard
-  ve onceden yapilandirilmis WebSetup gelistirme araclari.
-- `rust/crates/package-engine`: `.tzpkg`, `.tzsetup` ve
-  self-extracting setup olusturma/dogrulama.
-- `manifest-pipeline`, `manifest-verification`, `manifest-trust-store`:
-  detached CMS ve out-of-band publisher trust policy.
+- `installer-cli`: signed online/offline install, update, repair,
+  policy-allowed rollback, uninstall, launch, verify, journal recovery,
+  Windows kurulum sihirbazlari ve Setup Studio.
+- `package-engine`: `.tzpkg`, `.tzsetup`, imzasiz native setup
+  paketi, yerel dosya envanteri ve guvenli silme kontrolleri.
+- `manifest-pipeline`, `manifest-verification`,
+  `manifest-trust-store`: detached CMS ve dis publisher policy.
 - `artifact-transfer`, `artifact-validation`,
-  `authenticode-verification`: HTTPS/file staging, sinirli indirme,
-  byte size/SHA-256 ve gerekli Windows Authenticode.
-- `install-workflow`, `deployment-activation`, `operation-journal`,
-  `install-state-store`: gelistirme install/update/repair/rollback/
-  uninstall ve konservatif recovery.
+  `authenticode-verification`: HTTPS/file staging, boyut/SHA-256
+  kontrolleri ve gerekli Windows Authenticode.
+- `install-workflow`, `deployment-activation`,
+  `operation-journal`: versioned deployment ve kurtarilabilir
+  signed yasam dongusu.
 
-Studio yeni projelerde per-user LOCALAPPDATA dizinini varsayar;
-var olan `.tzproj` dosyalarinda secilmis yollar degistirilmez.
-Bu kapsamin production kabulunu sagladigi iddia edilmez.
+## Yerel imzasiz Setup Studio (gelistirme)
 
-## Kanit: sabit revizyon icin otomatik CI
+- Tam Kurulum projesi standart `TurkuazSetup.exe` uretir;
+  uygulama paketi EXE icine gomulur.
+- `03 Kurulum tasarimi`: kurulum sayfalarini ac/kapat, sirala,
+  Turkce/English baslik ve aciklama metinleri, EULA goruntuleme.
+- EULA kapali varsayilir. Aciksa iki dilde yayinciya ait gercek
+  metin gerekir; kullanıcı onay kutusu olmadan ilerleyemez.
+  Eski `.tzproj` dosyalari varsayilan ayarla acilir.
+- Tek kullanici / tum kullanicilar hedefi Windows known-folder
+  API ile cozulur; all-users akisi UAC ister. Ortak veya kullaniciya
+  ozel kisayol hedefleri ayridir.
+- Windows Yuklu Uygulamalar kaydi ve ayri kaldirma sihirbazi
+  yerel payload envanterini kullanir. Kullanici dosyalari, degisen
+  uygulama dosyalari ve yabanci kisayollar korunur.
+- Bu yerel akis **imzasiz** oldugundan SHA-256 kaydi publisher
+  guven zinciri yerine gecmez; signed update/rollback yerine kullanilmaz.
 
-- [Community CI 41342571609](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41342571609):
-  **PASS** — Linux Rust format/check/Clippy/test ve Windows
-  `--locked` workspace, NSIS script kontrolu, GUI build/test,
-  imzali TEST fixture offline lifecycle smoke ve artifact upload.
-- `rust/Cargo.lock` commit edilmistir; Linux/Windows cargo
-  check/build/test/Clippy komutlari `--locked` kullanir.
-- CI'nin urettigi CLI, GUI stub, Setup Studio, WebSetup ve ornek
-  setup **TEST artifact'lari** production imzali dagitim degildir.
-- Gercek kullanici masaustunde GUI pencere/tiklama: **NOT RUN**.
-  Temiz Windows VM ve production certificate: **NOT RUN**.
+## Otomatik test kaniti
 
-## Production icin acik kabul kapilari
+[Linux ve Windows CI #41913467340](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41913467340)
+(4 Kasim 2026, `ed272460`): **SUCCESS**.
 
-1. **BLOCKED — Publisher/provenance:** gercek yayin sertifikasi,
-   Authenticode, timestamp, zincir/revocation, AV/SmartScreen ve
-   signed HTTPS release trust kabulu.
-2. **BLOCKED — Windows uygulama entegrasyonlari:** Rust prereq
-   yukleme, kisayol, protocol kaydi, preserve_paths ve veri tasima
-   adapter'lari gelistirme runtime'inda uygulanmadi.
-3. **BLOCKED — Temiz Windows 10/11 VM:** GUI startup, tiklama/klavye,
-   install/update/repair/rollback/uninstall, reboot, kesinti ve
-   guvenli recovery kabul kanitlari.
-4. **BLOCKED — Tam Rust dagitim:** birincil motor Rust olsa da
-   `packaging/TurkuazInstallerBackup.nsi` zorunlu NSIS backup'tir.
-   CI testleri icin PowerShell kullanilir. Tum dagitima `%100 Rust`
-   denemez.
-5. **BLOCKED — Ilk gercek urun pilotu ve dis yayin:** gercek uygulama
-   verisi, dogrulanmis publisher trust ve son kullanici kabul kaniti.
-6. **BLOCKED — Pro canli entegrasyonu:** lisans kaynagi, OS credential
-   store, private feed arayuzu, authoritative rollout backend ve
-   Pro/Community E2E private Pro deposunun sorumlulugundadir.
+- Linux: Cargo fmt, locked workspace derleme, Clippy, Rust testleri.
+- Windows: locked workspace, GUI/Studio EXE derleme,
+  wizard/navigation, kisayol ve kapsam, HKCU kaydi, native setup
+  smoke ile signed offline yasam dongusu testleri.
+- Native EULA ayarlarinin EXE icine gomulup geri okunmasi, eski
+  ayar uyumlulugu, bozulmus EULA'nin reddi ve sayfa kontrati
+  Rust unit testlerinde dogrulandi.
+- Test ZIP'leri gecici GitHub Actions artifact'idir; imzali
+  production release degildir.
 
-## Tarihsel YAML sozlesmesi / canli Rust kontrati
+## Henuz acik kabul kapilari
 
-`contracts/` altindaki 11 YAML dosyasi
-`# Rust-Runtime-Status: legacy-design-only` isaretlidir.
-Bunlar onceki .NET planlarinin **tarihsel tasarim** kaydidir;
-Rust bunlari yuklemez, belge veya schema olarak var olmalari
-uygulama destegi anlamina gelmez.
+1. **Windows 10/11 temiz makine:** EULA sayfasi, dil degisimi,
+   geri/ileri/iptal, UAC ve HKLM butunlesmesi, kaldirma, upgrade,
+   kisayol ve korunan dosyalarin manuel GUI kabul matrisi.
+   Kullanici tarafinda daha once kurulumun temel dosya kopyalama ve
+   sihirbaz ekranlari denendi; son EULA ve kaldirma degisikliklerinin
+   tum matrisi henuz dogrulanmis degil.
+2. **Publisher/provenance:** production sertifikasi, Authenticode,
+   timestamp, chain/revocation, AV/SmartScreen ve gercek yayin
+   manifesti ile dis trust policy kabulu.
+3. **Signed installer Windows adapter parity:** prerequisites,
+   protocol kaydi, preserve_paths ve Windows yasam dongusu
+   entegrasyonlarinin tam fonksiyonel kabul testleri.
+4. **Tam Rust dagitim:** `packaging/TurkuazInstallerBackup.nsi`
+   fallback'i halen var. Uygulamanin tum dagitimi icin
+   `%100 Rust` iddiasi yapilmaz.
+5. **Gercek urun pilotu:** test verisinin disinda gercek yayinci
+   imzali dagitim, kurtarma, veri korunumu ve Windows VM testi.
+6. **Private Pro entegrasyonu:** lisans backend'i, staged rollout
+   ve private feed ayri depodadir; Community public crate'lerine
+   gizli kod veya anahtar eklenmez.
 
-Gecerli Rust signed manifest parser'i
-`rust/crates/manifest-parser/src/lib.rs`,
-release domain'i `rust/crates/domain/src/release.rs` dosyasindadir.
-`examples/community-manifest.yml` TEST placeholder'lari icerir.
-Uretim oncesi [RELEASE_SIGNING.md](RELEASE_SIGNING.md),
-[SETUP_BUILDER.md](SETUP_BUILDER.md) ve
-[Windows smoke rehberi](SMOKE_TEST.md) izlenmelidir.
+## Kaynaklar ve takip
 
-## Takip ve kapanis kaniti
-
+- [Setup Studio / EULA](SETUP_BUILDER.md)
+- [Windows kabul rehberi](SMOKE_TEST.md)
+- [Release signing](RELEASE_SIGNING.md)
 - [Windows manuel kabul #41](https://github.com/TurkuazLabs/TurkuazInstaller/issues/41)
 - [Gercek uygulama pilotu #42](https://github.com/TurkuazLabs/TurkuazInstaller/issues/42)
 - [Guvenlik #51](https://github.com/TurkuazLabs/TurkuazInstaller/issues/51)
 - [AV / SmartScreen #58](https://github.com/TurkuazLabs/TurkuazInstaller/issues/58)
 
-Community public crate'leri private Pro crate'lerine baglanmaz.
-PR Draft, `main` merge ve production release yoktur.
+Kaynak birlestirme, test ZIP'i ve production release birbirinden
+ayridir. Bu belgede olmayan adimlar PASS sayilmaz.
