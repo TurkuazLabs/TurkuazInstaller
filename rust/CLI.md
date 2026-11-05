@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.15
+Version: 0.4.16
 Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
 Bagimli Oldugu Katman: Application | Documentation
 -->
@@ -160,7 +160,7 @@ turkuaz-installer build-native-setup --stub Studio.exe --package application.tzp
 TurkuazSetup.exe install-local-self --target "C:\\Users\\Public\\App-Test-New"
 ```
 
-The second command accepts only a previously absent directory. The normal
+The second command accepts only a previously absent directory. This deliberate CLI default remains fail-closed even when an existing destination is present. The normal
 unsigned GUI defaults to the current user's LocalAppData/Programs/<package-id>.
 This route verifies embedded SHA-256 integrity and validates ZIP paths,
 regular files, size limits, and collisions. It is **not** a signed publisher
