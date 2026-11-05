@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.7
-Aciklama: Pencereye uyarlanan 03 onizlemesi, TR-EN preview kontrolleri ve Studio editoru
+Version: 0.9.8
+Aciklama: 03 onizlemesi responsive boyut ve tam TR/EN simulasyon metinleri
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -85,6 +85,9 @@ Onizlemedeki **Turkce / English** secimi yalnizca sayfa basligi,
 aciklamasi ve EULA ile sinirli degildir: ornek Windows wizard'in
 Ileri/Geri/Iptal, Hedef, Gozat, kisayol, gozden gecirme,
 ilerleme ve bitis metinlerini de secili dilde gosterir.
+Bu kapsama onizleme basligi, aciklama satiri, paneli ac/kapat
+dugmesi, EULA kabul metni ve devre disi sayfa uyarisinin
+dil secimine gore degismesi de dahildir.
 Yayincinin kendi girdigi marka adi ve alt baslik otomatik
 cevrilmez. Onizleme gercek Windows kurulumunu calistirmaz.
 
