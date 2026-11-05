@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.7.0
-// Aciklama: IDE calisma alani, Windows kurulum simulasyonu ve tam boy adim editoru
+// Version: 0.8.0
+// Aciklama: Tum bolumler icin tam boy Studio editoru, proje inspector'u ve kurulum simulasyonu
 // Bagimli Oldugu Katman: View | Application
 
 use std::{
@@ -544,7 +544,7 @@ impl eframe::App for BuilderApp {
                 .show(context, |ui| {
                     ui.label(egui::RichText::new("Proje adımları").size(19.0).strong());
                     ui.label(
-                        egui::RichText::new("Bölüm seçince düzenleme penceresi açılır.")
+                        egui::RichText::new("Bölüm seçince çalışma alanı değişir.")
                             .size(14.0)
                             .weak(),
                     );
@@ -608,49 +608,67 @@ impl eframe::App for BuilderApp {
                     );
                 });
 
-            // BRK-STUDIO-DESIGN-LAYOUT-001: editor and preview are peers.
-            // Product/files/distribution keep their existing modal editors;
-            // only installer design uses the full-height workspace.
-            if self.dialog_open && self.active_step == 2 {
-                egui::SidePanel::right("setup-designer-inspector")
-                    .resizable(true)
-                    .default_width(474.0)
-                    .min_width(350.0)
-                    .max_width(620.0)
-                    .show(context, |ui| {
+            // BRK-STUDIO-DESIGN-LAYOUT-002: all editors use the same
+            // full-height workspace. Keep the Windows wizard preview exclusive
+            // to section 03 and do not change the project/install contracts.
+            if self.dialog_open {
+                if self.active_step == 2 {
+                    egui::SidePanel::right("setup-designer-inspector")
+                        .resizable(true)
+                        .default_width(474.0)
+                        .min_width(350.0)
+                        .max_width(620.0)
+                        .show(context, |ui| {
+                            egui::ScrollArea::vertical()
+                                .id_salt("studio-designer-inspector-scroll")
+                                .show(ui, |ui| {
+                                    let selected_before = self.selected_wizard_page;
+                                    setup_design_surface::draw_step_inspector(
+                                        ui,
+                                        &mut self.project.wizard,
+                                        &mut self.selected_wizard_page,
+                                        &mut self.preview_english,
+                                    );
+                                    if selected_before != self.selected_wizard_page {
+                                        self.preview_accepted = false;
+                                    }
+                                    setup_design_surface::draw_appearance_editor(ui, &mut self.project);
+                                    ui.add_space(18.0);
+                                    if ui.button("← Genel bakışa dön").clicked() {
+                                        self.dialog_open = false;
+                                    }
+                                });
+                        });
+                    egui::CentralPanel::default().show(context, |ui| {
                         egui::ScrollArea::vertical()
-                            .id_salt("studio-designer-inspector-scroll")
+                            .id_salt("studio-designer-preview-scroll")
                             .show(ui, |ui| {
-                                let selected_before = self.selected_wizard_page;
-                                setup_design_surface::draw_step_inspector(
+                                setup_design_surface::draw_install_preview(
                                     ui,
-                                    &mut self.project.wizard,
+                                    &self.project,
                                     &mut self.selected_wizard_page,
                                     &mut self.preview_english,
+                                    &mut self.preview_accepted,
                                 );
-                                if selected_before != self.selected_wizard_page {
-                                    self.preview_accepted = false;
-                                }
-                                setup_design_surface::draw_appearance_editor(ui, &mut self.project);
-                                ui.add_space(18.0);
-                                if ui.button("← Genel bakışa dön").clicked() {
-                                    self.dialog_open = false;
-                                }
                             });
                     });
-                egui::CentralPanel::default().show(context, |ui| {
-                    egui::ScrollArea::vertical()
-                        .id_salt("studio-designer-preview-scroll")
-                        .show(ui, |ui| {
-                            setup_design_surface::draw_install_preview(
-                                ui,
-                                &self.project,
-                                &mut self.selected_wizard_page,
-                                &mut self.preview_english,
-                                &mut self.preview_accepted,
-                            );
+                } else {
+                    egui::SidePanel::right("setup-studio-section-inspector")
+                        .resizable(true)
+                        .default_width(350.0)
+                        .min_width(290.0)
+                        .max_width(450.0)
+                        .show(context, |ui| {
+                            egui::ScrollArea::vertical()
+                                .id_salt("studio-section-inspector-scroll")
+                                .show(ui, |ui| self.draw_section_inspector(ui));
                         });
-                });
+                    egui::CentralPanel::default().show(context, |ui| {
+                        egui::ScrollArea::vertical()
+                            .id_salt("studio-section-workspace-scroll")
+                            .show(ui, |ui| self.draw_section_workspace(ui, is_building));
+                    });
+                }
             } else {
                 egui::SidePanel::right("setup-builder-preview")
                     .resizable(false)
@@ -667,9 +685,6 @@ impl eframe::App for BuilderApp {
             });
         }
 
-        if self.dialog_open && self.active_step != 2 && !is_building {
-            self.show_editor_modal(context, false);
-        }
         if self.pending_new_kind.is_some() {
             self.confirm_new_project(context);
         }
@@ -846,7 +861,7 @@ impl BuilderApp {
 
         ui.label(egui::RichText::new("Proje ayarları").size(21.0).strong());
         ui.label(
-            egui::RichText::new("Düzenle düğmesiyle istediğiniz bölüme geçebilirsiniz.")
+            egui::RichText::new("Bölümleri Studio çalışma alanında, yan yana panellerle düzenleyin.")
                 .size(14.0)
                 .weak(),
         );
@@ -918,9 +933,21 @@ impl BuilderApp {
                 "Çıktı klasörü ve seçilen yükleyiciye ait yayın ayarları",
             ),
         ];
-        for (index, (title, summary, description)) in sections.iter().enumerate() {
-            self.draw_section_card(ui, index, title, summary, description);
-            ui.add_space(7.0);
+        // A compact two-column dashboard on roomy windows, one column on
+        // smaller layouts so long paths and editing buttons remain legible.
+        if ui.available_width() >= 820.0 {
+            ui.columns(2, |columns| {
+                for (index, (title, summary, description)) in sections.iter().enumerate() {
+                    let column = &mut columns[index % 2];
+                    self.draw_section_card(column, index, title, summary, description);
+                    column.add_space(12.0);
+                }
+            });
+        } else {
+            for (index, (title, summary, description)) in sections.iter().enumerate() {
+                self.draw_section_card(ui, index, title, summary, description);
+                ui.add_space(8.0);
+            }
         }
         ui.add_space(5.0);
         ui.label(
@@ -1100,93 +1127,200 @@ impl BuilderApp {
         }
     }
 
-    fn show_editor_modal(&mut self, context: &egui::Context, is_building: bool) {
-        const TITLES: [&str; 3] = ["Ürün bilgileri", "Uygulama dosyaları", "Kurulum tasarımı"];
-        let title = if self.active_step == 3 {
-            self.project.installer_kind.release_title()
-        } else {
-            TITLES[self.active_step]
+    /// @dev-id BRK-STUDIO-SECTION-EDITOR-001
+    /// @purpose Reuse the existing project fields and validation in an inline
+    /// full-height editor, aligned visually with section 03.
+    /// @contract Project serialization and all build callbacks stay unchanged.
+    fn draw_section_workspace(&mut self, ui: &mut egui::Ui, is_building: bool) {
+        let (title, description) = match self.active_step {
+            0 => (
+                "Ürün bilgileri",
+                "Uygulama kimliği, sürüm ve yayın kanalını yönetin.",
+            ),
+            1 => (
+                "Uygulama dosyaları",
+                "Kurulacak dosyaları ve paket öncesi güvenlik kontrollerini hazırlayın.",
+            ),
+            _ => (
+                self.project.installer_kind.release_title(),
+                "Paket çıktısını ve güvenli dağıtım seçeneklerini yapılandırın.",
+            ),
         };
-        let mut close_requested = false;
-        let mut next_requested = false;
-        let mut previous_requested = false;
-        let mut build_setup_requested = false;
+        let palette = studio_palette(ui.visuals().dark_mode);
+        ui.add_space(12.0);
+        ui.colored_label(
+            palette.accent,
+            egui::RichText::new(format!("PROJE STÜDYOSU  /  {:02} - 04", self.active_step + 1))
+                .size(13.0)
+                .strong(),
+        );
+        ui.label(egui::RichText::new(title).size(28.0).strong());
+        ui.label(egui::RichText::new(description).size(15.0).weak());
+        ui.add_space(16.0);
 
-        egui::Modal::new(egui::Id::new("setup-builder-section-editor")).show(context, |ui| {
-            ui.set_min_width(760.0);
+        studio_card(ui, |ui| {
             ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(title).size(25.0).strong());
+                ui.strong("Proje ilerlemesi");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
-                        egui::RichText::new(format!("BÖLÜM {} / 4", self.active_step + 1))
-                            .size(13.0)
-                            .strong()
-                            .weak(),
+                        egui::RichText::new(format!("Bölüm {} / 4", self.active_step + 1))
+                            .color(palette.accent)
+                            .strong(),
                     );
                 });
             });
-            ui.label(
-                egui::RichText::new(format!(
-                    "{} projesi · Düzenlemeler çalışma alanına ve setup önizlemesine yansır.",
-                    self.project.installer_kind.label()
-                ))
-                .size(15.0)
-                .weak(),
-            );
-            ui.add_space(4.0);
+            ui.add_space(6.0);
             ui.add(
                 egui::ProgressBar::new((self.active_step + 1) as f32 / 4.0)
-                    .desired_height(6.0)
-                    .fill(egui::Color32::from_rgb(18, 121, 132)),
+                    .desired_height(7.0)
+                    .fill(palette.accent),
             );
-            ui.separator();
-            egui::ScrollArea::vertical()
-                .max_height(560.0)
-                .show(ui, |ui| self.draw_active_step(ui, is_building));
-            if let Some((false, message)) = &self.status {
-                ui.colored_label(egui::Color32::from_rgb(180, 45, 45), message);
-            }
-            ui.separator();
+        });
+        ui.add_space(17.0);
 
+        // Existing controls are rendered directly; no extra popup or
+        // duplicated form state is introduced by this presentation change.
+        self.draw_active_step(ui, is_building);
+        if let Some((false, message)) = &self.status {
+            ui.add_space(12.0);
+            ui.colored_label(egui::Color32::from_rgb(240, 124, 109), message);
+        }
+        ui.add_space(18.0);
+
+        let mut previous_requested = false;
+        let mut next_requested = false;
+        let mut close_requested = false;
+        let mut build_setup_requested = false;
+        studio_card(ui, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("Kapat").clicked() {
+                if ui.button("← Genel bakış").clicked() {
                     close_requested = true;
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if self.active_step < 3 && ui.button("Sonraki bölüm").clicked() {
-                        next_requested = true;
-                    } else if self.active_step == 3 {
-                        if self.project.installer_kind == InstallerKind::Offline {
-                            if ui
-                                .add_enabled(
-                                    !is_building,
-                                    egui::Button::new("Kurulum EXE'sini oluştur")
-                                        .fill(egui::Color32::from_rgb(18, 121, 132)),
-                                )
-                                .clicked()
-                            {
-                                build_setup_requested = true;
-                            }
-                        } else if ui.button("Tamam").clicked() {
-                            close_requested = true;
+                    if self.active_step < 3 {
+                        if ui
+                            .add_enabled(!is_building, egui::Button::new("Sonraki bölüm →").fill(palette.accent))
+                            .clicked()
+                        {
+                            next_requested = true;
                         }
+                    } else if self.project.installer_kind == InstallerKind::Offline {
+                        if ui
+                            .add_enabled(
+                                !is_building,
+                                egui::Button::new("Kurulum EXE'sini oluştur")
+                                    .fill(palette.accent),
+                            )
+                            .clicked()
+                        {
+                            build_setup_requested = true;
+                        }
+                    } else if ui.button("Tamam").clicked() {
+                        close_requested = true;
                     }
-                    if self.active_step > 0 && ui.button("Önceki bölüm").clicked() {
+                    if self.active_step > 0
+                        && ui.button("← Önceki bölüm").clicked()
+                    {
                         previous_requested = true;
                     }
                 });
             });
         });
+        ui.add_space(12.0);
 
         if build_setup_requested {
             self.start_standard_build();
         } else if close_requested {
             self.dialog_open = false;
         } else if previous_requested {
-            self.active_step = self.active_step.saturating_sub(1);
-            self.status = None;
+            self.open_editor(self.active_step.saturating_sub(1));
         } else if next_requested {
             self.advance_step();
+        }
+    }
+
+    /// @dev-id BRK-STUDIO-SECTION-INSPECTOR-001
+    /// @purpose Give identity, files and distribution sections a contextual
+    /// side panel and a safe setup preview, without filesystem side effects.
+    fn draw_section_inspector(&mut self, ui: &mut egui::Ui) {
+        let palette = studio_palette(ui.visuals().dark_mode);
+        ui.add_space(12.0);
+        ui.label(egui::RichText::new("Proje paneli").size(22.0).strong());
+        ui.label(
+            egui::RichText::new("Seçili bölümün özeti ve canlı kurulum görünümü")
+                .size(13.0)
+                .weak(),
+        );
+        ui.add_space(14.0);
+        studio_card(ui, |ui| {
+            ui.colored_label(
+                palette.accent,
+                egui::RichText::new("AKTİF PROJE").size(12.0).strong(),
+            );
+            ui.add_space(5.0);
+            ui.label(
+                egui::RichText::new(&self.project.product_name)
+                    .size(19.0)
+                    .strong(),
+            );
+            ui.label(format!("v{}  •  {}", self.project.version, self.project.channel));
+            ui.separator();
+            match self.active_step {
+                0 => {
+                    ui.strong("Uygulama kimliği");
+                    ui.add(egui::Label::new(&self.project.package_id).wrap());
+                    ui.add_space(8.0);
+                    ui.small("Bu bilgiler paket manifestinde ve kurulum ekranında kullanılır.");
+                }
+                1 => {
+                    ui.strong("Kaynak dosyaları");
+                    if self.project.source_directory.trim().is_empty() {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(240, 179, 95),
+                            "Henüz kaynak klasörü seçilmedi.",
+                        );
+                    } else {
+                        ui.add(egui::Label::new(&self.project.source_directory).wrap());
+                    }
+                    ui.add_space(8.0);
+                    ui.label(format!(
+                        "Antivirüs kontrolü: {}",
+                        if self.project.av_scan.enabled { "Etkin" } else { "Kapalı" }
+                    ));
+                    ui.small("Paket bütünlüğü kontrolleri antivirüs ayarından bağımsızdır.");
+                }
+                _ => {
+                    ui.strong(self.project.installer_kind.release_title());
+                    ui.add(egui::Label::new(&self.project.output_directory).wrap());
+                    ui.add_space(8.0);
+                    ui.small(
+                        "Paket derlemesi ve imzalı yayın güvenliği ayrı aşamalardır.",
+                    );
+                }
+            }
+        });
+        ui.add_space(14.0);
+
+        let mut open_designer = false;
+        studio_card(ui, |ui| {
+            ui.label(egui::RichText::new("Kurulum tasarımına geç").size(17.0).strong());
+            ui.label("Son kullanıcının göreceği sayfaları ve EULA metnini düzenleyin.");
+            ui.add_space(8.0);
+            if ui
+                .add_sized(
+                    [ui.available_width(), 40.0],
+                    egui::Button::new("03  Kurulum tasarımını aç")
+                        .fill(palette.accent),
+                )
+                .clicked()
+            {
+                open_designer = true;
+            }
+        });
+        ui.add_space(17.0);
+        self.draw_preview(ui);
+        if open_designer {
+            self.open_editor(2);
         }
     }
 
@@ -2458,8 +2592,9 @@ fn navigation_item(ui: &mut egui::Ui, selected: bool, label: &str) -> egui::Resp
 
 fn studio_card(ui: &mut egui::Ui, contents: impl FnOnce(&mut egui::Ui)) {
     let palette = studio_palette(ui.visuals().dark_mode);
-    egui::Frame::group(ui.style())
+    egui::Frame::new()
         .inner_margin(egui::Margin::symmetric(18, 16))
+        .corner_radius(egui::CornerRadius::same(10))
         .fill(palette.surface)
         .stroke(egui::Stroke::new(1.0, palette.border))
         .show(ui, contents);
