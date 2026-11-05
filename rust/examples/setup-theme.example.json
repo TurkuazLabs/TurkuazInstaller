@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "preset": "ocean",
+  "brandName": "Example Product",
+  "subtitle": "Secure setup for Example Product",
+  "accentColor": "#2457A7",
+  "lightBackgroundColor": "#F1F5FC",
+  "lightSurfaceColor": "#FFFFFF",
+  "lightTextColor": "#1A2940",
+  "darkBackgroundColor": "#101827",
+  "darkSurfaceColor": "#1C2A40",
+  "darkTextColor": "#EAF0FA"
+}

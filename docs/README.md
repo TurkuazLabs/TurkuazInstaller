@@ -1,57 +1,70 @@
 <!--
 Dosya Yolu: REPO_ROOT/docs/README.md
-Amac: Main dalindaki legacy .NET belgelerini yeni Rust kaynaklarindan net ayirmak
+Amac: Aktif Community Rust gelistirmesine ait belgeler ve tarihsel kaynaklar icin dizin
 Modul - Markdown
-Version: 1.0.1
-Aciklama: Mevcut WinUI/Velopack belgelerine navigasyon ve Rust dali uyarisi
+Version: 1.1.0
+Aciklama: Studio, EULA, CLI, QA, release sinirlari ve tarihsel kaynaklar
 Bagimli Oldugu Katman: Documentation
 -->
 
-# Main dokumantasyon dizini (.NET / WinUI)
+# TurkuazInstaller Community belge dizini
 
-Bu klasordeki mevcut belgeler `main` dalinin .NET/WinUI/
-NativeAOT/Velopack uygulamasina aittir. **Yeni Rust uygulamasinin
-kullanici/kurulum talimatlari degildir.** Belgelerin v1.x veya
-tamamlandi ifadeleri Rust runtime'a aktarilmis ozellik sayilmaz.
+Aktif gelistirme Rust workspace (`rust/`) altindadir. Bu belge,
+hangi kaynagin gercek uygulamaya ait oldugunu ve hangi testin neyi
+kanitladigini ayirir. Onceki .NET/WinUI3/Velopack kaynak kodu Git
+gecmisindedir; Rust runtime sozlesmesi olarak kabul edilmez.
 
-Rust gelistirme kaynaklari icin
-[ayri Rust belge dizini](https://github.com/TurkuazLabs/TurkuazInstaller/blob/rewrite/rust-community/docs/README.md)
-kullanilmalidir. Rust PR'i kapatilmistir; kaynak dali korunur ve
-`main` ile henuz birlestirilmemistir.
+## Kurulum ve gelistirme
 
-## Main kaynak rehberleri
-
-| Konu | Main belgesi |
+| Konu | Belge |
 | --- | --- |
-| Uygulama mimarisi | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| CLI / otomasyon | [CLI.md](CLI.md) |
-| Son kullanici arayuzu | [USER_GUIDE.md](USER_GUIDE.md) |
-| WinUI masaustu | [WINUI_DESKTOP.md](WINUI_DESKTOP.md) |
-| Velopack test kapsami | [VELOPACK_E2E.md](VELOPACK_E2E.md) |
-| Proje entegrasyonu | [PROJECT_INTEGRATION.md](PROJECT_INTEGRATION.md) |
-| Manifest guven modeli | [MANIFEST_TRUST.md](MANIFEST_TRUST.md) |
-| Windows prerequisite | [PREREQUISITES.md](PREREQUISITES.md) |
-| Windows entegrasyonu | [WINDOWS_INTEGRATION.md](WINDOWS_INTEGRATION.md) |
-| Version/update politikasi | [VERSION_POLICY.md](VERSION_POLICY.md) |
-| Guvenlik | [SECURITY_MODEL.md](SECURITY_MODEL.md) |
-| Release imzalama | [RELEASE_SIGNING.md](RELEASE_SIGNING.md) |
-| Yayin oncesi kontroller | [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) |
-| Onceki gelistirme plani | [ROADMAP.md](ROADMAP.md) |
+| Proje ozeti ve hizli kurulum | [Kok README](../README.md) |
+| Rust crate'leri, bagimlilik ve gelistirme | [Rust README](../rust/README.md) |
+| Setup Studio, yonetilebilir kurulum sayfalari ve EULA | [Setup Studio](../rust/SETUP_BUILDER.md) |
+| Rust CLI komutlari | [CLI](../rust/CLI.md) |
+| `.tzpkg` / native EXE ve sinirlar | [Paket formati](../rust/PACKAGE_FORMAT.md) |
+| Install/update/repair/rollback/uninstall | [Install workflow](../rust/INSTALL_WORKFLOW.md) |
+| Versioned deployment ve kurtarma | [Deployment layout](../rust/DEPLOYMENT_LAYOUT.md) |
+| Publisher imzalama ve dagitim guveni | [Release signing](../rust/RELEASE_SIGNING.md) |
+| Windows GUI manuel test ve olumsuz senaryolar | [Windows smoke](../rust/SMOKE_TEST.md) |
+| Production'a gecis ve kalan kapilar | [Rust readiness](../rust/RUST_READINESS.md) |
+| Guvenlik bildirimi | [SECURITY](../SECURITY.md) |
 
-Diger eski tasarim, kural ve CI belgeleri mevcut dosya yollariyla
-korunur. Eski belgedeki ozelliklerin Rust'a aktarildigini,
-gercek production signing tamamlandigini veya bir release
-yayimlandigini varsaymayin.
+## Dogrulama kaniti
 
-## Teknik durum ayrimi
+- [GitHub Actions #41913467340](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41913467340):
+  `ed272460` revizyonunda Linux ve Windows CI **SUCCESS** (4 Kasim 2026).
+  Windows Studio GUI build, kisa yol, Rust installer ve test paketi
+  otomatik kontrolleri calisti.
+- Bu sonucun kapsaminda temiz Windows 10/11 masaustunde tam
+  **elle kullanici kabul testi**, production Authenticode imzasi,
+  gercek publisher kimligi ve ilk musteri uygulamasi pilotu bulunmaz.
+- Belge guncellemesi veya `main` merge yeni kod/test basarisi
+  sayilmaz. Yeni commit'in kendi CI calismasina bakin.
 
-- `main`: mevcut .NET cozumu, legacy belgeler ve ona ait CI.
-- `rewrite/rust-community`: Rust CLI/Studio/kurulum motoru,
-  ayri `Cargo.lock`, test ve Windows gelistirme artifact'lari.
-- Rust gelistirme CI **PASS**, production Authenticode,
-  interaktif Windows GUI acceptance ve temiz VM E2E **NOT RUN/BLOCKED**
-  olabilir; guncel durum icin Rust
-  [readiness](https://github.com/TurkuazLabs/TurkuazInstaller/blob/rewrite/rust-community/rust/RUST_READINESS.md)
-  dokumanini inceleyin.
+## Uyumluluk ve guvenlik
 
-[Main README'ye don](../README.md).
+- `../contracts/` altindaki tarihsel YAML tasarimlari
+  `legacy-design-only` durumundadir. Gercek manifest dogrulamasi
+  `../rust/crates/manifest-parser` icindedir.
+- Eski `.tzproj` projeleri lisans sayfasi kapali olarak acilir.
+  EULA aciksa Turkce ve English metinler yayinci tarafindan girilir.
+  Metin bosken EXE uretilmez; onay kutusu isaretlenmeden kurulum
+  sonraki asamaya gecemez.
+- Imzasiz yerel EXE SHA-256 butunluk denetimi saglar,
+  publisher authentication saglamaz.
+- Test ZIP/artifact'lari ve production Release ayri tutulur. Imzalama
+  anahtari, parola veya gercek musteri verisi issue/CI artifact'ina
+  eklenmemelidir.
+
+## Onceki .NET uygulamasi
+
+Rust onceki .NET/WinUI3 uygulamasinin ustune eklenen bir runtime degil,
+ayri bir uygulama mimarisidir. Tarihsel `main` kaynaklarina ve
+belgelerine Git gecmisinden erisilebilir:
+
+[Eski Community .NET kaynak durumu (1048931b)](https://github.com/TurkuazLabs/TurkuazInstaller/tree/1048931bf7498ab4d4440414c4463e6ee5e7421e)
+
+Hangi dalda olursa olsun kodu production olarak dagitmadan once
+[Windows manuel kabul rehberini](../rust/SMOKE_TEST.md) ve
+[release kapilarini](../rust/RUST_READINESS.md) dogrulayin.

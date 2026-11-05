@@ -1,0 +1,21 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/operation-lock/Cargo.toml
+# Amac: Package bazli cross-process installer operation lockunu tanimlamak
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Advisory OS file lock ile ayni paket icin eszamanli install/update islemlerini engeller
+# Bagimli Oldugu Katman: Tool | Service
+
+[package]
+name = "turkuaz-installer-operation-lock"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+fs2 = "0.4"
+turkuaz-installer-domain = { path = "../domain" }
+
+[lib]
+name = "turkuaz_installer_operation_lock"
+path = "src/lib.rs"

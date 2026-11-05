@@ -1,9 +1,14 @@
 # 📄 Dosya Yolu: /contracts/version-policy.yml
 # 📌 Amac: Package/channel version skip ve maximum-version pinning invariantlarini contract-first tanimlar
 # 📌 Modul - YAML
-# Version: 1.0.0
+# Version: 1.0.1
 # Aciklama: Latest signed candidate release'i kabul/engelleme, mutation guard ve no-downgrade kurallarini sabitler
 # Bagimli Oldugu Katman: Service | Repo | Tool | Config
+
+# Rust-Runtime-Status: legacy-design-only (NOT loaded/executed by rewrite/rust-community).
+# Operational Rust contract source: rust/crates/manifest-parser and rust/crates/domain.
+# Historic compatibility/roadmap fields here are NOT implemented feature guarantees.
+# See rust/RUST_READINESS.md before integrating a real application.
 
 schema_version: 1
 
@@ -54,7 +59,7 @@ discovery:
 mutation:
   enforce_in_shared_workflow: true
   consumers:
-    - winui
+    - setup_gui
     - cli
     - reboot_resume
   block_before:
@@ -66,7 +71,7 @@ mutation:
 
 security:
   bypass_policy_from_cli: deny
-  bypass_policy_from_winui: deny
+  bypass_policy_from_setup_gui: deny
   bypass_policy_from_resume: deny
   auto_downgrade: deny
   fetch_unverified_historic_release: deny

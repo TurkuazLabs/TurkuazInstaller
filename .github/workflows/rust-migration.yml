@@ -1,0 +1,248 @@
+# Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
+# Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
+# Modul - GitHub Actions YAML
+# Version: 0.2.31
+# Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
+# Bagimli Oldugu Katman: Tool | Repo
+
+name: Rust Migration CI
+
+on:
+  push:
+    branches:
+      - main
+      - rewrite/rust-community
+    paths:
+      - "rust/**"
+      - ".github/workflows/rust-migration.yml"
+      - "README.md"
+      - "docs/**"
+      - "SECURITY.md"
+      - "AGENTS.md"
+      - "contracts/**"
+      - "examples/**"
+      - "packaging/**"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "rust/**"
+      - ".github/workflows/rust-migration.yml"
+      - "packaging/**"
+      - "README.md"
+      - "docs/**"
+      - "SECURITY.md"
+      - "AGENTS.md"
+      - "contracts/**"
+      - "examples/**"
+
+concurrency:
+  group: rust-migration-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust-workspace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Report Rust toolchain
+        run: rustc --version && cargo --version
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path rust/Cargo.toml --all -- --check
+
+      - name: Compile workspace
+        run: cargo check --locked --manifest-path rust/Cargo.toml --workspace --all-targets
+
+      - name: Run Clippy
+        run: cargo clippy --locked --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        run: cargo test --locked --manifest-path rust/Cargo.toml --workspace --all-targets
+
+  rust-windows:
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile Windows workspace
+        run: cargo check --locked --manifest-path rust/Cargo.toml --workspace --all-targets
+
+      - name: Install NSIS
+        run: choco install nsis --yes --no-progress
+
+      - name: Validate NSIS backup script
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP "turkuaz-nsis-validation"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Set-Content -LiteralPath (Join-Path $stage "TurkuazSetup.exe") -Value "stub" -Encoding ascii
+          Set-Content -LiteralPath (Join-Path $stage "manifest-trust.yaml") -Value "validation: true" -Encoding ascii
+          $outputPath = Join-Path $stage "TurkuazInstallerBackup.exe"
+          $scriptPath = Join-Path $env:GITHUB_WORKSPACE "packaging/TurkuazInstallerBackup.nsi"
+          $makensis = Join-Path ${env:ProgramFiles(x86)} "NSIS/makensis.exe"
+          & $makensis "/DPACKAGE_ID=validation.example" "/DPRIMARY_SETUP_PATH=$(Join-Path $stage "TurkuazSetup.exe")" "/DTRUST_STORE_PATH=$(Join-Path $stage "manifest-trust.yaml")" "/DOUTPUT_PATH=$outputPath" $scriptPath
+          if ($LASTEXITCODE -ne 0) { throw "NSIS backup script compilation failed." }
+          if (!(Test-Path -LiteralPath $outputPath -PathType Leaf)) { throw "NSIS did not produce the backup executable." }
+
+      - name: Resolve CLI version
+        shell: pwsh
+        run: |
+          $metadata = cargo metadata --manifest-path rust/Cargo.toml --no-deps --format-version 1 | ConvertFrom-Json
+          $package = $metadata.packages | Where-Object { $_.name -eq "turkuaz-installer-cli" } | Select-Object -First 1
+          if (!$package) { throw "Could not resolve the installer CLI package version." }
+          "RUST_CLI_VERSION=$($package.version)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build development CLI
+        run: cargo build --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer
+
+      - name: Stamp development CLI artifact
+        shell: pwsh
+        run: Copy-Item -LiteralPath rust/target/release/turkuaz-installer.exe -Destination "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe"
+
+      - name: Upload development CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-installer-cli-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: rust/target/release/turkuaz-installer-v${{ env.RUST_CLI_VERSION }}-windows-x64.exe
+          if-no-files-found: error
+          retention-days: 7
+
+
+      - name: Build GUI setup stub
+        run: cargo build --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui
+
+      - name: Test signed HTTPS installer wizard source selection
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-gui web_installer_tests
+
+      - name: Build and inspect preconfigured WebSetup EXE
+        shell: pwsh
+        run: |
+          $cli = "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe"
+          $gui = "rust/target/release/turkuaz-installer.exe"
+          $output = Join-Path $env:RUNNER_TEMP "TurkuazWebSetup-test.exe"
+          & $cli build-web-setup --stub $gui --package-id example.product --manifest-url https://updates.example.test/stable.yaml --signature-url https://updates.example.test/stable.yaml.p7s --trust-store rust/examples/manifest-trust.example.yaml --target (Join-Path $env:RUNNER_TEMP "web-app") --output $output
+          if ($LASTEXITCODE -ne 0) { throw "WebSetup build failed." }
+          & $cli web-setup-info --file $output
+          if ($LASTEXITCODE -ne 0) { throw "WebSetup read-back failed." }
+          $file = [System.IO.File]::ReadAllBytes($output)
+          $file[$file.Length - 49] = $file[$file.Length - 49] -bxor 0x01
+          [System.IO.File]::WriteAllBytes($output, $file)
+          & $cli web-setup-info --file $output
+          if ($LASTEXITCODE -eq 0) { throw "Tampered WebSetup was accepted." }
+          Remove-Item -LiteralPath $output -Force
+          & $cli build-web-setup --stub $gui --package-id example.product --manifest-url https://updates.example.test/stable.yaml --signature-url https://updates.example.test/stable.yaml.p7s --trust-store rust/examples/manifest-trust.example.yaml --target (Join-Path $env:RUNNER_TEMP "web-app") --output $output
+          if ($LASTEXITCODE -ne 0) { throw "Clean WebSetup rebuild failed." }
+
+      - name: Upload unsigned WebSetup demonstration
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-web-setup-test-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: ${{ runner.temp }}/TurkuazWebSetup-test.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Stamp GUI setup stub artifact
+        shell: pwsh
+        run: Copy-Item -LiteralPath rust/target/release/turkuaz-installer.exe -Destination "rust/target/release/turkuaz-setup-gui-stub-v$env:RUST_CLI_VERSION-windows-x64.exe"
+
+      - name: Upload GUI setup stub artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-setup-gui-stub-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: rust/target/release/turkuaz-setup-gui-stub-v${{ env.RUST_CLI_VERSION }}-windows-x64.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build setup authoring GUI
+        run: cargo build --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui
+
+      # Native ShellLink COM contract: LNK created, foreign LNK preserved.
+      - name: Test Windows per-user shortcut adapter
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_shortcuts::tests
+
+      - name: Test UAC argument escaping without requesting elevation
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_elevation::tests
+
+      - name: Test setup wizard language switching
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui wizard_language::tests
+
+      - name: Test Windows installed-app registry ownership
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_local_registration::tests
+
+      - name: Test current-user and all-users scope guard
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_install_scope::tests
+
+      - name: Test multi-step unsigned local setup wizard navigation
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui unsigned_local_gui::tests
+
+      - name: Test setup authoring GUI theme safety
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_typography_is_available_for_both_appearances
+
+      - name: Test default Studio project output root
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui new_project_uses_os_data_root_instead_of_process_cwd
+
+      - name: Test IDE welcome and saved project mode compatibility
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui saved_project_kind_preserves_legacy_offline_and_web_projects
+
+      - name: Test modal wizard opening for chosen installer type
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui welcome_selection_opens_mode_specific_modal_without_replacing_old_project_silently
+
+      - name: Test GitHub Releases and existing HTTPS source migration
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui web_provider_preserves_legacy_https_projects_and_roundtrips_github_settings
+
+      - name: Test web source URL validation
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui web_provider_rejects_secret_links_invalid_segments_and_ambiguous_release_assets
+
+      - name: Test signed source URLs without network requests
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui check_release_source_rejects_unsafe_urls_without_network_io
+
+      - name: Test Studio source check request and trust policy selection
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui source_check_uses_selected_release_and_requires_trust_file
+
+      - name: Test native Rust standalone setup without invoking NSIS
+        shell: pwsh
+        run: |
+          pwsh -NoProfile -File rust/scripts/windows-native-setup-smoke.ps1 `
+            -CliPath "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe" `
+            -StudioStubPath "rust/target/release/turkuaz-installer.exe"
+
+      - name: Stamp setup authoring GUI artifact
+        shell: pwsh
+        run: Copy-Item -LiteralPath rust/target/release/turkuaz-installer.exe -Destination "rust/target/release/turkuaz-setup-builder-v$env:RUST_CLI_VERSION-windows-x64.exe"
+
+      - name: Upload setup authoring GUI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-setup-builder-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: rust/target/release/turkuaz-setup-builder-v${{ env.RUST_CLI_VERSION }}-windows-x64.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Run signed offline Windows lifecycle smoke
+        timeout-minutes: 15
+        shell: pwsh
+        run: |
+          $smokeArguments = @{
+            InstallerPath = "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe"
+            GuiStubPath = "rust/target/release/turkuaz-setup-gui-stub-v$env:RUST_CLI_VERSION-windows-x64.exe"
+            MakensisPath = (Join-Path ([Environment]::GetEnvironmentVariable("ProgramFiles(x86)")) "NSIS/makensis.exe")
+            RetainDistributionPath = (Join-Path $env:RUNNER_TEMP "turkuaz-example-test-setup")
+          }
+          & "rust/scripts/windows-signed-bundle-smoke.ps1" @smokeArguments
+
+      - name: Upload test-only example setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-example-test-setup-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: ${{ runner.temp }}/turkuaz-example-test-setup/**
+          if-no-files-found: error
+          retention-days: 7

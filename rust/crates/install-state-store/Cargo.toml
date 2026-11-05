@@ -1,0 +1,24 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/install-state-store/Cargo.toml
+# Amac: Kurulu package state verisini package bazli JSON dosyalarinda atomik saklamak
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Package get/list/save/delete islemlerini typed domain state uzerinden yurutur
+# Bagimli Oldugu Katman: Repo
+
+[package]
+name = "turkuaz-installer-install-state-store"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio.workspace = true
+uuid = { version = "1", features = ["v4"] }
+turkuaz-installer-domain = { path = "../domain" }
+
+[lib]
+name = "turkuaz_installer_install_state_store"
+path = "src/lib.rs"

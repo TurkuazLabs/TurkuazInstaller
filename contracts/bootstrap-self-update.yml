@@ -5,6 +5,11 @@
 # Aciklama: Automatic self-update hatalarinda current launch availability'sini korurken explicit trust zincirini fail-closed tutar
 # Bagimli Oldugu Katman: Service | Tool | Config
 
+# Rust-Runtime-Status: legacy-design-only (NOT loaded/executed by rewrite/rust-community).
+# Operational Rust contract source: rust/crates/manifest-parser and rust/crates/domain.
+# Historic compatibility/roadmap fields here are NOT implemented feature guarantees.
+# See rust/RUST_READINESS.md before integrating a real application.
+
 schema_version: 1
 
 discovery:

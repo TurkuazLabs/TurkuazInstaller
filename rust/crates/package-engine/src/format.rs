@@ -1,0 +1,48 @@
+// Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/format.rs
+// Amac: Turkuaz .tzpkg arşivinin versioned metadata sozlesmesini tanimlamak
+// Modul - Rust Package Format
+// Version: 0.3.0
+// Aciklama: Paket kimligi ve surumunu payload arşivinden bagimsiz olarak acikca tasir
+// Bagimli Oldugu Katman: Model | Service | Tool
+
+use serde::{Deserialize, Serialize};
+use turkuaz_installer_domain::{package_id::PackageId, semantic_version::SemanticVersion};
+
+pub(crate) const PACKAGE_METADATA_ENTRY: &str = "turkuaz-package.json";
+pub(crate) const PACKAGE_PAYLOAD_ROOT: &str = "payload/";
+pub(crate) const MAXIMUM_PACKAGE_METADATA_BYTES: u64 = 64 * 1024;
+pub(crate) const PACKAGE_FORMAT_VERSION: u32 = 1;
+pub(crate) const PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT: u32 = 2;
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct PackageArchiveMetadata {
+    pub(crate) format_version: u32,
+    pub(crate) package_id: String,
+    pub(crate) version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) entry_point: Option<String>,
+}
+
+impl PackageArchiveMetadata {
+    pub(crate) fn new(package_id: &PackageId, version: &SemanticVersion) -> Self {
+        Self::new_with_entry_point(package_id, version, None)
+    }
+
+    pub(crate) fn new_with_entry_point(
+        package_id: &PackageId,
+        version: &SemanticVersion,
+        entry_point: Option<String>,
+    ) -> Self {
+        Self {
+            format_version: if entry_point.is_some() {
+                PACKAGE_FORMAT_VERSION_WITH_ENTRY_POINT
+            } else {
+                PACKAGE_FORMAT_VERSION
+            },
+            package_id: package_id.to_string(),
+            version: version.to_string(),
+            entry_point,
+        }
+    }
+}

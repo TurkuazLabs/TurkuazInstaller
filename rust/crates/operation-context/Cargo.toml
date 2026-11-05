@@ -1,0 +1,23 @@
+# Dosya Yolu: REPO_ROOT/rust/crates/operation-context/Cargo.toml
+# Amac: Installer operation journal checkpoint yasam dongusunu koordine etmek
+# Modul - Cargo Package
+# Version: 0.1.0
+# Aciklama: Start, reboot resume, phase transition, completion, cancellation ve failure davranisini tasir
+# Bagimli Oldugu Katman: Service
+
+[package]
+name = "turkuaz-installer-operation-context"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[dependencies]
+time = { version = "0.3", features = ["serde", "serde-well-known"] }
+turkuaz-installer-domain = { path = "../domain" }
+turkuaz-installer-operation-journal = { path = "../operation-journal" }
+uuid = { version = "1", features = ["v4"] }
+
+[lib]
+name = "turkuaz_installer_operation_context"
+path = "src/lib.rs"
