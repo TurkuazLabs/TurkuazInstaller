@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.0
-# Aciklama: PR degisikliklerinde Rust workspace, tek setup lifecycle ve test ornek dagitimini dogrular
+# Version: 0.3.1
+# Aciklama: PR degisikliklerinde Rust workspace, PE uygulama manifesti, tek setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -247,6 +247,30 @@ jobs:
             RetainDistributionPath = (Join-Path $env:RUNNER_TEMP "turkuaz-example-test-setup")
           }
           & "rust/scripts/windows-signed-bundle-smoke.ps1" @smokeArguments
+
+      - name: Verify embedded Windows application manifests
+        shell: pwsh
+        run: |
+          $windowsKit = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin\*\x64\mt.exe"
+          $mt = Get-ChildItem -Path $windowsKit -ErrorAction Stop | Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+          $executables = @(
+            "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe",
+            "rust/target/release/turkuaz-setup-gui-stub-v$env:RUST_CLI_VERSION-windows-x64.exe",
+            "rust/target/release/turkuaz-setup-builder-v$env:RUST_CLI_VERSION-windows-x64.exe",
+            (Join-Path $env:RUNNER_TEMP "turkuaz-example-test-setup/TurkuazSetup.exe")
+          )
+          foreach ($executable in $executables) {
+            if (!(Test-Path -LiteralPath $executable -PathType Leaf)) { throw "Expected Windows executable is missing: $executable" }
+            $manifestOutput = Join-Path $env:RUNNER_TEMP (([System.IO.Path]::GetFileName($executable)) + ".manifest")
+            & $mt -nologo "-inputresource:$((Resolve-Path -LiteralPath $executable).Path);#1" "-out:$manifestOutput"
+            if ($LASTEXITCODE -ne 0) { throw "Could not extract embedded manifest from $executable" }
+            [xml]$manifest = Get-Content -LiteralPath $manifestOutput -Raw
+            $executionLevel = $manifest.SelectSingleNode("//*[local-name()='requestedExecutionLevel']")
+            if (!$executionLevel -or $executionLevel.GetAttribute("level") -ne "asInvoker" -or $executionLevel.GetAttribute("uiAccess") -ne "false") {
+              throw "Executable must declare requestedExecutionLevel=asInvoker and uiAccess=false: $executable"
+            }
+            Write-Host "Verified explicit asInvoker manifest: $executable"
+          }
 
       - name: Upload test-only example setup
         uses: actions/upload-artifact@v4

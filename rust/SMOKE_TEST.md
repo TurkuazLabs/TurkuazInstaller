@@ -2,12 +2,21 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.1
-Aciklama: Derleme kontrolunden gercek Windows kurulum kabulune gecis rehberi
+Version: 0.3.2
+Aciklama: Derleme, embedded UAC application manifesti ve gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
 # Windows smoke test ve kabul akisi
+
+Windows CLI, GUI stub, Setup Studio ve self-extracting setup EXE'leri
+embedded application manifest icinde `requestedExecutionLevel=asInvoker`
+ve `uiAccess=false` tasir. UAC gerektiren all-users islemleri uygulama
+manifestinin butun sureci administrator olarak baslatmasiyla degil,
+ayri ve acik kullanici onayli elevation akisi ile yurutulur. CI,
+Windows SDK `mt.exe` ile bu manifesti build artifact'larindan cikarip
+degerleri dogrular. Bu manifest SmartScreen reputation/signature
+uyarisini gidermez; signer guveni ve dosya itibari ayri yayin kapilaridir.
 
 Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde denemek icindir. GUI setup stub artifact'i yalniz arayuz kabugudur; release bundle eklenmeden kurulum yapmaz. Gercek imzali release paketi ve yayinlayici tarafindan saglanan guven politikasi olmadan lifecycle kabul testi yapilamaz.
 

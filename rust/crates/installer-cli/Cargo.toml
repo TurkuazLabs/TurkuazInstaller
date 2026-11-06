@@ -11,6 +11,7 @@ version = "0.2.20"
 edition = "2024"
 rust-version = "1.85"
 publish = false
+build = "build.rs"
 
 [features]
 default = []
