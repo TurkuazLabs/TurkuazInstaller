@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/manifest-parser/src/lib.rs
 // Amac: Signed YAML manifest alanlarini dogrulayip domain release modeline cevirmek
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Stable v1 alanlari, domain invariants ve unsupported policy degerlerini fail-closed uygular
 // Bagimli Oldugu Katman: Application
 
