@@ -1005,125 +1005,125 @@ impl eframe::App for LocalInstaller {
         egui::TopBottomPanel::bottom("local_setup_footer")
             .exact_height(LOCAL_WIZARD_FOOTER_HEIGHT)
             .show(ctx, |ui| {
-            ui.separator();
-            ui.add_space(10.0);
-            // In right-to-left layout the primary action is anchored to
-            // the bottom-right edge; back remains to its left.
-            show_local_wizard_action_row(ui, |ui| {
-                if self.busy.is_some() {
-                    ui.label(
-                        self.language
-                            .text("Kurulum devam ediyor…", "Installation in progress…"),
-                    );
-                    return;
-                }
-                let primary = egui::Color32::from_rgb(6, 123, 134);
-                match self.step {
-                    WizardStep::Welcome
-                    | WizardStep::License
-                    | WizardStep::Destination
-                    | WizardStep::Shortcuts => {
-                        if ui
-                            .add_enabled(
-                                self.step != WizardStep::License || self.license_accepted,
-                                egui::Button::new(
-                                    egui::RichText::new(language.text("İleri  ›", "Next  ›"))
-                                        .color(egui::Color32::WHITE),
+                ui.separator();
+                ui.add_space(10.0);
+                // In right-to-left layout the primary action is anchored to
+                // the bottom-right edge; back remains to its left.
+                show_local_wizard_action_row(ui, |ui| {
+                    if self.busy.is_some() {
+                        ui.label(
+                            self.language
+                                .text("Kurulum devam ediyor…", "Installation in progress…"),
+                        );
+                        return;
+                    }
+                    let primary = egui::Color32::from_rgb(6, 123, 134);
+                    match self.step {
+                        WizardStep::Welcome
+                        | WizardStep::License
+                        | WizardStep::Destination
+                        | WizardStep::Shortcuts => {
+                            if ui
+                                .add_enabled(
+                                    self.step != WizardStep::License || self.license_accepted,
+                                    egui::Button::new(
+                                        egui::RichText::new(language.text("İleri  ›", "Next  ›"))
+                                            .color(egui::Color32::WHITE),
+                                    )
+                                    .fill(primary)
+                                    .min_size(egui::vec2(110.0, 38.0)),
                                 )
-                                .fill(primary)
-                                .min_size(egui::vec2(110.0, 38.0)),
-                            )
-                            .clicked()
-                        {
-                            self.advance();
+                                .clicked()
+                            {
+                                self.advance();
+                            }
+                            if ui
+                                .add_sized(
+                                    [95.0, 38.0],
+                                    egui::Button::new(language.text("İptal", "Cancel")),
+                                )
+                                .clicked()
+                            {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            if self.previous_step().is_some()
+                                && ui
+                                    .add_sized(
+                                        [95.0, 38.0],
+                                        egui::Button::new(language.text("‹  Geri", "‹  Back")),
+                                    )
+                                    .clicked()
+                            {
+                                self.back();
+                            }
                         }
-                        if ui
-                            .add_sized(
-                                [95.0, 38.0],
-                                egui::Button::new(language.text("İptal", "Cancel")),
-                            )
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if self.previous_step().is_some()
-                            && ui
+                        WizardStep::Review => {
+                            if ui
+                                .add_sized(
+                                    [175.0, 38.0],
+                                    egui::Button::new(
+                                        egui::RichText::new(
+                                            language.text("Kurulumu başlat", "Install"),
+                                        )
+                                        .color(egui::Color32::WHITE),
+                                    )
+                                    .fill(primary),
+                                )
+                                .clicked()
+                            {
+                                if self.begin_install() {
+                                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                                }
+                            }
+                            if ui
+                                .add_sized(
+                                    [95.0, 38.0],
+                                    egui::Button::new(language.text("İptal", "Cancel")),
+                                )
+                                .clicked()
+                            {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            if ui
                                 .add_sized(
                                     [95.0, 38.0],
                                     egui::Button::new(language.text("‹  Geri", "‹  Back")),
                                 )
                                 .clicked()
-                        {
-                            self.back();
-                        }
-                    }
-                    WizardStep::Review => {
-                        if ui
-                            .add_sized(
-                                [175.0, 38.0],
-                                egui::Button::new(
-                                    egui::RichText::new(
-                                        language.text("Kurulumu başlat", "Install"),
-                                    )
-                                    .color(egui::Color32::WHITE),
-                                )
-                                .fill(primary),
-                            )
-                            .clicked()
-                        {
-                            if self.begin_install() {
-                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            {
+                                self.back();
                             }
                         }
-                        if ui
-                            .add_sized(
-                                [95.0, 38.0],
-                                egui::Button::new(language.text("İptal", "Cancel")),
-                            )
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if ui
-                            .add_sized(
-                                [95.0, 38.0],
-                                egui::Button::new(language.text("‹  Geri", "‹  Back")),
-                            )
-                            .clicked()
-                        {
-                            self.back();
-                        }
-                    }
-                    WizardStep::Installing => {}
-                    WizardStep::Finished => {
-                        if ui
-                            .add_sized(
-                                [105.0, 38.0],
-                                egui::Button::new(language.text("Kapat", "Close")),
-                            )
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if self.status.as_ref().is_some_and(Result::is_err)
-                            && ui
+                        WizardStep::Installing => {}
+                        WizardStep::Finished => {
+                            if ui
                                 .add_sized(
-                                    [165.0, 38.0],
-                                    egui::Button::new(
-                                        language.text("Seçimleri düzenle", "Change settings"),
-                                    ),
+                                    [105.0, 38.0],
+                                    egui::Button::new(language.text("Kapat", "Close")),
                                 )
                                 .clicked()
-                        {
-                            self.step = WizardStep::Destination;
-                            self.status = None;
-                            self.path_error = None;
+                            {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            if self.status.as_ref().is_some_and(Result::is_err)
+                                && ui
+                                    .add_sized(
+                                        [165.0, 38.0],
+                                        egui::Button::new(
+                                            language.text("Seçimleri düzenle", "Change settings"),
+                                        ),
+                                    )
+                                    .clicked()
+                            {
+                                self.step = WizardStep::Destination;
+                                self.status = None;
+                                self.path_error = None;
+                            }
                         }
                     }
-                }
+                });
+                ui.add_space(10.0);
             });
-            ui.add_space(10.0);
-        });
 
         // egui CentralPanel must come after all top/bottom panels.
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -1274,7 +1274,6 @@ mod tests {
             });
         }
     }
-
 
     #[test]
     fn wizard_requires_explicit_install_after_review() {
