@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/windows-app.manifest
+Amac: TurkuazInstaller Windows EXE'leri icin acik yetki ve uyumluluk politikasini tanimlamak
+Modul - Windows Application Manifest
+Version: 1.0.0
+Aciklama: Normal kullanici token'i ile calismayi ve UAC sanallastirmasini kapatmayi beyan eder
+Bagimli Oldugu Katman: Build | Windows Runtime
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity
+    version="1.0.0.0"
+    processorArchitecture="*"
+    name="TurkuazLabs.TurkuazInstaller"
+    type="win32" />
+  <description>TurkuazInstaller</description>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>
