@@ -32,5 +32,5 @@ fn main() {
     let manifest = manifest.display().to_string().replace('\\', "/");
 
     println!("cargo:rustc-link-arg-bin=turkuaz-installer=/MANIFEST:EMBED");
-    println!("cargo:rustc-link-arg-bin=turkuaz-installer=/MANIFESTINPUT:\"{manifest}\"");
+    println!("cargo:rustc-link-arg-bin=turkuaz-installer=/MANIFESTINPUT:{manifest}");
 }
