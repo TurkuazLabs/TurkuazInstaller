@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/RELEASE_SIGNING.md
 Amac: Community Rust release manifest taslagini guvenli sekilde detached CMS imzasi ile yayina hazirlamak
 Modul - Markdown
-Version: 0.1.0
+Version: 0.1.1
 Aciklama: Private key'i repodan ve istemciden ayirarak imzali manifest ve dis trust policy olusturma akisidir
 Bagimli Oldugu Katman: Release Engineering | Documentation
 -->
@@ -86,4 +86,4 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- install `
   --data-root .\installer-data
 ```
 
-The installer checks the signature before YAML parsing and checks the downloaded package's exact byte size and SHA-256 against the signed manifest. The current Rust CLI is a development tool; this workflow does not produce the Turkuaz setup or the paired NSIS backup.
+The installer checks the signature before YAML parsing and checks the downloaded package's exact byte size and SHA-256 against the signed manifest. The current Rust CLI is a development tool; this workflow does not produce a production-signed Turkuaz setup. The single Rust primary requires real publisher signing and Windows acceptance.
