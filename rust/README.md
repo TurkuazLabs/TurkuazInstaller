@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/README.md
 Amac: TurkuazInstaller Rust gecisinin kapsam ve dogrulama kapilarini aciklamak
 Modul - Markdown
-Version: 2.3.23
+Version: 2.3.24
 Aciklama: Aktif Community Rust kaynak kodu ve kabul sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
@@ -73,7 +73,7 @@ Ayrintilar: [SETUP_BUILDER.md](SETUP_BUILDER.md) ve
 - `manifest-verification`: Windows CryptoAPI ile detached CMS/PKCS#7 imzasini dogrulama; tek signer, sertifika gecerlilik zamani, trust policy subject eslesmesi ve sertifika SHA-256 pini kontrolu. Sertifika zinciri dogrulamasi yapilmaz; mevcut signature-only guven modelini izler.
 - `manifest-trust-store`: dis YAML trust store okumasini 1 MiB ile sinirlar, yalniz regular file kabul eder, okuma sirasinda boyut degisikligini reddeder; schema version 1, package id, tekrar eden kayit ve package signer policy denetimi yapar; olmayan dosyada policy bulunamadi sonucu.
 - `manifest-pipeline`: manifest ve imza stream'lerini 1 MiB / 256 KiB sinirinda okur, requested package trust policy'sini bulur, CMS imzasini dogrular ve yalnizca strict UTF-8 decode sonrasinda YAML parserini calistirir; sonuc typed `PackageRelease` domain modelidir.
-- `manifest-parser`: schema v1 YAML alanlarini domain invariant'lariyla eslestirir; bilinmeyen alanlari yok sayar ve taninmayan channel, install mode, shortcut location veya signature algorithm degerlerini reddeder.
+- `manifest-parser`: schema v1 YAML alanlarini domain invariant'lariyla eslestirir; bilinmeyen alanlari ve taninmayan channel, install mode, shortcut location veya signature algorithm degerlerini reddeder.
 - Community Rust CI now also tests native unsigned setup extraction, tamper detection and clean Windows file installation, separately from the signed release path. Community Rust CI format, Clippy (uyarilar hata sayilir), workspace testleri, Linux/Windows compile, surumlenmis Windows x64 CLI/GUI setup stub/Setup Studio artifact'larini dogrular; artifact'lar yedi gun saklanir. CLI surumunu `--version` veya `-V` ile, GUI surumunu pencere basliginda gosterir. Bunlar development artifact'laridir; dagitilabilir Turkuaz setup ya da production release degildir.
 
 Aktif Rust uygulamasi gelistirme/test asamasindadir; build ve CI production kabulunun yerine gecmez. CLI signed online install/update/repair/rollback, kurulu state listeleme/dogrulama/baslatma/uninstall, signed offline bundle ve self-extracting setup uretim akislarini icerir; no-argument CLI/GUI acilisi varsayilan data root journal'larini tarayip konservatif recovery dener. Ozel data root secilen paket isleminde denetlenir. Prerequisite ve Windows integration adapter'lari, production Authenticode signing/publishing ve gercek imzali paketlerle temiz Windows VM lifecycle kabul testi acik kalir. Windows CI gecici self-signed test sertifikasi ile detached CMS dogrulamasini, offline install/update/repair/rollback/launch/uninstall akisini ve Authenticode sertifikasi eklenmis self-extracting primary setup testini calistirir. Production yayinlayici sertifikasi ve temiz son kullanici VM kabul testi halen gereklidir.
@@ -116,3 +116,7 @@ gercek production kabulune kalmis islerdir. Durum/kanit
    Community install guven sinirini bozmadan bagla.
 
 Bu workspace signed production release kabulunu henuz tamamlamamistir.
+
+## Reverse-engineering siniri
+
+Release profili sembolleri binary'den kaldirir; bu yalnizca basit incelemeyi zorlastirir, reverse engineering'i veya patch'lenmis istemciyi engellemez. Community kaynak kodu acik oldugu icin obfuscation burada anlamli bir guvenlik siniri olusturmaz. Pro entitlement ve lisans kararlarinin sahibi sunucu olmalidir; istemciye gizli imza anahtari veya guvenilen tek lisans karari gomulmemelidir. Offline lisans verisi sunucu tarafinda imzalanmali ve istemci yalnizca gomulu public key ile dogrulamalidir. Hassas Pro islemleri sunucu tarafinda lisans denetiminden gecmelidir.
