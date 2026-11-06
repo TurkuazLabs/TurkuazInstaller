@@ -1,8 +1,8 @@
 //! Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/tests/cli_help.rs
 //! Amac: Kok CLI yardim ciktisinda guncel public komutlarin gorunmesini dogrulamak
 //! Modul - Rust Integration Tests
-//! Version: 0.1.0
-//! Aciklama: Rust CLI eklenen kurulum ve kaynak denetimi komutlarini --help'e dahil eder
+//! Version: 0.1.1
+//! Aciklama: Aktif Rust CLI komutlarini help ciktiya dahil eder; retired NSIS komutlarini disarida tutar
 //! Bagimli Oldugu Katman: QA | Tool
 
 use std::process::Command;
@@ -26,7 +26,6 @@ fn root_help_lists_existing_native_setup_and_release_commands() {
         "build-native-setup",
         "install-local-self",
         "uninstall-local",
-        "build-distribution-pair",
         "--version",
     ] {
         assert!(
