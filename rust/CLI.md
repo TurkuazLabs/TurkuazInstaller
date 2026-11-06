@@ -147,7 +147,7 @@ cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-pack
 
 The builder rejects unsafe paths and overwriting an existing output. Pass `--executable bin/app.exe` to embed an entry point and create format v2; omitting it creates a backward-compatible v1 package. Generate an unsigned manifest draft from the finished archive's exact size and SHA-256, then sign it separately.
 
-## Native standard setup without NSIS
+## Native Rust standard setup
 
 The Rust Studio build (`setup-authoring-gui` feature) can embed a completed
 `.tzpkg` into its own EXE and launch a separate local installer UI.
@@ -268,18 +268,28 @@ TurkuazSetup.exe install-self \
   --operation install
 ```
 
-The signer trust policy remains an explicit input to the primary setup. The `setup-gui` stub opens a Windows desktop wizard with package ID, publisher trust policy, install/data paths, and install/update/repair/rollback/uninstall selection. Uninstall hides the trust-policy field, shows the package and target paths, requires a separate confirmation checkbox, and invokes the CLI's managed-files-only uninstall command. The wizard also shows progress and supports cancellation. The trust policy defaults to the adjacent `manifest-trust.yaml` produced in the paired distribution folder; confirm that this is the publisher's real policy, never the example file. Cancellation terminates the worker process and then attempts `recover` automatically. If recovery reports an ambiguous state, follow its message for manual recovery. Passing explicit CLI arguments continues to support scripted installs. Build the primary Turkuaz setup and mandatory NSIS backup together from the same bundle and trust store. The `--stub` path must point to the `setup-gui` build above:
+The signer trust policy remains an explicit input to the only primary
+setup. The `setup-gui` stub provides a Windows wizard for
+install/update/repair/rollback/uninstall. Cancellation terminates the
+backend and conservatively recovers the journal. The public
+`manifest-trust.yaml` must be placed adjacent to the final EXE. Do
+not substitute example/test signer trust for a production policy.
+
+Build one Rust self-extracting primary from an already CMS-verified
+`.tzsetup` and the Windows `setup-gui` stub:
 
 ```sh
-cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-distribution-pair \
-  --package-id example.product \
+cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- build-self-extracting-setup \
   --stub ./rust/target/release/turkuaz-installer.exe \
   --bundle ./TurkuazSetup.tzsetup \
-  --trust-store ./manifest-trust.yaml \
-  --output-dir ./distribution
+  --output ./distribution/TurkuazSetup.exe
 ```
 
-The command requires `makensis` on `PATH` (or `--makensis PATH`). It stages both outputs and publishes the directory only after NSIS succeeds. Share `distribution/TurkuazSetup.exe`; `TurkuazInstallerBackup.exe` is the mandatory fallback and supports install, update, repair, and policy-authorized rollback. Sign both final executables with Authenticode after building. The GUI variant is compiled in Windows CI; real signed-package VM acceptance, automated production signing, and publishing remain pending.
+Only `distribution/TurkuazSetup.exe` is an installer; the external
+publisher trust policy is a sidecar. Sign the final EXE with real
+Authenticode, verify the pinned publisher certificate and detached
+CMS, and complete clean Windows 10/11 GUI acceptance before distribution.
+The Rust CI self-signed certificate is never a production trust root.
 
 ## Setup project authoring wizard (Windows)
 

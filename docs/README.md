@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/docs/README.md
 Amac: Aktif Community Rust gelistirmesine ait belgeler ve tarihsel kaynaklar icin dizin
 Modul - Markdown
-Version: 1.1.0
+Version: 1.2.0
 Aciklama: Studio, EULA, CLI, QA, release sinirlari ve tarihsel kaynaklar
 Bagimli Oldugu Katman: Documentation
 -->
@@ -11,8 +11,8 @@ Bagimli Oldugu Katman: Documentation
 
 Aktif gelistirme Rust workspace (`rust/`) altindadir. Bu belge,
 hangi kaynagin gercek uygulamaya ait oldugunu ve hangi testin neyi
-kanitladigini ayirir. Onceki .NET/WinUI3/Velopack kaynak kodu Git
-gecmisindedir; Rust runtime sozlesmesi olarak kabul edilmez.
+kanitladigini ayirir. Aktif kurulum uygulamasi, Studio ve CLI yalniz
+Rust workspace kaynaklarindan olusur.
 
 ## Kurulum ve gelistirme
 
@@ -56,14 +56,6 @@ gecmisindedir; Rust runtime sozlesmesi olarak kabul edilmez.
 - Test ZIP/artifact'lari ve production Release ayri tutulur. Imzalama
   anahtari, parola veya gercek musteri verisi issue/CI artifact'ina
   eklenmemelidir.
-
-## Onceki .NET uygulamasi
-
-Rust onceki .NET/WinUI3 uygulamasinin ustune eklenen bir runtime degil,
-ayri bir uygulama mimarisidir. Tarihsel `main` kaynaklarina ve
-belgelerine Git gecmisinden erisilebilir:
-
-[Eski Community .NET kaynak durumu (1048931b)](https://github.com/TurkuazLabs/TurkuazInstaller/tree/1048931bf7498ab4d4440414c4463e6ee5e7421e)
 
 Hangi dalda olursa olsun kodu production olarak dagitmadan once
 [Windows manuel kabul rehberini](../rust/SMOKE_TEST.md) ve

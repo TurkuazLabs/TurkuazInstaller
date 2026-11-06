@@ -15,7 +15,7 @@ Turkuaz Setup Studio, uygulama dosyalarindan Turkuaz .tzpkg paketi, setup tema a
 
 Studio karsilama ekraninda proje turleri **Tam Kurulum** ve **Cevrimici Kurulum** olarak gorunur. Teknik literaturdeki *Full Installer* ve *Web Installer* ifadeleri UI ana basligi olarak kullanilmaz. Proje secimi kaydedilen `.tzproj` dosyasinda aynen `offline` ve `web` teknik kimlikleriyle korunur; dosya bicimi veya CLI komutlari yeniden adlandirilmaz.
 
-Sihirbazda **Kurulum tasarimi** (eski Setup tasarimi), **Kurulum motoru (EXE)** (eski GUI stub), **Yayinci guven dosyasi** (eski trust store), **Imzali yayin dosyasi (YAML)** (eski signed manifest), **Yayin imza dosyasi** (eski detached signature) ve **Uygulama paketi** (eski payload paketi) adlari tercih edilir. `application.tzpkg`, `TurkuazWebSetup.exe`, `manifest-trust.yaml` gibi gercek dosya adlari ve WebSetup CLI arayuzu degismez. NSIS icin kullanici etiketi **Yedek yukleyici araci (NSIS)** olur.
+Sihirbazda **Kurulum tasarimi** (eski Setup tasarimi), **Kurulum motoru (EXE)** (eski GUI stub), **Yayinci guven dosyasi** (eski trust store), **Imzali yayin dosyasi (YAML)** (eski signed manifest), **Yayin imza dosyasi** (eski detached signature) ve **Uygulama paketi** (eski payload paketi) adlari tercih edilir. `application.tzpkg`, `TurkuazWebSetup.exe`, `manifest-trust.yaml` gibi gercek dosya adlari ve WebSetup CLI arayuzu degismez.
 
 ## Mevcut klasorle temiz kurulum (yalnizca Windows native wizard)
 
@@ -78,7 +78,7 @@ Ilk acilista iki proje sablonu yer alir: Tam Kurulum (tum dosyalari iceren offli
 - Urun bilgileri: uygulama adi, paket kimligi, SemVer surumu ve stable/beta kanali.
 - Uygulama dosyalari: kaynak klasoru ve istege bagli goreli EXE yolu.
 - Setup tasarimi: varsayilan kurulum yolu, hazir tema preset'i, marka adi, alt baslik ve istege bagli HEX vurgu rengi.
-- Cevrimdisi dagitim (Tam Kurulum): cikti klasoru, imzali manifest, detached imza, yayinci trust store'u, setup GUI stub'i ve istege bagli makensis.exe yolu.
+- Cevrimdisi dagitim (Tam Kurulum): cikti klasoru, imzali manifest, detached imza, yayinci trust store'u, setup GUI stub'i.
 - Cevrimici yayin (Cevrimici Kurulum): cikti klasoru, HTTPS manifest/imza adresleri, yayinci trust store'u ve setup GUI stub'i.
 
 Uygulama paketi ve imzali dagitim cifti ana ekrandaki eylemlerden baslatilir. Gerekli bilgiler eksikse ilgili modal editor otomatik acilir.
@@ -137,12 +137,12 @@ Windows CI, imzasiz bir WebSetup test EXE'si olusturup config'i geri okur ve byt
 
 Komut satiri ayni output'u `build-web-setup --stub GUI.exe --package-id ID --manifest-url HTTPS_URL --signature-url HTTPS_URL --trust-store trust.yaml --target DIR --theme-config setup-theme.json --output WebSetup.exe` ile uretebilir. `web-setup-info --file WebSetup.exe` config'i ozetler (trust policy'yi yazdirmaz).
 
-## Rust Standart Kurulum (NSIS gerektirmez)
+## Rust Standart Kurulum
 
 Tam Kurulum projesinin birinci adiminda `application.tzpkg` hazirlanir.
 Ikinci adim olan "2 Standart Kurulum olustur", Studio'nun Rust EXE
 motoruna paketi ekleyerek `standard/TurkuazSetup.exe` uretir.
-Bir NSIS derleyicisi veya imza sertifikasi gerektirmez.
+Yerel imzasiz kurulum ikinci bir derleyici veya imza sertifikasi gerektirmez.
 
 Bu EXE kendi baslatildiginda Rust yerel kurulum penceresini acar,
 paketin kimligini/surumunu gosterir ve uygulama dosyalarini
@@ -193,7 +193,7 @@ Kuruluyor -> Kurulum sonucu**.
   guc kesintisi veya zorla proses kapatma durumunda ayri recovery
   testleri gerekir.
 
-Ekran akisi Inno Setup ve NSIS Modern UI'nin geleneksel sihirbaz
+Ekran akisi Windows kurulum sihirbazlarinin geleneksel sayfa ve gezinme davranislarini esas alir.
 gorunumunden, WiX WixUI InstallDir ve Advanced Installer'in gercek
 konfigurasyon sayfalarindan esinlenir. Microsoft Windows arayuz
 rehberine gore gereksiz lisans/bilesen secim sayfalari sahte
@@ -202,7 +202,6 @@ ayri veri modeli ile gelistirilmelidir.
 
 Kaynaklar:
 - https://documentation.help/Inno-Setup/topic_wizardpages.htm
-- https://nsis.sourceforge.io/Docs/Modern%20UI%202/Readme.html
 - https://docs.firegiant.com/wix/tools/wixext/wixui/
 - https://www.advancedinstaller.com/user-guide/user-interface-dialogs.html
 - https://learn.microsoft.com/en-us/windows/win32/uxguide/exper-setup
@@ -308,10 +307,6 @@ Bu betik `NATIVE_RUST_SETUP_BUILD_PASS`, `NATIVE_RUST_SETUP_INSTALL_PASS`,
 `NATIVE_RUST_SETUP_OVERWRITE_REJECTED` adimlarini raporlar.
 Gercek UI tiklama/kurulum deneyimi ayri Windows kabul testidir.
 
-Eski NSIS yerel demo test betigi geriye donuk deneme icin dosya
-gecmisinde bulunabilir; standart kurulumun bagimliligi degildir.
-Gelistirmis imzali dagitimda NSIS yedek yukleyici ozelligi
-istege bagli olarak ayrica bulunabilir.
 
 ## Istege bagli antivirüs taramasi
 
@@ -387,7 +382,6 @@ hala ayrı bir güvenilir imza/trust doğrulaması gerektirir.
 - setup-theme.json: secilen preset ve varsa marka/renk ozellestirmesi.
 - project.tzproj: proje alanlarinin yeniden acilabilir kopyasi.
 - distribution/TurkuazSetup.exe: imzali release bundle iceren birincil setup.
-- distribution/TurkuazInstallerBackup.exe: ayni release bundle icin zorunlu NSIS yedegi.
-- distribution/manifest-trust.yaml: imzali manifesti dogrulayan yayin politikasi; setup ve NSIS EXE dosyalariyla birlikte tutulmalidir.
+- distribution/manifest-trust.yaml: tek Rust EXE yaninda saklanan dis yayinci guven politikasi.
 
-Manifest taslagi bir yayina guven kazandirmaz. Yerel file: URI'si yalnizca paketleme/yerel deneme icindir; uzak dagitim icin artifact HTTPS adresine yuklenmeli ve manifest bu adresle tekrar uretilmelidir. Dagitim cifti butonu, secilen yayin anahtariyla imzali manifesti dis trust policy ile dogrular, package ve setup temasiyla gecici .tzsetup bundle uretir ve bunu setup GUI stub ile birlestirir. NSIS yedegi de ayni bundle'dan olusur. Uretilen iki EXE dagitilmadan once Authenticode ile imzalanmalidir. manifest-trust.yaml genel dogrulama politikasidir ve dagitim klasorunde setup dosyalarinin yaninda kalmalidir. Signing key ve trust policy Setup Studio projesine veya .tzpkg dosyasina gomulmez; imza/trust dosyalari .tzproj icinde yalnizca dosya yolu olarak saklanir. Eski .tzproj dosyalari yeni alanlar bos birakilarak acilir. RELEASE_SIGNING.md, CLI.md ve SMOKE_TEST.md imzalama akisinin ayrintilarini aciklar.
+Manifest taslagi imzasizdir ve tek basina yayina guven vermez. Yayin manifesti ve detached CMS imzasi, dis trust policy ile kontrol edildikten sonra tek `distribution/TurkuazSetup.exe` olusturulur. Bu EXE dagitimdan once gercek Authenticode ile imzalanmalidir. Trust dosyasi projeye gizli anahtar olarak gomulmez; sadece disaridan okunan public policy'dir. Kaydedilmis eski `.tzproj` dosyalarindaki `makensisPath` alani okunabilir ancak yeni kayda yazilmaz. Gercek GUI/Windows kabulune ait kanit ayri tutulur. Ayrinti: CLI.md, RELEASE_SIGNING.md ve SMOKE_TEST.md.
