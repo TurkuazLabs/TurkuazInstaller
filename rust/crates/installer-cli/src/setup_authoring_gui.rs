@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Modal bolum editorleriyle Turkuaz setup projesi hazirlamak
 // Modul - Rust GUI Module
-// Version: 0.6.16
+// Version: 0.6.17
 // Aciklama: IDE karsilama ekrani, proje tipi secimi ve moda ozel modal kurulum proje sihirbazi
 // Bagimli Oldugu Katman: View | Application
 
@@ -144,8 +144,9 @@ struct SavedProject {
     trust_store_path: String,
     #[serde(default)]
     setup_stub_path: String,
-    #[serde(default)]
-    makensis_path: String,
+    // Accept old project JSON for migration but never write the retired field.
+    #[serde(default, rename = "makensisPath", skip_serializing)]
+    _retired_backup_compiler: String,
     #[serde(default)]
     av_scan: AvScanConfig,
     #[serde(default)]
@@ -199,7 +200,7 @@ impl Default for SavedProject {
             signature_path: String::new(),
             trust_store_path: String::new(),
             setup_stub_path: String::new(),
-            makensis_path: String::new(),
+            _retired_backup_compiler: String::new(),
             av_scan: AvScanConfig::default(),
             web_manifest_url: String::new(),
             web_signature_url: String::new(),
@@ -1432,7 +1433,7 @@ impl BuilderApp {
             }
             _ => {
                 ui.label(match self.project.installer_kind {
-                    InstallerKind::Offline => "Önce uygulama paketini hazırlayın. Ardından NSIS veya sertifika gerektirmeyen Rust Standart Kurulum EXE'sini oluşturun. İmzalı dağıtım gelişmiş seçenektir.",
+                    InstallerKind::Offline => "Önce uygulama paketini hazırlayın. Ardından Rust Standart Kurulum EXE'sini oluşturun. İmzalı dağıtım gelişmiş seçenektir.",
                     InstallerKind::Web => "Önce uygulama paketini hazırlayın, ardından imzalı yayın dosyalarını ve paketi HTTPS sunucunuza yükleyin. Çevrimiçi yükleyici uygulamayı buradan indirir.",
                 });
                 ui.add_space(12.0);
@@ -1461,7 +1462,7 @@ impl BuilderApp {
                     studio_card(ui, |ui| {
                         ui.heading("Standart Kurulum (Rust, imzasız)");
                         ui.label("İkinci adımda standard/TurkuazSetup.exe üretilir.");
-                        ui.label("NSIS, başka derleyici veya imza sertifikası gerekmez.");
+                        ui.label("Başka derleyici veya imza sertifikası gerekmez.");
                         ui.small("İmzasız kurulumda yayıncı doğrulaması, güvenli güncelleme ve rollback yoktur.");
                     });
                     ui.add_space(12.0);
@@ -1503,15 +1504,6 @@ impl BuilderApp {
                             "Windows uygulaması",
                             &["exe"],
                         );
-                        file_row(
-                            ui,
-                            "İsteğe bağlı NSIS yedek motoru",
-                            &mut self.project.makensis_path,
-                            "NSIS makensis.exe seçin",
-                            "Windows uygulaması",
-                            &["exe"],
-                        );
-                        ui.small("NSIS yalnızca gelişmiş imzalı dağıtımın yedek motoru içindir.");
                                 ui.small("Dağıtım klasöründeki manifest-trust.yaml güven dosyasını kurulum EXE dosyalarının yanında tutun.");
                                 signed_requested = ui
                                     .add_enabled(
@@ -3010,15 +3002,6 @@ fn build_distribution(project: SavedProject) -> Result<String, String> {
     let trust_store_path =
         require_regular_file("Yayıncı güven dosyası", &project.trust_store_path)?;
     let setup_stub_path = require_regular_file("Kurulum motoru (EXE)", &project.setup_stub_path)?;
-    let makensis_path = if project.makensis_path.trim().is_empty() {
-        None
-    } else {
-        Some(require_regular_file(
-            "NSIS makensis",
-            &project.makensis_path,
-        )?)
-    };
-
     let saved_project_path = package_directory.join("project.tzproj");
     let saved_project_metadata = fs::symlink_metadata(&saved_project_path)
         .map_err(|error| format!("Proje dosyası açılamadı: {error}"))?;
@@ -3060,33 +3043,40 @@ fn build_distribution(project: SavedProject) -> Result<String, String> {
         .arg(&bundle_path)
         .arg("--theme-config")
         .arg(&theme_path);
-    let result = run_child(bundle_command, "İmzalı tam kurulum paketi hazırlama").and_then(|()| {
-        let mut pair_command = Command::new(&executable);
-        pair_command
-            .arg("build-distribution-pair")
-            .arg("--package-id")
-            .arg(package_id.to_string())
-            .arg("--stub")
-            .arg(&setup_stub_path)
-            .arg("--bundle")
-            .arg(&bundle_path)
-            .arg("--trust-store")
-            .arg(&trust_store_path)
-            .arg("--output-dir")
-            .arg(&distribution_directory);
-        if let Some(path) = &makensis_path {
-            pair_command.arg("--makensis").arg(path);
-        }
-        run_child(pair_command, "Tam Kurulum ve yedek yükleyici oluşturma")
-    });
-    result?;
-
+    // BRK-RUST-PRIMARY-ONLY-001:
+    // Verify signed bundle first, then publish exactly one EXE and the
+    // public trust policy atomically. No half-built distribution directory.
+    run_child(bundle_command, "İmzalı tam kurulum paketi hazırlama")?;
+    let staged_distribution = temporary_directory.join("primary");
+    fs::create_dir(&staged_distribution)
+        .map_err(|error| format!("Geçici Turkuaz dağıtım klasörü oluşturulamadı: {error}"))?;
+    let primary_setup = staged_distribution.join("TurkuazSetup.exe");
+    let mut single_command = Command::new(&executable);
+    single_command
+        .arg("build-self-extracting-setup")
+        .arg("--stub")
+        .arg(&setup_stub_path)
+        .arg("--bundle")
+        .arg(&bundle_path)
+        .arg("--output")
+        .arg(&primary_setup);
+    run_child(single_command, "Tek Rust TurkuazSetup.exe oluşturma")?;
+    let primary_metadata = fs::symlink_metadata(&primary_setup)
+        .map_err(|error| format!("TurkuazSetup.exe oluşturulamadı: {error}"))?;
+    if !primary_metadata.is_file()
+        || primary_metadata.file_type().is_symlink()
+        || primary_metadata.len() < 1024
+    {
+        return Err("TurkuazSetup.exe normal, boş olmayan bir EXE olmalıdır.".to_owned());
+    }
+    let public_trust = staged_distribution.join("manifest-trust.yaml");
+    fs::copy(&trust_store_path, &public_trust)
+        .map_err(|error| format!("Yayıncı güven dosyası kopyalanamadı: {error}"))?;
+    fs::rename(&staged_distribution, &distribution_directory)
+        .map_err(|error| format!("Tek Turkuaz kurulum klasörü yayımlanamadı: {error}"))?;
     Ok(format!(
-        "İmzalı dağıtım çifti hazırlandı.\nTurkuaz setup: {}\nNSIS yedeği: {}\nTrust policy: {}\nHer iki EXE dosyasını dağıtımdan önce Authenticode ile imzalayın.",
+        "Tek Rust Turkuaz dağıtımı oluşturuldu.\nTurkuazSetup.exe: {}\nTrust policy: {}\nDağıtmadan önce EXE dosyasını gerçek Authenticode yayıncı sertifikasıyla imzalayın.",
         distribution_directory.join("TurkuazSetup.exe").display(),
-        distribution_directory
-            .join("TurkuazInstallerBackup.exe")
-            .display(),
         distribution_directory.join("manifest-trust.yaml").display()
     ))
 }
@@ -3444,6 +3434,26 @@ fn color(rgb: [u8; 3]) -> egui::Color32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retired_installer_compiler_field_is_read_once_and_never_saved() {
+        let mut old = serde_json::to_value(SavedProject::default()).expect("serialize");
+        let object = old.as_object_mut().expect("project object");
+        object.insert(
+            "makensisPath".to_owned(),
+            serde_json::json!("C:/old/compiler.exe"),
+        );
+        let restored: SavedProject =
+            serde_json::from_value(old).expect("legacy project still loads");
+        let serialized = serde_json::to_value(&restored).expect("serialize migrated project");
+        assert!(serialized.get("makensisPath").is_none());
+        let mut invalid = serialized;
+        invalid
+            .as_object_mut()
+            .expect("project object")
+            .insert("unexpectedOption".to_owned(), serde_json::json!(true));
+        assert!(serde_json::from_value::<SavedProject>(invalid).is_err());
+    }
 
     #[test]
     fn legacy_tzproj_files_get_optional_disabled_license_by_default() {

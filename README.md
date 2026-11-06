@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/README.md
 Amac: TurkuazInstaller Community Rust projesi, kurulum ve dogrulama giris sayfasi
 Modul - Markdown
-Version: 2.3.0
+Version: 2.3.1
 Aciklama: Aktif Rust uygulamasi, test ciktisi, kaynak yapisi ve production sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
@@ -15,10 +15,9 @@ klasorunden `.tzpkg` olusturur ve Windows icin tek dosyali
 `TurkuazSetup.exe` uretebilir. Ayri, imzali yayin altyapisi
 install / update / repair / rollback / uninstall islevlerini icerir.
 
-Bu depoda aktif Community gelistirmesi **Rust** kodudur (`rust/`).
-Eski .NET/WinUI3/Velopack uygulamasi ve belgeleri Git commit gecmisinde
-korunur; Rust runtime'inin parcasi degildir. Community kodu private Pro
-deposuna bagli degildir.
+Bu depoda aktif Community gelistirmesi **yalnizca Rust** kodudur
+(`rust/`). Kurulum motoru, Studio ve dagitim CLI'si Rust crate'lerinden
+olusturulur. Community kodu private Pro deposuna bagli degildir.
 
 ## Baslangic
 
@@ -86,8 +85,7 @@ merge testlerini otomatik olarak kanitlamaz.
 **Henuz production kabulune girmeyenler:** temiz Windows 10/11
 masaustunde tam sihirbaz / kaldirma / tum kullanicilar UAC elle kabul,
 gercek sertifikayla Authenticode ve publisher trust, ilk gercek urun
-pilotu, Windows imzali dagitim adapter parity'si ve NSIS yedeginden
-tam bagimsizlik. Acik kalemler
+pilotu ve Windows imzali dagitim adapter parity'si. Acik kalemler
 [Rust readiness](rust/RUST_READINESS.md) belgesinde izlenir.
 
 `main` dalinda Rust kodunu birlestirmek ile GitHub **Release**
