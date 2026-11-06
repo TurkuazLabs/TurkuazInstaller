@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/manifest-parser/src/lib.rs
 // Amac: Signed YAML manifest alanlarini dogrulayip domain release modeline cevirmek
 // Modul - Rust Library
-// Version: 0.1.0
-// Aciklama: Stable v1 alanlari, domain invariants ve unsupported policy degerlerini fail-closed uygular
+// Version: 0.1.1
+// Aciklama: Stable v1 alanlari ve bilinmeyen alanlari fail-closed uygular
 // Bagimli Oldugu Katman: Application
 
 use std::{error::Error, fmt};
@@ -304,7 +304,7 @@ fn parse_windows(
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default, rename_all = "snake_case")]
+#[serde(default, rename_all = "snake_case", deny_unknown_fields)]
 struct ManifestDocument {
     schema_version: i32,
     package: PackageSection,
@@ -314,7 +314,7 @@ struct ManifestDocument {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct PackageSection {
     id: String,
     version: String,
@@ -322,7 +322,7 @@ struct PackageSection {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct ArtifactSection {
     uri: String,
     sha256: String,
@@ -332,7 +332,7 @@ struct ArtifactSection {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct DeltaArtifactSection {
     from_version: String,
     uri: String,
@@ -342,7 +342,7 @@ struct DeltaArtifactSection {
 }
 
 #[derive(Debug, Default, Clone, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct SignatureSection {
     algorithm: String,
     publisher_subject: String,
@@ -350,7 +350,7 @@ struct SignatureSection {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct InstallSection {
     mode: String,
     target: String,
@@ -360,14 +360,14 @@ struct InstallSection {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct WindowsIntegrationSection {
     shortcuts: Vec<WindowsShortcutSection>,
     protocols: Vec<WindowsProtocolSection>,
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct WindowsShortcutSection {
     id: String,
     name: String,
@@ -376,14 +376,14 @@ struct WindowsShortcutSection {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct WindowsProtocolSection {
     scheme: String,
     executable: String,
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct PrerequisiteSection {
     id: String,
     version: String,
@@ -391,7 +391,7 @@ struct PrerequisiteSection {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct PrerequisiteInstallSection {
     artifact: ArtifactSection,
     arguments: Vec<String>,
@@ -399,8 +399,31 @@ struct PrerequisiteInstallSection {
 }
 
 #[derive(Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 struct RollbackSection {
     supported: bool,
     previous_version_required: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_manifest;
+
+    const VALID_MANIFEST: &str = include_str!("../../../../examples/community-manifest.yml");
+
+    #[test]
+    fn current_minimal_v1_manifest_parses() {
+        assert!(parse_manifest(VALID_MANIFEST).is_ok());
+    }
+
+    #[test]
+    fn unsupported_command_hook_is_rejected() {
+        let manifest = VALID_MANIFEST.replace(
+            "  target:",
+            "  post_install: \"powershell -Command Start-Process payload.exe\"\n  target:",
+        );
+
+        assert_ne!(manifest, VALID_MANIFEST);
+        assert!(parse_manifest(&manifest).is_err());
+    }
 }
