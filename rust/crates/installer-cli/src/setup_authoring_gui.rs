@@ -233,6 +233,8 @@ struct BuilderApp {
     pending_open_requested: bool,
     active_step: usize,
     dialog_open: bool,
+    marketing_dialog: Option<MarketingDialog>,
+    selected_pro_feature: Option<&'static str>,
     appearance: AppearancePreference,
     preview_dark: bool,
     selected_wizard_page: WizardPageId,
@@ -241,6 +243,12 @@ struct BuilderApp {
     source_check_receiver: Option<Receiver<SourceCheckResponse>>,
     source_check_result: Option<(SourceCheckRequest, bool, String)>,
     project_path: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MarketingDialog {
+    Pro,
+    About,
 }
 
 impl Default for BuilderApp {
@@ -253,6 +261,8 @@ impl Default for BuilderApp {
             pending_open_requested: false,
             active_step: 0,
             dialog_open: false,
+            marketing_dialog: None,
+            selected_pro_feature: None,
             appearance: AppearancePreference::System,
             preview_dark: false,
             selected_wizard_page: WizardPageId::License,
@@ -421,6 +431,13 @@ impl eframe::App for BuilderApp {
                         });
                     appearance_changed = previous_appearance != self.appearance;
                     ui.label("Görünüm");
+                    ui.separator();
+                    if ui.button("TurkuazLabs").clicked() {
+                        self.marketing_dialog = Some(MarketingDialog::About);
+                    }
+                    if ui.button("Pro özellikler").clicked() {
+                        self.marketing_dialog = Some(MarketingDialog::Pro);
+                    }
                     ui.separator();
                     if ui
                         .add_enabled(
@@ -625,6 +642,9 @@ impl eframe::App for BuilderApp {
         if self.pending_open_requested && !is_building {
             self.confirm_open_project(context);
         }
+        if let Some(dialog) = self.marketing_dialog {
+            self.show_marketing_dialog(context, dialog);
+        }
 
         if open_requested {
             self.request_open_project();
@@ -645,6 +665,79 @@ impl eframe::App for BuilderApp {
 }
 
 impl BuilderApp {
+    fn show_marketing_dialog(&mut self, context: &egui::Context, dialog: MarketingDialog) {
+        let mut open = true;
+        egui::Window::new(match dialog {
+            MarketingDialog::Pro => "TurkuazInstaller Pro",
+            MarketingDialog::About => "TurkuazLabs hakkında",
+        })
+        .id(egui::Id::new("turkuazlabs-marketing-dialog"))
+        .collapsible(false)
+        .resizable(false)
+        .open(&mut open)
+        .show(context, |ui| {
+            ui.set_min_width(440.0);
+            match dialog {
+                MarketingDialog::Pro => {
+                    ui.heading("Community ile başlayın, Pro ile genişletin");
+                    ui.label("Pro özellikleri Community arayüzünde görünür. Bir özelliğe tıklayın; lisans ve satış bilgisi için TurkuazLabs'a ulaşın.");
+                    ui.add_space(10.0);
+                    for (name, description) in [
+                        (
+                            "Ek dil paketleri",
+                            "Türkçe ve İngilizce dışındaki arayüz ve kurulum dili paketleri.",
+                        ),
+                        ("Özel paket akışları", "Özel kaynaklardan paket dağıtımı."),
+                        ("Aşamalı yayın", "Yeni sürümleri kontrollü gruplarla yayımlama."),
+                        ("Merkezi yönetim", "Ekip ve kurumsal dağıtım politikalarını yönetme."),
+                    ] {
+                        ui.group(|ui| {
+                            if ui.button(egui::RichText::new(name).strong()).clicked() {
+                                self.selected_pro_feature = Some(name);
+                            }
+                            ui.label(description);
+                        });
+                    }
+                    if let Some(feature) = self.selected_pro_feature {
+                        ui.add_space(6.0);
+                        ui.label(format!(
+                            "{feature} Pro planında sunulacak. Lisans ve satın alma bilgisi için TurkuazLabs ile iletişime geçin."
+                        ));
+                        ui.hyperlink_to(
+                            "Pro hakkında e-posta gönder",
+                            format!(
+                                "mailto:info@turkuazlabs.com?subject=TurkuazInstaller%20Pro%20-%20{}",
+                                feature.replace(' ', "%20")
+                            ),
+                        );
+                    }
+                    ui.add_space(8.0);
+                    ui.label("Community'deki Türkçe/İngilizce kurulum dili ve temel kurulum özellikleri ücretsiz kalır.");
+                    ui.label("Otomatik lisans aktivasyonu henüz bağlanmadı; bu pencere iletişim ve satış yönlendirmesidir.");
+                    ui.hyperlink_to("Pro lisans ve fiyat bilgisi için e-posta gönder", "mailto:info@turkuazlabs.com?subject=TurkuazInstaller%20Pro");
+                    ui.hyperlink_to("TurkuazLabs web sitesi", "https://turkuazlabs.com");
+                }
+                MarketingDialog::About => {
+                    ui.heading("TurkuazLabs");
+                    ui.label("Bağımsız yazılım ve teknoloji projeleri geliştiriyoruz.");
+                    ui.add_space(8.0);
+                    ui.hyperlink_to("turkuazlabs.com", "https://turkuazlabs.com");
+                    ui.hyperlink_to("Genel bilgi: info@turkuazlabs.com", "mailto:info@turkuazlabs.com");
+                    ui.hyperlink_to("Teknik destek: support@turkuazlabs.com", "mailto:support@turkuazlabs.com");
+                    ui.hyperlink_to("Güvenlik bildirimleri: security@turkuazlabs.com", "mailto:security@turkuazlabs.com");
+                    ui.hyperlink_to("TurkuazLabs GitHub", "https://github.com/TurkuazLabs");
+                }
+            }
+            ui.add_space(8.0);
+            if ui.button("Kapat").clicked() {
+                self.marketing_dialog = None;
+            }
+        });
+        if !open {
+            self.marketing_dialog = None;
+        }
+    }
+
     fn create_new_project(&mut self, kind: InstallerKind) {
         let mut project = SavedProject::default();
         project.installer_kind = kind;
@@ -756,6 +849,16 @@ impl BuilderApp {
             }
             if self.has_project && ui.button("Açık projeye dön").clicked() {
                 self.workspace_open = true;
+            }
+        });
+        ui.add_space(20.0);
+        ui.separator();
+        ui.horizontal_wrapped(|ui| {
+            ui.label("TurkuazLabs");
+            ui.hyperlink_to("Web sitesi", "https://turkuazlabs.com");
+            ui.hyperlink_to("E-posta", "mailto:info@turkuazlabs.com");
+            if ui.button("Pro özellikleri ve lisans bilgisi").clicked() {
+                self.marketing_dialog = Some(MarketingDialog::Pro);
             }
         });
         if let Some((success, message)) = &self.status {
