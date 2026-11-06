@@ -30,3 +30,7 @@ members = [
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["io-util", "fs", "rt"] }
+
+[profile.release]
+# Sembol adlarini release binary'lerinden kaldirir; tersine muhendisligi engellemez.
+strip = "symbols"
