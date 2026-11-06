@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/CLI.md
 Amac: Community Rust install/update CLI komutlarını ve kaynak gereksinimlerini belgelendirmek
 Modul - Markdown
-Version: 0.4.16
-Aciklama: HTTPS manifest/signature girdilerinden kurulum workflow'una giden ilk kullanim yuzeyini aciklar
+Version: 0.4.17
+Aciklama: Online CLI HTTPS URL, redirect ve guncel public komut yardimi kontrati
 Bagimli Oldugu Katman: Application | Documentation
 -->
 
@@ -26,6 +26,30 @@ Print the version recorded in Cargo package metadata with `--version` or `-V`:
 ```sh
 cargo run --manifest-path rust/Cargo.toml -p turkuaz-installer-cli -- --version
 ```
+
+Top-level `--help` documents the native unsigned setup, local uninstall
+and signed release-source diagnostic commands alongside core operations.
+Run `turkuaz-installer --help` to see the supported public command surface.
+
+## Release source URL safety
+
+Direct `install`, `update`, `repair`, and `rollback` operations
+accept only HTTPS manifest and detached-signature URLs without embedded
+usernames/passwords or URL fragments. These invalid sources fail before
+any HTTPS request. HTTPS query parameters remain accepted in direct
+operations for compatibility with existing signed distribution URLs.
+Credentials must not be embedded in command-line URLs.
+
+Metadata HTTPS redirects are limited to fewer than ten previous hops
+and cannot downgrade to HTTP, embed URL credentials, or include fragments.
+The separate `check-release-source` diagnostic intentionally has a
+stricter contract: it also rejects query parameters and URL lengths
+above 2048 characters. This check downloads only bounded manifest and
+signature content and uses HEAD for the signed package endpoint.
+
+This URL screening does not replace CMS signature verification,
+trust-store policy checks, package SHA-256, or Authenticode when required.
+It does not change `build-web-setup` or existing `.tzproj` data.
 
 The first install command is:
 
