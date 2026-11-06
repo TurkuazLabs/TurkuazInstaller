@@ -25,11 +25,11 @@ fn main() {
     )
     .join("windows-app.manifest");
 
-    let manifest = manifest
-        .canonicalize()
-        .expect("Windows application manifest must exist")
-        .to_string_lossy()
-        .replace('"', "");
+    if !manifest.is_file() {
+        panic!("Windows application manifest must exist");
+    }
+
+    let manifest = manifest.display().to_string().replace('\\', "/");
 
     println!("cargo:rustc-link-arg-bin=turkuaz-installer=/MANIFEST:EMBED");
     println!("cargo:rustc-link-arg-bin=turkuaz-installer=/MANIFESTINPUT:\"{manifest}\"");
