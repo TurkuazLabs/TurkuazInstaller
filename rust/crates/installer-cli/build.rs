@@ -15,12 +15,13 @@ fn main() {
     }
 
     if env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc") {
-        panic!("Windows installer binaries require the MSVC linker to embed the UAC application manifest");
+        panic!(
+            "Windows installer binaries require the MSVC linker to embed the UAC application manifest"
+        );
     }
 
     let manifest = PathBuf::from(
-        env::var_os("CARGO_MANIFEST_DIR")
-            .expect("Cargo must provide CARGO_MANIFEST_DIR"),
+        env::var_os("CARGO_MANIFEST_DIR").expect("Cargo must provide CARGO_MANIFEST_DIR"),
     )
     .join("windows-app.manifest");
 
