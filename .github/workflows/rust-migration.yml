@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.2.32
-# Aciklama: PR degisikliklerinde Rust workspace, NSIS, setup lifecycle ve test ornek dagitimini dogrular
+# Version: 0.3.0
+# Aciklama: PR degisikliklerinde Rust workspace, tek setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -51,6 +51,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Guard Rust single-primary installer and retirement of old toolchains
+        run: |
+          python3 rust/scripts/check_rust_primary_only.py
+          python3 -m unittest discover -s rust/scripts -p 'test_rust_primary_only.py' -v
+
       - name: Report Rust toolchain
         run: rustc --version && cargo --version
 
@@ -75,23 +80,6 @@ jobs:
 
       - name: Compile Windows workspace
         run: cargo check --locked --manifest-path rust/Cargo.toml --workspace --all-targets
-
-      - name: Install NSIS
-        run: choco install nsis --yes --no-progress
-
-      - name: Validate NSIS backup script
-        shell: pwsh
-        run: |
-          $stage = Join-Path $env:RUNNER_TEMP "turkuaz-nsis-validation"
-          New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Set-Content -LiteralPath (Join-Path $stage "TurkuazSetup.exe") -Value "stub" -Encoding ascii
-          Set-Content -LiteralPath (Join-Path $stage "manifest-trust.yaml") -Value "validation: true" -Encoding ascii
-          $outputPath = Join-Path $stage "TurkuazInstallerBackup.exe"
-          $scriptPath = Join-Path $env:GITHUB_WORKSPACE "packaging/TurkuazInstallerBackup.nsi"
-          $makensis = Join-Path ${env:ProgramFiles(x86)} "NSIS/makensis.exe"
-          & $makensis "/DPACKAGE_ID=validation.example" "/DPRIMARY_SETUP_PATH=$(Join-Path $stage "TurkuazSetup.exe")" "/DTRUST_STORE_PATH=$(Join-Path $stage "manifest-trust.yaml")" "/DOUTPUT_PATH=$outputPath" $scriptPath
-          if ($LASTEXITCODE -ne 0) { throw "NSIS backup script compilation failed." }
-          if (!(Test-Path -LiteralPath $outputPath -PathType Leaf)) { throw "NSIS did not produce the backup executable." }
 
       - name: Resolve CLI version
         shell: pwsh
@@ -212,7 +200,7 @@ jobs:
       - name: Test Studio source check request and trust policy selection
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui source_check_uses_selected_release_and_requires_trust_file
 
-      - name: Test native Rust standalone setup without invoking NSIS
+      - name: Test native Rust standalone setup
         shell: pwsh
         run: |
           pwsh -NoProfile -File rust/scripts/windows-native-setup-smoke.ps1 `
@@ -238,7 +226,6 @@ jobs:
           $smokeArguments = @{
             InstallerPath = "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe"
             GuiStubPath = "rust/target/release/turkuaz-setup-gui-stub-v$env:RUST_CLI_VERSION-windows-x64.exe"
-            MakensisPath = (Join-Path ([Environment]::GetEnvironmentVariable("ProgramFiles(x86)")) "NSIS/makensis.exe")
             RetainDistributionPath = (Join-Path $env:RUNNER_TEMP "turkuaz-example-test-setup")
           }
           & "rust/scripts/windows-signed-bundle-smoke.ps1" @smokeArguments
