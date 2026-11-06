@@ -176,6 +176,9 @@ jobs:
       - name: Test multi-step unsigned local setup wizard navigation
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui unsigned_local_gui::tests
 
+      - name: Test Windows Recycle Bin path guard (no deletion)
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_recycle::tests
+
       - name: Test visual designer preview navigation and disabled pages
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui setup_design_surface::tests
 

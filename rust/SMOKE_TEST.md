@@ -11,6 +11,32 @@ Bagimli Oldugu Katman: QA | Documentation
 
 Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde denemek icindir. GUI setup stub artifact'i yalniz arayuz kabugudur; release bundle eklenmeden kurulum yapmaz. Gercek imzali release paketi ve yayinlayici tarafindan saglanan guven politikasi olmadan lifecycle kabul testi yapilamaz.
 
+## Yerel klasor degistirme ve Geri Donusum Kutusu kabulu
+
+Bu testleri yalnizca bos/dedike Windows 10/11 VM kullanarak yapin:
+1. Test uygulamasini `qa.recycle` klasorune yukleyin ve farkli
+   bir `user-data.txt` dosyasi ekleyin. Standart kurulum EXE'sini
+   tekrar acin. Kullanici onay kutusu isaretlenmeden Kurulumu baslat
+   **basarisiz olmali**, eski icerik dokunulmadan kalmalidir.
+2. Son kontrol ekraninda tam hedef yol ve tum dosyalarin
+   Geri Donusum Kutusu'na tasinacagi uyarisini okuyup
+   checkbox'i isaretleyin. Yeni paket hazirlandiktan sonra
+   onceki klasorun Geri Donusum Kutusu'nda bulundugunu
+   dogrulayin; yeni klasorde guncel paket ve yeni receipt olmali.
+3. UAC ile tum kullanicilar seceneginde yeniden acilan pencerede
+   checkbox isaretsiz olmali, yeniden acik onay gerekmeli.
+4. Recycle Bin devre disi, disk dolu veya Windows Shell islemi
+   iptal edilmisken eski dosyalarin kalici silinmedigini ve
+   temiz kurulumun baslatilmadigini dogrulayin.
+5. Farkli `package-id` ile adlandirilmis klasor, UNC paylasimi,
+   junction/symlink ve disaridan gelen degisiklik senaryolarinin
+   reddedildigini gozlemleyin. Gercek Windows recycle davranisi,
+   yalnızca headless/UI unit testleriyle dogrulanmis sayilmaz.
+
+`install-local-self` CLI komutu onaysiz oldugu icin
+mevcut klasore kurulum yapmayi reddetmeye devam eder.
+Eski klasorun geri alinmasi otomatik degildir.
+
 ## On kosullar
 
 - [GitHub Actions](https://github.com/TurkuazLabs/TurkuazInstaller/actions) uzerindeki en son **basarili** Rust CI calismasindan `turkuaz-setup-builder-v<surum>-windows-x64` ve gereken CLI/GUI test artifact'larini indirin. Artifact'lar gecicidir; kullanmadan once run'in commit SHA'sini, sonucunu ve uygulama surumunu dogrulayin. Referans: [#41913467340](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41913467340) (4 Kasim 2026, `ed272460`).

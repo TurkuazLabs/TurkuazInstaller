@@ -80,6 +80,9 @@ mod windows_local_uninstall_gui;
 mod windows_shortcuts;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
+mod windows_recycle;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
 use turkuaz_installer_package_engine::has_unsigned_local_setup;
 
 #[tokio::main]

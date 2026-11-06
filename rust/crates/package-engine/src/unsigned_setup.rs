@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/unsigned_setup.rs
 // Amac: NSIS olmadan yalniz yerel standart kurulum icin .tzpkg gomulu EXE uretmek
 // Modul - Rust Package Engine
-// Version: 0.3.1
+// Version: 0.3.2
 // Aciklama: Imzasiz yerel EXE butunluk kontrolu; imzali release/trust asla atlanmaz
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -469,7 +469,7 @@ pub fn install_unsigned_local_setup(
     executable: impl AsRef<Path>,
     target: impl AsRef<Path>,
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
-    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), None, None)
+    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), None, None, None)
 }
 
 /// Named milestones from the real installer operations; not a percentage or
@@ -490,7 +490,34 @@ pub fn install_unsigned_local_setup_with_progress(
     target: impl AsRef<Path>,
     on_phase: &mut dyn FnMut(LocalInstallPhase),
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
-    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), None, Some(on_phase))
+    install_unsigned_local_setup_inner(
+        executable.as_ref(),
+        target.as_ref(),
+        None,
+        Some(on_phase),
+        None,
+    )
+}
+
+/// @dev-id BRK-LOCAL-SETUP-RECYCLE-001
+/// @purpose Prepare and validate the new payload before a caller-approved
+/// platform adapter clears a pre-existing destination.
+/// @contract Standard install APIs still reject occupied targets. The adapter
+/// must move the old folder to recoverable storage; the engine never deletes it.
+/// A failed adapter or still-occupied path aborts before publishing.
+pub fn install_unsigned_local_setup_with_replacement(
+    executable: impl AsRef<Path>,
+    target: impl AsRef<Path>,
+    on_phase: &mut dyn FnMut(LocalInstallPhase),
+    on_existing_target: &mut dyn FnMut(&Path) -> Result<(), PackageEngineError>,
+) -> Result<UnsignedLocalIdentity, PackageEngineError> {
+    install_unsigned_local_setup_inner(
+        executable.as_ref(),
+        target.as_ref(),
+        None,
+        Some(on_phase),
+        Some(on_existing_target),
+    )
 }
 
 /// @dev-id BRK-LOCAL-SETUP-006
@@ -503,25 +530,35 @@ pub fn install_unsigned_local_setup_scanned(
     target: impl AsRef<Path>,
     scanner: &dyn MalwareScanner,
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
-    install_unsigned_local_setup_inner(executable.as_ref(), target.as_ref(), Some(scanner), None)
+    install_unsigned_local_setup_inner(
+        executable.as_ref(),
+        target.as_ref(),
+        Some(scanner),
+        None,
+        None,
+    )
 }
+
+type ExistingTargetHook<'a> = &'a mut dyn FnMut(&Path) -> Result<(), PackageEngineError>;
 
 fn install_unsigned_local_setup_inner(
     executable: &Path,
     target: &Path,
     scanner: Option<&dyn MalwareScanner>,
     mut on_phase: Option<&mut dyn FnMut(LocalInstallPhase)>,
+    mut on_existing_target: Option<ExistingTargetHook<'_>>,
 ) -> Result<UnsignedLocalIdentity, PackageEngineError> {
     let parent = target
         .parent()
         .ok_or(invalid("local install target has no parent"))?;
     ensure_safe_directory(parent)?;
     match fs::symlink_metadata(target) {
-        Ok(_) => {
+        Ok(_) if on_existing_target.is_none() => {
             return Err(invalid(
                 "local install target already exists; overwrite refused",
             ));
         }
+        Ok(_) => {} // Opt-in callback runs only after staged payload validation.
         Err(err) if err.kind() == io::ErrorKind::NotFound => {}
         Err(err) => return Err(PackageEngineError::Io(err)),
     }
@@ -553,10 +590,20 @@ fn install_unsigned_local_setup_inner(
     if let Some(callback) = &mut on_phase {
         callback(LocalInstallPhase::PublishingInstall);
     }
-    // Existing target directories must never be overwritten. Windows rename is
-    // fail-if-exists; this precheck is retained for clear cross-platform behavior.
-    if fs::symlink_metadata(target).is_ok() {
-        return Err(invalid("local install target became occupied"));
+    // Never overwrite in place. An explicitly opted-in platform adapter may
+    // recycle an occupied folder only after staged files and receipt are ready.
+    match fs::symlink_metadata(target) {
+        Ok(_) => match &mut on_existing_target {
+            Some(recycle) => recycle(target)?,
+            None => return Err(invalid("local install target became occupied")),
+        },
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+        Err(err) => return Err(PackageEngineError::Io(err)),
+    }
+    match fs::symlink_metadata(target) {
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+        Ok(_) => return Err(invalid("local install target is still occupied")),
+        Err(err) => return Err(PackageEngineError::Io(err)),
     }
     fs::rename(&stage, target).map_err(PackageEngineError::Io)?;
     Ok(identity)
@@ -763,6 +810,96 @@ mod tests {
         assert_eq!(
             fs::read(target.join("hello.txt")).expect("still preserved"),
             "Türkçe test payload".as_bytes()
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    /// @dev-id BRK-LOCAL-SETUP-RECYCLE-TEST-001
+    /// @purpose Ensure the existing-target hook runs only after full staging.
+    /// @contract Test adapter simulates recycling; production recycle is Windows-only.
+    #[test]
+    fn optional_replacement_runs_after_staging_and_denial_preserves_old_tree() {
+        let root = std::env::temp_dir().join(format!("tz-local-replace-{}", Uuid::new_v4()));
+        fs::create_dir(&root).expect("create root");
+        let source = root.join("source");
+        fs::create_dir(&source).expect("create source");
+        fs::write(source.join("new.txt"), b"new payload").expect("new payload");
+        let id = PackageId::parse("qa.recycle").expect("id");
+        let version = SemanticVersion::parse("1.0.0").expect("version");
+        let package = root.join("app.tzpkg");
+        crate::build_full_package(
+            &source,
+            &id,
+            &version,
+            &package,
+            PackageExtractionLimits::default(),
+        )
+        .expect("package");
+        let stub = root.join("stub.exe");
+        let executable = root.join("installer.exe");
+        fs::write(&stub, b"MZ-rust-stub").expect("stub");
+        create_unsigned_local_setup(&stub, &package, &executable).expect("setup");
+
+        let target = root.join("qa.recycle");
+        fs::create_dir(&target).expect("old folder");
+        fs::write(target.join("old.txt"), b"previous user data").expect("old content");
+        let mut called = false;
+        let mut phases = Vec::new();
+        let rejected = install_unsigned_local_setup_with_replacement(
+            &executable,
+            &target,
+            &mut |phase| phases.push(phase),
+            &mut |path| {
+                called = true;
+                assert_eq!(path, target);
+                assert_eq!(
+                    fs::read(path.join("old.txt")).unwrap(),
+                    b"previous user data"
+                );
+                assert!(
+                    fs::read_dir(&root)
+                        .unwrap()
+                        .filter_map(Result::ok)
+                        .any(|item| item
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(".turkuaz-native-stage-"))
+                );
+                Err(invalid("recycle request denied"))
+            },
+        );
+        assert!(rejected.is_err());
+        assert!(called);
+        assert!(target.join("old.txt").exists());
+        assert!(!target.join("new.txt").exists());
+        assert_eq!(
+            phases,
+            [
+                LocalInstallPhase::VerifyingPackage,
+                LocalInstallPhase::ExtractingPayload,
+                LocalInstallPhase::PublishingInstall,
+            ]
+        );
+
+        let mut recycled = false;
+        let replaced = install_unsigned_local_setup_with_replacement(
+            &executable,
+            &target,
+            &mut |_| {},
+            &mut |path| {
+                let old = root.join("simulated-recycle");
+                fs::rename(path, &old).map_err(PackageEngineError::Io)?;
+                recycled = true;
+                Ok(())
+            },
+        )
+        .expect("replacement");
+        assert_eq!(replaced.package_id, "qa.recycle");
+        assert!(recycled);
+        assert_eq!(fs::read(target.join("new.txt")).unwrap(), b"new payload");
+        assert_eq!(
+            fs::read(root.join("simulated-recycle/old.txt")).unwrap(),
+            b"previous user data"
         );
         fs::remove_dir_all(root).expect("cleanup");
     }

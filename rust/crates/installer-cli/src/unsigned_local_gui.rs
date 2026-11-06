@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.0
+// Version: 0.5.1
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -15,7 +15,8 @@ use std::{
 
 use eframe::egui;
 use turkuaz_installer_package_engine::{
-    LocalInstallPhase, WizardConfig, WizardPageId, install_unsigned_local_setup_with_progress,
+    LocalInstallPhase, PackageEngineError, WizardConfig, WizardPageId,
+    install_unsigned_local_setup_with_progress, install_unsigned_local_setup_with_replacement,
     read_unsigned_local_wizard_config, unsigned_local_identity,
 };
 
@@ -26,6 +27,7 @@ use crate::{
         validate_install_scope,
     },
     windows_local_registration::register_local_install,
+    windows_recycle::validate_recycle_target,
     windows_shortcuts::create_installed_shortcuts,
     wizard_language::WizardLanguage,
 };
@@ -116,10 +118,10 @@ impl WizardStep {
 }
 
 /// @dev-id BRK-LOCAL-WIZARD-001
-/// @purpose Reject unsafe or already occupied paths before final confirmation.
-/// @contract This is a read-only preflight. The package engine still performs
-/// its own authoritative validation immediately before staging and publish.
-fn preflight_destination(value: &str) -> Result<PathBuf, String> {
+/// @purpose Let the wizard review existing folders without modifying them.
+/// @contract An occupied target is allowed only when the Windows recycle
+/// adapter verifies the exact application-owned leaf and safe ancestors.
+fn inspect_destination(value: &str, package_id: &str) -> Result<(PathBuf, bool), String> {
     let path = PathBuf::from(value.trim());
     if path.as_os_str().is_empty()
         || !path.is_absolute()
@@ -131,8 +133,11 @@ fn preflight_destination(value: &str) -> Result<PathBuf, String> {
         return Err("Tam bir Windows klasör yolu girin; '.' ve '..' kullanmayın.".into());
     }
     match fs::symlink_metadata(&path) {
-        Ok(_) => Err("Hedef klasör zaten var. Mevcut kurulumun üzerine yazılmaz.".into()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(path),
+        Ok(_) => {
+            validate_recycle_target(&path, package_id)?;
+            Ok((path, true))
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok((path, false)),
         Err(error) => Err(format!("Hedef klasör doğrulanamadı: {error}")),
     }
 }
@@ -141,6 +146,7 @@ fn preflight_destination(value: &str) -> Result<PathBuf, String> {
 enum WorkerEvent {
     Phase(LocalInstallPhase),
     CreatingShortcuts,
+    RecyclingExistingTarget,
     RegisteringUninstaller,
     Finished(Result<(String, bool), String>),
 }
@@ -173,6 +179,7 @@ struct LocalInstaller {
     language: WizardLanguage,
     wizard: WizardConfig,
     license_accepted: bool,
+    recycle_approved: bool,
     entry_point: Option<String>,
     start_menu: bool,
     desktop: bool,
@@ -225,6 +232,7 @@ impl LocalInstaller {
             language: WizardLanguage::default(),
             wizard,
             license_accepted: false,
+            recycle_approved: false,
             entry_point,
             start_menu: shortcut_default,
             desktop: false,
@@ -287,18 +295,20 @@ impl LocalInstaller {
                     .into_owned(),
             };
             self.path_error = None;
+            self.recycle_approved = false;
         }
     }
 
-    fn validated_target(&self) -> Result<PathBuf, String> {
-        let path = preflight_destination(&self.target)?;
-        validate_install_scope(
-            self.scope,
-            &path,
-            &self.program_files_root,
-            current_process_is_elevated(),
-        )?;
-        Ok(path)
+    fn validated_target(&self, elevated: bool) -> Result<(PathBuf, bool), String> {
+        let (path, occupied) = inspect_destination(&self.target, &self.package_id)?;
+        if occupied && !self.recycle_approved {
+            return Err(self.language.text(
+                "Klasör zaten var. Temiz kurulum için gözden geçirme ekranında Geri Dönüşüm Kutusu onayını verin.",
+                "Folder already exists. Approve moving it to the Recycle Bin on the review page.",
+            ).to_owned());
+        }
+        validate_install_scope(self.scope, &path, &self.program_files_root, elevated)?;
+        Ok((path, occupied))
     }
 
     fn advance(&mut self) {
@@ -311,10 +321,11 @@ impl LocalInstaller {
         if self.step == WizardStep::Destination {
             // Let the user choose shortcuts before the UAC prompt; we still
             // validate the protected root now, and the token at installation.
-            let choice = preflight_destination(&self.target).and_then(|path| {
-                validate_install_scope(self.scope, &path, &self.program_files_root, true)
-                    .map(|_| path)
-            });
+            let choice =
+                inspect_destination(&self.target, &self.package_id).and_then(|(path, _)| {
+                    validate_install_scope(self.scope, &path, &self.program_files_root, true)
+                        .map(|_| path)
+                });
             match choice {
                 Ok(_) => self.path_error = None,
                 Err(error) => {
@@ -357,17 +368,18 @@ impl LocalInstaller {
             );
             return false;
         }
-        if self.scope == InstallScope::AllUsers && !current_process_is_elevated() {
-            let target = match preflight_destination(&self.target).and_then(|target| {
-                validate_install_scope(self.scope, &target, &self.program_files_root, true)
-                    .map(|_| target)
-            }) {
-                Ok(path) => path,
+        // On a UAC restart consent is intentionally not inherited; the
+        // elevated wizard displays Review and asks again.
+        let elevated = current_process_is_elevated();
+        let (target, replacing_existing) =
+            match self.validated_target(elevated || self.scope == InstallScope::AllUsers) {
+                Ok(value) => value,
                 Err(error) => {
                     self.path_error = Some(error);
                     return false;
                 }
             };
+        if self.scope == InstallScope::AllUsers && !elevated {
             match request_elevated_setup(
                 &self.executable,
                 &self.package_id,
@@ -383,14 +395,6 @@ impl LocalInstaller {
                 }
             }
         }
-        let target = match self.validated_target() {
-            Ok(target) => target,
-            Err(error) => {
-                self.path_error = Some(error);
-                self.step = WizardStep::Destination;
-                return false;
-            }
-        };
         let executable = self.executable.clone();
         let source_uninstaller = executable.clone();
         let start_menu = self.start_menu;
@@ -398,6 +402,7 @@ impl LocalInstaller {
         let scope = self.scope;
         let language = self.language;
         let program_files_root = self.program_files_root.clone();
+        let package_id = self.package_id.clone();
         let (sender, receiver) = mpsc::channel();
         self.busy = Some(receiver);
         self.status = None;
@@ -412,6 +417,7 @@ impl LocalInstaller {
             let mut on_phase = move |phase| {
                 let _ = phase_sender.send(WorkerEvent::Phase(phase));
             };
+            let mut recycled = false;
             let result = validate_install_scope(
                 scope,
                 &target,
@@ -419,8 +425,23 @@ impl LocalInstaller {
                 current_process_is_elevated(),
             )
             .and_then(|_| {
-                install_unsigned_local_setup_with_progress(executable, &target, &mut on_phase)
-                    .map_err(|error| error.to_string())
+                if replacing_existing {
+                    install_unsigned_local_setup_with_replacement(
+                        executable,
+                        &target,
+                        &mut on_phase,
+                        &mut |path| {
+                            let _ = sender.send(WorkerEvent::RecyclingExistingTarget);
+                            crate::windows_recycle::recycle_existing_target(path, &package_id)
+                                .map_err(|error| PackageEngineError::Io(io::Error::other(error)))?;
+                            recycled = true;
+                            Ok(())
+                        },
+                    )
+                } else {
+                    install_unsigned_local_setup_with_progress(executable, &target, &mut on_phase)
+                }
+                .map_err(|error| error.to_string())
             })
             .map(|identity| {
                 let mut message = format!(
@@ -431,6 +452,12 @@ impl LocalInstaller {
                     target.display()
                 );
                 let mut warning = false;
+                if recycled {
+                    message.push_str(language.text(
+                        "\nÖnceki klasör Windows Geri Dönüşüm Kutusu'na taşındı.",
+                        "\nPrevious folder moved to the Windows Recycle Bin.",
+                    ));
+                }
                 let mut owned_links = Vec::new();
                 if start_menu || desktop {
                     let _ = sender.send(WorkerEvent::CreatingShortcuts);
@@ -530,6 +557,12 @@ impl LocalInstaller {
                 match receiver.try_recv() {
                     Ok(WorkerEvent::Phase(phase)) => {
                         self.progress_label = phase_label(phase, self.language);
+                    }
+                    Ok(WorkerEvent::RecyclingExistingTarget) => {
+                        self.progress_label = self.language.text(
+                            "Onaylanan eski klasör Geri Dönüşüm Kutusu'na taşınıyor…",
+                            "Moving the approved previous folder to the Recycle Bin…",
+                        );
                     }
                     Ok(WorkerEvent::CreatingShortcuts) => {
                         self.progress_label = self.language.text(
@@ -637,8 +670,8 @@ impl LocalInstaller {
             }
             WizardStep::Destination => {
                 ui.label(language.text(
-                    "Uygulamanın kurulacağı yeni klasörü seçin.",
-                    "Choose a new folder for this application.",
+                    "Kurulum klasörünü seçin. Varsa eski klasör gözden geçirme ekranında ayrıca onaylanır.",
+                    "Choose the destination. An existing folder requires separate approval on Review.",
                 ));
                 ui.add_space(14.0);
                 ui.strong(language.text("Kurulum kapsamı", "Installation scope"));
@@ -675,14 +708,22 @@ impl LocalInstaller {
                 }
                 ui.add_space(16.0);
                 ui.horizontal(|ui| {
-                    ui.add(
-                        egui::TextEdit::singleline(&mut self.target)
-                            .desired_width((ui.available_width() - 94.0).max(240.0)),
-                    );
+                    if ui
+                        .add(
+                            egui::TextEdit::singleline(&mut self.target)
+                                .desired_width((ui.available_width() - 94.0).max(240.0)),
+                        )
+                        .changed()
+                    {
+                        self.recycle_approved = false;
+                        self.path_error = None;
+                    }
                     if ui.button(language.text("Gözat…", "Browse…")).clicked() {
                         if let Some(parent) = rfd::FileDialog::new().pick_folder() {
                             self.target =
                                 parent.join(&self.package_id).to_string_lossy().into_owned();
+                            self.recycle_approved = false;
+                            self.path_error = None;
                         }
                     }
                 });
@@ -691,8 +732,8 @@ impl LocalInstaller {
                     "Browse adds a new folder named after the application identifier.",
                 ));
                 ui.small(language.text(
-                    "Mevcut bir klasörün üzerine yazılmaz; eski kurulum korunur.",
-                    "Existing folders are not overwritten; previous installations remain intact.",
+                    "Var olan klasör, yalnızca açık onayınızla Geri Dönüşüm Kutusu'na taşınabilir; üzerine yazılmaz.",
+                    "An existing folder can be moved to the Recycle Bin only with your explicit approval; no overwrite.",
                 ));
                 if let Some(error) = &self.path_error {
                     ui.add_space(10.0);
@@ -777,10 +818,41 @@ impl LocalInstaller {
                     "Kurulumu başlat düğmesiyle onay verdiğinizde dosyalar hazırlanır.",
                     "Files will be prepared after you confirm with Install.",
                 ));
-                ui.small(language.text(
-                    "Mevcut klasörler değiştirilmez; yeni klasör gereklidir.",
-                    "A new destination folder is required; existing folders are not changed.",
-                ));
+                match inspect_destination(&self.target, &self.package_id) {
+                    Ok((path, true)) => {
+                        ui.add_space(8.0);
+                        ui.colored_label(
+                            egui::Color32::from_rgb(190, 112, 39),
+                            language.text(
+                                "DİKKAT: Bu klasör zaten var. İçindeki tüm dosyalar ve kullanıcı verileri birlikte Geri Dönüşüm Kutusu'na taşınacak.",
+                                "WARNING: This folder exists. All its files, including user data, will be moved together to the Recycle Bin.",
+                            ),
+                        );
+                        ui.add(egui::Label::new(path.display().to_string()).wrap());
+                        ui.checkbox(
+                            &mut self.recycle_approved,
+                            language.text(
+                                "Onaylıyorum: Eski klasörü Geri Dönüşüm Kutusu'na taşı, ardından temiz kurulum yap.",
+                                "I approve moving the old folder to the Recycle Bin, then performing a clean install.",
+                            ),
+                        );
+                        ui.small(language.text(
+                            "Kurulum başarısız olursa eski klasörü Geri Dönüşüm Kutusu'ndan kendiniz geri yükleyebilirsiniz. Otomatik geri alma yapılmaz.",
+                            "If installation fails, you may restore the previous folder from the Recycle Bin manually. There is no automatic restore.",
+                        ));
+                    }
+                    Ok((_, false)) => {
+                        self.recycle_approved = false;
+                        ui.small(language.text(
+                            "Hedef klasör yeni; eski dosyalar değiştirilmez.",
+                            "The target is new; existing files are not changed.",
+                        ));
+                    }
+                    Err(error) => {
+                        self.recycle_approved = false;
+                        ui.colored_label(egui::Color32::RED, error);
+                    }
+                }
                 if let Some(error) = &self.path_error {
                     ui.add_space(10.0);
                     ui.colored_label(egui::Color32::RED, error);
@@ -1071,7 +1143,7 @@ pub fn run_resumed() -> Result<(), Box<dyn std::error::Error>> {
     if args.package_id != app.package_id {
         return Err("UAC paket kimliği doğrulanamadı.".into());
     }
-    let path = preflight_destination(&args.target)?;
+    let (path, _) = inspect_destination(&args.target, &app.package_id)?;
     validate_install_scope(
         InstallScope::AllUsers,
         &path,
@@ -1091,6 +1163,7 @@ pub fn run_resumed() -> Result<(), Box<dyn std::error::Error>> {
         WizardStep::Review
     };
     app.license_accepted = false;
+    app.recycle_approved = false;
     launch(app)
 }
 
@@ -1206,6 +1279,7 @@ mod tests {
             language: WizardLanguage::Turkish,
             wizard: WizardConfig::default(),
             license_accepted: false,
+            recycle_approved: true,
             entry_point: None,
             start_menu: false,
             desktop: false,
@@ -1219,22 +1293,36 @@ mod tests {
         assert_eq!(app.scope, InstallScope::AllUsers);
         assert_eq!(PathBuf::from(&app.target), machine.join("qa.scope"));
         assert!(app.path_error.is_none());
+        assert!(!app.recycle_approved);
         app.select_scope(InstallScope::CurrentUser);
         assert_eq!(PathBuf::from(&app.target), user.join("qa.scope"));
         assert_eq!(app.step, WizardStep::Destination);
     }
 
     #[test]
-    fn preflight_rejects_existing_or_traversal_targets_without_writes() {
+    fn preflight_rejects_unsafe_targets_but_reports_existing_without_writes() {
         let temp = std::env::temp_dir();
-        assert!(preflight_destination(&temp.to_string_lossy()).is_err());
+        assert!(inspect_destination(&temp.to_string_lossy(), "qa.recycle").is_err());
         let unsafe_path = temp.join("..").join("should-not-install");
-        assert!(preflight_destination(&unsafe_path.to_string_lossy()).is_err());
-        assert!(preflight_destination("relative-path").is_err());
-        let new_path = temp.join(format!("turkuaz-wizard-missing-{}", std::process::id()));
-        if !new_path.exists() {
-            assert!(preflight_destination(&new_path.to_string_lossy()).is_ok());
-            assert!(!new_path.exists(), "preflight must be read-only");
-        }
+        assert!(inspect_destination(&unsafe_path.to_string_lossy(), "qa.recycle").is_err());
+        assert!(inspect_destination("relative-path", "qa.recycle").is_err());
+        let root = temp.join(format!("turkuaz-wizard-recycle-{}", std::process::id()));
+        let old = root.join("qa.recycle");
+        fs::create_dir_all(&old).expect("old fixture");
+        fs::write(old.join("user.txt"), b"user-owned").expect("fixture content");
+        let (selected, occupied) =
+            inspect_destination(&old.to_string_lossy(), "qa.recycle").expect("inspect");
+        assert_eq!(selected, old);
+        assert!(occupied);
+        assert_eq!(fs::read(old.join("user.txt")).unwrap(), b"user-owned");
+        assert!(inspect_destination(&old.to_string_lossy(), "wrong.package").is_err());
+        let fresh = root.join("new.qa");
+        assert!(
+            !inspect_destination(&fresh.to_string_lossy(), "qa.recycle")
+                .expect("new path")
+                .1
+        );
+        assert!(!fresh.exists(), "preflight must be read-only");
+        fs::remove_dir_all(root).expect("test cleanup");
     }
 }
