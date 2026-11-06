@@ -2,7 +2,7 @@
 // Amac: Signed YAML manifest alanlarini dogrulayip domain release modeline cevirmek
 // Modul - Rust Library
 // Version: 0.1.1
-// Aciklama: Stable v1 alanlari, domain invariants ve unsupported policy degerlerini fail-closed uygular
+// Aciklama: Stable v1 alanlari ve bilinmeyen alanlari fail-closed uygular
 // Bagimli Oldugu Katman: Application
 
 use std::{error::Error, fmt};
@@ -403,4 +403,27 @@ struct PrerequisiteInstallSection {
 struct RollbackSection {
     supported: bool,
     previous_version_required: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_manifest;
+
+    const VALID_MANIFEST: &str = include_str!("../../../examples/community-manifest.yml");
+
+    #[test]
+    fn current_minimal_v1_manifest_parses() {
+        assert!(parse_manifest(VALID_MANIFEST).is_ok());
+    }
+
+    #[test]
+    fn unsupported_command_hook_is_rejected() {
+        let manifest = VALID_MANIFEST.replace(
+            "  target:",
+            "  post_install: \"powershell -Command Start-Process payload.exe\"\n  target:",
+        );
+
+        assert_ne!(manifest, VALID_MANIFEST);
+        assert!(parse_manifest(&manifest).is_err());
+    }
 }
