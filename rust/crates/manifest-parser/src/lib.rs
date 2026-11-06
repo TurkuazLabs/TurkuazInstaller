@@ -409,7 +409,7 @@ struct RollbackSection {
 mod tests {
     use super::parse_manifest;
 
-    const VALID_MANIFEST: &str = include_str!("../../../examples/community-manifest.yml");
+    const VALID_MANIFEST: &str = include_str!("../../../../examples/community-manifest.yml");
 
     #[test]
     fn current_minimal_v1_manifest_parses() {
