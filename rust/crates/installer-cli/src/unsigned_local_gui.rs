@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.2
-// Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
+// Version: 0.5.3
+// Aciklama: Kurulum adimlari ve alt navigasyon paneli geometri guvenligi
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
@@ -935,6 +935,25 @@ impl LocalInstaller {
     }
 }
 
+/// @dev-id BRK-LOCAL-WIZARD-FOOTER-001
+/// @purpose Keep navigation actions at the bottom without swallowing the
+/// welcome/destination/review content in the native setup wizard.
+const LOCAL_WIZARD_FOOTER_HEIGHT: f32 = 92.0;
+const LOCAL_WIZARD_ACTION_ROW_HEIGHT: f32 = 38.0;
+
+fn show_local_wizard_action_row<R>(
+    ui: &mut egui::Ui,
+    add_actions: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    // Ui::with_layout consumes all remaining space in a bottom panel.
+    // A bounded row preserves the CentralPanel at Windows minimum sizes.
+    ui.allocate_ui_with_layout(
+        egui::vec2(ui.available_width(), LOCAL_WIZARD_ACTION_ROW_HEIGHT),
+        egui::Layout::right_to_left(egui::Align::Center),
+        add_actions,
+    )
+}
+
 impl eframe::App for LocalInstaller {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let language = self.language;
@@ -983,12 +1002,14 @@ impl eframe::App for LocalInstaller {
             ui.separator();
         });
 
-        egui::TopBottomPanel::bottom("local_setup_footer").show(ctx, |ui| {
+        egui::TopBottomPanel::bottom("local_setup_footer")
+            .exact_height(LOCAL_WIZARD_FOOTER_HEIGHT)
+            .show(ctx, |ui| {
             ui.separator();
             ui.add_space(10.0);
             // In right-to-left layout the primary action is anchored to
             // the bottom-right edge; back remains to its left.
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            show_local_wizard_action_row(ui, |ui| {
                 if self.busy.is_some() {
                     ui.label(
                         self.language
@@ -1201,6 +1222,59 @@ fn launch(app: LocalInstaller) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// @dev-id BRK-LOCAL-WIZARD-FOOTER-TEST-001
+    /// @purpose Regression for an empty wizard page caused by the action row
+    /// taking all remaining height in the bottom panel.
+    #[test]
+    fn wizard_footer_preserves_page_content_at_minimum_and_default_sizes() {
+        for (width, height) in [(760.0, 490.0), (860.0, 550.0)] {
+            let ctx = egui::Context::default();
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(width, height),
+                )),
+                ..Default::default()
+            };
+            let _ = ctx.run(input, |ctx| {
+                egui::TopBottomPanel::top("wizard_test_header")
+                    .exact_height(140.0)
+                    .show(ctx, |ui| {
+                        ui.label("Welcome and language");
+                    });
+                let footer = egui::TopBottomPanel::bottom("wizard_test_footer")
+                    .exact_height(LOCAL_WIZARD_FOOTER_HEIGHT)
+                    .show(ctx, |ui| {
+                        ui.separator();
+                        ui.add_space(10.0);
+                        show_local_wizard_action_row(ui, |ui| {
+                            ui.add_sized([110.0, 38.0], egui::Button::new("Next"));
+                        });
+                        ui.add_space(10.0);
+                    });
+                let central = egui::CentralPanel::default().show(ctx, |ui| {
+                    ui.heading("Turkuaz Standard Setup");
+                    ui.label("Package details must remain visible.");
+                });
+                assert!(
+                    footer.response.rect.height() <= LOCAL_WIZARD_FOOTER_HEIGHT + 2.0,
+                    "footer expanded beyond its navigation row"
+                );
+                assert!(
+                    central.response.rect.height() >= 180.0,
+                    "wizard content was hidden by the footer: {}x{}",
+                    width,
+                    height
+                );
+                assert!(
+                    central.response.rect.bottom() <= footer.response.rect.top() + 2.0,
+                    "wizard body overlaps footer"
+                );
+            });
+        }
+    }
+
 
     #[test]
     fn wizard_requires_explicit_install_after_review() {
