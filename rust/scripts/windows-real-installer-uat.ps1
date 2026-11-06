@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-real-installer-uat.ps1
 # Amac: Guncel TurkuazInstaller Studio ve CLI icin gercek test kurulumu olusturmak
 # Modul - PowerShell Windows Integration QA
-# Version: 0.1.2
+# Version: 0.1.3
 # Aciklama: Ornek ci.smoke yerine ayni derlemenin Studio ve CLI ikilisini native setup'a paketler
 # Bagimli Oldugu Katman: QA | Tool
 
@@ -21,6 +21,36 @@ $PSNativeCommandUseErrorActionPreference = $false
 if (-not $IsWindows) { throw 'Windows PowerShell 7 is required.' }
 $cli = (Resolve-Path -LiteralPath $CliPath -ErrorAction Stop).ProviderPath
 $studio = (Resolve-Path -LiteralPath $StudioPath -ErrorAction Stop).ProviderPath
+# BRK-FULL-UAT-PROCESS-001: PowerShell may return immediately for a
+# GUI-subsystem EXE. Always await its exit before inspecting installed files.
+function Invoke-TestExecutable {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+        [int]$TimeoutMilliseconds = 120000
+    )
+    $start = [Diagnostics.ProcessStartInfo]::new()
+    $start.FileName = $FilePath
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    foreach ($item in $Arguments) {
+        [void]$start.ArgumentList.Add($item)
+    }
+    $process = [Diagnostics.Process]::Start($start)
+    if ($null -eq $process) { throw 'Could not start native test executable.' }
+    try {
+        if (-not $process.WaitForExit($TimeoutMilliseconds)) {
+            $process.Kill($true)
+            throw 'Native test executable did not exit before the timeout.'
+        }
+        return [int]$process.ExitCode
+    } finally {
+        $process.Dispose()
+    }
+}
+
 $pkgId = 'turkuaz.installer.tools'
 $targetOutput = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $targetOutput) {
@@ -60,8 +90,8 @@ try {
 
     # BRK-REAL-SETUP-UAT-001: Install only in unique ephemeral RUNNER_TEMP.
     # Never touch any existing machine or user installation.
-    & $setup install-local-self --target $testTarget
-    if ($LASTEXITCODE -ne 0) { throw 'Integrated setup could not install the actual tools.' }
+    $installExit = Invoke-TestExecutable -FilePath $setup -Arguments @('install-local-self', '--target', $testTarget)
+    if ($installExit -ne 0) { throw "Integrated setup could not install the actual tools: exit=$installExit" }
     Write-Host 'FULL_SUITE_TEMP_INSTALL_PASS'
     $deployedFiles = @(Get-ChildItem -LiteralPath $testTarget -File -Recurse |
         ForEach-Object { $_.FullName.Substring($testTarget.Length).TrimStart('\') })
@@ -93,13 +123,13 @@ try {
         throw 'The installed tools are missing their local install receipt.'
     }
     Write-Host 'FULL_SUITE_RECEIPT_PASS'
-    & (Join-Path $testTarget 'TurkuazInstallerStudio.exe') --version
-    if ($LASTEXITCODE -ne 0) { throw 'Installed Studio version check failed.' }
+    $versionExit = Invoke-TestExecutable -FilePath (Join-Path $testTarget 'TurkuazInstallerStudio.exe') -Arguments @('--version')
+    if ($versionExit -ne 0) { throw "Installed Studio version check failed: exit=$versionExit" }
     Write-Host 'FULL_SUITE_STUDIO_VERSION_PASS'
 
     # Default CLI must not silently overwrite an occupied target.
-    & $setup install-local-self --target $testTarget 2>&1 | Out-Null
-    if ($LASTEXITCODE -eq 0) { throw 'Native CLI silently overwrote an existing target.' }
+    $retryExit = Invoke-TestExecutable -FilePath $setup -Arguments @('install-local-self', '--target', $testTarget)
+    if ($retryExit -eq 0) { throw 'Native CLI silently overwrote an existing target.' }
     & $cli uninstall-local --package-id $pkgId --target $testTarget --confirm-uninstall YES
     if ($LASTEXITCODE -ne 0) { throw 'Receipt-checked test uninstall failed.' }
     if (Test-Path -LiteralPath (Join-Path $testTarget 'TurkuazInstallerStudio.exe')) {
