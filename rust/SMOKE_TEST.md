@@ -19,6 +19,56 @@ Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde
 - Ayni paket kimligi icin yayinlayici tarafindan saglanmis gercek trust policy dosyasini ayri tutun. Ornek YAML icindeki sifir pin ve ornek sertifika kimligi guvenilir degildir; uretimde kullanilamaz.
 - Her komutta ayni paket kimligi, target ve data-root degerlerini kullanin. Asagidaki degerleri kendi paketinizle degistirin.
 
+## Windows UAC yetki ve UAT kabul matrisi
+
+UAC (User Account Control), Windows'un korumali klasor veya HKLM
+islemleri icin yonetici onayi istemesidir. UAT (User Acceptance Testing)
+ise gercek Windows kullanici arayuzunun ve kurulum davranisinin
+kontrollu kabuludur; CI kod testinin aynisi degildir.
+
+Otomatik Windows CI, `windows_elevation::tests` ve
+`windows-uac-resume-smoke.ps1` ile yetki istemeden su olumsuz
+senaryolari dogrular: bilinmeyen flag, ek EULA/recycle onay flag'i,
+bozuk boolean, eksik/degismis arguman sirasi, goreli/traversal
+hedefi ve desteklenmeyen dil. Testler gercek UAC prompt'u acmaz,
+admin izni almaz, dosya tasimaz ya da klasor silmez.
+
+Gercek UAT'yi geri alinabilir Windows 10/11 sanal makinede,
+test icin uretilmis dosyalarla ve farkli iki kullanici turunde yapin:
+
+1. Standart kullanici / Yalnizca bu kullanici: Windows yonetici
+   onayi istenmemeli; kurulum kullanici veri koklerinde kalmali.
+2. Standart kullanici / Tum kullanicilar: Windows `runas`
+   ekrani cikmali. Iptal edilirse eski klasor, HKLM,
+   Program Files ve kisayollar degismemeli.
+3. UAC onaylanirsa ikinci bir kurulum penceresi acilmali.
+   Hedef Program Files altinda ve paket kimligi ayni olmali.
+   Yeni pencerede `Kurulumu baslat` tiklanmadan dosya
+   kopyalamasi / kayit degisikligi yapilmamali.
+4. Lisans/EULA sayfasi varsa yeni yukseltilmis surecte kabul
+   tekrar istenmeli. Komut satirindan `--accept-license`
+   veya `--recycle-approved` kabul edilmemeli.
+5. Mevcut kurulum klasoru durumunda (PR #71 ile birlikte)
+   Recycle Bin onayi UAC sonrasinda **yeniden istenmeli**.
+   Onaysizsa hedef korunmali. Geri donusum islemi hata
+   verirse asla kalici silme/ustune yazma fallback'i olmamali.
+6. Admin kullanici ile Tum kullanicilar senaryosu: zaten
+   elevated token varsa gereksiz ikinci UAC istenmemeli,
+   fakat review/ozel klasor kabulu yine zorunlu olmali.
+7. UAT raporuna Windows yapisi, UAC sonucu, kullanici haklari,
+   test commit SHA'si, EXE'nin Authenticode signer sonucu,
+   uygulama surumu, hedef kapsam/yolu, beklenen ve
+   gercek davranis ile gizli bilgi icermeyen ekran
+   goruntusunu kaydedin.
+
+Windows UAC dialogu, kod imzasi veya yayinci orijinalligi
+garantisi saglamaz. Imzasiz test EXE'si Windows'ta
+bilinmeyen yayinci gorunebilir; production dagitimi icin
+gercek yayinci sertifikasi ile Authenticode dogrulamasi,
+imzali CMS release ve guven politikasi ayri kabul kapilaridir.
+Islem gercek dosyalar uzerinde degil VM fixture'larinda
+yapilmalidir.
+
 ## Studio, EULA ve Windows uygulama kaydi kabul senaryosu
 
 Bu bolumu geri alinabilir temiz Windows 10/11 test hesabinda,

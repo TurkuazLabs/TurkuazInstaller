@@ -157,8 +157,12 @@ jobs:
       - name: Test Windows per-user shortcut adapter
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_shortcuts::tests
 
-      - name: Test UAC argument escaping without requesting elevation
+      - name: Test UAC argument escaping and strict resume policy
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_elevation::tests
+
+      - name: Reject invalid UAC resume processes without elevation
+        shell: pwsh
+        run: pwsh -NoProfile -File rust/scripts/windows-uac-resume-smoke.ps1 -SetupPath rust/target/release/turkuaz-installer.exe
 
       - name: Test setup wizard language switching
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui wizard_language::tests
