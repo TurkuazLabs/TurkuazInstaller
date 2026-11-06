@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/RUST_READINESS.md
 Amac: Community Rust test kaniti ve production kabul eksiklerini ayri izlemek
 Modul - Markdown
-Version: 1.1.0
+Version: 1.2.0
 Aciklama: CI kaniti, yerel installer, signed workflow ve acik Windows kabul kapilari
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
@@ -78,9 +78,10 @@ kaniti olusturmaz.
 3. **Signed installer Windows adapter parity:** prerequisites,
    protocol kaydi, preserve_paths ve Windows yasam dongusu
    entegrasyonlarinin tam fonksiyonel kabul testleri.
-4. **Tam Rust dagitim:** `packaging/TurkuazInstallerBackup.nsi`
-   fallback'i halen var. Uygulamanin tum dagitimi icin
-   `%100 Rust` iddiasi yapilmaz.
+4. **Tek Rust kurulum kabulü:** aktif NSIS kaynagi ve ikinci setup
+   motoru kaldirildi. Ancak gercek Windows 10/11 kabul, Authenticode
+   yayinci imzasi, Windows entegrasyon adapterleri ve kurtarma eksikleri
+   tamamlanmadan production hazirlik iddiasi yapilmaz.
 5. **Gercek urun pilotu:** test verisinin disinda gercek yayinci
    imzali dagitim, kurtarma, veri korunumu ve Windows VM testi.
 6. **Private Pro entegrasyonu:** lisans backend'i, staged rollout
