@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_uninstall_gui.rs
 // Amac: Windows yuklu uygulamalar kaydindan cagirilabilen guvenli kaldirma sihirbazi
 // Modul - Rust Windows Uninstall Presentation
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: Acik onay, envanter on kontrolu ve degistirilmis dosyalari koruma
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -159,7 +159,9 @@ impl eframe::App for UninstallApp {
         egui::TopBottomPanel::bottom("uninstall_actions").show(context, |ui| {
             ui.separator();
             ui.add_space(9.0);
-            ui.with_layout(
+            // Limit the footer to a button row; the body needs the remaining height.
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), 40.0),
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| match self.phase {
                     UninstallPhase::Confirm => {
@@ -195,6 +197,10 @@ impl eframe::App for UninstallApp {
             );
         });
         egui::CentralPanel::default().show(context, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("uninstall_page")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
             ui.add_space(16.0);
             match self.phase {
                 UninstallPhase::Confirm => {
@@ -241,6 +247,7 @@ impl eframe::App for UninstallApp {
                     }
                 }
             }
+                });
         });
     }
 }

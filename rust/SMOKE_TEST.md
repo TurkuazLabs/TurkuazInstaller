@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.2
+Version: 0.3.3
 Aciklama: Derleme, embedded UAC application manifesti ve gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -19,6 +19,29 @@ degerleri dogrular. Bu manifest SmartScreen reputation/signature
 uyarisini gidermez; signer guveni ve dosya itibari ayri yayin kapilaridir.
 
 Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde denemek icindir. GUI setup stub artifact'i yalniz arayuz kabugudur; release bundle eklenmeden kurulum yapmaz. Gercek imzali release paketi ve yayinlayici tarafindan saglanan guven politikasi olmadan lifecycle kabul testi yapilamaz.
+
+## Standart sihirbaz gorunurlugu (2026-11-11)
+
+Alt eylem satiri yalnizca dugmelerin yuksekligini ayirir; kalan alani
+kaplayip sayfa icerigini kirpmaz. Standart kurulum ve kaldirma govdesi
+kucuk pencerelerde dikey kaydirilabilir. Kurulumda her sayfanin kaydirma
+konumu ayridir. Paket motoru, lisans/UAC onayi ve veri koruma kurallari
+degismez. Takip: [Windows kabul #41](https://github.com/TurkuazLabs/TurkuazInstaller/issues/41).
+
+- Otomatik regresyon: `unsigned_local_gui::tests::destination_controls_remain_visible_beside_header_and_footer`
+  gercek egui sayfasini 860x550 ve 760x490 mantiksal boyutta, acik/koyu
+  temada, Turkce/English ve ard arda uc karede cizer. Kurulum kapsami,
+  kullanici secimi, Gozat ve Ileri metinlerinin kirpma alaninda kaldigini
+  denetler. Mevcut Windows CI wizard test adimina dahildir.
+- Windows 10/11 manuel kabul **NOT RUN**: %100/%125/%150 olcekte
+  hos geldiniz, lisans, hedef, kisayollar ve son kontrol sayfalarini
+  gezin. Hedef yolu yazilabilmeli, Gozat gorunmeli; uzun aciklama ve
+  hatalara kaydirarak ulasilabilmeli. Dil ve tema degisimini deneyin.
+- Kaldirma penceresinde onay kutusu, uygulama/konum ve veri koruma
+  aciklamalarini kontrol edin; onaysiz kaldirma baslamamali. Bu manuel
+  kabul tamamlanmadan GUI sorunu production icin kapanmis sayilmaz.
+- Studio'nun yeni derlemesini kullanarak standart EXE'yi yeniden
+  olusturun. Eski gomulu EXE, Studio dosyasi degistirilince guncellenmez.
 
 ## Yerel klasor degistirme ve Geri Donusum Kutusu kabulu
 
