@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_uninstaller_cleanup.rs
 // Amac: Dogrulanmis kaldiriciyi pencere kapandiginda yonetici yetkisiz temizlemek
 // Modul - Rust Windows File Adapter
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Ayni dosya taniticisinda SHA-256 kontrolu ve POSIX delete disposition
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -134,9 +134,12 @@ mod tests {
     use std::{
         fs,
         process::{Child, Command},
+        sync::atomic::{AtomicU64, Ordering},
         thread,
         time::{Duration, SystemTime, UNIX_EPOCH},
     };
+
+    static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 
     struct Fixture(std::path::PathBuf);
     impl Fixture {
@@ -145,8 +148,11 @@ mod tests {
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_nanos();
-            let path = std::env::temp_dir()
-                .join(format!("turkuaz-cleanup-{}-{nonce}", std::process::id()));
+            let sequence = NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "turkuaz-cleanup-{}-{nonce}-{sequence}",
+                std::process::id()
+            ));
             fs::create_dir(&path).unwrap();
             Self(path)
         }
