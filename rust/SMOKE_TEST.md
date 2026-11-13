@@ -33,6 +33,8 @@ Normal acilis ve UAC sonrasi devam ayni pencere baslatma yolunu kullanir.
 Windows geometri sorgusu basarisizsa eframe'in ortalama davranisi
 korunur; stderr'e `TI-GUI-001` yazilir (monitor/pencere yerlestirme hatasi).
 
+Alt panel ilk karede de dugme, ayirici ve bosluklar icin yeterli alani
+ayirir; sonraki karelerde egui olculen icerik yuksekligini kullanir.
 Alt eylem satiri yalnizca dugmelerin yuksekligini ayirir; kalan alani
 kaplayip sayfa icerigini kirpmaz. Standart kurulum ve kaldirma govdesi
 kucuk pencerelerde dikey kaydirilabilir. Kurulumda her sayfanin kaydirma

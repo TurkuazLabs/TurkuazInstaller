@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.3
+// Version: 0.5.4
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -32,6 +32,10 @@ use crate::{
     wizard_language::WizardLanguage,
 };
 use windows::Win32::UI::Shell::FOLDERID_ProgramFiles;
+
+// Reserve the action row, separator and padding before egui has measured it.
+// Without this initial estimate, the first frame clips the navigation labels.
+const INITIAL_ACTION_PANEL_HEIGHT: f32 = 100.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WizardStep {
@@ -964,7 +968,9 @@ impl LocalInstaller {
             ui.separator();
         });
 
-        egui::TopBottomPanel::bottom("local_setup_footer").show(ctx, |ui| {
+        let footer = egui::TopBottomPanel::bottom("local_setup_footer")
+            .default_height(INITIAL_ACTION_PANEL_HEIGHT);
+        footer.show(ctx, |ui| {
             ui.separator();
             ui.add_space(10.0);
             // @dev-id TI-WIZARD-LAYOUT-001
