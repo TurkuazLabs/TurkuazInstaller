@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.1
+# Version: 0.3.2
 # Aciklama: PR degisikliklerinde Rust workspace, PE uygulama manifesti, tek setup lifecycle ve test ornek dagitimini dogrular
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -175,6 +175,12 @@ jobs:
 
       - name: Test multi-step unsigned local setup wizard navigation
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui unsigned_local_gui::tests
+
+      - name: Test Studio rebuild refresh and output preservation
+        shell: pwsh
+        run: |
+          $env:TURKUAZ_STUDIO_TEST_CLI = (Resolve-Path "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe").Path
+          cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_rebuild -- --include-ignored
 
       - name: Test Windows Recycle Bin path guard (no deletion)
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_recycle::tests

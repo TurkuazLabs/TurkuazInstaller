@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.12
+Version: 0.9.13
 Aciklama: Studio tasarim onizlemesi EULA kabul sifirlama ve tema regresyonu
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
@@ -45,6 +45,32 @@ otomatik restore ve kalici veri garantisi sunulmaz. Windows profilinin
 Recycle Bin ayarlarini, alan yetersizligini ve desteklenmeyen
 suruculeri test VM'inde ayri denetleyin. Pencere uyarisi
 ve bos/var klasor secimi Windows 10/11'de manuel kabul gerektirir.
+
+## Mevcut ciktiyi yeniden olusturma
+
+Tam Kurulum projesinin cikti klasoru mevcutsa Genel bakis ekraninda
+**Cikti klasorunu ac** yaninda **Yeniden olustur** gorunur. Bu dugme,
+ayarlar ayni kalsa bile kaynak dosyalarini tekrar paketler; secili AV
+taramasini uygular ve guncel Studio motoruyla standart EXE'yi hazirlar.
+Paket ve EXE once gecici klasorde tamamlanir. Ancak ikisi de basariliysa
+taninan eski cikti klasoru zaman damgali bir yedege tasinir ve yeni
+cikti yerine konur. Yedegin yolu sonuc mesajinda gosterilir; eski
+klasordeki ek kullanici dosyalari da yedekte korunur. Taninmayan klasor
+ve basarisiz derleme mevcut ciktinin uzerine yazmaz.
+
+Islem surerken dugme devre disidir. Bu eylem yalnizca Tam Kurulum
+icin standart imzasiz EXE uretir; imzali/cevrimici dagitim otomatik
+yeniden yayinlanmaz. Cikti klasoru yoksa mevcut 1/2 adimli ilk olusturma
+akisi kullanilir.
+
+Windows CI `studio_rebuild` testinde ayni proje ayarlariyla kaynak
+icerigini degistirir, yeni EXE'den cikan dosyayi ve eski yedegi kontrol
+eder; derleme hatasi ve taninmayan klasor korumasini da sinar.
+E2E testi icin once CLI derlenmeli; `TURKUAZ_STUDIO_TEST_CLI` tam EXE
+yoluna ayarlanip `cargo test --locked --manifest-path rust/Cargo.toml
+-p turkuaz-installer-cli --features setup-authoring-gui studio_rebuild
+-- --include-ignored` calistirilmalidir. Normal test kosusunda bu harici
+CLI gerektiren E2E testi `ignored` olarak raporlanir.
 
 ## Windows GUI derlemesi
 
