@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.5
+Version: 0.3.6
 Aciklama: Derleme, embedded UAC application manifesti ve gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -268,22 +268,30 @@ CI artifact'inin olusmasi kod dogrulamasidir; temiz son kullanici makinesinde el
 
 ### Kaldirici EXE temizligi (Windows)
 
-- Per-user kaldirici artik `MoveFileExW / DELAY_UNTIL_REBOOT` kullanmaz.
-  Dogrulanmis dosyada `FileDispositionInfoEx` DELETE + POSIX semantigi uygulanir.
-  Sonuc penceresi dosya taniticisini tutar; pencere kapaninca dosya adi temizlenir.
-- Ayni taniticida SHA-256 kontrol edilir. Ust dizinler yeniden adlandirmaya karsi
-  sabitlenir; reparse point, hardlink, degismis ve salt okunur dosyalar korunur.
-  Yabanci dosya, dizin veya onceki kurulum artigi topluca silinmez.
-- Desteklenmeyen dosya sistemi veya erisim reddinde EXE ve envanter korunur,
-  uyari gosterilir. Shell, yardimci EXE, yetki yukseltme veya reboot fallback yoktur.
+- Per-user kaldirici `MoveFileExW / DELAY_UNTIL_REBOOT` kullanmaz. Kucuk bir
+  Rust yardimci sureci asil kaldiricinin process handle'inin sinyalini bekler.
+  Surec bittikten sonra dogrulanmis EXE ve envanter handle'larini siler.
+- SHA-256 ayni dosya taniticisinda kontrol edilir; ust dizinler sabitlenir.
+  Reparse point, hardlink, degismis ve salt okunur dosyalar korunur.
+  Yardimciya HANDLE_LIST ile yalniz DELETE, SYNCHRONIZE ve log yazma yetkisi
+  aktarilir. Yardimci dosya yolu, PID aramasi veya shell komutu kabul etmez.
+- Yardimci `build.rs` tarafindan Rust ile derlenir ve Studio icine gomulur.
+  `Uninstallers/Cleanup/turkuaz-cleanup-<sha256>.exe` ortak onbellekte tutulur;
+  tekrar kullanmadan once gomulu SHA-256 ile dogrulanir. All-users onbellegi
+  yonetici korumali Program Files altindadir. Onbellek ve `cleanup-*.log`
+  dosyalari uygulama kaldirmasinda bilerek korunur; tum klasor temizlendi denmez.
+- Hazirlik/baslatma hatasi UI'da gorunur, EXE ve envanter korunur. Pencere
+  kapandiktan sonraki sonuc `Cleanup/cleanup-*.log` dosyasina yazilir.
+  Silme basarisizsa envanter tutulur. Shell, reboot veya ek UAC fallback yoktur.
 - Hata kodlari: `TI-UNINSTALL-CLEANUP-001` kimlik/yol/icerik/sahiplik;
-  `TI-UNINSTALL-CLEANUP-002` dosya silme erisimi;
-  `TI-UNINSTALL-CLEANUP-003` Windows disposition destegi veya silme reddi.
-- Windows CI normal dosya, degismis icerik, hardlink, salt okunur dosya,
-  komsu dosyalarin korunmasi ve gercek calisan test EXE'si ile temizligi sinar.
-  Ignore edilen child entry point, ana test tarafindan ayri proses olarak calistirilir.
+  `002` dosya silme erisimi; `003` kapanis sonrasi silme; `004` yardimci surec
+  veya parent bekleme; `005` yardimci onbellek/log hazirligi. Basari: `TI-UNINSTALL-CLEANUP-OK`.
+- Windows CI gercek Rust yardimci binary'siyle bekleme/silme, calisan EXE'nin
+  surec sonuna kadar korunmasi, EXE+envanter temizligi, yabanci/degismis dosya
+  ve degistirilmis yardimci onbelleginin korunmasini sinar. Ignore edilen
+  child test ana test tarafindan ayri proses olarak calistirilir.
 - Manuel kabul: Windows 10/11 standart kullanici oturumunda yeni Studio ile
-  paketi yeniden olustur, kur, Windows uygulama listesinden kaldir. Sonuc acikken
-  kaldirici EXE durmali; Kapat sonrasinda EXE kalkmali ve 0x80070005 uyarisi
-  olmamali. Bu manuel kontrol CI sonucu yerine gecmez; henuz CALISTIRILMADI.
+  paketi yeniden olustur, kur, Windows uygulama listesinden kaldir. Sonuc
+  acikken EXE ve envanter durmali; Kapat sonrasi ikisi kalkmali, log OK olmali,
+  0x80070005 uyarisi olmamali. Manuel kontrol henuz CALISTIRILMADI.
 - Eski uretilmis EXE ve onceden kurulmus kaldiricilar otomatik guncellenmez.

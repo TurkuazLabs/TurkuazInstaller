@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.8
+// Version: 0.1.9
 // Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -621,7 +621,7 @@ pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupRepo
 }
 
 /// @dev-id BRK-WIN-UNINSTALL-003
-/// @purpose Hold verified native uninstaller deletion until the result UI closes.
+/// @purpose Schedule verified EXE and receipt cleanup after process exit.
 /// @contract Called after owned registry removal. Failed preparation preserves
 /// both EXE and receipt; no system-wide reboot operation or shell is used.
 pub(super) fn finalize_uninstaller(
@@ -643,7 +643,13 @@ pub(super) fn finalize_uninstaller(
             .uninstaller_sha256
             .as_deref()
             .ok_or("TI-UNINSTALL-CLEANUP-001: Kaldırıcı içerik doğrulaması eksik.")?;
-        crate::windows_uninstaller_cleanup::prepare_removal(&record.uninstaller, digest)
+        let target =
+            crate::windows_uninstaller_cleanup::prepare_removal(&record.uninstaller, digest)?;
+        let receipt =
+            crate::windows_uninstaller_cleanup::prepare_removal(manifest, &digest_file(manifest)?)?;
+        crate::windows_uninstaller_cleanup::schedule_removal(target, receipt, unsafe {
+            windows::Win32::System::Threading::GetCurrentProcess()
+        })
     };
     let pending = match prepare() {
         Ok(pending) => pending,
@@ -657,11 +663,7 @@ pub(super) fn finalize_uninstaller(
             );
         }
     };
-    let mut warnings = Vec::new();
-    if let Err(error) = fs::remove_file(manifest) {
-        warnings.push(format!("Kaldırıcı envanteri silinemedi: {error}"));
-    }
-    (Some(pending), warnings)
+    (Some(pending), Vec::new())
 }
 
 #[cfg(test)]
@@ -784,10 +786,11 @@ mod tests {
         let (pending, warnings) = finalize_uninstaller(&record, &manifest);
         assert!(warnings.is_empty(), "{warnings:?}");
         assert!(pending.is_some());
-        assert!(!manifest.exists());
+        assert!(manifest.exists());
         assert!(record.uninstaller.exists());
         drop(pending);
-        assert!(!record.uninstaller.exists());
+        // Worker owns both handles and waits for this test process to exit.
+        // The live-child test verifies actual post-exit deletion.
         let _ = fs::remove_dir_all(&base);
     }
 

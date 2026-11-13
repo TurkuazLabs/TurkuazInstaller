@@ -1,48 +1,54 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_uninstaller_cleanup.rs
 // Amac: Dogrulanmis kaldiriciyi pencere kapandiginda yonetici yetkisiz temizlemek
 // Modul - Rust Windows File Adapter
-// Version: 0.1.1
-// Aciklama: Ayni dosya taniticisinda SHA-256 kontrolu ve POSIX delete disposition
+// Version: 0.2.0
+// Aciklama: Dogrulanmis taniticilari Rust yardimci surecine aktararak kapanis sonrasi temizlik
 // Bagimli Oldugu Katman: Adapter | Security
 
 use sha2::{Digest, Sha256};
 use std::{
     fs::{File, OpenOptions},
-    io::Read,
+    io::{Read, Write},
     os::windows::{
         fs::{MetadataExt, OpenOptionsExt},
-        io::AsRawHandle,
+        io::{AsRawHandle, OwnedHandle},
     },
-    path::{Component, Path},
+    path::{Component, Path, PathBuf},
 };
 use windows::Win32::{
     Foundation::HANDLE,
     Storage::FileSystem::{
-        BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ATTRIBUTE_REPARSE_POINT,
-        FILE_DISPOSITION_FLAG_DELETE, FILE_DISPOSITION_FLAG_POSIX_SEMANTICS,
-        FILE_DISPOSITION_INFO_EX, FILE_DISPOSITION_INFO_EX_FLAGS, FILE_FLAG_BACKUP_SEMANTICS,
-        FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ, FILE_READ_ATTRIBUTES, FILE_SHARE_READ,
-        FILE_SHARE_WRITE, FileDispositionInfoEx, GetFileInformationByHandle,
-        SetFileInformationByHandle,
+        BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_REPARSE_POINT,
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ,
+        FILE_READ_ATTRIBUTES, FILE_SHARE_READ, FILE_SHARE_WRITE, GetFileInformationByHandle,
     },
 };
 
 // Field order matters: close the deletion handle before releasing ancestor locks.
-pub(super) struct PendingUninstallerRemoval {
+pub(super) struct VerifiedRemoval {
+    path: PathBuf,
     _file: File,
     _ancestors: Vec<File>,
 }
 
 /// @dev-id TI-UNINSTALL-CLEANUP-001
-/// @purpose Hold verified deletion until the result window releases this object.
+/// @purpose Pin and verify files before transferring deletion capabilities.
 /// @reason Reboot deletion writes system-wide state and fails for standard users.
-/// @contract No shell, helper EXE, elevation or reboot. Pin every path ancestor;
+/// @contract No shell, elevation or reboot. Pin every path ancestor;
 /// hash and delete the same regular single-link file with writes/renames denied.
-/// Unsupported filesystems or denied deletion preserve the file and return an error.
+/// Denied access, readonly files and changed content are preserved.
 pub(super) fn prepare_removal(
     path: &Path,
     expected_sha256: &str,
-) -> Result<PendingUninstallerRemoval, String> {
+) -> Result<VerifiedRemoval, String> {
+    verify_file(path, expected_sha256, true)
+}
+
+fn verify_file(
+    path: &Path,
+    expected_sha256: &str,
+    delete_access: bool,
+) -> Result<VerifiedRemoval, String> {
     if !path.is_absolute()
         || path
             .components()
@@ -70,14 +76,15 @@ pub(super) fn prepare_removal(
         ancestors.push(handle);
     }
     let mut file = OpenOptions::new()
-        .access_mode(FILE_GENERIC_READ.0 | DELETE.0)
+        .access_mode(FILE_GENERIC_READ.0 | if delete_access { DELETE.0 } else { 0 })
         .share_mode(FILE_SHARE_READ.0)
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
         .open(path)
         .map_err(|e| format!("TI-UNINSTALL-CLEANUP-002: Kaldırıcı silme erişimi alınamadı: {e}"))?;
     let meta = file.metadata().map_err(|e| e.to_string())?;
     if !meta.is_file()
-        || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+        || meta.file_attributes() & (FILE_ATTRIBUTE_REPARSE_POINT.0 | FILE_ATTRIBUTE_READONLY.0)
+            != 0
         || meta.len() > super::windows_local_registration::MAX_EXECUTABLE_BYTES
     {
         return Err(
@@ -104,27 +111,89 @@ pub(super) fn prepare_removal(
     if actual != expected_sha256 {
         return Err("TI-UNINSTALL-CLEANUP-001: Kaldırıcı içeriği değişti; dosya korunuyor.".into());
     }
-    let disposition = FILE_DISPOSITION_INFO_EX {
-        Flags: FILE_DISPOSITION_INFO_EX_FLAGS(
-            FILE_DISPOSITION_FLAG_DELETE.0 | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS.0,
-        ),
-    };
-    // SAFETY: DELETE access was obtained for this verified File; the structure
-    // remains live for the synchronous call. Do not force-clear read-only flags.
-    unsafe {
-        SetFileInformationByHandle(
-            handle,
-            FileDispositionInfoEx,
-            &disposition as *const _ as *const _,
-            std::mem::size_of_val(&disposition) as u32,
-        )
-    }
-    .map_err(|e| {
-        format!("TI-UNINSTALL-CLEANUP-003: Windows dosya temizliğini kabul etmedi: {e}")
-    })?;
-    Ok(PendingUninstallerRemoval {
+    Ok(VerifiedRemoval {
+        path: path.to_path_buf(),
         _file: file,
         _ancestors: ancestors,
+    })
+}
+
+pub(super) struct PendingUninstallerRemoval {
+    _target: VerifiedRemoval,
+    _receipt: VerifiedRemoval,
+    _helper: VerifiedRemoval,
+    _worker: OwnedHandle,
+    _log: File,
+}
+
+const WORKER_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/turkuaz-cleanup-worker.exe"));
+
+/// @dev-id TI-UNINSTALL-CLEANUP-005
+/// @purpose Launch a small shared Rust worker, which waits for the real parent handle.
+/// @contract Reuse only the embedded worker's content hash. Keep cache/log files;
+/// delete only verified target and receipt handles after process exit.
+pub(super) fn schedule_removal(
+    target: VerifiedRemoval,
+    receipt: VerifiedRemoval,
+    parent: HANDLE,
+) -> Result<PendingUninstallerRemoval, String> {
+    let root = target.path.parent().ok_or("cleanup root missing")?;
+    let cache = root.join("Cleanup");
+    match std::fs::create_dir(&cache) {
+        Ok(()) => (),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => (),
+        Err(e) => return Err(format!("TI-UNINSTALL-CLEANUP-005: {e}")),
+    }
+    // Pin and reject a reparse cache directory before any writes into it.
+    let cache_lock = OpenOptions::new()
+        .access_mode(FILE_READ_ATTRIBUTES.0)
+        .share_mode(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0)
+        .open(&cache)
+        .map_err(|e| e.to_string())?;
+    let meta = cache_lock.metadata().map_err(|e| e.to_string())?;
+    if !meta.is_dir() || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0 {
+        return Err("TI-UNINSTALL-CLEANUP-005: Güvensiz temizleyici önbelleği.".into());
+    }
+    let digest = format!("{:x}", Sha256::digest(WORKER_BYTES));
+    let executable = cache.join(format!("turkuaz-cleanup-{digest}.exe"));
+    match OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&executable)
+    {
+        Ok(mut file) => {
+            file.write_all(WORKER_BYTES)
+                .and_then(|_| file.sync_all())
+                .map_err(|e| e.to_string())?;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => (),
+        Err(e) => return Err(format!("TI-UNINSTALL-CLEANUP-005: {e}")),
+    }
+    let helper = verify_file(&executable, &digest, false)?;
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_nanos();
+    let log = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(cache.join(format!("cleanup-{}-{nonce}.log", std::process::id())))
+        .map_err(|e| format!("TI-UNINSTALL-CLEANUP-005: {e}"))?;
+    let worker = crate::windows_cleanup_process::spawn_worker(
+        &executable,
+        HANDLE(target._file.as_raw_handle()),
+        HANDLE(receipt._file.as_raw_handle()),
+        parent,
+        HANDLE(log.as_raw_handle()),
+    )
+    .map_err(|e| format!("TI-UNINSTALL-CLEANUP-004: {e}"))?;
+    Ok(PendingUninstallerRemoval {
+        _target: target,
+        _receipt: receipt,
+        _helper: helper,
+        _worker: worker,
+        _log: log,
     })
 }
 
@@ -174,19 +243,37 @@ mod tests {
     }
 
     #[test]
-    fn cleanup_waits_for_handle_drop_and_preserves_neighbours() {
+    fn cleanup_waits_for_parent_signal_and_preserves_neighbours() {
         let fixture = Fixture::new();
         let owned = fixture.0.join("owned.exe");
         let foreign = fixture.0.join("user.txt");
         fs::write(&owned, b"owned fixture").unwrap();
         fs::write(&foreign, b"keep").unwrap();
-        let pending = prepare_removal(&owned, &digest(&owned)).unwrap();
-        assert!(
-            owned.exists(),
-            "must remain until the result window releases its handle"
-        );
-        drop(pending);
+        let receipt = fixture.0.join("receipt.json");
+        fs::write(&receipt, b"receipt").unwrap();
+        use std::os::windows::io::FromRawHandle;
+        use windows::Win32::System::Threading::{CreateEventW, SetEvent};
+        let event = unsafe { CreateEventW(None, true, false, None) }.unwrap();
+        let event_owner = unsafe { OwnedHandle::from_raw_handle(event.0) };
+        let pending = schedule_removal(
+            prepare_removal(&owned, &digest(&owned)).unwrap(),
+            prepare_removal(&receipt, &digest(&receipt)).unwrap(),
+            event,
+        )
+        .unwrap();
+        assert!(owned.exists());
+        assert!(receipt.exists());
+        unsafe { SetEvent(event) }.unwrap();
+        // Release parent file references, but retain the process handle for verification.
+        let worker = pending._worker;
+        drop(pending._target);
+        drop(pending._receipt);
+        drop(pending._helper);
+        drop(pending._log);
+        wait_worker(&worker);
+        drop(event_owner);
         assert!(!owned.exists());
+        assert!(!receipt.exists());
         assert_eq!(fs::read(foreign).unwrap(), b"keep");
     }
 
@@ -214,7 +301,7 @@ mod tests {
     }
 
     #[test]
-    fn cleanup_can_release_a_running_executable_without_reboot() {
+    fn cleanup_removes_executable_only_after_process_exit() {
         let fixture = Fixture::new();
         let original = std::env::current_exe().unwrap();
         let copy = fixture.0.join("running-test.exe");
@@ -239,21 +326,70 @@ mod tests {
         }
         assert!(fixture.0.join("ready").exists(), "child did not start");
         assert!(child.0.try_wait().unwrap().is_none());
-        let pending = prepare_removal(&copy, &expected).expect("live image cleanup");
+        let receipt = fixture.0.join("receipt.json");
+        fs::write(&receipt, b"receipt").unwrap();
+        let pending = schedule_removal(
+            prepare_removal(&copy, &expected).unwrap(),
+            prepare_removal(&receipt, &digest(&receipt)).unwrap(),
+            HANDLE(child.0.as_raw_handle()),
+        )
+        .unwrap();
         assert!(copy.exists());
-        drop(pending);
-        assert!(
-            !copy.exists(),
-            "uninstaller name should be removed without reboot"
-        );
+        assert!(receipt.exists());
         fs::write(fixture.0.join("finish"), b"exit").unwrap();
         assert!(child.0.wait().unwrap().success());
+        let worker = pending._worker;
+        drop(pending._target);
+        drop(pending._receipt);
+        drop(pending._helper);
+        drop(pending._log);
+        wait_worker(&worker);
+        assert!(
+            !copy.exists(),
+            "uninstaller must be removed after process exit"
+        );
+        assert!(!receipt.exists());
         assert!(original.exists(), "the parent test executable must survive");
+    }
+
+    #[test]
+    fn modified_cached_worker_is_never_launched_and_receipts_survive() {
+        let fixture = Fixture::new();
+        let target = fixture.0.join("owned.exe");
+        let receipt = fixture.0.join("receipt.json");
+        fs::write(&target, b"target").unwrap();
+        fs::write(&receipt, b"receipt").unwrap();
+        let cache = fixture.0.join("Cleanup");
+        fs::create_dir(&cache).unwrap();
+        let name = format!("turkuaz-cleanup-{:x}.exe", Sha256::digest(WORKER_BYTES));
+        fs::write(cache.join(name), b"foreign contents").unwrap();
+        let result = schedule_removal(
+            prepare_removal(&target, &digest(&target)).unwrap(),
+            prepare_removal(&receipt, &digest(&receipt)).unwrap(),
+            unsafe { windows::Win32::System::Threading::GetCurrentProcess() },
+        );
+        assert!(result.is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"target");
+        assert_eq!(fs::read(&receipt).unwrap(), b"receipt");
+    }
+
+    fn wait_worker(worker: &OwnedHandle) {
+        use windows::Win32::{
+            Foundation::WAIT_OBJECT_0,
+            System::Threading::{GetExitCodeProcess, WaitForSingleObject},
+        };
+        assert_eq!(
+            unsafe { WaitForSingleObject(HANDLE(worker.as_raw_handle()), 15000) },
+            WAIT_OBJECT_0
+        );
+        let mut code = 99;
+        unsafe { GetExitCodeProcess(HANDLE(worker.as_raw_handle()), &mut code) }.unwrap();
+        assert_eq!(code, 0, "cleanup worker failed");
     }
 
     // This is a child-process entry point, exercised by the test above.
     #[test]
-    #[ignore = "spawned by cleanup_can_release_a_running_executable_without_reboot"]
+    #[ignore = "spawned by cleanup_removes_executable_only_after_process_exit"]
     fn cleanup_child_process() {
         let root = std::path::PathBuf::from(
             std::env::var_os("TURKUAZ_CLEANUP_TEST_ROOT").expect("child root"),
