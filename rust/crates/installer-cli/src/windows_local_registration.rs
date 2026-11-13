@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.7
+// Version: 0.1.8
 // Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -18,7 +18,6 @@ use sha2::{Digest, Sha256};
 use windows::{
     Win32::{
         Foundation::ERROR_SUCCESS,
-        Storage::FileSystem::{MOVEFILE_DELAY_UNTIL_REBOOT, MoveFileExW},
         System::Registry::{
             HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, KEY_SET_VALUE,
             REG_CREATE_KEY_DISPOSITION, REG_CREATED_NEW_KEY, REG_DWORD, REG_OPTION_NON_VOLATILE,
@@ -41,7 +40,7 @@ use crate::{
 const UNINSTALL_ROOT: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
 const MARKER: &str = "TurkuazOwner";
 const MAX_JSON_BYTES: u64 = 256 * 1024;
-const MAX_EXECUTABLE_BYTES: u64 = 512 * 1024 * 1024;
+pub(super) const MAX_EXECUTABLE_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -87,9 +86,16 @@ pub(super) struct LocalRegistration {
     marker: String,
     uninstaller: PathBuf,
     shortcuts: Vec<OwnedShortcut>,
+    #[serde(skip)]
+    uninstaller_sha256: Option<String>,
 }
 
 impl LocalRegistration {
+    pub(super) fn same_uninstaller(&self, other: &Self) -> bool {
+        self.uninstaller == other.uninstaller
+            && self.uninstaller_sha256.is_some()
+            && self.uninstaller_sha256 == other.uninstaller_sha256
+    }
     pub(super) fn package_id(&self) -> &str {
         &self.package_id
     }
@@ -376,7 +382,8 @@ pub(super) fn read_registration(source: &Path) -> Result<LocalRegistration, Stri
     if input.len() as u64 > MAX_JSON_BYTES {
         return Err("Kaldırma envanteri aşırı büyük.".into());
     }
-    let record: LocalRegistration = serde_json::from_slice(&input).map_err(|e| e.to_string())?;
+    let mut record: LocalRegistration =
+        serde_json::from_slice(&input).map_err(|e| e.to_string())?;
     if record.version != 1
         || !valid_id(&record.package_id)
         || record.key != registration_name(&record.package_id, &record.target)?
@@ -394,6 +401,7 @@ pub(super) fn read_registration(source: &Path) -> Result<LocalRegistration, Stri
     {
         return Err("Windows uygulama kaydı/kurulum eşleşmiyor.".into());
     }
+    record.uninstaller_sha256 = Some(digest_file(&record.uninstaller)?);
     Ok(record)
 }
 
@@ -528,6 +536,7 @@ pub(super) fn register_local_install(
         marker,
         uninstaller,
         shortcuts,
+        uninstaller_sha256: None,
     };
     let manifest_data = serde_json::to_vec(&record).map_err(|e| e.to_string())?;
     if manifest_data.len() as u64 > MAX_JSON_BYTES {
@@ -612,38 +621,47 @@ pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupRepo
 }
 
 /// @dev-id BRK-WIN-UNINSTALL-003
-/// @purpose Dispose of the owner receipt and request deferred uninstaller
-/// removal once the program is no longer running. No untrusted commands.
-/// @contract Only called after the owned registry entry was removed.
-pub(super) fn finalize_uninstaller(record: &LocalRegistration, manifest: &Path) -> Vec<String> {
-    let mut warnings = Vec::new();
-    if manifest
-        != registration_path(record)
-            .ok()
+/// @purpose Hold verified native uninstaller deletion until the result UI closes.
+/// @contract Called after owned registry removal. Failed preparation preserves
+/// both EXE and receipt; no system-wide reboot operation or shell is used.
+pub(super) fn finalize_uninstaller(
+    record: &LocalRegistration,
+    manifest: &Path,
+) -> (
+    Option<crate::windows_uninstaller_cleanup::PendingUninstallerRemoval>,
+    Vec<String>,
+) {
+    let prepare = || {
+        let root = owned_root(record.scope())?;
+        if record.key != registration_name(&record.package_id, &record.target)?
+            || manifest != registration_path(record)?
+            || record.uninstaller != root.join(format!("{}.exe", record.key))
+        {
+            return Err("TI-UNINSTALL-CLEANUP-001: Kaldırıcı konum doğrulaması başarısız.".into());
+        }
+        let digest = record
+            .uninstaller_sha256
             .as_deref()
-            .unwrap_or(Path::new(""))
-    {
-        return vec!["Kaldırıcı konum doğrulaması başarısız oldu.".into()];
-    }
+            .ok_or("TI-UNINSTALL-CLEANUP-001: Kaldırıcı içerik doğrulaması eksik.")?;
+        crate::windows_uninstaller_cleanup::prepare_removal(&record.uninstaller, digest)
+    };
+    let pending = match prepare() {
+        Ok(pending) => pending,
+        Err(error) => {
+            return (
+                None,
+                vec![format!(
+                    "Kaldırıcı EXE ve envanteri korundu: {} ({error})",
+                    record.uninstaller.display()
+                )],
+            );
+        }
+    };
+    let mut warnings = Vec::new();
     if let Err(error) = fs::remove_file(manifest) {
         warnings.push(format!("Kaldırıcı envanteri silinemedi: {error}"));
     }
-    let path_w = wide(record.uninstaller.as_os_str());
-    if let Err(error) = unsafe {
-        MoveFileExW(
-            PCWSTR(path_w.as_ptr()),
-            PCWSTR::null(),
-            MOVEFILE_DELAY_UNTIL_REBOOT,
-        )
-    } {
-        // On non-elevated per-user installs Windows can deny the system-wide
-        // delayed-delete registry operation. Preserve rather than force delete.
-        warnings.push(format!(
-            "Kaldırıcı EXE daha sonra temizlenmelidir: {} ({error})",
-            record.uninstaller.display()
-        ));
-    }
-    warnings
+    (Some(pending), warnings)
 }
 
 #[cfg(test)]
@@ -743,8 +761,33 @@ mod tests {
             cleanup.warnings
         );
         assert!(open_key(InstallScope::CurrentUser, &name).is_err());
-        fs::remove_file(&manifest).expect("remove fixture manifest");
-        fs::remove_file(&record.uninstaller).expect("remove unused fixture binary");
+        let (rejected, warnings) = finalize_uninstaller(&record, &base.join("foreign.json"));
+        assert!(rejected.is_none());
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("TI-UNINSTALL-CLEANUP-001"))
+        );
+        assert!(manifest.exists());
+        let mut stale = record.clone();
+        stale.uninstaller_sha256 = Some("0".repeat(64));
+        assert!(!record.same_uninstaller(&stale));
+        let (rejected, warnings) = finalize_uninstaller(&stale, &manifest);
+        assert!(rejected.is_none());
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("TI-UNINSTALL-CLEANUP-001"))
+        );
+        assert!(manifest.exists());
+        assert!(record.uninstaller.exists());
+        let (pending, warnings) = finalize_uninstaller(&record, &manifest);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(pending.is_some());
+        assert!(!manifest.exists());
+        assert!(record.uninstaller.exists());
+        drop(pending);
+        assert!(!record.uninstaller.exists());
         let _ = fs::remove_dir_all(&base);
     }
 

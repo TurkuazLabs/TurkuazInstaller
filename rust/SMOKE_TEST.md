@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.4
+Version: 0.3.5
 Aciklama: Derleme, embedded UAC application manifesti ve gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -265,3 +265,25 @@ Rust Migration CI basariliysa `turkuaz-example-test-setup-v<surum>-windows-x64` 
 ZIP'i ayri bir klasore cikartip yalnizca deneme icin kullanin. Sihirbazda `Kur` islemini secip `İleri`'ye basin. Paket kimligini `ci.smoke` birakin; guven dosyasinin yanindaki test YAML dosyasi oldugunu kontrol edin; kurulum dizinini `%LOCALAPPDATA%\TurkuazInstaller-Test\App`, veri dizinini `%LOCALAPPDATA%\TurkuazInstaller-Test\Data` secin; son kontrol ekraninda `Kur ve doğrula`'ya basin. Ardindan `README-TR.txt` icindeki CLI komutuyla ornek uygulamayi acin. Kaldirmayi GUI'den denemek icin setup'i yeniden acin, `Kaldır` islemini secin, ayni paket ve yollari kullanin, son ekrandaki onay kutusunu isaretleyip `Paketi kaldır`'a basin. Self-signed CI sertifikasi nedeniyle Windows yayinci uyarisi gosterebilir; bu imza production yayincisini dogrulamaz ve sertifika Trusted Root'a eklenmemelidir. Artifact yedi gun tutulur ve production'da kullanilmaz.
 
 CI artifact'inin olusmasi kod dogrulamasidir; temiz son kullanici makinesinde elle GUI testi yerine gecmez.
+
+### Kaldirici EXE temizligi (Windows)
+
+- Per-user kaldirici artik `MoveFileExW / DELAY_UNTIL_REBOOT` kullanmaz.
+  Dogrulanmis dosyada `FileDispositionInfoEx` DELETE + POSIX semantigi uygulanir.
+  Sonuc penceresi dosya taniticisini tutar; pencere kapaninca dosya adi temizlenir.
+- Ayni taniticida SHA-256 kontrol edilir. Ust dizinler yeniden adlandirmaya karsi
+  sabitlenir; reparse point, hardlink, degismis ve salt okunur dosyalar korunur.
+  Yabanci dosya, dizin veya onceki kurulum artigi topluca silinmez.
+- Desteklenmeyen dosya sistemi veya erisim reddinde EXE ve envanter korunur,
+  uyari gosterilir. Shell, yardimci EXE, yetki yukseltme veya reboot fallback yoktur.
+- Hata kodlari: `TI-UNINSTALL-CLEANUP-001` kimlik/yol/icerik/sahiplik;
+  `TI-UNINSTALL-CLEANUP-002` dosya silme erisimi;
+  `TI-UNINSTALL-CLEANUP-003` Windows disposition destegi veya silme reddi.
+- Windows CI normal dosya, degismis icerik, hardlink, salt okunur dosya,
+  komsu dosyalarin korunmasi ve gercek calisan test EXE'si ile temizligi sinar.
+  Ignore edilen child entry point, ana test tarafindan ayri proses olarak calistirilir.
+- Manuel kabul: Windows 10/11 standart kullanici oturumunda yeni Studio ile
+  paketi yeniden olustur, kur, Windows uygulama listesinden kaldir. Sonuc acikken
+  kaldirici EXE durmali; Kapat sonrasinda EXE kalkmali ve 0x80070005 uyarisi
+  olmamali. Bu manuel kontrol CI sonucu yerine gecmez; henuz CALISTIRILMADI.
+- Eski uretilmis EXE ve onceden kurulmus kaldiricilar otomatik guncellenmez.
