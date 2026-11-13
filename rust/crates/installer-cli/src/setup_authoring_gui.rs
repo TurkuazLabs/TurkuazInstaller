@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_authoring_gui.rs
 // Amac: Koyu renkli Turkuaz Studio ve tam boy kurulum tasarimi onizlemesi
 // Modul - Rust GUI Module
-// Version: 0.8.9
+// Version: 0.8.10
 // Aciklama: Tam boy Studio tasarimi, acilir bilgi panelleri ve Pro icin TurkuazLabs yonlendirmesi
 // Bagimli Oldugu Katman: View | Application
 
@@ -38,6 +38,12 @@ mod setup_design_surface;
 
 const MAXIMUM_PROJECT_FILE_BYTES: u64 = 1024 * 1024;
 const PROJECT_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ProjectBuildOutput {
+    Package,
+    StandardSetup,
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum AppearancePreference {
@@ -567,7 +573,7 @@ impl eframe::App for BuilderApp {
                             )
                             .clicked()
                         {
-                            self.start_standard_build();
+                            self.start_standard_build(false);
                         }
 
                         let build_clicked = ui
@@ -1127,6 +1133,7 @@ impl BuilderApp {
         let is_building = self.build_receiver.is_some();
         let recent_status = self.status.clone();
         let mut folder_to_open = None;
+        let mut rebuild_requested = false;
 
         studio_card(ui, |ui| {
             ui.label(
@@ -1201,7 +1208,7 @@ impl BuilderApp {
                             egui::Color32::from_rgb(170, 92, 22),
                             "Mevcut paket farklı proje ayarlarına ait veya proje kaydı okunamıyor.",
                         );
-                        ui.label("2 Standart Kurulum EXE oluştur: eski çıktıyı güvenli yedekleyip güncel paketle EXE üretir.");
+                        ui.label("Tam Kurulum için Yeniden oluştur: eski çıktıyı yedekleyip güncel kaynak dosyalarıyla paket ve EXE üretir.");
                         ui.small("Eski paket tanınmıyorsa güvenlik nedeniyle korunur; farklı çıktı klasörü veya yeni sürüm seçin.");
                     } else {
                         ui.label("Bu konumda henüz bir uygulama paketi bulunamadı.");
@@ -1216,15 +1223,25 @@ impl BuilderApp {
                             .ok()
                             .filter(|path| regular_directory_exists(path))
                     };
-                    if ui
-                        .add_enabled(
-                            open_directory.is_some() && !is_building,
-                            egui::Button::new("Çıktı klasörünü aç"),
-                        )
-                        .clicked()
-                    {
-                        folder_to_open = open_directory;
-                    }
+                    ui.horizontal_wrapped(|ui| {
+                        if ui
+                            .add_enabled(
+                                open_directory.is_some() && !is_building,
+                                egui::Button::new("Çıktı klasörünü aç"),
+                            )
+                            .clicked()
+                        {
+                            folder_to_open = open_directory;
+                        }
+                        if self.project.installer_kind == InstallerKind::Offline
+                            && regular_directory_exists(package_directory)
+                            && ui.add_enabled(!is_building, egui::Button::new("Yeniden oluştur"))
+                                .on_hover_text("Kaynak dosyalarını yeniden paketler ve kurulum EXE'sini oluşturur. Önceki çıktı silinmez, yedeklenir.")
+                                .clicked()
+                        {
+                            rebuild_requested = true;
+                        }
+                    });
                 }
                 Err(error) => {
                     ui.colored_label(egui::Color32::from_rgb(180, 45, 45), error);
@@ -1248,6 +1265,9 @@ impl BuilderApp {
             }
         });
 
+        if rebuild_requested {
+            self.start_standard_build(true);
+        }
         if let Some(path) = folder_to_open {
             if let Err(error) = open_output_directory(&path) {
                 self.status = Some((false, error));
@@ -1431,7 +1451,7 @@ impl BuilderApp {
         ui.add_space(12.0);
 
         if build_setup_requested {
-            self.start_standard_build();
+            self.start_standard_build(false);
         } else if close_requested {
             self.dialog_open = false;
         } else if previous_requested {
@@ -2530,7 +2550,10 @@ impl BuilderApp {
     }
 
     // BRK-STUDIO-STANDARD-001: Native unsigned setup never bypasses signed releases.
-    fn start_standard_build(&mut self) {
+    fn start_standard_build(&mut self, refresh_source: bool) {
+        if self.build_receiver.is_some() {
+            return;
+        }
         if self.project.installer_kind != InstallerKind::Offline {
             self.status = Some((
                 false,
@@ -2551,7 +2574,12 @@ impl BuilderApp {
         self.dialog_open = false;
         self.status = None;
         thread::spawn(move || {
-            let _ = sender.send(build_native_standard_setup(project));
+            let result = if refresh_source {
+                prepare_project(project, true, ProjectBuildOutput::StandardSetup)
+            } else {
+                build_native_standard_setup(project)
+            };
+            let _ = sender.send(result);
         });
     }
 
@@ -3658,7 +3686,7 @@ fn build_native_standard_setup(project: SavedProject) -> Result<String, String> 
     // BRK-STUDIO-REBUILD-001: One-click EXE generation must never skip
     // selected antivirus scanning when the project or its inputs changed.
     if ensure_prepared_package_is_current(&project).is_err() {
-        prepare_project(project.clone(), true)?;
+        prepare_project(project.clone(), true, ProjectBuildOutput::Package)?;
     }
     let root = ensure_prepared_package_is_current(&project)?;
     let directory = root.join("standard");
@@ -3691,13 +3719,38 @@ fn build_native_standard_setup(project: SavedProject) -> Result<String, String> 
 }
 
 fn build_project(project: SavedProject) -> Result<String, String> {
-    prepare_project(project, false)
+    prepare_project(project, false, ProjectBuildOutput::Package)
 }
 
 /// BRK-STUDIO-REBUILD-002: Prepare a new package and only then, if requested,
 /// preserve the previous recognized output as a timestamped backup. Never delete
 /// or silently overwrite an unknown user directory.
-fn prepare_project(project: SavedProject, backup_stale_output: bool) -> Result<String, String> {
+fn prepare_project(
+    project: SavedProject,
+    backup_stale_output: bool,
+    output: ProjectBuildOutput,
+) -> Result<String, String> {
+    let executable = std::env::current_exe()
+        .map_err(|error| format!("Setup Builder executable path could not be read: {error}"))?;
+    prepare_project_with_builder(project, backup_stale_output, output, &executable)
+}
+
+/// @dev-id TI-STUDIO-REBUILD-001
+/// @purpose Build fresh source bytes and the requested EXE before publishing.
+/// @reason Reusing a matching project record misses changes within source files.
+/// @contract Recognized old output is backed up only after the entire build and
+/// selected AV scan succeed. Unknown output and failed builds remain untouched.
+fn prepare_project_with_builder(
+    project: SavedProject,
+    backup_stale_output: bool,
+    output: ProjectBuildOutput,
+    executable: &Path,
+) -> Result<String, String> {
+    if output == ProjectBuildOutput::StandardSetup
+        && project.installer_kind != InstallerKind::Offline
+    {
+        return Err("Standart Kurulum yalnızca Tam Kurulum içindir.".to_owned());
+    }
     for step in 0..4 {
         validate_project_step(&project, step)?;
     }
@@ -3706,8 +3759,6 @@ fn prepare_project(project: SavedProject, backup_stale_output: bool) -> Result<S
     let version = SemanticVersion::parse(&project.version).map_err(|error| error.to_string())?;
     let source_directory = resolve_path(&project.source_directory)?;
     let output_parent = resolve_path(&project.output_directory)?;
-    let executable = std::env::current_exe()
-        .map_err(|error| format!("Setup Builder executable path could not be read: {error}"))?;
     validate_or_create_output_parent(&output_parent, true)?;
 
     let final_directory = output_parent.join(format!("{package_id}-{version}"));
@@ -3715,11 +3766,14 @@ fn prepare_project(project: SavedProject, backup_stale_output: bool) -> Result<S
         Ok(metadata) => {
             if !backup_stale_output {
                 return Err(format!(
-                    "Çıktı klasörü zaten var: {}. İsterseniz 2 Standart Kurulum EXE oluştur ile eski paketi güvenli yedekleyin.",
+                    "Çıktı klasörü zaten var: {}. Tam Kurulum için Çıktı klasörünü aç yanındaki Yeniden oluştur düğmesini kullanın; eski çıktı yedeklenir.",
                     final_directory.display()
                 ));
             }
-            if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            if metadata.file_type().is_symlink()
+                || is_windows_reparse_point(&metadata)
+                || !metadata.is_dir()
+            {
                 return Err(
                     "Eski çıktı klasörü gerçek bir dizin değil; üzerine yazılmadı.".to_owned(),
                 );
@@ -3756,10 +3810,25 @@ fn prepare_project(project: SavedProject, backup_stale_output: bool) -> Result<S
         &package_id,
         &version,
         &source_directory,
-        &executable,
+        executable,
         &staging_directory,
         &final_directory.join("application.tzpkg"),
-    );
+    )
+    .and_then(|()| {
+        if output == ProjectBuildOutput::StandardSetup {
+            let standard = staging_directory.join("standard");
+            fs::create_dir(&standard)
+                .map_err(|error| format!("Standart Kurulum klasörü oluşturulamadı: {error}"))?;
+            create_unsigned_local_setup_with_wizard(
+                executable,
+                staging_directory.join("application.tzpkg"),
+                standard.join("TurkuazSetup.exe"),
+                &project.wizard,
+            )
+            .map_err(|error| format!("Standart Kurulum EXE oluşturulamadı: {error}"))?;
+        }
+        Ok(())
+    });
     if let Err(error) = result {
         let _ = fs::remove_dir_all(&staging_directory);
         return Err(error);
@@ -3812,12 +3881,20 @@ fn prepare_project(project: SavedProject, backup_stale_output: bool) -> Result<S
     } else {
         "\nAntivirüs taraması: kullanıcı tarafından kapatıldı.".to_owned()
     };
-    Ok(format!(
-        "Uygulama paketi hazır.\nÇıktı klasörü: {}\nDosyalar: application.tzpkg, release-manifest.draft.yaml, setup-theme.json ve project.tzproj.{}\nStandart Kurulum için 2 Standart Kurulum oluştur seçeneğini kullanın. Güvenilir yayın için 04 İmzalı dağıtım (gelişmiş) bölümündeki imza ve trust dosyaları gereklidir.",
-        final_directory.display(),
-        scan_status
-    ))
-    .map(|message| match previous_backup {
+    let message = if output == ProjectBuildOutput::StandardSetup {
+        format!(
+            "Kurulum yeniden oluşturuldu: {}.\nUygulama paketi güncel kaynak dosyalarından hazırlandı.{}\nİmzasız kurulum; yayıncı doğrulaması, güvenli güncelleme ve rollback içermez.",
+            final_directory.join("standard/TurkuazSetup.exe").display(),
+            scan_status
+        )
+    } else {
+        format!(
+            "Uygulama paketi hazır.\nÇıktı klasörü: {}\nDosyalar: application.tzpkg, release-manifest.draft.yaml, setup-theme.json ve project.tzproj.{}\nStandart Kurulum için 2 Standart Kurulum oluştur seçeneğini kullanın. Güvenilir yayın için 04 İmzalı dağıtım (gelişmiş) bölümündeki imza ve trust dosyaları gereklidir.",
+            final_directory.display(),
+            scan_status
+        )
+    };
+    Ok(match previous_backup {
         Some(backup) => format!(
             "{message}\nEski paket yedeklendi (silinmedi): {}",
             backup.display()
@@ -3940,6 +4017,136 @@ fn color(rgb: [u8; 3]) -> egui::Color32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rebuild_fixture() -> (TemporaryDirectoryGuard, SavedProject) {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("turkuaz-rebuild-{}-{nonce}", std::process::id()));
+        let source = root.join("source");
+        fs::create_dir_all(&source).unwrap();
+        fs::write(source.join("content.txt"), b"original source").unwrap();
+        let mut project = SavedProject::default();
+        project.package_id = "qa.rebuild".into();
+        project.source_directory = source.to_string_lossy().into_owned();
+        project.output_directory = root.join("output").to_string_lossy().into_owned();
+        project.install_target = root.join("application").to_string_lossy().into_owned();
+        project.av_scan.enabled = false;
+        (TemporaryDirectoryGuard(root), project)
+    }
+
+    #[test]
+    #[ignore = "requires TURKUAZ_STUDIO_TEST_CLI pointing to a built Windows CLI; run by CI"]
+    fn studio_rebuild_refreshes_source_and_preserves_previous_output_on_failure() {
+        let cli =
+            PathBuf::from(std::env::var_os("TURKUAZ_STUDIO_TEST_CLI").expect("built CLI path"));
+        assert!(regular_file_exists(&cli));
+        let (fixture, project) = rebuild_fixture();
+        let output = package_output_directory(&project).unwrap();
+        prepare_project_with_builder(
+            project.clone(),
+            false,
+            ProjectBuildOutput::StandardSetup,
+            &cli,
+        )
+        .expect("first package and EXE");
+        let old_exe = fs::read(output.join("standard/TurkuazSetup.exe")).unwrap();
+        fs::write(output.join("author-notes.txt"), b"keep user notes").unwrap();
+        fs::write(
+            Path::new(&project.source_directory).join("content.txt"),
+            b"updated source",
+        )
+        .unwrap();
+        assert!(
+            prepared_package_is_current(&project),
+            "unchanged settings reproduce stale-package case"
+        );
+
+        let message = prepare_project_with_builder(
+            project.clone(),
+            true,
+            ProjectBuildOutput::StandardSetup,
+            &cli,
+        )
+        .expect("fresh package and EXE");
+        assert!(message.contains("Eski paket yedeklendi"));
+        let backup = fs::read_dir(output.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .contains("-backup-")
+            })
+            .expect("previous output backup");
+        assert_eq!(
+            fs::read(backup.join("author-notes.txt")).unwrap(),
+            b"keep user notes"
+        );
+        assert_eq!(
+            fs::read(backup.join("standard/TurkuazSetup.exe")).unwrap(),
+            old_exe
+        );
+        let extracted = fixture.0.join("extracted");
+        turkuaz_installer_package_engine::install_unsigned_local_setup(
+            output.join("standard/TurkuazSetup.exe"),
+            &extracted,
+        )
+        .expect("extract rebuilt EXE");
+        assert_eq!(
+            fs::read(extracted.join("content.txt")).unwrap(),
+            b"updated source"
+        );
+
+        let current_exe = fs::read(output.join("standard/TurkuazSetup.exe")).unwrap();
+        let before: Vec<_> = fs::read_dir(output.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert!(
+            prepare_project_with_builder(
+                project,
+                true,
+                ProjectBuildOutput::StandardSetup,
+                &fixture.0.join("missing-builder.exe")
+            )
+            .is_err()
+        );
+        assert_eq!(
+            fs::read(output.join("standard/TurkuazSetup.exe")).unwrap(),
+            current_exe
+        );
+        let after: Vec<_> = fs::read_dir(output.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(
+            before.len(),
+            after.len(),
+            "failed build must not leave staging or another backup"
+        );
+    }
+
+    #[test]
+    fn studio_rebuild_rejects_unknown_output_without_modifying_it() {
+        let (fixture, project) = rebuild_fixture();
+        let output = package_output_directory(&project).unwrap();
+        fs::create_dir_all(&output).unwrap();
+        fs::write(output.join("user.txt"), b"untouched").unwrap();
+        let error = prepare_project_with_builder(
+            project,
+            true,
+            ProjectBuildOutput::StandardSetup,
+            &fixture.0.join("unused-builder.exe"),
+        )
+        .unwrap_err();
+        assert!(error.contains("Eski çıktı tanınmıyor"));
+        assert_eq!(fs::read(output.join("user.txt")).unwrap(), b"untouched");
+        assert_eq!(fs::read_dir(output.parent().unwrap()).unwrap().count(), 1);
+    }
 
     #[test]
     fn retired_installer_compiler_field_is_read_once_and_never_saved() {

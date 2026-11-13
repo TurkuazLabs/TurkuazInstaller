@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_uninstall_gui.rs
 // Amac: Windows yuklu uygulamalar kaydindan cagirilabilen guvenli kaldirma sihirbazi
 // Modul - Rust Windows Uninstall Presentation
-// Version: 0.1.1
+// Version: 0.1.3
 // Aciklama: Acik onay, envanter on kontrolu ve degistirilmis dosyalari koruma
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -32,13 +32,18 @@ enum UninstallPhase {
     Result,
 }
 
+struct UninstallResult {
+    message: String,
+    _pending_removal: Option<crate::windows_uninstaller_cleanup::PendingUninstallerRemoval>,
+}
+
 struct UninstallApp {
     record: LocalRegistration,
     manifest: PathBuf,
     phase: UninstallPhase,
     confirmed: bool,
-    worker: Option<Receiver<Result<String, String>>>,
-    result: Option<Result<String, String>>,
+    worker: Option<Receiver<Result<UninstallResult, String>>>,
+    result: Option<Result<UninstallResult, String>>,
 }
 
 impl UninstallApp {
@@ -84,7 +89,9 @@ impl UninstallApp {
         self.phase = UninstallPhase::Running;
         thread::spawn(move || {
             let result = read_registration(&manifest).and_then(|latest| {
-                if latest.package_id() != record.package_id() || latest.target() != record.target()
+                if latest.package_id() != record.package_id()
+                    || latest.target() != record.target()
+                    || !latest.same_uninstaller(&record)
                 {
                     return Err("Kaldırma envanteri işlem sırasında değişti.".into());
                 }
@@ -95,9 +102,13 @@ impl UninstallApp {
                     .map_err(|e| format!("Dosyalar güvenli biçimde kaldırılamadı: {e}"))?;
                 let cleanup = cleanup_after_uninstall(&latest);
                 let mut warnings = cleanup.warnings;
-                if cleanup.registry_removed {
-                    warnings.extend(finalize_uninstaller(&latest, &manifest));
-                }
+                let pending_removal = if cleanup.registry_removed {
+                    let (pending, cleanup_warnings) = finalize_uninstaller(&latest, &manifest);
+                    warnings.extend(cleanup_warnings);
+                    pending
+                } else {
+                    None
+                };
                 let mut message = format!(
                     "{}: {} uygulama dosyası kaldırıldı.",
                     latest.package_id(),
@@ -110,7 +121,13 @@ impl UninstallApp {
                     message.push_str("\nWindows bütünleşmesi uyarıları: ");
                     message.push_str(&warnings.join("; "));
                 }
-                Ok(message)
+                if pending_removal.is_some() {
+                    message.push_str("\nKaldırıcı bu pencere kapandığında temizlenecek.");
+                }
+                Ok(UninstallResult {
+                    message,
+                    _pending_removal: pending_removal,
+                })
             });
             let _ = sender.send(result);
         });
@@ -159,7 +176,9 @@ impl eframe::App for UninstallApp {
         egui::TopBottomPanel::bottom("uninstall_actions").show(context, |ui| {
             ui.separator();
             ui.add_space(9.0);
-            ui.with_layout(
+            // Limit the footer to a button row; the body needs the remaining height.
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), 40.0),
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| match self.phase {
                     UninstallPhase::Confirm => {
@@ -195,6 +214,10 @@ impl eframe::App for UninstallApp {
             );
         });
         egui::CentralPanel::default().show(context, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("uninstall_page")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
             ui.add_space(16.0);
             match self.phase {
                 UninstallPhase::Confirm => {
@@ -226,10 +249,10 @@ impl eframe::App for UninstallApp {
                 }
                 UninstallPhase::Result => {
                     match &self.result {
-                        Some(Ok(message)) => {
+                        Some(Ok(result)) => {
                             ui.heading("Kaldırma tamamlandı");
                             ui.add_space(12.0);
-                            ui.label(message);
+                            ui.label(&result.message);
                         }
                         Some(Err(message)) => {
                             ui.heading("Kaldırma tamamlanamadı");
@@ -241,6 +264,7 @@ impl eframe::App for UninstallApp {
                     }
                 }
             }
+                });
         });
     }
 }

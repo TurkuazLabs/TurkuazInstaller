@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.2
+Version: 0.3.6
 Aciklama: Derleme, embedded UAC application manifesti ve gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -19,6 +19,51 @@ degerleri dogrular. Bu manifest SmartScreen reputation/signature
 uyarisini gidermez; signer guveni ve dosya itibari ayri yayin kapilaridir.
 
 Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde denemek icindir. GUI setup stub artifact'i yalniz arayuz kabugudur; release bundle eklenmeden kurulum yapmaz. Gercek imzali release paketi ve yayinlayici tarafindan saglanan guven politikasi olmadan lifecycle kabul testi yapilamaz.
+
+## Standart sihirbaz gorunurlugu (2026-11-13)
+
+Standart kurulum penceresi varsayilan olarak 900x700 mantiksal boyutta
+acilir. Baslik cubugu ve kenarlik dahil fiziksel pencere, bulundugu
+monitorun Windows calisma alanina ortalanir; gorev cubugu ve monitor
+koordinat baslangici hesaba katilir. Kucuk ekranlarda dis pencere
+calisma alanina sigdirilir; sabit minimum boyut bunu engellemez.
+Onceki pencere boyutu/konumu geri yuklenmez. Kullanici pencereyi
+tasidiktan veya boyutlandirdiktan sonra tekrar zorla ortalanmaz.
+Normal acilis ve UAC sonrasi devam ayni pencere baslatma yolunu kullanir.
+Windows geometri sorgusu basarisizsa eframe'in ortalama davranisi
+korunur; stderr'e `TI-GUI-001` yazilir (monitor/pencere yerlestirme hatasi).
+
+Alt panel ilk karede de dugme, ayirici ve bosluklar icin yeterli alani
+ayirir; sonraki karelerde egui olculen icerik yuksekligini kullanir.
+Alt eylem satiri yalnizca dugmelerin yuksekligini ayirir; kalan alani
+kaplayip sayfa icerigini kirpmaz. Standart kurulum ve kaldirma govdesi
+kucuk pencerelerde dikey kaydirilabilir. Kurulumda her sayfanin kaydirma
+konumu ayridir. Paket motoru, lisans/UAC onayi ve veri koruma kurallari
+degismez. Takip: [Windows kabul #41](https://github.com/TurkuazLabs/TurkuazInstaller/issues/41).
+
+- Otomatik regresyon: `unsigned_local_gui::tests::destination_controls_remain_visible_beside_header_and_footer`
+  gercek egui sayfasini 900x700, 860x550 ve 760x490 boyutta, acik/koyu
+  temada, Turkce/English ve ard arda uc karede cizer. Kurulum kapsami,
+  kullanici secimi, Gozat ve Ileri metinlerinin kirpma alaninda
+  tamamen gorunur oldugunu denetler. 900x700 acilista hedef yolu,
+  Gozat ve klasor koruma aciklamasi kaydirmadan gorunmelidir.
+  Mevcut Windows CI wizard test adimina dahildir. `setup_window_layout`
+  geometri testleri kucuk ekran, %100/%125/%150/%200 olcekli pencere,
+  gorev cubugu ve negatif/ofset monitor koordinatlarini kapsar.
+- Windows 10/11 manuel kabul **NOT RUN**: %100/%125/%150 olcekte
+  hos geldiniz, lisans, hedef, kisayollar ve son kontrol sayfalarini
+  gezin. Hedef yolu yazilabilmeli, Gozat gorunmeli; uzun aciklama ve
+  hatalara kaydirarak ulasilabilmeli. Dil ve tema degisimini deneyin.
+  1920x1080 ve 1366x768 ekranlarda ilk acilisin ortasini, baslik cubugu
+  ve alt dugmelerin gorev cubugu disinda kalmasini kontrol edin.
+  Yan/ust gorev cubugu ve ikinci monitoru da deneyin. Pencereyi
+  tasiyip yeniden boyutlandirin: sayfa degisince yeri korunmali;
+  kapatip acinca yeniden ortalanmali. UAC sonrasi da kontrol edin.
+- Kaldirma penceresinde onay kutusu, uygulama/konum ve veri koruma
+  aciklamalarini kontrol edin; onaysiz kaldirma baslamamali. Bu manuel
+  kabul tamamlanmadan GUI sorunu production icin kapanmis sayilmaz.
+- Studio'nun yeni derlemesini kullanarak standart EXE'yi yeniden
+  olusturun. Eski gomulu EXE, Studio dosyasi degistirilince guncellenmez.
 
 ## Yerel klasor degistirme ve Geri Donusum Kutusu kabulu
 
@@ -220,3 +265,33 @@ Rust Migration CI basariliysa `turkuaz-example-test-setup-v<surum>-windows-x64` 
 ZIP'i ayri bir klasore cikartip yalnizca deneme icin kullanin. Sihirbazda `Kur` islemini secip `İleri`'ye basin. Paket kimligini `ci.smoke` birakin; guven dosyasinin yanindaki test YAML dosyasi oldugunu kontrol edin; kurulum dizinini `%LOCALAPPDATA%\TurkuazInstaller-Test\App`, veri dizinini `%LOCALAPPDATA%\TurkuazInstaller-Test\Data` secin; son kontrol ekraninda `Kur ve doğrula`'ya basin. Ardindan `README-TR.txt` icindeki CLI komutuyla ornek uygulamayi acin. Kaldirmayi GUI'den denemek icin setup'i yeniden acin, `Kaldır` islemini secin, ayni paket ve yollari kullanin, son ekrandaki onay kutusunu isaretleyip `Paketi kaldır`'a basin. Self-signed CI sertifikasi nedeniyle Windows yayinci uyarisi gosterebilir; bu imza production yayincisini dogrulamaz ve sertifika Trusted Root'a eklenmemelidir. Artifact yedi gun tutulur ve production'da kullanilmaz.
 
 CI artifact'inin olusmasi kod dogrulamasidir; temiz son kullanici makinesinde elle GUI testi yerine gecmez.
+
+### Kaldirici EXE temizligi (Windows)
+
+- Per-user kaldirici `MoveFileExW / DELAY_UNTIL_REBOOT` kullanmaz. Kucuk bir
+  Rust yardimci sureci asil kaldiricinin process handle'inin sinyalini bekler.
+  Surec bittikten sonra dogrulanmis EXE ve envanter handle'larini siler.
+- SHA-256 ayni dosya taniticisinda kontrol edilir; ust dizinler sabitlenir.
+  Reparse point, hardlink, degismis ve salt okunur dosyalar korunur.
+  Yardimciya HANDLE_LIST ile yalniz DELETE, SYNCHRONIZE ve log yazma yetkisi
+  aktarilir. Yardimci dosya yolu, PID aramasi veya shell komutu kabul etmez.
+- Yardimci `build.rs` tarafindan Rust ile derlenir ve Studio icine gomulur.
+  `Uninstallers/Cleanup/turkuaz-cleanup-<sha256>.exe` ortak onbellekte tutulur;
+  tekrar kullanmadan once gomulu SHA-256 ile dogrulanir. All-users onbellegi
+  yonetici korumali Program Files altindadir. Onbellek ve `cleanup-*.log`
+  dosyalari uygulama kaldirmasinda bilerek korunur; tum klasor temizlendi denmez.
+- Hazirlik/baslatma hatasi UI'da gorunur, EXE ve envanter korunur. Pencere
+  kapandiktan sonraki sonuc `Cleanup/cleanup-*.log` dosyasina yazilir.
+  Silme basarisizsa envanter tutulur. Shell, reboot veya ek UAC fallback yoktur.
+- Hata kodlari: `TI-UNINSTALL-CLEANUP-001` kimlik/yol/icerik/sahiplik;
+  `002` dosya silme erisimi; `003` kapanis sonrasi silme; `004` yardimci surec
+  veya parent bekleme; `005` yardimci onbellek/log hazirligi. Basari: `TI-UNINSTALL-CLEANUP-OK`.
+- Windows CI gercek Rust yardimci binary'siyle bekleme/silme, calisan EXE'nin
+  surec sonuna kadar korunmasi, EXE+envanter temizligi, yabanci/degismis dosya
+  ve degistirilmis yardimci onbelleginin korunmasini sinar. Ignore edilen
+  child test ana test tarafindan ayri proses olarak calistirilir.
+- Manuel kabul: Windows 10/11 standart kullanici oturumunda yeni Studio ile
+  paketi yeniden olustur, kur, Windows uygulama listesinden kaldir. Sonuc
+  acikken EXE ve envanter durmali; Kapat sonrasi ikisi kalkmali, log OK olmali,
+  0x80070005 uyarisi olmamali. Manuel kontrol henuz CALISTIRILMADI.
+- Eski uretilmis EXE ve onceden kurulmus kaldiricilar otomatik guncellenmez.

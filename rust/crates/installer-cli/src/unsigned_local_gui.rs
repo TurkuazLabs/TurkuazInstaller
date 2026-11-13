@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.1
+// Version: 0.5.4
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -32,6 +32,10 @@ use crate::{
     wizard_language::WizardLanguage,
 };
 use windows::Win32::UI::Shell::FOLDERID_ProgramFiles;
+
+// Reserve the action row, separator and padding before egui has measured it.
+// Without this initial estimate, the first frame clips the navigation labels.
+const INITIAL_ACTION_PANEL_HEIGHT: f32 = 100.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WizardStep {
@@ -916,8 +920,8 @@ impl LocalInstaller {
     }
 }
 
-impl eframe::App for LocalInstaller {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+impl LocalInstaller {
+    fn show(&mut self, ctx: &egui::Context) {
         let language = self.language;
         self.poll(ctx);
         if self.busy.is_some() && ctx.input(|input| input.viewport().close_requested()) {
@@ -964,132 +968,151 @@ impl eframe::App for LocalInstaller {
             ui.separator();
         });
 
-        egui::TopBottomPanel::bottom("local_setup_footer").show(ctx, |ui| {
+        let footer = egui::TopBottomPanel::bottom("local_setup_footer")
+            .default_height(INITIAL_ACTION_PANEL_HEIGHT);
+        footer.show(ctx, |ui| {
             ui.separator();
             ui.add_space(10.0);
-            // In right-to-left layout the primary action is anchored to
-            // the bottom-right edge; back remains to its left.
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if self.busy.is_some() {
-                    ui.label(
-                        self.language
-                            .text("Kurulum devam ediyor…", "Installation in progress…"),
-                    );
-                    return;
-                }
-                let primary = egui::Color32::from_rgb(6, 123, 134);
-                match self.step {
-                    WizardStep::Welcome
-                    | WizardStep::License
-                    | WizardStep::Destination
-                    | WizardStep::Shortcuts => {
-                        if ui
-                            .add_enabled(
-                                self.step != WizardStep::License || self.license_accepted,
-                                egui::Button::new(
-                                    egui::RichText::new(language.text("İleri  ›", "Next  ›"))
-                                        .color(egui::Color32::WHITE),
+            // @dev-id TI-WIZARD-LAYOUT-001
+            // @purpose Reserve only one action row and keep the page visible.
+            // @reason with_layout inherits the full remaining height, making
+            // the bottom panel consume the body and clip every page control.
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), 38.0),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    if self.busy.is_some() {
+                        ui.label(
+                            self.language
+                                .text("Kurulum devam ediyor…", "Installation in progress…"),
+                        );
+                        return;
+                    }
+                    let primary = egui::Color32::from_rgb(6, 123, 134);
+                    match self.step {
+                        WizardStep::Welcome
+                        | WizardStep::License
+                        | WizardStep::Destination
+                        | WizardStep::Shortcuts => {
+                            if ui
+                                .add_enabled(
+                                    self.step != WizardStep::License || self.license_accepted,
+                                    egui::Button::new(
+                                        egui::RichText::new(language.text("İleri  ›", "Next  ›"))
+                                            .color(egui::Color32::WHITE),
+                                    )
+                                    .fill(primary)
+                                    .min_size(egui::vec2(110.0, 38.0)),
                                 )
-                                .fill(primary)
-                                .min_size(egui::vec2(110.0, 38.0)),
-                            )
-                            .clicked()
-                        {
-                            self.advance();
+                                .clicked()
+                            {
+                                self.advance();
+                            }
+                            if ui
+                                .add_sized(
+                                    [95.0, 38.0],
+                                    egui::Button::new(language.text("İptal", "Cancel")),
+                                )
+                                .clicked()
+                            {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            if self.previous_step().is_some()
+                                && ui
+                                    .add_sized(
+                                        [95.0, 38.0],
+                                        egui::Button::new(language.text("‹  Geri", "‹  Back")),
+                                    )
+                                    .clicked()
+                            {
+                                self.back();
+                            }
                         }
-                        if ui
-                            .add_sized(
-                                [95.0, 38.0],
-                                egui::Button::new(language.text("İptal", "Cancel")),
-                            )
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if self.previous_step().is_some()
-                            && ui
+                        WizardStep::Review => {
+                            if ui
+                                .add_sized(
+                                    [175.0, 38.0],
+                                    egui::Button::new(
+                                        egui::RichText::new(
+                                            language.text("Kurulumu başlat", "Install"),
+                                        )
+                                        .color(egui::Color32::WHITE),
+                                    )
+                                    .fill(primary),
+                                )
+                                .clicked()
+                            {
+                                if self.begin_install() {
+                                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                                }
+                            }
+                            if ui
+                                .add_sized(
+                                    [95.0, 38.0],
+                                    egui::Button::new(language.text("İptal", "Cancel")),
+                                )
+                                .clicked()
+                            {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            if ui
                                 .add_sized(
                                     [95.0, 38.0],
                                     egui::Button::new(language.text("‹  Geri", "‹  Back")),
                                 )
                                 .clicked()
-                        {
-                            self.back();
-                        }
-                    }
-                    WizardStep::Review => {
-                        if ui
-                            .add_sized(
-                                [175.0, 38.0],
-                                egui::Button::new(
-                                    egui::RichText::new(
-                                        language.text("Kurulumu başlat", "Install"),
-                                    )
-                                    .color(egui::Color32::WHITE),
-                                )
-                                .fill(primary),
-                            )
-                            .clicked()
-                        {
-                            if self.begin_install() {
-                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            {
+                                self.back();
                             }
                         }
-                        if ui
-                            .add_sized(
-                                [95.0, 38.0],
-                                egui::Button::new(language.text("İptal", "Cancel")),
-                            )
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if ui
-                            .add_sized(
-                                [95.0, 38.0],
-                                egui::Button::new(language.text("‹  Geri", "‹  Back")),
-                            )
-                            .clicked()
-                        {
-                            self.back();
-                        }
-                    }
-                    WizardStep::Installing => {}
-                    WizardStep::Finished => {
-                        if ui
-                            .add_sized(
-                                [105.0, 38.0],
-                                egui::Button::new(language.text("Kapat", "Close")),
-                            )
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if self.status.as_ref().is_some_and(Result::is_err)
-                            && ui
+                        WizardStep::Installing => {}
+                        WizardStep::Finished => {
+                            if ui
                                 .add_sized(
-                                    [165.0, 38.0],
-                                    egui::Button::new(
-                                        language.text("Seçimleri düzenle", "Change settings"),
-                                    ),
+                                    [105.0, 38.0],
+                                    egui::Button::new(language.text("Kapat", "Close")),
                                 )
                                 .clicked()
-                        {
-                            self.step = WizardStep::Destination;
-                            self.status = None;
-                            self.path_error = None;
+                            {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            if self.status.as_ref().is_some_and(Result::is_err)
+                                && ui
+                                    .add_sized(
+                                        [165.0, 38.0],
+                                        egui::Button::new(
+                                            language.text("Seçimleri düzenle", "Change settings"),
+                                        ),
+                                    )
+                                    .clicked()
+                            {
+                                self.step = WizardStep::Destination;
+                                self.status = None;
+                                self.path_error = None;
+                            }
                         }
                     }
-                }
-            });
+                },
+            );
             ui.add_space(10.0);
         });
 
         // egui CentralPanel must come after all top/bottom panels.
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add_space(22.0);
-            self.page(ui);
+            egui::ScrollArea::vertical()
+                .id_salt(("local_setup_page", self.step.page_id()))
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.add_space(22.0);
+                    self.page(ui);
+                });
         });
+    }
+}
+
+impl eframe::App for LocalInstaller {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.show(ctx);
     }
 }
 
@@ -1176,9 +1199,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 fn launch(app: LocalInstaller) -> Result<(), Box<dyn std::error::Error>> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([860.0, 550.0])
-            .with_min_inner_size([760.0, 490.0])
+            .with_inner_size(crate::setup_window_layout::DEFAULT_INNER_SIZE)
             .with_title("Turkuaz Standart Kurulum"),
+        centered: true,
+        persist_window: false,
         ..Default::default()
     };
     eframe::run_native(
@@ -1186,6 +1210,9 @@ fn launch(app: LocalInstaller) -> Result<(), Box<dyn std::error::Error>> {
         options,
         Box::new(move |creation_context| {
             configure_local_style(&creation_context.egui_ctx);
+            if let Err(error) = crate::setup_window_layout::center_on_work_area(creation_context) {
+                eprintln!("TI-GUI-001: setup window placement failed: {error}");
+            }
             Ok(Box::new(app))
         }),
     )?;
@@ -1195,6 +1222,124 @@ fn launch(app: LocalInstaller) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn layout_fixture() -> LocalInstaller {
+        let user = PathBuf::from(r"C:\Users\Test\AppData\Local\Programs");
+        let machine = PathBuf::from(r"C:\Program Files");
+        LocalInstaller {
+            executable: PathBuf::from("fixture.exe"),
+            package_id: "qa.scope".into(),
+            package_label: "qa.scope · 1.0.0".into(),
+            target: user.join("qa.scope").to_string_lossy().into_owned(),
+            program_files_root: machine.clone(),
+            current_user_root: user.clone(),
+            scope: InstallScope::CurrentUser,
+            language: WizardLanguage::Turkish,
+            wizard: WizardConfig::default(),
+            license_accepted: false,
+            recycle_approved: true,
+            entry_point: None,
+            start_menu: false,
+            desktop: false,
+            step: WizardStep::Destination,
+            path_error: Some("previous error".into()),
+            busy: None,
+            progress_label: "",
+            status: None,
+        }
+    }
+
+    fn visible_text(shapes: &[egui::epaint::ClippedShape], expected: &str) -> bool {
+        fn contains(shape: &egui::Shape, clip: egui::Rect, expected: &str) -> bool {
+            match shape {
+                egui::Shape::Text(text) => {
+                    text.galley.text().contains(expected)
+                        && clip.contains_rect(text.galley.rect.translate(text.pos.to_vec2()))
+                }
+                egui::Shape::Vec(shapes) => shapes.iter().any(|s| contains(s, clip, expected)),
+                _ => false,
+            }
+        }
+        shapes
+            .iter()
+            .any(|s| contains(&s.shape, s.clip_rect, expected))
+    }
+
+    #[test]
+    fn destination_controls_remain_visible_beside_header_and_footer() {
+        let default_size = crate::setup_window_layout::DEFAULT_INNER_SIZE;
+        for size in [default_size, [860.0, 550.0], [760.0, 490.0]] {
+            for dark in [false, true] {
+                for language in [WizardLanguage::Turkish, WizardLanguage::English] {
+                    let ctx = egui::Context::default();
+                    configure_local_style(&ctx);
+                    ctx.set_visuals(if dark {
+                        egui::Visuals::dark()
+                    } else {
+                        egui::Visuals::light()
+                    });
+                    let mut app = layout_fixture();
+                    app.language = language;
+                    app.path_error = None;
+                    let input = egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size.into())),
+                        ..Default::default()
+                    };
+                    // Panels remember their size, so verify settled frames too.
+                    for frame in 0..3 {
+                        let output = ctx.run(input.clone(), |ctx| app.show(ctx));
+                        for expected in [
+                            language.text("Kurulum kapsamı", "Installation scope"),
+                            language.text("Yalnızca bu kullanıcı", "Only for this user"),
+                            language.text("İleri", "Next"),
+                        ] {
+                            assert!(
+                                visible_text(&output.shapes, expected),
+                                "missing {expected:?}, size={size:?}, dark={dark}, frame={frame}"
+                            );
+                        }
+                        if size == default_size {
+                            for expected in [
+                                app.target.as_str(),
+                                language.text("Gözat…", "Browse…"),
+                                language.text(
+                                    "Var olan klasör, yalnızca açık onayınızla Geri Dönüşüm Kutusu'na taşınabilir; üzerine yazılmaz.",
+                                    "An existing folder can be moved to the Recycle Bin only with your explicit approval; no overwrite.",
+                                ),
+                            ] {
+                                assert!(
+                                    visible_text(&output.shapes, expected),
+                                    "default window clips {expected:?} before scrolling, dark={dark}, language={language:?}, frame={frame}"
+                                );
+                            }
+                        }
+                    }
+                    // Small windows may need scrolling to reach the path controls.
+                    let mut browse_visible = false;
+                    for _ in 0..8 {
+                        let mut scroll_input = input.clone();
+                        scroll_input.events = vec![
+                            egui::Event::PointerMoved(egui::pos2(size[0] / 2.0, size[1] / 2.0)),
+                            egui::Event::MouseWheel {
+                                unit: egui::MouseWheelUnit::Point,
+                                delta: egui::vec2(0.0, -40.0),
+                                modifiers: egui::Modifiers::NONE,
+                            },
+                        ];
+                        let output = ctx.run(scroll_input, |ctx| app.show(ctx));
+                        browse_visible |=
+                            visible_text(&output.shapes, language.text("Gözat…", "Browse…"));
+                    }
+                    assert!(
+                        browse_visible,
+                        "path controls unreachable, size={size:?}, dark={dark}"
+                    );
+                    assert!(app.busy.is_none());
+                    assert_eq!(app.step, WizardStep::Destination);
+                }
+            }
+        }
+    }
 
     #[test]
     fn wizard_requires_explicit_install_after_review() {
