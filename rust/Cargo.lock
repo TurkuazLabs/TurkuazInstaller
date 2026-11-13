@@ -2880,6 +2880,7 @@ name = "turkuaz-installer-cli"
 version = "0.2.20"
 dependencies = [
  "eframe",
+ "raw-window-handle",
  "reqwest",
  "rfd",
  "serde",

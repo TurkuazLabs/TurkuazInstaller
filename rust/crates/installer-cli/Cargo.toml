@@ -16,7 +16,7 @@ build = "build.rs"
 [features]
 default = []
 setup-gui = ["dep:eframe", "dep:rfd"]
-setup-authoring-gui = ["dep:eframe", "dep:rfd", "dep:windows"]
+setup-authoring-gui = ["dep:eframe", "dep:rfd", "dep:windows", "dep:raw-window-handle"]
 
 [dependencies]
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream"] }
@@ -40,9 +40,10 @@ turkuaz-installer-package-engine = { path = "../package-engine" }
 url = "2"
 
 [target.'cfg(windows)'.dependencies]
+raw-window-handle = { version = "0.6.2", optional = true }
 eframe = { version = "0.33.3", default-features = false, features = ["default_fonts", "glow"], optional = true }
 rfd = { version = "0.17.2", default-features = false, features = ["common-controls-v6"], optional = true }
-windows = { version = "0.62.2", optional = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62.2", optional = true, features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Storage_FileSystem", "Win32_Security", "Win32_System_Com", "Win32_System_Registry", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 
 [[bin]]
 name = "turkuaz-installer"

@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.3
+Version: 0.3.4
 Aciklama: Derleme, embedded UAC application manifesti ve gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
@@ -20,7 +20,18 @@ uyarisini gidermez; signer guveni ve dosya itibari ayri yayin kapilaridir.
 
 Bu rehber, Community Rust gelistirme ciktisini kontrollu bir Windows makinesinde denemek icindir. GUI setup stub artifact'i yalniz arayuz kabugudur; release bundle eklenmeden kurulum yapmaz. Gercek imzali release paketi ve yayinlayici tarafindan saglanan guven politikasi olmadan lifecycle kabul testi yapilamaz.
 
-## Standart sihirbaz gorunurlugu (2026-11-11)
+## Standart sihirbaz gorunurlugu (2026-11-13)
+
+Standart kurulum penceresi varsayilan olarak 900x700 mantiksal boyutta
+acilir. Baslik cubugu ve kenarlik dahil fiziksel pencere, bulundugu
+monitorun Windows calisma alanina ortalanir; gorev cubugu ve monitor
+koordinat baslangici hesaba katilir. Kucuk ekranlarda dis pencere
+calisma alanina sigdirilir; sabit minimum boyut bunu engellemez.
+Onceki pencere boyutu/konumu geri yuklenmez. Kullanici pencereyi
+tasidiktan veya boyutlandirdiktan sonra tekrar zorla ortalanmaz.
+Normal acilis ve UAC sonrasi devam ayni pencere baslatma yolunu kullanir.
+Windows geometri sorgusu basarisizsa eframe'in ortalama davranisi
+korunur; stderr'e `TI-GUI-001` yazilir (monitor/pencere yerlestirme hatasi).
 
 Alt eylem satiri yalnizca dugmelerin yuksekligini ayirir; kalan alani
 kaplayip sayfa icerigini kirpmaz. Standart kurulum ve kaldirma govdesi
@@ -29,14 +40,23 @@ konumu ayridir. Paket motoru, lisans/UAC onayi ve veri koruma kurallari
 degismez. Takip: [Windows kabul #41](https://github.com/TurkuazLabs/TurkuazInstaller/issues/41).
 
 - Otomatik regresyon: `unsigned_local_gui::tests::destination_controls_remain_visible_beside_header_and_footer`
-  gercek egui sayfasini 860x550 ve 760x490 mantiksal boyutta, acik/koyu
+  gercek egui sayfasini 900x700, 860x550 ve 760x490 boyutta, acik/koyu
   temada, Turkce/English ve ard arda uc karede cizer. Kurulum kapsami,
-  kullanici secimi, Gozat ve Ileri metinlerinin kirpma alaninda kaldigini
-  denetler. Mevcut Windows CI wizard test adimina dahildir.
+  kullanici secimi, Gozat ve Ileri metinlerinin kirpma alaninda
+  tamamen gorunur oldugunu denetler. 900x700 acilista hedef yolu,
+  Gozat ve klasor koruma aciklamasi kaydirmadan gorunmelidir.
+  Mevcut Windows CI wizard test adimina dahildir. `setup_window_layout`
+  geometri testleri kucuk ekran, %100/%125/%150/%200 olcekli pencere,
+  gorev cubugu ve negatif/ofset monitor koordinatlarini kapsar.
 - Windows 10/11 manuel kabul **NOT RUN**: %100/%125/%150 olcekte
   hos geldiniz, lisans, hedef, kisayollar ve son kontrol sayfalarini
   gezin. Hedef yolu yazilabilmeli, Gozat gorunmeli; uzun aciklama ve
   hatalara kaydirarak ulasilabilmeli. Dil ve tema degisimini deneyin.
+  1920x1080 ve 1366x768 ekranlarda ilk acilisin ortasini, baslik cubugu
+  ve alt dugmelerin gorev cubugu disinda kalmasini kontrol edin.
+  Yan/ust gorev cubugu ve ikinci monitoru da deneyin. Pencereyi
+  tasiyip yeniden boyutlandirin: sayfa degisince yeri korunmali;
+  kapatip acinca yeniden ortalanmali. UAC sonrasi da kontrol edin.
 - Kaldirma penceresinde onay kutusu, uygulama/konum ve veri koruma
   aciklamalarini kontrol edin; onaysiz kaldirma baslamamali. Bu manuel
   kabul tamamlanmadan GUI sorunu production icin kapanmis sayilmaz.

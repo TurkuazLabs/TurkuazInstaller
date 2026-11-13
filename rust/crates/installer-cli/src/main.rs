@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.29
+// Version: 0.2.30
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -60,6 +60,9 @@ mod setup_authoring_gui;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod unsigned_local_gui;
+
+#[cfg(any(test, all(windows, feature = "setup-authoring-gui")))]
+mod setup_window_layout;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod windows_elevation;

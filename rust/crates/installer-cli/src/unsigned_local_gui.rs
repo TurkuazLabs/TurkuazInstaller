@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.2
+// Version: 0.5.3
 // Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -1193,9 +1193,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 fn launch(app: LocalInstaller) -> Result<(), Box<dyn std::error::Error>> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([860.0, 550.0])
-            .with_min_inner_size([760.0, 490.0])
+            .with_inner_size(crate::setup_window_layout::DEFAULT_INNER_SIZE)
             .with_title("Turkuaz Standart Kurulum"),
+        centered: true,
+        persist_window: false,
         ..Default::default()
     };
     eframe::run_native(
@@ -1203,6 +1204,9 @@ fn launch(app: LocalInstaller) -> Result<(), Box<dyn std::error::Error>> {
         options,
         Box::new(move |creation_context| {
             configure_local_style(&creation_context.egui_ctx);
+            if let Err(error) = crate::setup_window_layout::center_on_work_area(creation_context) {
+                eprintln!("TI-GUI-001: setup window placement failed: {error}");
+            }
             Ok(Box::new(app))
         }),
     )?;
@@ -1244,9 +1248,7 @@ mod tests {
             match shape {
                 egui::Shape::Text(text) => {
                     text.galley.text().contains(expected)
-                        && clip
-                            .intersect(text.galley.rect.translate(text.pos.to_vec2()))
-                            .is_positive()
+                        && clip.contains_rect(text.galley.rect.translate(text.pos.to_vec2()))
                 }
                 egui::Shape::Vec(shapes) => shapes.iter().any(|s| contains(s, clip, expected)),
                 _ => false,
@@ -1259,7 +1261,8 @@ mod tests {
 
     #[test]
     fn destination_controls_remain_visible_beside_header_and_footer() {
-        for size in [[860.0, 550.0], [760.0, 490.0]] {
+        let default_size = crate::setup_window_layout::DEFAULT_INNER_SIZE;
+        for size in [default_size, [860.0, 550.0], [760.0, 490.0]] {
             for dark in [false, true] {
                 for language in [WizardLanguage::Turkish, WizardLanguage::English] {
                     let ctx = egui::Context::default();
@@ -1288,6 +1291,21 @@ mod tests {
                                 visible_text(&output.shapes, expected),
                                 "missing {expected:?}, size={size:?}, dark={dark}, frame={frame}"
                             );
+                        }
+                        if size == default_size {
+                            for expected in [
+                                app.target.as_str(),
+                                language.text("Gözat…", "Browse…"),
+                                language.text(
+                                    "Var olan klasör, yalnızca açık onayınızla Geri Dönüşüm Kutusu'na taşınabilir; üzerine yazılmaz.",
+                                    "An existing folder can be moved to the Recycle Bin only with your explicit approval; no overwrite.",
+                                ),
+                            ] {
+                                assert!(
+                                    visible_text(&output.shapes, expected),
+                                    "default window clips {expected:?} before scrolling, dark={dark}, language={language:?}, frame={frame}"
+                                );
+                            }
                         }
                     }
                     // Small windows may need scrolling to reach the path controls.
