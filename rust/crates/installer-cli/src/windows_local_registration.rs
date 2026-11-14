@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.9
+// Version: 0.1.10
 // Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -121,7 +121,7 @@ fn failure(action: &str, code: windows::Win32::Foundation::WIN32_ERROR) -> Strin
 struct RegistryKey(HKEY);
 impl Drop for RegistryKey {
     fn drop(&mut self) {
-        unsafe { RegCloseKey(self.0) };
+        let _ = unsafe { RegCloseKey(self.0) };
     }
 }
 
@@ -423,7 +423,7 @@ fn register_key(record: &LocalRegistration, manifest: &Path) -> Result<(), Strin
     drop(key);
     if result.is_err() {
         let path = wide(OsStr::new(&key_path(&record.key)));
-        unsafe { RegDeleteKeyW(hive(record.scope()), PCWSTR(path.as_ptr())) };
+        let _ = unsafe { RegDeleteKeyW(hive(record.scope()), PCWSTR(path.as_ptr())) };
     }
     result
 }

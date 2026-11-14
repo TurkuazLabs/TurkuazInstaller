@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/manifest-verification/src/lib.rs
 // Amac: Detached CMS imzasini ve package-scoped signer trust policy'sini dogrulamak
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Windows CryptoAPI imzayi signature-only dogrular, sertifika validity, subject ve SHA-256 pinini denetler
 // Bagimli Oldugu Katman: Tool | Model
 
@@ -137,9 +137,11 @@ mod windows_crypto {
             return Err(ManifestVerificationError::InvalidSignature);
         }
 
-        let mut verify_parameters = CRYPT_VERIFY_MESSAGE_PARA::default();
-        verify_parameters.cbSize = size_of::<CRYPT_VERIFY_MESSAGE_PARA>() as u32;
-        verify_parameters.dwMsgAndCertEncodingType = (X509_ASN_ENCODING | PKCS_7_ASN_ENCODING).0;
+        let verify_parameters = CRYPT_VERIFY_MESSAGE_PARA {
+            cbSize: size_of::<CRYPT_VERIFY_MESSAGE_PARA>() as u32,
+            dwMsgAndCertEncodingType: (X509_ASN_ENCODING | PKCS_7_ASN_ENCODING).0,
+            ..Default::default()
+        };
 
         let content_pointers = [manifest_content.as_ptr()];
         let content_lengths = [content_length];
@@ -191,7 +193,7 @@ mod windows_crypto {
                 None,
             )
         };
-        if subject_length < 2 || subject_length > 16_384 {
+        if !(2..=16_384).contains(&subject_length) {
             return Err(ManifestVerificationError::InvalidSignerCertificate);
         }
         let mut subject_buffer = vec![0_u16; subject_length as usize];

@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/builder.rs
 // Amac: Uygulama payload dizinini Turkuaz'in ozel .tzpkg ZIP paketine donusturmek
 // Modul - Rust Package Builder
-// Version: 0.4.1
+// Version: 0.4.2
 // Aciklama: Symlink ve path collision reddi, sinirli kaynak taramasi, gecici dosya ve no-overwrite publish uygular
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -164,9 +164,9 @@ pub fn build_full_package_with_entry_point(
         let relative = validate_archive_path(entry_point)
             .map_err(|_| PackageBuildError::InvalidPackage("package entry point path is unsafe"))?;
         let key = relative.to_string_lossy().replace('\\', "/").to_lowercase();
-        if !entry_kinds
+        if entry_kinds
             .get(&key)
-            .is_some_and(|is_directory| !*is_directory)
+            .is_none_or(|is_directory| *is_directory)
         {
             return Err(PackageBuildError::InvalidPackage(
                 "package entry point must name a regular file in the source directory",

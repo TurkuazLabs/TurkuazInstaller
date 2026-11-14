@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 1.0.10
+// Version: 1.0.11
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -379,9 +379,9 @@ fn extract_archive_contents(
     }
     validate_entry_conflicts(&entry_kinds)?;
     if let Some(entry_point) = entry_point.as_deref() {
-        if !entry_kinds
+        if entry_kinds
             .get(&entry_point.to_lowercase())
-            .is_some_and(|is_directory| !*is_directory)
+            .is_none_or(|is_directory| *is_directory)
         {
             return Err(PackageEngineError::InvalidPackage(
                 "package entry point must name a regular payload file",

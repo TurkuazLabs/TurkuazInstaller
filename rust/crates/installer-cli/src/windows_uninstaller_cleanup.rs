@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_uninstaller_cleanup.rs
 // Amac: Dogrulanmis kaldiriciyi pencere kapandiginda yonetici yetkisiz temizlemek
 // Modul - Rust Windows File Adapter
-// Version: 0.2.0
+// Version: 0.2.1
 // Aciklama: Dogrulanmis taniticilari Rust yardimci surecine aktararak kapanis sonrasi temizlik
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -242,6 +242,19 @@ mod tests {
         format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
     }
 
+    fn wait_until_missing(path: &Path) {
+        for _ in 0..100 {
+            if !path.exists() {
+                return;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+        assert!(
+            !path.exists(),
+            "delete-pending file remained visible: {path:?}"
+        );
+    }
+
     #[test]
     fn cleanup_waits_for_parent_signal_and_preserves_neighbours() {
         let fixture = Fixture::new();
@@ -272,8 +285,10 @@ mod tests {
         drop(pending._log);
         wait_worker(&worker);
         drop(event_owner);
-        assert!(!owned.exists());
-        assert!(!receipt.exists());
+        // Virus scanners may briefly retain a delete-sharing read handle even
+        // after the worker has successfully marked the file for deletion.
+        wait_until_missing(&owned);
+        wait_until_missing(&receipt);
         assert_eq!(fs::read(foreign).unwrap(), b"keep");
     }
 
@@ -344,11 +359,8 @@ mod tests {
         drop(pending._helper);
         drop(pending._log);
         wait_worker(&worker);
-        assert!(
-            !copy.exists(),
-            "uninstaller must be removed after process exit"
-        );
-        assert!(!receipt.exists());
+        wait_until_missing(&copy);
+        wait_until_missing(&receipt);
         assert!(original.exists(), "the parent test executable must survive");
     }
 
