@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.5
-// Aciklama: OS known folder, guvenli entry point ve yabanci LNK korumasi
+// Version: 0.1.6
+// Aciklama: OS known folder, urun adi/ikonu, Shell yenileme ve yabanci LNK korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -23,13 +23,14 @@ use windows::{
         },
         UI::Shell::{
             FOLDERID_CommonPrograms, FOLDERID_Desktop, FOLDERID_Programs, FOLDERID_PublicDesktop,
-            IShellLinkW, ShellLink,
+            IShellLinkW, SHCNE_CREATE, SHCNE_DELETE, SHCNE_UPDATEDIR, SHCNF_PATHW, SHChangeNotify,
+            ShellLink,
         },
     },
     core::{Interface, PCWSTR},
 };
 
-fn safe_relative_executable(root: &Path, relative: &str) -> Result<PathBuf, String> {
+pub(super) fn resolve_installed_executable(root: &Path, relative: &str) -> Result<PathBuf, String> {
     let path = Path::new(relative);
     if relative.is_empty()
         || !path
@@ -52,6 +53,18 @@ fn safe_relative_executable(root: &Path, relative: &str) -> Result<PathBuf, Stri
         return Err("Ana EXE kurulum kökünün dışına çıkıyor.".into());
     }
     Ok(resolved)
+}
+
+pub(super) fn valid_display_name(value: &str) -> bool {
+    let value = value.trim();
+    !value.is_empty()
+        && value.chars().count() <= 128
+        && value != "."
+        && value != ".."
+        && !value.ends_with([' ', '.'])
+        && !value
+            .chars()
+            .any(|character| character.is_control() || r#"<>:"/\|?*"#.contains(character))
 }
 
 fn windows_reparse(meta: &fs::Metadata) -> bool {
@@ -95,6 +108,52 @@ fn wide(value: &OsStr) -> Vec<u16> {
     value.encode_wide().chain(std::iter::once(0)).collect()
 }
 
+fn notify_shell_created(path: &Path) {
+    let path_w = wide(path.as_os_str());
+    unsafe {
+        SHChangeNotify(
+            SHCNE_CREATE,
+            SHCNF_PATHW,
+            Some(path_w.as_ptr().cast()),
+            None,
+        );
+    }
+    if let Some(parent) = path.parent() {
+        let parent_w = wide(parent.as_os_str());
+        unsafe {
+            SHChangeNotify(
+                SHCNE_UPDATEDIR,
+                SHCNF_PATHW,
+                Some(parent_w.as_ptr().cast()),
+                None,
+            );
+        }
+    }
+}
+
+pub(super) fn notify_shell_removed(path: &Path) {
+    let path_w = wide(path.as_os_str());
+    unsafe {
+        SHChangeNotify(
+            SHCNE_DELETE,
+            SHCNF_PATHW,
+            Some(path_w.as_ptr().cast()),
+            None,
+        );
+    }
+    if let Some(parent) = path.parent() {
+        let parent_w = wide(parent.as_os_str());
+        unsafe {
+            SHChangeNotify(
+                SHCNE_UPDATEDIR,
+                SHCNF_PATHW,
+                Some(parent_w.as_ptr().cast()),
+                None,
+            );
+        }
+    }
+}
+
 struct ComApartment;
 impl ComApartment {
     fn enter() -> Result<Self, String> {
@@ -127,6 +186,7 @@ fn create_link_file(
     destination: &Path,
     name: &str,
     args: Option<&str>,
+    icon: Option<&Path>,
 ) -> Result<(), String> {
     let parent = destination
         .parent()
@@ -160,6 +220,8 @@ fn create_link_file(
     let description = format!("{name} uygulamasını aç");
     let description_w = wide(OsStr::new(&description));
     let arguments_w = args.map(|args| wide(OsStr::new(args)));
+    let icon_path = icon.map(shell_path).transpose()?;
+    let icon_w = icon_path.as_ref().map(|path| wide(path.as_os_str()));
     unsafe {
         link.SetPath(PCWSTR(target_w.as_ptr()))
             .map_err(|e| format!("Kısayol EXE hedefi atanamadı: {e}"))?;
@@ -171,6 +233,10 @@ fn create_link_file(
             link.SetArguments(PCWSTR(arguments.as_ptr()))
                 .map_err(|e| format!("Kısayol parametresi atanamadı: {e}"))?;
         }
+        if let Some(icon) = &icon_w {
+            link.SetIconLocation(PCWSTR(icon.as_ptr()), 0)
+                .map_err(|e| format!("Kısayol ikonu atanamadı: {e}"))?;
+        }
     }
     let persist: IPersistFile = link
         .cast()
@@ -181,7 +247,10 @@ fn create_link_file(
 
     // NTFS hard link publication is no-clobber. Do not fall back to a rename
     // that could overwrite an unrelated shortcut.
-    fs::hard_link(&staged, destination).map_err(|e| format!("Kısayol güvenli yayımlanamadı: {e}"))
+    fs::hard_link(&staged, destination)
+        .map_err(|e| format!("Kısayol güvenli yayımlanamadı: {e}"))?;
+    notify_shell_created(destination);
+    Ok(())
 }
 
 #[derive(Default)]
@@ -197,12 +266,15 @@ pub(super) struct ShortcutReport {
 pub(super) fn create_installed_shortcuts(
     install_root: &Path,
     entry_point: &str,
-    package_id: &str,
+    display_name: &str,
     start_menu: bool,
     desktop: bool,
     scope: InstallScope,
 ) -> Result<ShortcutReport, String> {
-    let exe = safe_relative_executable(install_root, entry_point)?;
+    if !valid_display_name(display_name) {
+        return Err("Kısayol için güvenli bir uygulama adı gerekli.".into());
+    }
+    let exe = resolve_installed_executable(install_root, entry_point)?;
     let _apartment = ComApartment::enter()?;
     let mut report = ShortcutReport::default();
     if start_menu {
@@ -211,11 +283,11 @@ pub(super) fn create_installed_shortcuts(
             InstallScope::AllUsers => &FOLDERID_CommonPrograms,
         };
         let parent = known_folder(folder)?;
-        let group = parent.join(package_id);
+        let group = parent.join(display_name);
         match fs::create_dir(&group) {
             Ok(()) => {
-                let shortcut = group.join(format!("{package_id}.lnk"));
-                match create_link_file(&exe, &shortcut, package_id, None) {
+                let shortcut = group.join(format!("{display_name}.lnk"));
+                match create_link_file(&exe, &shortcut, display_name, None, Some(&exe)) {
                     Ok(()) => report.created.push(shortcut),
                     Err(error) => {
                         let _ = fs::remove_dir(&group);
@@ -237,8 +309,8 @@ pub(super) fn create_installed_shortcuts(
             InstallScope::AllUsers => &FOLDERID_PublicDesktop,
         };
         let parent = known_folder(folder)?;
-        let shortcut = parent.join(format!("{package_id}.lnk"));
-        match create_link_file(&exe, &shortcut, package_id, None) {
+        let shortcut = parent.join(format!("{display_name}.lnk"));
+        match create_link_file(&exe, &shortcut, display_name, None, Some(&exe)) {
             Ok(()) => report.created.push(shortcut),
             Err(error) => report.warnings.push(format!("Masaüstü: {error}")),
         }
@@ -252,7 +324,7 @@ pub(super) fn create_installed_shortcuts(
 pub(super) fn shortcut_location_is_owned(
     path: &Path,
     scope: InstallScope,
-    package_id: &str,
+    display_name: &str,
     allow_uninstall: bool,
 ) -> Result<bool, String> {
     let programs = match scope {
@@ -263,9 +335,9 @@ pub(super) fn shortcut_location_is_owned(
         InstallScope::CurrentUser => &FOLDERID_Desktop,
         InstallScope::AllUsers => &FOLDERID_PublicDesktop,
     };
-    let start_dir = known_folder(programs)?.join(package_id);
-    let app_link = start_dir.join(format!("{package_id}.lnk"));
-    let desktop_link = known_folder(desktop)?.join(format!("{package_id}.lnk"));
+    let start_dir = known_folder(programs)?.join(display_name);
+    let app_link = start_dir.join(format!("{display_name}.lnk"));
+    let desktop_link = known_folder(desktop)?.join(format!("{display_name}.lnk"));
     let uninstall_link = start_dir.join("Kaldır.lnk");
     Ok(path == app_link || path == desktop_link || (allow_uninstall && path == uninstall_link))
 }
@@ -276,7 +348,8 @@ pub(super) fn shortcut_location_is_owned(
 pub(super) fn create_owned_uninstaller_link(
     executable: &Path,
     manifest: &Path,
-    package_id: &str,
+    display_name: &str,
+    display_icon: &Path,
     scope: InstallScope,
     owns_existing_group: bool,
 ) -> Result<PathBuf, String> {
@@ -288,7 +361,10 @@ pub(super) fn create_owned_uninstaller_link(
         InstallScope::CurrentUser => &FOLDERID_Programs,
         InstallScope::AllUsers => &FOLDERID_CommonPrograms,
     };
-    let directory = known_folder(programs)?.join(package_id);
+    if !valid_display_name(display_name) {
+        return Err("Kaldır kısayolu için güvenli bir uygulama adı gerekli.".into());
+    }
+    let directory = known_folder(programs)?.join(display_name);
     match fs::create_dir(&directory) {
         Ok(()) => {}
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists && owns_existing_group => {}
@@ -313,7 +389,13 @@ pub(super) fn create_owned_uninstaller_link(
         return Err("Kaldırıcı parametre yolu geçersiz.".into());
     }
     let _com = ComApartment::enter()?;
-    create_link_file(executable, &link, "Uygulamayı Kaldır", Some(&arguments))?;
+    create_link_file(
+        executable,
+        &link,
+        &format!("{display_name} uygulamasını kaldır"),
+        Some(&arguments),
+        Some(display_icon),
+    )?;
     Ok(link)
 }
 
@@ -332,7 +414,7 @@ mod tests {
             "/absolute.exe",
         ] {
             assert!(
-                safe_relative_executable(&root, relative).is_err(),
+                resolve_installed_executable(&root, relative).is_err(),
                 "{relative}"
             );
         }
@@ -359,12 +441,20 @@ mod tests {
         let exe = std::env::current_exe().expect("running Windows test executable");
         let _com = ComApartment::enter().expect("COM");
         let link = root.join("Kisayol.lnk");
-        create_link_file(&exe, &link, "Test", None).expect("create shell link");
+        create_link_file(&exe, &link, "Test", None, None).expect("create shell link");
         let bytes = fs::read(&link).expect("read LNK");
         assert!(bytes.len() > 76);
         assert_eq!(&bytes[..4], &[0x4c, 0x00, 0x00, 0x00]);
-        assert!(create_link_file(&exe, &link, "Test", None).is_err());
+        assert!(create_link_file(&exe, &link, "Test", None, None).is_err());
         assert_eq!(fs::read(&link).expect("unchanged"), bytes);
         fs::remove_dir_all(&root).expect("fixture cleanup");
+    }
+
+    #[test]
+    fn display_name_rejects_windows_path_syntax() {
+        assert!(valid_display_name("PixelTone"));
+        for name in ["", ".", "..", "Bad/Name", "Bad\\Name", "Bad:", "Bad. "] {
+            assert!(!valid_display_name(name), "{name:?}");
+        }
     }
 }

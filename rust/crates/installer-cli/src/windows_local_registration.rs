@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.10
-// Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
+// Version: 0.1.11
+// Aciklama: HKCU/HKLM Uninstall, urun adi/ikonu, harici kaldirici ve kisayol korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -34,7 +34,10 @@ use windows::{
 
 use crate::{
     windows_install_scope::{InstallScope, current_process_is_elevated, known_folder},
-    windows_shortcuts::{create_owned_uninstaller_link, shortcut_location_is_owned},
+    windows_shortcuts::{
+        create_owned_uninstaller_link, notify_shell_removed, resolve_installed_executable,
+        shortcut_location_is_owned, valid_display_name,
+    },
 };
 
 const UNINSTALL_ROOT: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
@@ -79,12 +82,16 @@ struct OwnedShortcut {
 pub(super) struct LocalRegistration {
     version: u32,
     package_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    display_name: Option<String>,
     display_version: String,
     target: PathBuf,
     scope: RegisteredScope,
     key: String,
     marker: String,
     uninstaller: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    display_icon: Option<PathBuf>,
     shortcuts: Vec<OwnedShortcut>,
     #[serde(skip)]
     uninstaller_sha256: Option<String>,
@@ -99,6 +106,9 @@ impl LocalRegistration {
     pub(super) fn package_id(&self) -> &str {
         &self.package_id
     }
+    pub(super) fn display_name(&self) -> &str {
+        self.display_name.as_deref().unwrap_or(&self.package_id)
+    }
     pub(super) fn target(&self) -> &Path {
         &self.target
     }
@@ -107,6 +117,9 @@ impl LocalRegistration {
     }
     pub(super) fn display_version(&self) -> &str {
         &self.display_version
+    }
+    fn display_icon(&self) -> &Path {
+        self.display_icon.as_deref().unwrap_or(&self.uninstaller)
     }
 }
 
@@ -351,6 +364,8 @@ fn remove_key(record: &LocalRegistration) -> Result<(), String> {
         || read_value(key.0, "InstallLocation")? != record.target.to_string_lossy()
         || read_value(key.0, "UninstallString")?
             != uninstall_command(record, &registration_path(record)?)
+        || read_value(key.0, "DisplayName")? != record.display_name()
+        || read_value(key.0, "DisplayIcon")? != record.display_icon().to_string_lossy()
     {
         return Err("Windows uygulama kaydı artık bu kurulumla eşleşmiyor.".into());
     }
@@ -386,12 +401,16 @@ pub(super) fn read_registration(source: &Path) -> Result<LocalRegistration, Stri
         serde_json::from_slice(&input).map_err(|e| e.to_string())?;
     if record.version != 1
         || !valid_id(&record.package_id)
+        || !valid_display_name(record.display_name())
         || record.key != registration_name(&record.package_id, &record.target)?
         || record.shortcuts.len() > 8
         || source != registration_path(&record)?
         || !record.uninstaller.is_absolute()
         || record.uninstaller.parent() != source.parent()
         || record.uninstaller.file_name() != Some(OsStr::new(&format!("{}.exe", record.key)))
+        || record.display_icon.as_ref().is_some_and(|icon| {
+            !icon.is_absolute() || !icon.starts_with(&record.target) || !icon.is_file()
+        })
     {
         return Err("Kaldırma envanteri bu Windows kurulumuna ait değil.".into());
     }
@@ -410,12 +429,16 @@ fn register_key(record: &LocalRegistration, manifest: &Path) -> Result<(), Strin
     let arguments = uninstall_command(record, manifest);
     let result = (|| {
         write_string(key.0, MARKER, &record.marker)?;
-        write_string(key.0, "DisplayName", &record.package_id)?;
+        write_string(key.0, "DisplayName", record.display_name())?;
         write_string(key.0, "DisplayVersion", &record.display_version)?;
         write_string(key.0, "Publisher", "TurkuazInstaller local package")?;
         write_string(key.0, "InstallLocation", &record.target.to_string_lossy())?;
         write_string(key.0, "UninstallString", &arguments)?;
-        write_string(key.0, "DisplayIcon", &record.uninstaller.to_string_lossy())?;
+        write_string(
+            key.0,
+            "DisplayIcon",
+            &record.display_icon().to_string_lossy(),
+        )?;
         write_u32(key.0, "NoModify", 1)?;
         write_u32(key.0, "NoRepair", 1)?;
         Ok::<(), String>(())
@@ -456,14 +479,25 @@ fn create_copy_no_clobber(source: &Path, destination: &Path) -> Result<(), Strin
 pub(super) fn register_local_install(
     source_setup: &Path,
     package_id: &str,
+    display_name: &str,
     display_version: &str,
     target: &Path,
+    entry_point: Option<&str>,
     scope: InstallScope,
     previously_created_shortcuts: &[PathBuf],
 ) -> Result<Vec<String>, String> {
     if scope == InstallScope::AllUsers && !current_process_is_elevated() {
         return Err("Tüm kullanıcılar kaldırıcı kaydı yönetici yetkisi gerektirir.".into());
     }
+    if !valid_display_name(display_name) {
+        return Err("Windows uygulama kaydı için güvenli bir ürün adı gerekli.".into());
+    }
+    let display_icon = entry_point
+        .map(|entry| {
+            resolve_installed_executable(target, entry)?;
+            Ok::<PathBuf, String>(target.join(entry))
+        })
+        .transpose()?;
     let name = registration_name(package_id, target)?;
     let root = owned_root(scope)?;
     ensure_managed_directory(&root)?;
@@ -484,7 +518,7 @@ pub(super) fn register_local_install(
     let mut shortcuts = Vec::new();
     let mut uninstall_link = None;
     for path in previously_created_shortcuts {
-        if shortcut_location_is_owned(path, scope, package_id, false)? {
+        if shortcut_location_is_owned(path, scope, display_name, false)? {
             shortcuts.push(OwnedShortcut {
                 path: path.clone(),
                 sha256: digest_file(path)?,
@@ -495,15 +529,16 @@ pub(super) fn register_local_install(
         InstallScope::CurrentUser => &FOLDERID_Programs,
         InstallScope::AllUsers => &FOLDERID_CommonPrograms,
     };
-    let group = known_folder(programs)?.join(package_id);
-    let expected_application_link = group.join(format!("{package_id}.lnk"));
+    let group = known_folder(programs)?.join(display_name);
+    let expected_application_link = group.join(format!("{display_name}.lnk"));
     let owns_start_group = previously_created_shortcuts
         .iter()
         .any(|path| path == &expected_application_link);
     match create_owned_uninstaller_link(
         &uninstaller,
         &manifest,
-        package_id,
+        display_name,
+        display_icon.as_deref().unwrap_or(&uninstaller),
         scope,
         owns_start_group,
     ) {
@@ -529,12 +564,14 @@ pub(super) fn register_local_install(
     let record = LocalRegistration {
         version: 1,
         package_id: package_id.to_owned(),
+        display_name: Some(display_name.to_owned()),
         display_version: display_version.to_owned(),
         target: target.to_path_buf(),
         scope: scope.into(),
         key: name,
         marker,
         uninstaller,
+        display_icon,
         shortcuts,
         uninstaller_sha256: None,
     };
@@ -581,7 +618,7 @@ pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupRepo
     let mut warnings = Vec::new();
     for owned in &record.shortcuts {
         let allowed =
-            shortcut_location_is_owned(&owned.path, record.scope(), &record.package_id, true)
+            shortcut_location_is_owned(&owned.path, record.scope(), record.display_name(), true)
                 .unwrap_or(false);
         if !allowed || digest_file(&owned.path).ok().as_deref() != Some(&owned.sha256) {
             warnings.push(format!(
@@ -592,6 +629,8 @@ pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupRepo
         }
         if let Err(error) = fs::remove_file(&owned.path) {
             warnings.push(format!("Kısayol kaldırılamadı: {error}"));
+        } else {
+            notify_shell_removed(&owned.path);
         }
         if let Some(folder) = owned.path.parent() {
             // Never delete an empty Desktop, Programs root, or foreign folder.
@@ -601,7 +640,7 @@ pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupRepo
             };
             if known_folder(programs)
                 .ok()
-                .is_some_and(|root| folder == root.join(&record.package_id))
+                .is_some_and(|root| folder == root.join(record.display_name()))
             {
                 let _ = fs::remove_dir(folder);
             }
@@ -731,8 +770,10 @@ mod tests {
         let warnings = register_local_install(
             &source,
             &id,
+            "QA Native",
             "1.0.0",
             &target,
+            None,
             InstallScope::CurrentUser,
             &[],
         )
@@ -747,6 +788,7 @@ mod tests {
         let record = read_registration(&manifest).expect("registered identity");
         assert_eq!(record.target(), target.as_path());
         assert_eq!(record.package_id(), id);
+        assert_eq!(record.display_name(), "QA Native");
 
         let removed = uninstall_local_install(&target, &id).expect("receipt-guarded removal");
         assert_eq!(removed.removed_files, 1);

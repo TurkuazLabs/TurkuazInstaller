@@ -1,11 +1,12 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.4
-// Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
+// Version: 0.5.5
+// Aciklama: Urun adli/ikonlu kisayollar, hedef, son kontrol, kurulum ve sonuc akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
+    ffi::OsStr,
     fs, io,
     path::{Component, Path, PathBuf},
     sync::mpsc::{self, Receiver, TryRecvError},
@@ -28,7 +29,7 @@ use crate::{
     },
     windows_local_registration::register_local_install,
     windows_recycle::validate_recycle_target,
-    windows_shortcuts::create_installed_shortcuts,
+    windows_shortcuts::{create_installed_shortcuts, valid_display_name},
     wizard_language::WizardLanguage,
 };
 use windows::Win32::UI::Shell::FOLDERID_ProgramFiles;
@@ -175,6 +176,7 @@ fn phase_label(phase: LocalInstallPhase, language: WizardLanguage) -> &'static s
 struct LocalInstaller {
     executable: PathBuf,
     package_id: String,
+    display_name: String,
     package_label: String,
     target: String,
     program_files_root: PathBuf,
@@ -217,6 +219,14 @@ impl LocalInstaller {
                     .extension()
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
         });
+        let display_name = entry_point
+            .as_deref()
+            .and_then(|entry| Path::new(entry).file_stem())
+            .and_then(OsStr::to_str)
+            .map(str::trim)
+            .filter(|name| valid_display_name(name))
+            .unwrap_or(&identity.package_id)
+            .to_owned();
         let supports_shortcuts = entry_point.is_some();
         let first_page = wizard
             .visible_pages(supports_shortcuts)
@@ -228,7 +238,8 @@ impl LocalInstaller {
         Ok(Self {
             executable,
             package_id: identity.package_id.clone(),
-            package_label: format!("{} · v{}", identity.package_id, identity.version),
+            display_name: display_name.clone(),
+            package_label: format!("{} · v{}", display_name, identity.version),
             target,
             program_files_root,
             current_user_root,
@@ -407,6 +418,7 @@ impl LocalInstaller {
         let language = self.language;
         let program_files_root = self.program_files_root.clone();
         let package_id = self.package_id.clone();
+        let display_name = self.display_name.clone();
         let (sender, receiver) = mpsc::channel();
         self.busy = Some(receiver);
         self.status = None;
@@ -450,7 +462,7 @@ impl LocalInstaller {
             .map(|identity| {
                 let mut message = format!(
                     "{} v{} {}: {}",
-                    identity.package_id,
+                    display_name,
                     identity.version,
                     language.text("kuruldu", "installed"),
                     target.display()
@@ -469,7 +481,7 @@ impl LocalInstaller {
                         Some(entry) => match create_installed_shortcuts(
                             &target,
                             entry,
-                            &identity.package_id,
+                            &display_name,
                             start_menu,
                             desktop,
                             scope,
@@ -520,8 +532,10 @@ impl LocalInstaller {
                 match register_local_install(
                     &source_uninstaller,
                     &identity.package_id,
+                    &display_name,
                     &identity.version,
                     &target,
+                    identity.entry_point.as_deref(),
                     scope,
                     &owned_links,
                 ) {
@@ -1229,7 +1243,8 @@ mod tests {
         LocalInstaller {
             executable: PathBuf::from("fixture.exe"),
             package_id: "qa.scope".into(),
-            package_label: "qa.scope · 1.0.0".into(),
+            display_name: "QA Scope".into(),
+            package_label: "QA Scope · 1.0.0".into(),
             target: user.join("qa.scope").to_string_lossy().into_owned(),
             program_files_root: machine.clone(),
             current_user_root: user.clone(),
@@ -1416,7 +1431,8 @@ mod tests {
         let mut app = LocalInstaller {
             executable: PathBuf::from("fixture.exe"),
             package_id: "qa.scope".into(),
-            package_label: "qa.scope · 1.0.0".into(),
+            display_name: "QA Scope".into(),
+            package_label: "QA Scope · 1.0.0".into(),
             target: user.join("qa.scope").to_string_lossy().into_owned(),
             program_files_root: machine.clone(),
             current_user_root: user.clone(),

@@ -1,13 +1,13 @@
 # Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/Cargo.toml
 # Amac: Imzali manifestten paket indirip Community Rust install workflow'unu calistiran CLI'yi tanimlamak
 # Modul - Cargo Package
-# Version: 0.2.21
-# Aciklama: HTTPS release intake, artifact validation ve install/update service katmanlarini birlestirir
+# Version: 0.2.22
+# Aciklama: HTTPS release intake, Windows urun kimligi ve install/update servislerini birlestirir
 # Bagimli Oldugu Katman: Application | Tool
 
 [package]
 name = "turkuaz-installer-cli"
-version = "0.2.20"
+version = "0.2.21"
 edition = "2024"
 rust-version = "1.85"
 publish = false
