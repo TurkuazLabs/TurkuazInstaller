@@ -62,9 +62,16 @@ pub(super) fn resolve_installed_executable(root: &Path, relative: &str) -> Resul
 /// @contract Case-insensitive reserved stems are rejected; no filesystem writes.
 /// @tests windows_shortcuts::tests::display_name_rejects_windows_path_syntax
 fn windows_reserved_device_name(value: &str) -> bool {
-    let stem = value.split('.').next().unwrap_or(value).trim_end_matches(' ');
+    let stem = value
+        .split('.')
+        .next()
+        .unwrap_or(value)
+        .trim_end_matches(' ');
     let upper = stem.to_ascii_uppercase();
-    if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$") {
+    if matches!(
+        upper.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) {
         return true;
     }
     ["COM", "LPT"].iter().any(|prefix| {
@@ -633,10 +640,30 @@ mod tests {
         assert!(valid_display_name("PixelTone"));
         assert!(valid_display_name("Türkçe Uygulama 2.0"));
         for name in [
-            "", ".", "..", "Bad/Name", "Bad\\Name", "Bad:", "Bad. ",
-            " Leading", "Trailing ", "\tTab", "CON", "con.txt", "PRN.txt",
-            "NUL", "nul.log", "AUX", "CONIN$", "CONOUT$", "COM1",
-            "Com9.log", "LPT1", "lpt3.txt", "LPT¹", "COM².dat",
+            "",
+            ".",
+            "..",
+            "Bad/Name",
+            "Bad\\Name",
+            "Bad:",
+            "Bad. ",
+            " Leading",
+            "Trailing ",
+            "\tTab",
+            "CON",
+            "con.txt",
+            "PRN.txt",
+            "NUL",
+            "nul.log",
+            "AUX",
+            "CONIN$",
+            "CONOUT$",
+            "COM1",
+            "Com9.log",
+            "LPT1",
+            "lpt3.txt",
+            "LPT¹",
+            "COM².dat",
         ] {
             assert!(!valid_display_name(name), "{name:?}");
         }
