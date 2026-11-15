@@ -387,8 +387,9 @@ Kuruluyor -> Kurulum sonucu**.
   dosya butunlugu ve mevcut klasor korumasi paket motorundadir.
   `Gozat` secilen ust klasore `package-id` adinda yeni hedef ekler.
 - Ek seceneklerde, pakette guvenli ana `.exe` bulunursa `Baslat menusu`
-  uygulama/kaldirma ve `Masaustu` uygulama kisayollarinin zorunlu oldugu
-  gosterilir; bu standart entegrasyon kullanici tarafindan kapatilamaz.
+  uygulama/kaldirma kisayollari standart olarak olusturulur. `Masaustu`
+  uygulama kisayolu varsayilan olarak isaretlidir; kullanici istemiyorsa
+  kutunun isaretini kaldirabilir.
   Ana EXE yoksa gereksiz kisayol sayfasi atlanir; hazirlik adim sayisi
   4 yerine 3 olur.
 - Alt navigasyon duğmeleri sagda konumlandirilir, kademeli
@@ -398,9 +399,10 @@ Kuruluyor -> Kurulum sonucu**.
   navigasyon kapanir. Paket motoru dogrudan `LocalInstallPhase`
   olaylarini yayimlar: gomulu paket dogrulama, arsiv cikarma ve
   sahiplik envanteri hazirlama, son klasore yayinlama. Ardindan secili
-  zorunlu Windows kisayollari yapilir. Olaylar gercek motor adimlaridir,
+  zorunlu Baslat menusu/kaldirma ve secilmis masaustu kisayollari yapilir.
+  Olaylar gercek motor adimlaridir,
   dosya bazli yuzde veya kesin sure vaadi degildir.
-- Zorunlu kisayollardan veya kaldirma kaydindan biri olusmazsa kurulum
+- Zorunlu ya da kullanici tarafindan secilmis kisayollardan veya kaldirma kaydindan biri olusmazsa kurulum
   basarili sayilmaz ve yonetilen dosyalar geri alinir. Hatadan sonra yeni
   hedef secmek icin duzenleme sayfasina donulebilir.
 - Kurulum sirasinda guvenli iptal destegi olmadigindan pencere

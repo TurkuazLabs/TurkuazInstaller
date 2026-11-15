@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.7
-// Aciklama: Zorunlu Baslat, masaustu ve kaldirma entegrasyonu ile atomik hata akisi
+// Version: 0.5.8
+// Aciklama: Zorunlu Baslat/kaldirma ve varsayilan secili masaustu tercihiyle atomik hata akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
@@ -210,6 +210,7 @@ struct LocalInstaller {
     wizard: WizardConfig,
     license_accepted: bool,
     recycle_approved: bool,
+    desktop_shortcut: bool,
     entry_point: Option<String>,
     step: WizardStep,
     path_error: Option<String>,
@@ -268,6 +269,7 @@ impl LocalInstaller {
             wizard,
             license_accepted: false,
             recycle_approved: false,
+            desktop_shortcut: true,
             entry_point,
             step: WizardStep::from_page(first_page),
             path_error: None,
@@ -413,8 +415,13 @@ impl LocalInstaller {
                 }
             };
         if self.scope == InstallScope::AllUsers && !elevated {
-            match request_elevated_setup(&self.executable, &self.package_id, &target, self.language)
-            {
+            match request_elevated_setup(
+                &self.executable,
+                &self.package_id,
+                &target,
+                self.language,
+                self.desktop_shortcut,
+            ) {
                 Ok(()) => return true,
                 Err(error) => {
                     self.path_error = Some(error);
@@ -429,6 +436,7 @@ impl LocalInstaller {
         let program_files_root = self.program_files_root.clone();
         let package_id = self.package_id.clone();
         let display_name = self.display_name.clone();
+        let desktop_shortcut = self.desktop_shortcut;
         let (sender, receiver) = mpsc::channel();
         self.busy = Some(receiver);
         self.status = None;
@@ -489,7 +497,13 @@ impl LocalInstaller {
                     let _ = sender.send(WorkerEvent::CreatingShortcuts);
                     match identity.entry_point.as_deref() {
                         Some(entry) => {
-                            match create_installed_shortcuts(&target, entry, &display_name, scope) {
+                            match create_installed_shortcuts(
+                                &target,
+                                entry,
+                                &display_name,
+                                scope,
+                                desktop_shortcut,
+                            ) {
                                 Ok(report) => {
                                     owned_links = report.created;
                                     if !owned_links.is_empty() {
@@ -510,8 +524,8 @@ impl LocalInstaller {
                                         format!(
                                             "{}: {error}",
                                             language.text(
-                                                "Zorunlu Windows kısayolları oluşturulamadı",
-                                                "Required Windows shortcuts could not be created"
+                                                "Seçilen Windows kısayolları oluşturulamadı",
+                                                "Selected Windows shortcuts could not be created"
                                             )
                                         ),
                                         language,
@@ -531,6 +545,7 @@ impl LocalInstaller {
                     &target,
                     identity.entry_point.as_deref(),
                     scope,
+                    desktop_shortcut,
                     &owned_links,
                 ) {
                     Ok(warnings) => {
@@ -759,10 +774,19 @@ impl LocalInstaller {
             WizardStep::Shortcuts => {
                 if self.entry_point.is_some() {
                     ui.label(language.text(
-                        "Başlat menüsü uygulama ve kaldırma kısayolları ile masaüstü uygulama kısayolu standart olarak oluşturulur.",
-                        "Application and uninstall shortcuts in the Start menu, plus the Desktop application shortcut, are always created.",
+                        "Başlat menüsündeki uygulama ve Kaldır kısayolları standart olarak oluşturulur.",
+                        "Application and uninstall shortcuts in the Start menu are created as standard.",
                     ));
                     ui.add_space(12.0);
+                    ui.checkbox(
+                        &mut self.desktop_shortcut,
+                        language.text("Masaüstü kısayolu oluştur", "Create a Desktop shortcut"),
+                    );
+                    ui.small(language.text(
+                        "Bu seçenek varsayılan olarak işaretlidir; masaüstü kısayolu istemiyorsanız işareti kaldırın.",
+                        "This option is selected by default; clear it if you do not want a Desktop shortcut.",
+                    ));
+                    ui.add_space(8.0);
                     ui.small(language.text(
                         "Kısayollar yalnızca pakette tanımlı uygulama EXE'sine bağlanır.",
                         "Shortcuts are created only for the EXE declared in the package.",
@@ -810,7 +834,7 @@ impl LocalInstaller {
                         ui.end_row();
 
                         ui.strong(language.text("Masaüstü", "Desktop"));
-                        ui.label(if self.entry_point.is_some() {
+                        ui.label(if self.entry_point.is_some() && self.desktop_shortcut {
                             language.text("Kısayol oluşturulacak", "Shortcut will be created")
                         } else {
                             language.text("Oluşturulmayacak", "No shortcut")
@@ -1176,6 +1200,7 @@ pub fn run_resumed() -> Result<(), Box<dyn std::error::Error>> {
     app.scope = InstallScope::AllUsers;
     app.target = path.to_string_lossy().into_owned();
     app.language = args.language;
+    app.desktop_shortcut = args.desktop_shortcut;
     app.step = if app.wizard.is_enabled(WizardPageId::License) {
         // An elevated restart must never inherit unsigned acceptance state
         // from command-line arguments. Require consent in this process too.
@@ -1237,6 +1262,7 @@ mod tests {
             wizard: WizardConfig::default(),
             license_accepted: false,
             recycle_approved: true,
+            desktop_shortcut: true,
             entry_point: None,
             step: WizardStep::Destination,
             path_error: Some("previous error".into()),
@@ -1372,6 +1398,31 @@ mod tests {
     }
 
     #[test]
+    fn desktop_shortcut_is_selected_by_default_and_review_reflects_opt_out() {
+        let mut app = layout_fixture();
+        app.entry_point = Some("PixelTone.exe".into());
+        app.step = WizardStep::Shortcuts;
+        assert!(app.desktop_shortcut);
+
+        let context = egui::Context::default();
+        configure_local_style(&context);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                crate::setup_window_layout::DEFAULT_INNER_SIZE.into(),
+            )),
+            ..Default::default()
+        };
+        let output = context.run(input.clone(), |context| app.show(context));
+        assert!(visible_text(&output.shapes, "Masaüstü kısayolu oluştur"));
+
+        app.desktop_shortcut = false;
+        app.step = WizardStep::Review;
+        let output = context.run(input, |context| app.show(context));
+        assert!(visible_text(&output.shapes, "Oluşturulmayacak"));
+    }
+
+    #[test]
     fn configured_eula_blocks_progress_until_explicit_acceptance() {
         let mut wizard = WizardConfig::default();
         wizard.page_mut(WizardPageId::License).unwrap().enabled = true;
@@ -1423,6 +1474,7 @@ mod tests {
             wizard: WizardConfig::default(),
             license_accepted: false,
             recycle_approved: true,
+            desktop_shortcut: true,
             entry_point: None,
             step: WizardStep::Destination,
             path_error: Some("previous error".into()),

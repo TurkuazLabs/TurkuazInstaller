@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-uac-resume-smoke.ps1
 # Amac: UAC yeniden acilis parametrelerinin onaysiz yetkili islemlere izin vermedigini dogrulamak
 # Modul - PowerShell QA Script
-# Version: 0.1.4
-# Aciklama: Zorunlu Windows kisayollari resume protokolunun reddedilen argumanlarini test eder
+# Version: 0.1.5
+# Aciklama: Masaustu kisayol tercihi resume protokolunun reddedilen argumanlarini test eder
 # Bagimli Oldugu Katman: QA | Tool
 
 param(
@@ -59,7 +59,8 @@ $base = [string[]]@(
     'resume-local-wizard',
     '--package-id', 'qa.uac',
     '--target', 'C:\Program Files\qa.uac',
-    '--language', 'tr'
+    '--language', 'tr',
+    '--desktop-shortcut', '1'
 )
 
 Assert-UacResumeRejected -Scenario 'consent-smuggling-license' -Arguments ([string[]]($base + @('--accept-license', '1'))) -ExpectedError 'UAC yeniden başlatma parametreleri geçersiz.'
@@ -80,5 +81,9 @@ Assert-UacResumeRejected -Scenario 'traversal-target' -Arguments $traversalTarge
 $invalidLanguage = [string[]]$base.Clone()
 $invalidLanguage[6] = 'xx'
 Assert-UacResumeRejected -Scenario 'invalid-language' -Arguments $invalidLanguage -ExpectedError 'Geçersiz UAC dili.'
+
+$invalidDesktop = [string[]]$base.Clone()
+$invalidDesktop[8] = 'true'
+Assert-UacResumeRejected -Scenario 'invalid-desktop-choice' -Arguments $invalidDesktop -ExpectedError 'Geçersiz masaüstü kısayol tercihi.'
 
 Write-Host 'UAC_RESUME_ARGUMENT_SMOKE_PASS'

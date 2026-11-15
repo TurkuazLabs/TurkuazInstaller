@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.8
-// Aciklama: Zorunlu Baslat/masaustu kisayollari, Shell yenileme ve yabanci LNK korumasi
+// Version: 0.1.9
+// Aciklama: Zorunlu Baslat ve secilebilir masaustu kisayolu, Shell yenileme ve yabanci LNK korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -285,15 +285,17 @@ pub(super) struct ShortcutReport {
 }
 
 /// @dev-id BRK-WIN-SHORTCUT-003
-/// @purpose Create the required product Start menu and Desktop links.
-/// @contract Every executable application gets both application links;
-/// no elevation, no overwrite, and no guessed EXE path. A partial pair is
-/// rolled back before returning an error.
+/// @purpose Create the required product Start menu link and the selected
+/// Desktop link.
+/// @contract Every executable application gets a Start menu application link;
+/// Desktop is created only when selected. There is no elevation, overwrite or
+/// guessed EXE path. A selected partial pair is rolled back on error.
 pub(super) fn create_installed_shortcuts(
     install_root: &Path,
     entry_point: &str,
     display_name: &str,
     scope: InstallScope,
+    create_desktop: bool,
 ) -> Result<ShortcutReport, String> {
     if !valid_display_name(display_name) {
         return Err("Kısayol için güvenli bir uygulama adı gerekli.".into());
@@ -342,6 +344,9 @@ pub(super) fn create_installed_shortcuts(
         return Err(format!("Başlat menüsü uygulama kısayolu: {error}"));
     }
     report.created.push(application_shortcut.clone());
+    if !create_desktop {
+        return Ok(report);
+    }
     let desktop_result = (|| {
         let folder = match scope {
             InstallScope::CurrentUser => &FOLDERID_Desktop,
@@ -515,7 +520,7 @@ mod tests {
     }
 
     #[test]
-    fn mandatory_desktop_collision_rolls_back_start_link_without_overwrite() {
+    fn selected_desktop_collision_rolls_back_start_link_without_overwrite() {
         let unique = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("test clock")
@@ -538,10 +543,15 @@ mod tests {
         let foreign = b"foreign desktop shortcut";
         fs::write(&desktop_link, foreign).expect("foreign Desktop fixture");
 
-        let error =
-            create_installed_shortcuts(&root, "App.exe", &display_name, InstallScope::CurrentUser)
-                .err()
-                .expect("mandatory Desktop collision must fail");
+        let error = create_installed_shortcuts(
+            &root,
+            "App.exe",
+            &display_name,
+            InstallScope::CurrentUser,
+            true,
+        )
+        .err()
+        .expect("selected Desktop collision must fail");
 
         assert!(error.contains("Masaüstü"));
         assert_eq!(
@@ -550,7 +560,48 @@ mod tests {
         );
         assert!(
             !start_group.exists(),
-            "partial Start menu group survived mandatory Desktop failure"
+            "partial Start menu group survived selected Desktop failure"
+        );
+    }
+
+    #[test]
+    fn desktop_opt_out_creates_start_link_without_touching_foreign_desktop_file() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let display_name = format!("QA Optional Desktop {} {unique}", std::process::id());
+        let root = std::env::temp_dir().join(format!("turkuaz-shortcut-opt-out-{unique}"));
+        fs::create_dir(&root).expect("fixture root");
+        fs::write(root.join("App.exe"), b"MZ fixture").expect("fixture executable");
+        let desktop_link = known_folder(&FOLDERID_Desktop)
+            .expect("Desktop")
+            .join(format!("{display_name}.lnk"));
+        let start_group = known_folder(&FOLDERID_Programs)
+            .expect("Programs")
+            .join(&display_name);
+        let _cleanup = ShortcutTestCleanup {
+            root: root.clone(),
+            desktop_link: desktop_link.clone(),
+            start_group: start_group.clone(),
+        };
+        let foreign = b"foreign desktop shortcut";
+        fs::write(&desktop_link, foreign).expect("foreign Desktop fixture");
+
+        let report = create_installed_shortcuts(
+            &root,
+            "App.exe",
+            &display_name,
+            InstallScope::CurrentUser,
+            false,
+        )
+        .expect("Desktop opt-out");
+
+        assert_eq!(report.created.len(), 1);
+        assert!(report.created[0].starts_with(&start_group));
+        assert_eq!(
+            fs::read(&desktop_link).expect("foreign link preserved"),
+            foreign
         );
     }
 

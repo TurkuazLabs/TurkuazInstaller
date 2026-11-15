@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.13
-// Aciklama: Zorunlu Baslat/masaustu/kaldirma kaydi ve dosya kimlikli temizlik
+// Version: 0.1.14
+// Aciklama: Zorunlu Baslat/kaldirma, secilebilir masaustu kaydi ve dosya kimlikli temizlik
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -546,6 +546,7 @@ pub(super) fn register_local_install(
     target: &Path,
     entry_point: Option<&str>,
     scope: InstallScope,
+    desktop_shortcut_required: bool,
     previously_created_shortcuts: &[PathBuf],
 ) -> Result<Vec<String>, String> {
     if scope == InstallScope::AllUsers && !current_process_is_elevated() {
@@ -587,21 +588,27 @@ pub(super) fn register_local_install(
     };
     let group = known_folder(programs)?.join(display_name);
     let expected_application_link = group.join(format!("{display_name}.lnk"));
-    let desktop = match scope {
-        InstallScope::CurrentUser => &FOLDERID_Desktop,
-        InstallScope::AllUsers => &FOLDERID_PublicDesktop,
-    };
-    let expected_desktop_link = known_folder(desktop)?.join(format!("{display_name}.lnk"));
     let owns_start_group = previously_created_shortcuts
         .iter()
         .any(|path| path == &expected_application_link);
-    let owns_desktop_link = previously_created_shortcuts
-        .iter()
-        .any(|path| path == &expected_desktop_link);
-    if entry_point.is_some() && (!owns_start_group || !owns_desktop_link) {
+    let owns_selected_desktop = if desktop_shortcut_required {
+        let desktop = match scope {
+            InstallScope::CurrentUser => &FOLDERID_Desktop,
+            InstallScope::AllUsers => &FOLDERID_PublicDesktop,
+        };
+        let expected = known_folder(desktop)?.join(format!("{display_name}.lnk"));
+        previously_created_shortcuts
+            .iter()
+            .any(|path| path == &expected)
+    } else {
+        true
+    };
+    if entry_point.is_some() && (!owns_start_group || !owns_selected_desktop) {
         let _ = remove_owned_shortcuts(&shortcuts, scope, display_name);
         let _ = fs::remove_file(&uninstaller);
-        return Err("Zorunlu Başlat menüsü veya masaüstü uygulama kısayolu doğrulanamadı.".into());
+        return Err(
+            "Zorunlu Başlat menüsü veya seçilmiş masaüstü uygulama kısayolu doğrulanamadı.".into(),
+        );
     }
     create_copy_no_clobber(source_setup, &uninstaller)?;
     match create_owned_uninstaller_link(
@@ -868,8 +875,9 @@ mod tests {
             executable_name,
             &display_name,
             InstallScope::CurrentUser,
+            true,
         )
-        .expect("required Start menu and Desktop shortcuts");
+        .expect("required Start menu and selected Desktop shortcuts");
         assert_eq!(shortcut_report.created.len(), 2);
         let warnings = register_local_install(
             &source,
@@ -879,6 +887,7 @@ mod tests {
             &target,
             Some(executable_name),
             InstallScope::CurrentUser,
+            true,
             &shortcut_report.created,
         )
         .expect("register standalone install");
@@ -962,6 +971,71 @@ mod tests {
         drop(pending);
         // Worker owns both handles and waits for this test process to exit.
         // The live-child test verifies actual post-exit deletion.
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn desktop_opt_out_registers_and_cleans_start_menu_links_only() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let id = format!("qa.native.optout.{}.{}", std::process::id(), unique);
+        let display_name = format!("QA Native Opt Out {} {unique}", std::process::id());
+        let base = std::env::temp_dir().join(format!("turkuaz-local-opt-out-{unique}"));
+        let target = base.join("installed");
+        fs::create_dir_all(&target).expect("fixture target");
+        let executable_name = "QA-Native.exe";
+        fs::write(target.join(executable_name), b"MZ fixture executable")
+            .expect("fixture executable");
+
+        let shortcut_report = crate::windows_shortcuts::create_installed_shortcuts(
+            &target,
+            executable_name,
+            &display_name,
+            InstallScope::CurrentUser,
+            false,
+        )
+        .expect("Start menu shortcut with Desktop opted out");
+        assert_eq!(shortcut_report.created.len(), 1);
+
+        let source = std::env::current_exe().expect("test exe");
+        let warnings = register_local_install(
+            &source,
+            &id,
+            &display_name,
+            "1.0.0",
+            &target,
+            Some(executable_name),
+            InstallScope::CurrentUser,
+            false,
+            &shortcut_report.created,
+        )
+        .expect("register Desktop opt-out");
+        assert!(warnings.is_empty(), "{warnings:?}");
+
+        let name = registration_name(&id, &target).expect("owner key");
+        let root = owned_root(InstallScope::CurrentUser).expect("installer root");
+        let manifest = root.join(format!("{name}.json"));
+        let record = read_registration(&manifest).expect("registered identity");
+        assert_eq!(record.shortcuts.len(), 2, "application and uninstall links");
+        let desktop_link = known_folder(&FOLDERID_Desktop)
+            .expect("Desktop")
+            .join(format!("{display_name}.lnk"));
+        assert!(!desktop_link.exists());
+
+        let cleanup = cleanup_after_uninstall(&record);
+        assert!(cleanup.registry_removed, "{:?}", cleanup.warnings);
+        assert!(cleanup.warnings.is_empty(), "{:?}", cleanup.warnings);
+        for shortcut in &record.shortcuts {
+            assert!(
+                !shortcut.path.exists(),
+                "left shortcut: {:?}",
+                shortcut.path
+            );
+        }
+        let _ = fs::remove_file(&manifest);
+        let _ = fs::remove_file(&record.uninstaller);
         let _ = fs::remove_dir_all(&base);
     }
 

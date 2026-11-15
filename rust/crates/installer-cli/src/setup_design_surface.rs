@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_design_surface.rs
 // Amac: Studio'da gercek Windows kurulumuna benzeyen canli sayfa onizlemesi ve adim inspector'u
 // Modul - Rust Presentation
-// Version: 0.1.9
-// Aciklama: Studio temasi, zorunlu Windows kisayollari onizlemesi ve EULA kontrolleri
+// Version: 0.1.10
+// Aciklama: Studio temasi, varsayilan masaustu kisayol tercihi onizlemesi ve EULA kontrolleri
 // Bagimli Oldugu Katman: View | Application
 
 use eframe::egui;
@@ -341,6 +341,7 @@ struct PreviewCopy {
     browse: &'static str,
     destination_hint: &'static str,
     shortcuts_standard: &'static str,
+    desktop_shortcut: &'static str,
     shortcuts_hint: &'static str,
     application: &'static str,
     target: &'static str,
@@ -367,8 +368,9 @@ fn preview_copy(english: bool) -> PreviewCopy {
             destination: "Installation directory",
             browse: "Browse…",
             destination_hint: "Preview only. No folder will be created.",
-            shortcuts_standard: "Application and uninstall shortcuts in the Start menu, plus the Desktop application shortcut, are always created.",
-            shortcuts_hint: "These standard Windows shortcuts are required for executable applications.",
+            shortcuts_standard: "Application and uninstall shortcuts in the Start menu are created as standard.",
+            desktop_shortcut: "Create a Desktop shortcut",
+            shortcuts_hint: "Selected by default; users can clear this option if they do not want a Desktop shortcut.",
             application: "Application",
             target: "Destination",
             review_hint: "No files are written in this preview.",
@@ -392,8 +394,9 @@ fn preview_copy(english: bool) -> PreviewCopy {
             destination: "Kurulum dizini",
             browse: "Gözat…",
             destination_hint: "Kurulum yalnızca önizleniyor. Klasör oluşturulmaz.",
-            shortcuts_standard: "Başlat menüsünde uygulama ve Kaldır kısayolları ile masaüstü uygulama kısayolu her zaman oluşturulur.",
-            shortcuts_hint: "Bu standart Windows kısayolları EXE uygulamaları için zorunludur.",
+            shortcuts_standard: "Başlat menüsünde uygulama ve Kaldır kısayolları standart olarak oluşturulur.",
+            desktop_shortcut: "Masaüstü kısayolu oluştur",
+            shortcuts_hint: "Varsayılan olarak işaretlidir; masaüstü kısayolu istemeyen kullanıcı işareti kaldırabilir.",
             application: "Uygulama",
             target: "Hedef",
             review_hint: "Bu örnek ekranda dosya yazılmaz.",
@@ -470,7 +473,12 @@ fn preview_page_body(
         WizardPageId::Shortcuts => {
             ui.label(copy.shortcuts_standard);
             ui.add_space(12.0);
-            ui.label(copy.shortcuts_hint);
+            let mut desktop_shortcut = true;
+            ui.add_enabled(
+                false,
+                egui::Checkbox::new(&mut desktop_shortcut, copy.desktop_shortcut),
+            );
+            ui.small(copy.shortcuts_hint);
         }
         WizardPageId::Welcome => {
             ui.label(
