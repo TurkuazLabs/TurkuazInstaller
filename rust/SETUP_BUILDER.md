@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.14
-Aciklama: Zorunlu Windows kisayol yasam dongusu ve Studio onizleme kontrati
+Version: 0.9.15
+Aciklama: Guvenli Windows kisayol secimi, kaldirici cleanup ve Studio onizleme kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -456,20 +456,33 @@ dokunulmaz.
 
 ### Windows kisayollari (gelistirme, imzasiz standart kurulum)
 
-`02 Uygulama dosyalari` bolumunde **ana uygulama EXE'si** (kaynak
-dizinine gore goreli `entryPoint`) secilirse yeni Rust kurulum
-penceresinde **Baslat menusunde kisayol olustur** varsayilan acik,
-**Masaustunde kisayol olustur** ise varsayilan kapali olarak gorunur.
-EXE tanimlanmazsa ya da paket ana uygulama yolu EXE degilse kisayol
-olusturulmaz; tahmini EXE secimi yapilmaz.
+`02 Uygulama dosyalari` bolumunde kaynaga gore goreli ana EXE
+(`entryPoint`) secildiyse standart kurulum, uygulama adiyla bir
+**Baslat menusu uygulama kisayolu** ve **Kaldir kisayolu** olusturur.
+**Masaustu kisayolu** varsayilan olarak isaretlidir; kullanici kisayol
+sayfasindan secimi kaldirabilir. Masaustu secimini kaldirmak zorunlu
+Baslat menusu ve kaldirma kisayollarini kapatmaz. Pakette ana EXE
+tanimli degilse uygulama/masaustu kisayollari ve secim sayfasi
+atlanir; yine de kayitli kaldirici icin Baslat menusu Kaldir
+kisayolu olusturulur. Tahmini EXE secilmez.
 
-Kisayollar Windows known-folder API ile mevcut kullaniciya ait gercek
-Baslat Menusu/Programs ve yonlendirilmis Masaustu yolunda olusturulur.
-`<package-id>/<package-id>.lnk` ve `<package-id>.lnk` adlandirmasi
-kullanilir. Ucuncu taraf kisayollari ve mevcut Baslat menusu gruplari
-asla ezilmez. Yalnizca kurulmus ve kurulum koku icinde dogrulanan EXE
-hedeflenir. Kisayol hatasinda yuklenen dosyalar saklanir, son durum
-eksik Windows butunlesmesi olarak acikca raporlanir.
+Tek kullanici icin Windows known-folder API ile kullaniciya ait
+Programs ve masaustu, tum kullanicilar icin Common Programs ve
+Public Desktop kullanilir. Uygulama kisayolu `<urun adi>/<urun adi>.lnk`,
+kaldirma kisayolu `<urun adi>/Kaldir.lnk` (Windows'ta `Kaldır.lnk`)
+ve secilen masaustu kisayolu `<urun adi>.lnk` olur.
+Uygulama adinda Windows ayraclari, bas/son bosluklar ve
+`CON`, `NUL`, `COM1`, `LPT1` gibi Windows aygit takma adlari
+(uzantili bicimleri dahil) reddedilir. Ucuncu taraf kisayollarinin
+uzerine yazilmaz, dolu/yabanci Baslat menusu gruplari korunur.
+
+Yalnizca kurulum koku icinde dogrulanmis EXE hedeflenir.
+Zorunlu veya kullanicinin sectigi kisayol olusmazsa kurulum hata
+verir ve envantere gore guvenli payload geri alma denenir;
+geri alma basarisizsa hata acikca raporlanir. Hata durumunda
+yabanci ve degistirilmis dosyalar otomatik silinmez.
+Windows hosted CI'nin kisayol/registry testleri, gercek
+Windows 10/11 desktop ve all-users UAC kabul testlerinin yerine gecmez.
 
 Yeni yerel kurulumlar `.turkuaz-local-install.json` sahiplik kaydi ile
 yayinlanir: kayit tam payload dosya yollari, SHA-256 ozetleri ve boyutlari
@@ -486,9 +499,11 @@ saklanir. Baslat menusu `Kaldir` kisayolu ve kayitli uygulama
 kisayollari SHA-256 ile sahiplik envanterine alinir. Kaldirma ayri bir
 onay ekrani ile baslatilir ve paket motorunun degistirilmemis dosyalar
 kontrolu kullanilir. Degistirilmis veya yabanci kisayollar korunur.
-Kaldirici EXE calisirken silinemeyebileceginden Windows'un yeniden
-baslangicta silme mekanizmasi denenir; yetki yoksa kalici kaldirici
-dosyasi kalabilir ve kullaniciya raporlanir.
+Calisan kaldirici EXE'sinin kendi dosyasini silmesi yerine Rust cleanup
+yardimcisi, kaldirici surecinin bitmesini bekler ve dogrulanmis
+EXE/envanter taniticilarini silmeyi dener. Yeniden baslatma veya
+ek yetki fallback'i kullanilmaz. Hazirlik basarisizsa dosyalar korunur;
+kapanis sonrasi sonuc ayri cleanup log'una yazilir.
 
 Kurulum dili hos geldiniz ekraninda `Turkce` veya `English` olarak
 secilir. Degistirilme yalnizca gorunum metinlerini etkiler; paket
