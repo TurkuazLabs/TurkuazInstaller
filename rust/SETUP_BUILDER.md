@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.13
-Aciklama: Studio tasarim onizlemesi EULA kabul sifirlama ve tema regresyonu
+Version: 0.9.14
+Aciklama: Zorunlu Windows kisayol yasam dongusu ve Studio onizleme kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -386,8 +386,9 @@ Kuruluyor -> Kurulum sonucu**.
 - Hedef klasor secimi sadece on denetim yapar. Gercek yol/reparse,
   dosya butunlugu ve mevcut klasor korumasi paket motorundadir.
   `Gozat` secilen ust klasore `package-id` adinda yeni hedef ekler.
-- Ek seceneklerde, pakette guvenli ana `.exe` bulunursa kullanici
-  `Baslat menusu` ve `Masaustu` kisayollarini ayri secer.
+- Ek seceneklerde, pakette guvenli ana `.exe` bulunursa `Baslat menusu`
+  uygulama/kaldirma ve `Masaustu` uygulama kisayollarinin zorunlu oldugu
+  gosterilir; bu standart entegrasyon kullanici tarafindan kapatilamaz.
   Ana EXE yoksa gereksiz kisayol sayfasi atlanir; hazirlik adim sayisi
   4 yerine 3 olur.
 - Alt navigasyon duğmeleri sagda konumlandirilir, kademeli
@@ -397,10 +398,11 @@ Kuruluyor -> Kurulum sonucu**.
   navigasyon kapanir. Paket motoru dogrudan `LocalInstallPhase`
   olaylarini yayimlar: gomulu paket dogrulama, arsiv cikarma ve
   sahiplik envanteri hazirlama, son klasore yayinlama. Ardindan secili
-  Windows kisayollari yapilir. Olaylar gercek motor adimlaridir,
+  zorunlu Windows kisayollari yapilir. Olaylar gercek motor adimlaridir,
   dosya bazli yuzde veya kesin sure vaadi degildir.
-- Kurulum tamamlandiginda basari / kisayol uyarisi / hata ayrilir.
-  Hatadan sonra yeni hedef secmek icin duzenleme sayfasina donulebilir.
+- Zorunlu kisayollardan veya kaldirma kaydindan biri olusmazsa kurulum
+  basarili sayilmaz ve yonetilen dosyalar geri alinir. Hatadan sonra yeni
+  hedef secmek icin duzenleme sayfasina donulebilir.
 - Kurulum sirasinda guvenli iptal destegi olmadigindan pencere
   kapatilma istegi ertelenir. `CancelClose` arayuz denetimidir;
   guc kesintisi veya zorla proses kapatma durumunda ayri recovery

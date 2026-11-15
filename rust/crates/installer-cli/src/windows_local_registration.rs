@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.12
-// Aciklama: Zorunlu Baslat/kaldirma kaydi ve Windows dosya kimlikli kisayol temizligi
+// Version: 0.1.13
+// Aciklama: Zorunlu Baslat/masaustu/kaldirma kaydi ve dosya kimlikli temizlik
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -30,8 +30,8 @@ use windows::{
             RegSetValueExW,
         },
         UI::Shell::{
-            FOLDERID_CommonPrograms, FOLDERID_LocalAppData, FOLDERID_ProgramFiles,
-            FOLDERID_Programs,
+            FOLDERID_CommonPrograms, FOLDERID_Desktop, FOLDERID_LocalAppData,
+            FOLDERID_ProgramFiles, FOLDERID_Programs, FOLDERID_PublicDesktop,
         },
     },
     core::PCWSTR,
@@ -574,8 +574,6 @@ pub(super) fn register_local_install(
     if open_key(scope, &name).is_ok() {
         return Err("Mevcut Windows uygulama kaydının üzerine yazılmadı.".into());
     }
-    create_copy_no_clobber(source_setup, &uninstaller)?;
-
     let warnings = Vec::new();
     let mut shortcuts = Vec::new();
     for path in previously_created_shortcuts {
@@ -589,14 +587,23 @@ pub(super) fn register_local_install(
     };
     let group = known_folder(programs)?.join(display_name);
     let expected_application_link = group.join(format!("{display_name}.lnk"));
+    let desktop = match scope {
+        InstallScope::CurrentUser => &FOLDERID_Desktop,
+        InstallScope::AllUsers => &FOLDERID_PublicDesktop,
+    };
+    let expected_desktop_link = known_folder(desktop)?.join(format!("{display_name}.lnk"));
     let owns_start_group = previously_created_shortcuts
         .iter()
         .any(|path| path == &expected_application_link);
-    if entry_point.is_some() && !owns_start_group {
+    let owns_desktop_link = previously_created_shortcuts
+        .iter()
+        .any(|path| path == &expected_desktop_link);
+    if entry_point.is_some() && (!owns_start_group || !owns_desktop_link) {
         let _ = remove_owned_shortcuts(&shortcuts, scope, display_name);
         let _ = fs::remove_file(&uninstaller);
-        return Err("Zorunlu Başlat menüsü uygulama kısayolu doğrulanamadı.".into());
+        return Err("Zorunlu Başlat menüsü veya masaüstü uygulama kısayolu doğrulanamadı.".into());
     }
+    create_copy_no_clobber(source_setup, &uninstaller)?;
     match create_owned_uninstaller_link(
         &uninstaller,
         &manifest,
@@ -860,11 +867,9 @@ mod tests {
             &target,
             executable_name,
             &display_name,
-            true,
             InstallScope::CurrentUser,
         )
-        .expect("required Start menu and optional Desktop shortcuts");
-        assert!(shortcut_report.warnings.is_empty());
+        .expect("required Start menu and Desktop shortcuts");
         assert_eq!(shortcut_report.created.len(), 2);
         let warnings = register_local_install(
             &source,

@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.7
-// Aciklama: Zorunlu Baslat grubu, urun ikonlari, Shell yenileme ve yabanci LNK korumasi
+// Version: 0.1.8
+// Aciklama: Zorunlu Baslat/masaustu kisayollari, Shell yenileme ve yabanci LNK korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -282,18 +282,17 @@ fn create_link_file(
 #[derive(Default)]
 pub(super) struct ShortcutReport {
     pub(super) created: Vec<PathBuf>,
-    pub(super) warnings: Vec<String>,
 }
 
 /// @dev-id BRK-WIN-SHORTCUT-003
-/// @purpose Create the required product Start menu link and opt-in Desktop link.
-/// @contract Every executable application gets a dedicated Start menu group;
-/// no elevation, no overwrite, and no guessed EXE path.
+/// @purpose Create the required product Start menu and Desktop links.
+/// @contract Every executable application gets both application links;
+/// no elevation, no overwrite, and no guessed EXE path. A partial pair is
+/// rolled back before returning an error.
 pub(super) fn create_installed_shortcuts(
     install_root: &Path,
     entry_point: &str,
     display_name: &str,
-    desktop: bool,
     scope: InstallScope,
 ) -> Result<ShortcutReport, String> {
     if !valid_display_name(display_name) {
@@ -333,24 +332,37 @@ pub(super) fn create_installed_shortcuts(
         }
         Err(error) => return Err(format!("Başlat menüsü uygulama grubu: {error}")),
     };
-    let shortcut = group.join(format!("{display_name}.lnk"));
-    if let Err(error) = create_link_file(&exe, &shortcut, display_name, None, Some(&exe)) {
+    let application_shortcut = group.join(format!("{display_name}.lnk"));
+    if let Err(error) =
+        create_link_file(&exe, &application_shortcut, display_name, None, Some(&exe))
+    {
         if created_group && fs::remove_dir(&group).is_ok() {
             notify_shell_directory_removed(&group);
         }
         return Err(format!("Başlat menüsü uygulama kısayolu: {error}"));
     }
-    report.created.push(shortcut);
-    if desktop {
+    report.created.push(application_shortcut.clone());
+    let desktop_result = (|| {
         let folder = match scope {
             InstallScope::CurrentUser => &FOLDERID_Desktop,
             InstallScope::AllUsers => &FOLDERID_PublicDesktop,
         };
         let parent = known_folder(folder)?;
         let shortcut = parent.join(format!("{display_name}.lnk"));
-        match create_link_file(&exe, &shortcut, display_name, None, Some(&exe)) {
-            Ok(()) => report.created.push(shortcut),
-            Err(error) => report.warnings.push(format!("Masaüstü: {error}")),
+        create_link_file(&exe, &shortcut, display_name, None, Some(&exe))
+            .map_err(|error| format!("Masaüstü uygulama kısayolu: {error}"))?;
+        Ok::<PathBuf, String>(shortcut)
+    })();
+    match desktop_result {
+        Ok(shortcut) => report.created.push(shortcut),
+        Err(error) => {
+            if fs::remove_file(&application_shortcut).is_ok() {
+                notify_shell_removed(&application_shortcut);
+            }
+            if created_group && fs::remove_dir(&group).is_ok() {
+                notify_shell_directory_removed(&group);
+            }
+            return Err(error);
         }
     }
     Ok(report)
@@ -441,6 +453,20 @@ pub(super) fn create_owned_uninstaller_link(
 mod tests {
     use super::*;
 
+    struct ShortcutTestCleanup {
+        root: PathBuf,
+        desktop_link: PathBuf,
+        start_group: PathBuf,
+    }
+
+    impl Drop for ShortcutTestCleanup {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.desktop_link);
+            let _ = fs::remove_dir_all(&self.start_group);
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
     #[test]
     fn reject_missing_exe_and_escaping_paths() {
         let root = std::env::temp_dir();
@@ -486,6 +512,46 @@ mod tests {
         assert!(create_link_file(&exe, &link, "Test", None, None).is_err());
         assert_eq!(fs::read(&link).expect("unchanged"), bytes);
         fs::remove_dir_all(&root).expect("fixture cleanup");
+    }
+
+    #[test]
+    fn mandatory_desktop_collision_rolls_back_start_link_without_overwrite() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let display_name = format!("QA Mandatory Desktop {} {unique}", std::process::id());
+        let root = std::env::temp_dir().join(format!("turkuaz-shortcut-pair-{unique}"));
+        fs::create_dir(&root).expect("fixture root");
+        fs::write(root.join("App.exe"), b"MZ fixture").expect("fixture executable");
+        let desktop_link = known_folder(&FOLDERID_Desktop)
+            .expect("Desktop")
+            .join(format!("{display_name}.lnk"));
+        let start_group = known_folder(&FOLDERID_Programs)
+            .expect("Programs")
+            .join(&display_name);
+        let _cleanup = ShortcutTestCleanup {
+            root: root.clone(),
+            desktop_link: desktop_link.clone(),
+            start_group: start_group.clone(),
+        };
+        let foreign = b"foreign desktop shortcut";
+        fs::write(&desktop_link, foreign).expect("foreign Desktop fixture");
+
+        let error =
+            create_installed_shortcuts(&root, "App.exe", &display_name, InstallScope::CurrentUser)
+                .err()
+                .expect("mandatory Desktop collision must fail");
+
+        assert!(error.contains("Masaüstü"));
+        assert_eq!(
+            fs::read(&desktop_link).expect("foreign link preserved"),
+            foreign
+        );
+        assert!(
+            !start_group.exists(),
+            "partial Start menu group survived mandatory Desktop failure"
+        );
     }
 
     #[test]

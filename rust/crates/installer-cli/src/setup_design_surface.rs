@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/setup_design_surface.rs
 // Amac: Studio'da gercek Windows kurulumuna benzeyen canli sayfa onizlemesi ve adim inspector'u
 // Modul - Rust Presentation
-// Version: 0.1.8
-// Aciklama: Studio temasi, zorunlu Baslat entegrasyonu onizlemesi ve EULA kontrolleri
+// Version: 0.1.9
+// Aciklama: Studio temasi, zorunlu Windows kisayollari onizlemesi ve EULA kontrolleri
 // Bagimli Oldugu Katman: View | Application
 
 use eframe::egui;
@@ -340,8 +340,7 @@ struct PreviewCopy {
     destination: &'static str,
     browse: &'static str,
     destination_hint: &'static str,
-    start_menu_standard: &'static str,
-    desktop: &'static str,
+    shortcuts_standard: &'static str,
     shortcuts_hint: &'static str,
     application: &'static str,
     target: &'static str,
@@ -368,9 +367,8 @@ fn preview_copy(english: bool) -> PreviewCopy {
             destination: "Installation directory",
             browse: "Browse…",
             destination_hint: "Preview only. No folder will be created.",
-            start_menu_standard: "Application and uninstall shortcuts are always created in the Start menu.",
-            desktop: "Create desktop shortcut",
-            shortcuts_hint: "The user can optionally add the desktop shortcut during installation.",
+            shortcuts_standard: "Application and uninstall shortcuts in the Start menu, plus the Desktop application shortcut, are always created.",
+            shortcuts_hint: "These standard Windows shortcuts are required for executable applications.",
             application: "Application",
             target: "Destination",
             review_hint: "No files are written in this preview.",
@@ -394,9 +392,8 @@ fn preview_copy(english: bool) -> PreviewCopy {
             destination: "Kurulum dizini",
             browse: "Gözat…",
             destination_hint: "Kurulum yalnızca önizleniyor. Klasör oluşturulmaz.",
-            start_menu_standard: "Başlat menüsünde uygulama ve Kaldır kısayolları her zaman oluşturulur.",
-            desktop: "Masaüstüne kısayol oluştur",
-            shortcuts_hint: "Kullanıcı kurulum sırasında masaüstü kısayolunu ayrıca seçebilir.",
+            shortcuts_standard: "Başlat menüsünde uygulama ve Kaldır kısayolları ile masaüstü uygulama kısayolu her zaman oluşturulur.",
+            shortcuts_hint: "Bu standart Windows kısayolları EXE uygulamaları için zorunludur.",
             application: "Uygulama",
             target: "Hedef",
             review_hint: "Bu örnek ekranda dosya yazılmaz.",
@@ -471,12 +468,7 @@ fn preview_page_body(
             ui.label(copy.destination_hint);
         }
         WizardPageId::Shortcuts => {
-            let mut desktop = false;
-            ui.label(copy.start_menu_standard);
-            ui.add_space(10.0);
-            ui.add_enabled_ui(false, |ui| {
-                ui.checkbox(&mut desktop, copy.desktop);
-            });
+            ui.label(copy.shortcuts_standard);
             ui.add_space(12.0);
             ui.label(copy.shortcuts_hint);
         }

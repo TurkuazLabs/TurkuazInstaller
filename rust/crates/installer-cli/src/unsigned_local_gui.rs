@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.6
-// Aciklama: Zorunlu Baslat/kaldirma entegrasyonu, masaustu tercihi ve atomik hata akisi
+// Version: 0.5.7
+// Aciklama: Zorunlu Baslat, masaustu ve kaldirma entegrasyonu ile atomik hata akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
@@ -211,7 +211,6 @@ struct LocalInstaller {
     license_accepted: bool,
     recycle_approved: bool,
     entry_point: Option<String>,
-    desktop: bool,
     step: WizardStep,
     path_error: Option<String>,
     busy: Option<Receiver<WorkerEvent>>,
@@ -270,7 +269,6 @@ impl LocalInstaller {
             license_accepted: false,
             recycle_approved: false,
             entry_point,
-            desktop: false,
             step: WizardStep::from_page(first_page),
             path_error: None,
             busy: None,
@@ -415,13 +413,8 @@ impl LocalInstaller {
                 }
             };
         if self.scope == InstallScope::AllUsers && !elevated {
-            match request_elevated_setup(
-                &self.executable,
-                &self.package_id,
-                &target,
-                self.desktop,
-                self.language,
-            ) {
+            match request_elevated_setup(&self.executable, &self.package_id, &target, self.language)
+            {
                 Ok(()) => return true,
                 Err(error) => {
                     self.path_error = Some(error);
@@ -431,7 +424,6 @@ impl LocalInstaller {
         }
         let executable = self.executable.clone();
         let source_uninstaller = executable.clone();
-        let desktop = self.desktop;
         let scope = self.scope;
         let language = self.language;
         let program_files_root = self.program_files_root.clone();
@@ -496,49 +488,37 @@ impl LocalInstaller {
                 if identity.entry_point.is_some() {
                     let _ = sender.send(WorkerEvent::CreatingShortcuts);
                     match identity.entry_point.as_deref() {
-                        Some(entry) => match create_installed_shortcuts(
-                            &target,
-                            entry,
-                            &display_name,
-                            desktop,
-                            scope,
-                        ) {
-                            Ok(report) => {
-                                owned_links = report.created;
-                                if !owned_links.is_empty() {
-                                    message.push_str(&format!(
-                                        "\n{} {}",
-                                        owned_links.len(),
-                                        language.text(
-                                            "Windows kısayolu oluşturuldu.",
-                                            "Windows shortcut(s) created."
-                                        )
-                                    ));
+                        Some(entry) => {
+                            match create_installed_shortcuts(&target, entry, &display_name, scope) {
+                                Ok(report) => {
+                                    owned_links = report.created;
+                                    if !owned_links.is_empty() {
+                                        message.push_str(&format!(
+                                            "\n{} {}",
+                                            owned_links.len(),
+                                            language.text(
+                                                "Windows kısayolu oluşturuldu.",
+                                                "Windows shortcut(s) created."
+                                            )
+                                        ));
+                                    }
                                 }
-                                if !report.warnings.is_empty() {
-                                    warning = true;
-                                    message.push_str(&format!(
-                                        "\n{}: {}",
-                                        language.text("Kısayol uyarısı", "Shortcut warning"),
-                                        report.warnings.join("; ")
+                                Err(error) => {
+                                    return Err(rollback_failed_standard_install(
+                                        &target,
+                                        &identity.package_id,
+                                        format!(
+                                            "{}: {error}",
+                                            language.text(
+                                                "Zorunlu Windows kısayolları oluşturulamadı",
+                                                "Required Windows shortcuts could not be created"
+                                            )
+                                        ),
+                                        language,
                                     ));
                                 }
                             }
-                            Err(error) => {
-                                return Err(rollback_failed_standard_install(
-                                    &target,
-                                    &identity.package_id,
-                                    format!(
-                                        "{}: {error}",
-                                        language.text(
-                                            "Zorunlu Başlat menüsü kısayolu oluşturulamadı",
-                                            "Required Start menu shortcut could not be created"
-                                        )
-                                    ),
-                                    language,
-                                ));
-                            }
-                        },
+                        }
                         None => unreachable!("entry point checked above"),
                     }
                 }
@@ -779,14 +759,9 @@ impl LocalInstaller {
             WizardStep::Shortcuts => {
                 if self.entry_point.is_some() {
                     ui.label(language.text(
-                        "Başlat menüsü uygulama ve kaldırma kısayolları standart olarak oluşturulur.",
-                        "Application and uninstall shortcuts are always created in the Start menu.",
+                        "Başlat menüsü uygulama ve kaldırma kısayolları ile masaüstü uygulama kısayolu standart olarak oluşturulur.",
+                        "Application and uninstall shortcuts in the Start menu, plus the Desktop application shortcut, are always created.",
                     ));
-                    ui.add_space(12.0);
-                    ui.checkbox(
-                        &mut self.desktop,
-                        language.text("Masaüstünde kısayol oluştur", "Create Desktop shortcut"),
-                    );
                     ui.add_space(12.0);
                     ui.small(language.text(
                         "Kısayollar yalnızca pakette tanımlı uygulama EXE'sine bağlanır.",
@@ -835,7 +810,7 @@ impl LocalInstaller {
                         ui.end_row();
 
                         ui.strong(language.text("Masaüstü", "Desktop"));
-                        ui.label(if self.entry_point.is_some() && self.desktop {
+                        ui.label(if self.entry_point.is_some() {
                             language.text("Kısayol oluşturulacak", "Shortcut will be created")
                         } else {
                             language.text("Oluşturulmayacak", "No shortcut")
@@ -1201,7 +1176,6 @@ pub fn run_resumed() -> Result<(), Box<dyn std::error::Error>> {
     app.scope = InstallScope::AllUsers;
     app.target = path.to_string_lossy().into_owned();
     app.language = args.language;
-    app.desktop = app.entry_point.is_some() && args.desktop;
     app.step = if app.wizard.is_enabled(WizardPageId::License) {
         // An elevated restart must never inherit unsigned acceptance state
         // from command-line arguments. Require consent in this process too.
@@ -1264,7 +1238,6 @@ mod tests {
             license_accepted: false,
             recycle_approved: true,
             entry_point: None,
-            desktop: false,
             step: WizardStep::Destination,
             path_error: Some("previous error".into()),
             busy: None,
@@ -1451,7 +1424,6 @@ mod tests {
             license_accepted: false,
             recycle_approved: true,
             entry_point: None,
-            desktop: false,
             step: WizardStep::Destination,
             path_error: Some("previous error".into()),
             busy: None,
