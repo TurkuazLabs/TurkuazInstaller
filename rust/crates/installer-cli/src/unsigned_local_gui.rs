@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.5
-// Aciklama: Urun adli/ikonlu kisayollar, hedef, son kontrol, kurulum ve sonuc akisi
+// Version: 0.5.6
+// Aciklama: Zorunlu Baslat/kaldirma entegrasyonu, masaustu tercihi ve atomik hata akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
@@ -18,7 +18,7 @@ use eframe::egui;
 use turkuaz_installer_package_engine::{
     LocalInstallPhase, PackageEngineError, WizardConfig, WizardPageId,
     install_unsigned_local_setup_with_progress, install_unsigned_local_setup_with_replacement,
-    read_unsigned_local_wizard_config, unsigned_local_identity,
+    read_unsigned_local_wizard_config, uninstall_local_install, unsigned_local_identity,
 };
 
 use crate::{
@@ -173,6 +173,30 @@ fn phase_label(phase: LocalInstallPhase, language: WizardLanguage) -> &'static s
     language.text(tr, en)
 }
 
+fn rollback_failed_standard_install(
+    target: &Path,
+    package_id: &str,
+    error: String,
+    language: WizardLanguage,
+) -> String {
+    match uninstall_local_install(target, package_id) {
+        Ok(_) => format!(
+            "{error} {}",
+            language.text(
+                "Kurulum dosyaları güvenli biçimde geri alındı.",
+                "Installation files were safely rolled back."
+            )
+        ),
+        Err(rollback) => format!(
+            "{error} {}: {rollback}",
+            language.text(
+                "Otomatik geri alma tamamlanamadı; Yüklü Uygulamalar kaydı oluşturulmadı",
+                "Automatic rollback could not be completed; no Installed Apps entry was created"
+            )
+        ),
+    }
+}
+
 struct LocalInstaller {
     executable: PathBuf,
     package_id: String,
@@ -187,7 +211,6 @@ struct LocalInstaller {
     license_accepted: bool,
     recycle_approved: bool,
     entry_point: Option<String>,
-    start_menu: bool,
     desktop: bool,
     step: WizardStep,
     path_error: Option<String>,
@@ -233,8 +256,6 @@ impl LocalInstaller {
             .into_iter()
             .next()
             .ok_or("Kurulumda gösterilecek sayfa bulunamadı.")?;
-        let shortcut_default = supports_shortcuts && wizard.is_enabled(WizardPageId::Shortcuts);
-
         Ok(Self {
             executable,
             package_id: identity.package_id.clone(),
@@ -249,7 +270,6 @@ impl LocalInstaller {
             license_accepted: false,
             recycle_approved: false,
             entry_point,
-            start_menu: shortcut_default,
             desktop: false,
             step: WizardStep::from_page(first_page),
             path_error: None,
@@ -399,7 +419,6 @@ impl LocalInstaller {
                 &self.executable,
                 &self.package_id,
                 &target,
-                self.start_menu,
                 self.desktop,
                 self.language,
             ) {
@@ -412,7 +431,6 @@ impl LocalInstaller {
         }
         let executable = self.executable.clone();
         let source_uninstaller = executable.clone();
-        let start_menu = self.start_menu;
         let desktop = self.desktop;
         let scope = self.scope;
         let language = self.language;
@@ -459,7 +477,7 @@ impl LocalInstaller {
                 }
                 .map_err(|error| error.to_string())
             })
-            .map(|identity| {
+            .and_then(|identity| {
                 let mut message = format!(
                     "{} v{} {}: {}",
                     display_name,
@@ -475,14 +493,13 @@ impl LocalInstaller {
                     ));
                 }
                 let mut owned_links = Vec::new();
-                if start_menu || desktop {
+                if identity.entry_point.is_some() {
                     let _ = sender.send(WorkerEvent::CreatingShortcuts);
                     match identity.entry_point.as_deref() {
                         Some(entry) => match create_installed_shortcuts(
                             &target,
                             entry,
                             &display_name,
-                            start_menu,
                             desktop,
                             scope,
                         ) {
@@ -508,24 +525,21 @@ impl LocalInstaller {
                                 }
                             }
                             Err(error) => {
-                                warning = true;
-                                message.push_str(&format!(
-                                    "{}: {error}",
-                                    language.text(
-                                        "\nDosyalar kuruldu ancak kısayol oluşturulamadı",
-                                        "\nFiles installed, but shortcuts could not be created"
-                                    )
+                                return Err(rollback_failed_standard_install(
+                                    &target,
+                                    &identity.package_id,
+                                    format!(
+                                        "{}: {error}",
+                                        language.text(
+                                            "Zorunlu Başlat menüsü kısayolu oluşturulamadı",
+                                            "Required Start menu shortcut could not be created"
+                                        )
+                                    ),
+                                    language,
                                 ));
                             }
                         },
-                        None => {
-                            warning = true;
-                            message
-                                .push_str(language.text(
-                                    "\nPakette ana EXE tanımı yok; kısayol oluşturulamadı.",
-                                    "\nNo main EXE is defined in the package; shortcuts were not created."
-                                ));
-                        }
+                        None => unreachable!("entry point checked above"),
                     }
                 }
                 let _ = sender.send(WorkerEvent::RegisteringUninstaller);
@@ -551,17 +565,21 @@ impl LocalInstaller {
                         }
                     }
                     Err(error) => {
-                        warning = true;
-                        message.push_str(&format!(
-                            "{}: {error}",
-                            language.text(
-                                "\nWindows kaldırma kaydı oluşturulamadı",
-                                "\nWindows uninstall registration failed"
-                            )
+                        return Err(rollback_failed_standard_install(
+                            &target,
+                            &identity.package_id,
+                            format!(
+                                "{}: {error}",
+                                language.text(
+                                    "Windows kaldırma kaydı oluşturulamadı",
+                                    "Windows uninstall registration failed"
+                                )
+                            ),
+                            language,
                         ));
                     }
                 }
-                (message, warning)
+                Ok((message, warning))
             });
             let _ = sender.send(WorkerEvent::Finished(result));
         });
@@ -761,17 +779,10 @@ impl LocalInstaller {
             WizardStep::Shortcuts => {
                 if self.entry_point.is_some() {
                     ui.label(language.text(
-                        "Kurulumdan sonra oluşturulacak Windows kısayollarını seçin.",
-                        "Choose Windows shortcuts to create after installation.",
+                        "Başlat menüsü uygulama ve kaldırma kısayolları standart olarak oluşturulur.",
+                        "Application and uninstall shortcuts are always created in the Start menu.",
                     ));
                     ui.add_space(12.0);
-                    ui.checkbox(
-                        &mut self.start_menu,
-                        language.text(
-                            "Başlat menüsünde kısayol oluştur",
-                            "Create Start menu shortcut",
-                        ),
-                    );
                     ui.checkbox(
                         &mut self.desktop,
                         language.text("Masaüstünde kısayol oluştur", "Create Desktop shortcut"),
@@ -816,7 +827,7 @@ impl LocalInstaller {
                         ui.end_row();
 
                         ui.strong(language.text("Başlat menüsü", "Start menu"));
-                        ui.label(if self.entry_point.is_some() && self.start_menu {
+                        ui.label(if self.entry_point.is_some() {
                             language.text("Kısayol oluşturulacak", "Shortcut will be created")
                         } else {
                             language.text("Oluşturulmayacak", "No shortcut")
@@ -1190,7 +1201,6 @@ pub fn run_resumed() -> Result<(), Box<dyn std::error::Error>> {
     app.scope = InstallScope::AllUsers;
     app.target = path.to_string_lossy().into_owned();
     app.language = args.language;
-    app.start_menu = app.entry_point.is_some() && args.start_menu;
     app.desktop = app.entry_point.is_some() && args.desktop;
     app.step = if app.wizard.is_enabled(WizardPageId::License) {
         // An elevated restart must never inherit unsigned acceptance state
@@ -1254,7 +1264,6 @@ mod tests {
             license_accepted: false,
             recycle_approved: true,
             entry_point: None,
-            start_menu: false,
             desktop: false,
             step: WizardStep::Destination,
             path_error: Some("previous error".into()),
@@ -1442,7 +1451,6 @@ mod tests {
             license_accepted: false,
             recycle_approved: true,
             entry_point: None,
-            start_menu: false,
             desktop: false,
             step: WizardStep::Destination,
             path_error: Some("previous error".into()),

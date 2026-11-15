@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.6
-// Aciklama: OS known folder, urun adi/ikonu, Shell yenileme ve yabanci LNK korumasi
+// Version: 0.1.7
+// Aciklama: Zorunlu Baslat grubu, urun ikonlari, Shell yenileme ve yabanci LNK korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -23,8 +23,8 @@ use windows::{
         },
         UI::Shell::{
             FOLDERID_CommonPrograms, FOLDERID_Desktop, FOLDERID_Programs, FOLDERID_PublicDesktop,
-            IShellLinkW, SHCNE_CREATE, SHCNE_DELETE, SHCNE_UPDATEDIR, SHCNF_PATHW, SHChangeNotify,
-            ShellLink,
+            IShellLinkW, SHCNE_CREATE, SHCNE_DELETE, SHCNE_MKDIR, SHCNE_RMDIR, SHCNE_UPDATEDIR,
+            SHCNF_PATHW, SHChangeNotify, ShellLink,
         },
     },
     core::{Interface, PCWSTR},
@@ -117,6 +117,32 @@ fn notify_shell_created(path: &Path) {
             Some(path_w.as_ptr().cast()),
             None,
         );
+    }
+    if let Some(parent) = path.parent() {
+        let parent_w = wide(parent.as_os_str());
+        unsafe {
+            SHChangeNotify(
+                SHCNE_UPDATEDIR,
+                SHCNF_PATHW,
+                Some(parent_w.as_ptr().cast()),
+                None,
+            );
+        }
+    }
+}
+
+fn notify_shell_directory_created(path: &Path) {
+    notify_shell_path(path, SHCNE_MKDIR);
+}
+
+pub(super) fn notify_shell_directory_removed(path: &Path) {
+    notify_shell_path(path, SHCNE_RMDIR);
+}
+
+fn notify_shell_path(path: &Path, event: windows::Win32::UI::Shell::SHCNE_ID) {
+    let path_w = wide(path.as_os_str());
+    unsafe {
+        SHChangeNotify(event, SHCNF_PATHW, Some(path_w.as_ptr().cast()), None);
     }
     if let Some(parent) = path.parent() {
         let parent_w = wide(parent.as_os_str());
@@ -260,14 +286,13 @@ pub(super) struct ShortcutReport {
 }
 
 /// @dev-id BRK-WIN-SHORTCUT-003
-/// @purpose Create per-user Start menu and opt-in Desktop links after install.
-/// @contract No elevation; no HKLM; never replace shortcuts or guess EXE paths.
-/// This does not represent a complete uninstall/ownership protocol.
+/// @purpose Create the required product Start menu link and opt-in Desktop link.
+/// @contract Every executable application gets a dedicated Start menu group;
+/// no elevation, no overwrite, and no guessed EXE path.
 pub(super) fn create_installed_shortcuts(
     install_root: &Path,
     entry_point: &str,
     display_name: &str,
-    start_menu: bool,
     desktop: bool,
     scope: InstallScope,
 ) -> Result<ShortcutReport, String> {
@@ -277,32 +302,45 @@ pub(super) fn create_installed_shortcuts(
     let exe = resolve_installed_executable(install_root, entry_point)?;
     let _apartment = ComApartment::enter()?;
     let mut report = ShortcutReport::default();
-    if start_menu {
-        let folder = match scope {
-            InstallScope::CurrentUser => &FOLDERID_Programs,
-            InstallScope::AllUsers => &FOLDERID_CommonPrograms,
-        };
-        let parent = known_folder(folder)?;
-        let group = parent.join(display_name);
-        match fs::create_dir(&group) {
-            Ok(()) => {
-                let shortcut = group.join(format!("{display_name}.lnk"));
-                match create_link_file(&exe, &shortcut, display_name, None, Some(&exe)) {
-                    Ok(()) => report.created.push(shortcut),
-                    Err(error) => {
-                        let _ = fs::remove_dir(&group);
-                        report.warnings.push(format!("Başlat menüsü: {error}"));
-                    }
-                }
-            }
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                report
-                    .warnings
-                    .push("Başlat menüsü grubunda mevcut dosyalar var; üzerine yazılmadı.".into());
-            }
-            Err(error) => report.warnings.push(format!("Başlat menüsü: {error}")),
+    let folder = match scope {
+        InstallScope::CurrentUser => &FOLDERID_Programs,
+        InstallScope::AllUsers => &FOLDERID_CommonPrograms,
+    };
+    let parent = known_folder(folder)?;
+    let group = parent.join(display_name);
+    let created_group = match fs::create_dir(&group) {
+        Ok(()) => {
+            notify_shell_directory_created(&group);
+            true
         }
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            let metadata = fs::symlink_metadata(&group).map_err(|e| e.to_string())?;
+            if !metadata.is_dir() || metadata.file_type().is_symlink() || windows_reparse(&metadata)
+            {
+                return Err("Başlat menüsü uygulama grubu güvenli bir klasör değil.".into());
+            }
+            if fs::read_dir(&group)
+                .map_err(|e| e.to_string())?
+                .next()
+                .is_some()
+            {
+                return Err(
+                    "Başlat menüsü uygulama grubunda mevcut dosyalar var; üzerine yazılmadı."
+                        .into(),
+                );
+            }
+            false
+        }
+        Err(error) => return Err(format!("Başlat menüsü uygulama grubu: {error}")),
+    };
+    let shortcut = group.join(format!("{display_name}.lnk"));
+    if let Err(error) = create_link_file(&exe, &shortcut, display_name, None, Some(&exe)) {
+        if created_group && fs::remove_dir(&group).is_ok() {
+            notify_shell_directory_removed(&group);
+        }
+        return Err(format!("Başlat menüsü uygulama kısayolu: {error}"));
     }
+    report.created.push(shortcut);
     if desktop {
         let folder = match scope {
             InstallScope::CurrentUser => &FOLDERID_Desktop,
@@ -366,7 +404,7 @@ pub(super) fn create_owned_uninstaller_link(
     }
     let directory = known_folder(programs)?.join(display_name);
     match fs::create_dir(&directory) {
-        Ok(()) => {}
+        Ok(()) => notify_shell_directory_created(&directory),
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists && owns_existing_group => {}
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
             return Err("Başlat menüsündeki mevcut yabancı gruba dokunulmadı.".into());

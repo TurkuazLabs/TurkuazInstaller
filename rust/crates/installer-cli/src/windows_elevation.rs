@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_elevation.rs
 // Amac: Tum kullanicilar kurulumunu Windows UAC ile yeniden baslatmak
 // Modul - Rust Windows Elevation Adapter
-// Version: 0.1.2
-// Aciklama: runas, komut satiri kacis kodlamasi, onayli yeniden acilis
+// Version: 0.1.3
+// Aciklama: Zorunlu Baslat entegrasyonunu koruyan runas ve onayli yeniden acilis
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -53,7 +53,6 @@ fn quote_arg(value: &str) -> Result<String, String> {
 fn resumed_arguments(
     package_id: &str,
     target: &Path,
-    start_menu: bool,
     desktop: bool,
     language: WizardLanguage,
 ) -> Result<String, String> {
@@ -65,10 +64,9 @@ fn resumed_arguments(
         WizardLanguage::English => "en",
     };
     Ok(format!(
-        "resume-local-wizard --package-id {} --target {} --start-menu {} --desktop {} --language {}",
+        "resume-local-wizard --package-id {} --target {} --desktop {} --language {}",
         quote_arg(package_id)?,
         quote_arg(target)?,
-        if start_menu { "1" } else { "0" },
         if desktop { "1" } else { "0" },
         language
     ))
@@ -83,11 +81,10 @@ pub(super) fn request_elevated_setup(
     executable: &Path,
     package_id: &str,
     target: &Path,
-    start_menu: bool,
     desktop: bool,
     language: WizardLanguage,
 ) -> Result<(), String> {
-    let args = resumed_arguments(package_id, target, start_menu, desktop, language)?;
+    let args = resumed_arguments(package_id, target, desktop, language)?;
     let exe = wide(executable.as_os_str());
     let params = wide(OsStr::new(&args));
     let verb = wide(OsStr::new("runas"));
@@ -147,7 +144,6 @@ pub(super) fn request_elevated_uninstall(
 pub(super) struct ResumeOptions {
     pub(super) package_id: String,
     pub(super) target: String,
-    pub(super) start_menu: bool,
     pub(super) desktop: bool,
     pub(super) language: WizardLanguage,
 }
@@ -163,17 +159,11 @@ pub(super) fn parse_resumed_arguments() -> Result<ResumeOptions, String> {
 /// AllUsers; the elevated wizard must re-ask EULA and recycle consent.
 fn parse_resumed_values(values: &[String]) -> Result<ResumeOptions, String> {
     // No optional unknown switches, no implicit defaults for privileged state.
-    if values.len() != 12 || values[1] != "resume-local-wizard" {
+    if values.len() != 10 || values[1] != "resume-local-wizard" {
         return Err("UAC yeniden başlatma parametreleri geçersiz.".into());
     }
-    let expected = [
-        "--package-id",
-        "--target",
-        "--start-menu",
-        "--desktop",
-        "--language",
-    ];
-    // 5 named flags and values -> executable + command + 10 = 12.
+    let expected = ["--package-id", "--target", "--desktop", "--language"];
+    // 4 named flags and values -> executable + command + 8 = 10.
     for (index, flag) in expected.iter().enumerate() {
         if values[2 + index * 2] != *flag {
             return Err("UAC parametre sırası geçersiz.".into());
@@ -186,7 +176,7 @@ fn parse_resumed_values(values: &[String]) -> Result<ResumeOptions, String> {
             _ => Err("Geçersiz UAC tercih değeri.".into()),
         }
     }
-    let language = match values[11].as_str() {
+    let language = match values[9].as_str() {
         "tr" => WizardLanguage::Turkish,
         "en" => WizardLanguage::English,
         _ => return Err("Geçersiz UAC dili.".into()),
@@ -204,8 +194,7 @@ fn parse_resumed_values(values: &[String]) -> Result<ResumeOptions, String> {
     Ok(ResumeOptions {
         package_id: values[3].clone(),
         target: values[5].clone(),
-        start_menu: yes_no(&values[7])?,
-        desktop: yes_no(&values[9])?,
+        desktop: yes_no(&values[7])?,
         language,
     })
 }
@@ -236,8 +225,6 @@ mod tests {
             "qa.uac",
             "--target",
             r"C:\Program Files\qa.uac",
-            "--start-menu",
-            "1",
             "--desktop",
             "0",
             "--language",
@@ -248,7 +235,6 @@ mod tests {
         let options = parse_resumed_values(&valid).expect("valid UAC resume");
         assert_eq!(options.package_id, "qa.uac");
         assert_eq!(options.target, r"C:\Program Files\qa.uac");
-        assert!(options.start_menu);
         assert!(!options.desktop);
         assert_eq!(options.language, WizardLanguage::Turkish);
 
@@ -263,18 +249,10 @@ mod tests {
             args.push("1".to_owned());
             assert!(parse_resumed_values(&args).is_err(), "accepted {flag}");
         }
-        for invalid in ["0", "yes", "2", ""] {
+        for invalid in ["yes", "2", ""] {
             let mut args = make();
             args[7] = invalid.into();
-            if invalid == "0" {
-                assert!(
-                    !parse_resumed_values(&args)
-                        .expect("explicit false")
-                        .start_menu
-                );
-            } else {
-                assert!(parse_resumed_values(&args).is_err(), "accepted {invalid}");
-            }
+            assert!(parse_resumed_values(&args).is_err(), "accepted {invalid}");
         }
         for invalid in [
             "relative\\qa.uac",
@@ -289,7 +267,7 @@ mod tests {
         swapped[2] = "--target".into();
         assert!(parse_resumed_values(&swapped).is_err());
         let mut invalid_language = make();
-        invalid_language[11] = "de".into();
+        invalid_language[9] = "de".into();
         assert!(parse_resumed_values(&invalid_language).is_err());
     }
 
@@ -309,13 +287,13 @@ mod tests {
         let args = resumed_arguments(
             "ornek.uygulamam",
             Path::new(r"C:\Program Files\örnek"),
-            true,
             false,
             WizardLanguage::English,
         )
         .unwrap();
         assert!(args.starts_with("resume-local-wizard --package-id "));
         assert!(args.contains(r#"--target "C:\Program Files\örnek""#));
-        assert!(args.contains("--start-menu 1 --desktop 0 --language en"));
+        assert!(args.contains("--desktop 0 --language en"));
+        assert!(!args.contains("--start-menu"));
     }
 }
