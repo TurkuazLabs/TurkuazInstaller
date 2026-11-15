@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.9
-// Aciklama: Zorunlu Baslat ve secilebilir masaustu kisayolu, Shell yenileme ve yabanci LNK korumasi
+// Version: 0.1.10
+// Aciklama: Windows aygit adi ve bosluk denetimli Baslat/masaustu kisayollari, Shell yenileme ve yabanci LNK korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -55,13 +55,36 @@ pub(super) fn resolve_installed_executable(root: &Path, relative: &str) -> Resul
     Ok(resolved)
 }
 
+/// @dev-id BRK-WIN-SHORTCUT-005
+/// @purpose Reject Windows device aliases before creating Start/desktop paths.
+/// @reason DOS device names remain reserved even when followed by an extension;
+/// allowing them or normalized whitespace can target a different shell path.
+/// @contract Case-insensitive reserved stems are rejected; no filesystem writes.
+/// @tests windows_shortcuts::tests::display_name_rejects_windows_path_syntax
+fn windows_reserved_device_name(value: &str) -> bool {
+    let stem = value.split('.').next().unwrap_or(value).trim_end_matches(' ');
+    let upper = stem.to_ascii_uppercase();
+    if matches!(upper.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$") {
+        return true;
+    }
+    ["COM", "LPT"].iter().any(|prefix| {
+        upper.strip_prefix(prefix).is_some_and(|suffix| {
+            matches!(
+                suffix,
+                "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+            )
+        })
+    })
+}
+
 pub(super) fn valid_display_name(value: &str) -> bool {
-    let value = value.trim();
     !value.is_empty()
+        && value.trim() == value
         && value.chars().count() <= 128
         && value != "."
         && value != ".."
         && !value.ends_with([' ', '.'])
+        && !windows_reserved_device_name(value)
         && !value
             .chars()
             .any(|character| character.is_control() || r#"<>:"/\|?*"#.contains(character))
@@ -608,7 +631,13 @@ mod tests {
     #[test]
     fn display_name_rejects_windows_path_syntax() {
         assert!(valid_display_name("PixelTone"));
-        for name in ["", ".", "..", "Bad/Name", "Bad\\Name", "Bad:", "Bad. "] {
+        assert!(valid_display_name("Türkçe Uygulama 2.0"));
+        for name in [
+            "", ".", "..", "Bad/Name", "Bad\\Name", "Bad:", "Bad. ",
+            " Leading", "Trailing ", "\tTab", "CON", "con.txt", "PRN.txt",
+            "NUL", "nul.log", "AUX", "CONIN$", "CONOUT$", "COM1",
+            "Com9.log", "LPT1", "lpt3.txt", "LPT¹", "COM².dat",
+        ] {
             assert!(!valid_display_name(name), "{name:?}");
         }
     }
