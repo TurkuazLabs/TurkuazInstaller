@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-uac-resume-smoke.ps1
 # Amac: UAC yeniden acilis parametrelerinin onaysiz yetkili islemlere izin vermedigini dogrulamak
 # Modul - PowerShell QA Script
-# Version: 0.1.2
-# Aciklama: Gercek UAC penceresi acmadan reddedilen argumanlari process olarak test eder
+# Version: 0.1.3
+# Aciklama: Zorunlu Baslat entegrasyonlu resume protokolunun reddedilen argumanlarini test eder
 # Bagimli Oldugu Katman: QA | Tool
 
 param(
@@ -59,7 +59,6 @@ $base = [string[]]@(
     'resume-local-wizard',
     '--package-id', 'qa.uac',
     '--target', 'C:\Program Files\qa.uac',
-    '--start-menu', '1',
     '--desktop', '0',
     '--language', 'tr'
 )
@@ -84,7 +83,7 @@ $invalidBoolean[6] = 'yes'
 Assert-UacResumeRejected -Scenario 'invalid-boolean' -Arguments $invalidBoolean -ExpectedError 'Geçersiz UAC tercih değeri.'
 
 $invalidLanguage = [string[]]$base.Clone()
-$invalidLanguage[10] = 'xx'
+$invalidLanguage[8] = 'xx'
 Assert-UacResumeRejected -Scenario 'invalid-language' -Arguments $invalidLanguage -ExpectedError 'Geçersiz UAC dili.'
 
 Write-Host 'UAC_RESUME_ARGUMENT_SMOKE_PASS'
