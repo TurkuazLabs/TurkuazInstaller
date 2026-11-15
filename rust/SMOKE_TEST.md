@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.6
-Aciklama: Derleme, embedded UAC application manifesti ve gercek Windows kurulum kabulune gecis rehberi
+Version: 0.3.7
+Aciklama: UAC, kisayol adi guvenligi ve gercek Windows kurulum kabulune gecis rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -64,6 +64,36 @@ degismez. Takip: [Windows kabul #41](https://github.com/TurkuazLabs/TurkuazInsta
   kabul tamamlanmadan GUI sorunu production icin kapanmis sayilmaz.
 - Studio'nun yeni derlemesini kullanarak standart EXE'yi yeniden
   olusturun. Eski gomulu EXE, Studio dosyasi degistirilince guncellenmez.
+
+## Baslat menusu ve masaustu kisayolu kabul matrisi (NOT RUN)
+
+Windows 10/11'de ayri, temiz bir test kullanicisi veya geri alinabilir
+test VM'i kullanin. Bu kontrol otomatik CI'dan farklidir; sonuc almadan
+PASS olarak kaydetmeyin.
+
+1. Ana EXE'si ve guvenli `Turkce Uygulama 2.0` gibi bir adi olan
+   test paketiyle kurun. Baslat menusunde uygulama ve
+   `Kaldır.lnk` gorunmeli; masaustu secimi varsayilan isaretli olmali.
+2. Ayni uygulamanin farkli, temiz test kurulumu icin masaustu
+   secimini kaldirin. Baslat menusu uygulama/kaldirma kisayollari
+   kalmali, masaustu kisayolu olusturulmamali.
+3. `CON`, `con.txt`, `COM1`, `lpt3.txt` ve basinda/sonunda
+   bosluk olan test urun adlarini sirayla deneyin. Bu adlarla
+   Windows kisayolu veya kaydi yayinlanmamali; varsa guvenli
+   geri alma sonucu ve hata iletisi kaydedilmeli.
+4. Var olan yabanci masaustu .lnk dosyasi veya dolu yabanci Baslat
+   menusu klasoru ile cakisma olusturun. Kurulum mevcut kisayolu
+   degistirmemeli; kismi dosya yayinini/geri almayi dogrulayin.
+5. Kaldirma sonrasinda sadece envanterdeki degismemis kisayollarin
+   silindigini, kullanicinin duzenledigi .lnk'nin korundugunu ve
+   cleanup log sonucunu dogrulayin. Tek kullanici ve UAC onayli
+   tum kullanicilar akislari ayri raporlansin.
+
+CI'daki `windows_shortcuts::tests` ve
+`windows_local_registration::tests` Windows COM, known-folder
+ve sahiplik regresyonlaridir. Gercek masaustu, profil politikasi,
+yeniden yonlendirme ve Windows 10/11 gorsel kabulu icin yeterli
+degildir. Takip: [Windows manuel kabul #41](https://github.com/TurkuazLabs/TurkuazInstaller/issues/41).
 
 ## Yerel klasor degistirme ve Geri Donusum Kutusu kabulu
 
