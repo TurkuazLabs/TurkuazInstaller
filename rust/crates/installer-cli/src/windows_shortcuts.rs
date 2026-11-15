@@ -68,7 +68,7 @@ fn windows_reserved_device_name(value: &str) -> bool {
         return true;
     }
     ["COM", "LPT"].iter().any(|prefix| {
-        upper.strip_prefix(prefix).is_some_and(|suffix| {
+        upper.strip_prefix(*prefix).is_some_and(|suffix| {
             matches!(
                 suffix,
                 "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
