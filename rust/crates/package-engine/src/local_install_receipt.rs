@@ -111,11 +111,13 @@ impl Drop for RestartManagerSession {
 
 #[cfg(windows)]
 fn running_resource(path: &Path) -> bool {
-    path.extension().and_then(|ext| ext.to_str()).is_some_and(|ext| {
-        ["exe", "dll", "com", "ocx"]
-            .iter()
-            .any(|candidate| ext.eq_ignore_ascii_case(candidate))
-    })
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| {
+            ["exe", "dll", "com", "ocx"]
+                .iter()
+                .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+        })
 }
 
 /// @dev-id TI-WIN-UNINSTALL-RUNNING-001
