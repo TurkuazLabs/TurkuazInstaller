@@ -29,8 +29,7 @@ use crate::{
     windows_shortcuts::uninstall_display_label,
 };
 
-const RUNNING_APPLICATION_WARNING: &str =
-    "Uygulama hâlâ çalışıyor. Önce uygulamayı ve açık pencerelerini kapatın, ardından tekrar deneyin. Kaldırma başlatılmadı; kurulum dosyaları ve kayıtları korundu.";
+const RUNNING_APPLICATION_WARNING: &str = "Uygulama hâlâ çalışıyor. Önce uygulamayı ve açık pencerelerini kapatın, ardından tekrar deneyin. Kaldırma başlatılmadı; kurulum dosyaları ve kayıtları korundu.";
 
 enum UninstallPhase {
     Confirm,
