@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.22
-Aciklama: Windows binary-first kaldirma, acik uygulama ve sahiplik kabul matrisi
+Version: 0.3.23
+Aciklama: Windows DELETE preflight, envanter handle ve acik uygulama kabul matrisi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -269,7 +269,15 @@ Windows CI, `windows_uninstall_prioritizes_executable_resources`
 regresyonunda kayitli dosyalar alfabetik olarak veri once olsa dahi
 Windows EXE/DLL/COM/OCX siralamasinin once uygulandigini,
 butun envanter girdilerinin bir kez ele alindigini dogrulamali.
-Ayrica `windows_running_application_blocks_removal_until_closed`
+Ayrica `windows_locked_later_file_blocks_before_any_deletion`
+regresyonunda alfabetik olarak sonraki bir veri dosyasinin DELETE
+paylasimi olmadan acik tutulmasi, ilk payload silinmeden kaldirmayi
+reddetmeli; kilit kapandiktan sonra kurulum tamamen kaldirilmalidir.
+`windows_receipt_handle_stays_pinned_until_deletion` testinde,
+okunup dogrulanmis envanterin acik handle'i uzerinden rename
+reddedilmeli ve ayni handle ile silme yalnizca envanteri
+kaldirmalidir; payload korunmalidir.
+`windows_running_application_blocks_removal_until_closed`
 regresyonunda izole fixture EXE'sini gercek subprocess olarak
 calistirir; program acikken silmeyi reddetmeli, ilk payload
 dosyasini korumali, child durduktan sonra temiz kaldirmalidir.
