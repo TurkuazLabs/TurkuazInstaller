@@ -287,9 +287,7 @@ fn owned_root(scope: InstallScope) -> Result<PathBuf, String> {
 /// components separately; never create descendants through a reparse parent.
 /// @tests windows_local_registration::tests::managed_directory_rejects_unsafe_parent
 fn ensure_managed_directory(root: &Path) -> Result<(), String> {
-    let parent = root
-        .parent()
-        .ok_or("Kaldırıcı için üst klasör gerekli.")?;
+    let parent = root.parent().ok_or("Kaldırıcı için üst klasör gerekli.")?;
     if root.file_name() != Some(OsStr::new("Uninstallers"))
         || parent.file_name() != Some(OsStr::new("TurkuazInstaller"))
     {
@@ -979,10 +977,7 @@ mod tests {
             ensure_managed_directory(&root).is_err(),
             "must not create a directory through a foreign parent file"
         );
-        assert_eq!(
-            fs::read(&parent).expect("foreign file preserved"),
-            original
-        );
+        assert_eq!(fs::read(&parent).expect("foreign file preserved"), original);
         assert!(!root.exists(), "no descendant may be created");
 
         fs::remove_file(&parent).expect("remove isolated fixture file");

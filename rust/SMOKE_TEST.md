@@ -352,7 +352,7 @@ CI artifact'inin olusmasi kod dogrulamasidir; temiz son kullanici makinesinde el
   junction/reparse olarak olusturdugunuzda yeni `Uninstallers`
   alt klasoru acilmamali; baglantinin hedefindeki kullanici
   dosyalari degismemeli. Normal owned klasorlerde kurulum ve
-  kaldirma calismali. Eşzamanli path degistirme / gerçek junction
+  kaldirma calismali. Eszamanli path degistirme / gercek junction
   GUI kabul testi henuz **NOT RUN**; hosted CI bu testi
   dogrudan gerceklestirmiyor.
 - Per-user kaldirici `MoveFileExW / DELAY_UNTIL_REBOOT` kullanmaz. Kucuk bir
