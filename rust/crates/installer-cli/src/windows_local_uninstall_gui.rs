@@ -166,8 +166,7 @@ impl eframe::App for UninstallApp {
         egui::TopBottomPanel::top("uninstall_header").show(context, |ui| {
             ui.add_space(12.0);
             ui.heading(
-                egui::RichText::new(uninstall_display_label(self.record.display_name()))
-                    .size(24.0),
+                egui::RichText::new(uninstall_display_label(self.record.display_name())).size(24.0),
             );
             ui.label(format!(
                 "{} · {}",

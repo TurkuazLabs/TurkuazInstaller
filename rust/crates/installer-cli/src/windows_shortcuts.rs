@@ -669,24 +669,14 @@ mod tests {
                 "{path:?}"
             );
             assert!(
-                !shortcut_location_is_owned(
-                    path,
-                    InstallScope::CurrentUser,
-                    display_name,
-                    false
-                )
-                .expect("not a normal application shortcut"),
+                !shortcut_location_is_owned(path, InstallScope::CurrentUser, display_name, false)
+                    .expect("not a normal application shortcut"),
                 "{path:?}"
             );
         }
         assert!(
-            !shortcut_location_is_owned(
-                &unrelated,
-                InstallScope::CurrentUser,
-                display_name,
-                true
-            )
-            .expect("foreign link must not be owned")
+            !shortcut_location_is_owned(&unrelated, InstallScope::CurrentUser, display_name, true)
+                .expect("foreign link must not be owned")
         );
     }
 

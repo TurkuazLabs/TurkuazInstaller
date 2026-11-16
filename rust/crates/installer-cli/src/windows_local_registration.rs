@@ -1193,7 +1193,10 @@ mod tests {
             .join(&display_name)
             .join(format!("{display_name} Kaldır.lnk"));
         assert!(
-            record.shortcuts.iter().any(|entry| entry.path == named_uninstaller),
+            record
+                .shortcuts
+                .iter()
+                .any(|entry| entry.path == named_uninstaller),
             "new installations must register a product-named uninstall link"
         );
         assert!(named_uninstaller.exists(), "named uninstall link missing");
