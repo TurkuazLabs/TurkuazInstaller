@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/local_install_receipt.rs
 // Amac: Imzasiz yerel kurulumun sahip oldugu payload dosyalarini guvenli kaydetmek ve kaldirmak
 // Modul - Rust Package Lifecycle Service
-// Version: 0.1.3
+// Version: 0.1.4
 // Aciklama: Payload envanter dosya taniticisi, SHA-256 ve veri korumali kaldirma
 // Bagimli Oldugu Katman: Service | Security
 
@@ -218,6 +218,9 @@ pub(crate) fn write_local_install_record(
 /// are checked and removed; refuse an existing writer before any deletion.
 /// @tests local_install_receipt::tests::concurrent_receipt_writer_blocks_uninstall
 fn open_local_receipt(path: &Path) -> Result<fs::File, PackageEngineError> {
+    // Retain the cross-platform no-symlink policy. On Windows, the
+    // checked open handle adds protection against replacement after this.
+    safe_regular(path)?;
     let mut options = fs::OpenOptions::new();
     options.read(true);
     #[cfg(windows)]
@@ -409,6 +412,27 @@ mod tests {
         assert!(uninstall_local_install(&target, "other.package").is_err());
         assert!(target.join(RECORD_NAME).exists());
         fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn receipt_symlink_is_refused_and_foreign_bytes_survive() {
+        use std::os::unix::fs::symlink;
+
+        let (base, target) = fixture();
+        let receipt = target.join(RECORD_NAME);
+        let original = fs::read(&receipt).expect("read isolated fixture inventory");
+        let foreign = base.join("foreign-inventory.json");
+        fs::write(&foreign, &original).expect("create external inventory");
+        fs::remove_file(&receipt).expect("replace receipt with symlink");
+        symlink(&foreign, &receipt).expect("create symlink receipt");
+        assert!(
+            uninstall_local_install(&target, "qa.native").is_err(),
+            "linked receipt must not authorize payload removal"
+        );
+        assert!(target.join("bin/hello.txt").exists());
+        assert_eq!(fs::read(&foreign).expect("foreign bytes preserved"), original);
+        fs::remove_dir_all(base).expect("remove isolated fixture");
     }
 
     #[cfg(windows)]
