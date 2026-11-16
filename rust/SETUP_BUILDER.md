@@ -557,7 +557,10 @@ ortadan kaldirmaz; kaldirma/cleanup sonraki sahiplik
 kontrolleri de gereklidir. Kaldirma GUI'si uygulama dosyalarini
 silmeden once Windows `TurkuazOwner`, `InstallLocation`,
 `UninstallString`, `DisplayName` ve `DisplayIcon` degerlerinin
-kayitli envanterle ayni oldugunu dogrular. Bu alanlardan biri
+kayitli envanterle ayni oldugunu dogrular. `REG_SZ` sahiplik degerleri
+yalnizca cift baytli, tam tek NUL ile biten, ara NUL icermeyen
+gecerli UTF-16 olarak kabul edilir. Eksik/bozuk sonlandirma veya
+sondaki gizli veri ile envanter eslesmesi kurulmaz. Bu alanlardan biri
 degismisse kaldirma reddedilir. Kayit silinirken kontrol tekrarlanir;
 kayit korunuyorsa onceki Baslat/masaustu kisayollari da korunur.
 Bu islem eszamanli tum surecleri kilitlemez, atomik transaction
