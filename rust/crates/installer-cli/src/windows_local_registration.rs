@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.23
-// Aciklama: Kaldirici dizinlerinde traversal, goreli yol, reparse ve yabanci dosyalari korur
+// Version: 0.1.24
+// Aciklama: Kaldirici yol korumasi ve tam UTF-16 REG_SZ sahiplik dogrulamasi
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -320,6 +320,26 @@ fn ensure_managed_directory(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// @dev-id TI-WINREG-SZ-001
+/// @purpose Decode only an unambiguous, exactly terminated UTF-16 REG_SZ.
+/// @reason Ignoring data after the first NUL can hide a changed registry
+/// ownership field and make a foreign value appear to match our receipt.
+/// @contract Reject odd lengths, missing or embedded NUL and invalid UTF-16.
+/// @tests windows_local_registration::tests::registry_sz_requires_exact_utf16_terminator
+fn decode_registry_sz(bytes: &[u8]) -> Result<String, String> {
+    if bytes.len() < 2 || bytes.len() % 2 != 0 {
+        return Err("REG_SZ boyutu geçersiz.".into());
+    }
+    let words = bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .collect::<Vec<_>>();
+    if words.last() != Some(&0) || words[..words.len() - 1].contains(&0) {
+        return Err("REG_SZ sonlandırması geçersiz.".into());
+    }
+    String::from_utf16(&words[..words.len() - 1]).map_err(|e| e.to_string())
+}
+
 fn read_value(key: HKEY, name: &str) -> Result<String, String> {
     let name_w = wide(OsStr::new(name));
     let mut value_type = REG_SZ;
@@ -355,12 +375,8 @@ fn read_value(key: HKEY, name: &str) -> Result<String, String> {
     {
         return Err(format!("Windows kayıt değeri değişti: {name}"));
     }
-    let words = bytes[..needed as usize]
-        .chunks_exact(2)
-        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-        .take_while(|word| *word != 0)
-        .collect::<Vec<_>>();
-    String::from_utf16(&words).map_err(|e| e.to_string())
+    decode_registry_sz(&bytes[..needed as usize])
+        .map_err(|error| format!("Windows kayıt değeri bozuk: {name} ({error})"))
 }
 
 fn write_string(key: HKEY, name: &str, value: &str) -> Result<(), String> {
@@ -1039,6 +1055,24 @@ mod tests {
     }
 
     #[test]
+    fn registry_sz_requires_exact_utf16_terminator() {
+        let valid = wide(OsStr::new("Türkçe Uygulama 2.0"))
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            decode_registry_sz(&valid).expect("valid unicode registry value"),
+            "Türkçe Uygulama 2.0"
+        );
+        assert!(decode_registry_sz(&[]).is_err());
+        assert!(decode_registry_sz(&[0]).is_err());
+        assert!(decode_registry_sz(&valid[..valid.len() - 2]).is_err());
+        assert!(decode_registry_sz(&[b'a', 0, 0, 0, b'b', 0, 0, 0]).is_err());
+        assert!(decode_registry_sz(&[b'a', 0, 0, 0, 0, 0]).is_err());
+        assert!(decode_registry_sz(&[0x00, 0xD8, 0, 0]).is_err());
+    }
+
+    #[test]
     fn hkcu_record_is_created_read_and_deleted_without_touching_other_keys() {
         let unique = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1047,6 +1081,26 @@ mod tests {
         let name = format!("TurkuazInstaller.qa.ci.{}.{}", std::process::id(), unique);
         let key = create_key(InstallScope::CurrentUser, &name).expect("new CI-only key");
         write_string(key.0, MARKER, "test-owner").expect("write marker");
+        assert_eq!(read_value(key.0, MARKER).unwrap(), "test-owner");
+        let marker = wide(OsStr::new(MARKER));
+        let ambiguous = [b't', 0, 0, 0, b'x', 0, 0, 0];
+        assert_eq!(
+            unsafe {
+                RegSetValueExW(
+                    key.0,
+                    PCWSTR(marker.as_ptr()),
+                    None,
+                    REG_SZ,
+                    Some(&ambiguous),
+                )
+            },
+            ERROR_SUCCESS
+        );
+        assert!(
+            read_value(key.0, MARKER).is_err(),
+            "embedded-NUL ownership marker must be rejected"
+        );
+        write_string(key.0, MARKER, "test-owner").expect("restore valid marker");
         assert_eq!(read_value(key.0, MARKER).unwrap(), "test-owner");
         assert!(create_key(InstallScope::CurrentUser, &name).is_err());
         drop(key);
