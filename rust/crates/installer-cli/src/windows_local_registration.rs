@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.24
-// Aciklama: Kaldirici yol korumasi ve tam UTF-16 REG_SZ sahiplik dogrulamasi
+// Version: 0.1.25
+// Aciklama: Windows kaldirici kaydi, UTF-16 ve file-handle tabanli kisayol silme
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -24,8 +24,9 @@ use windows::{
     Win32::{
         Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS, HANDLE},
         Storage::FileSystem::{
-            BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
-            FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
+            BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ATTRIBUTE_DIRECTORY,
+            FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT,
+            FILE_GENERIC_READ, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
             FILE_SHARE_WRITE, GetFileInformationByHandle,
         },
         System::Registry::{
@@ -221,6 +222,10 @@ fn shortcut_file_identity(path: &Path) -> Result<ShortcutFileIdentity, String> {
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
         .open(path)
         .map_err(|e| e.to_string())?;
+    shortcut_file_identity_handle(&file)
+}
+
+fn shortcut_file_identity_handle(file: &File) -> Result<ShortcutFileIdentity, String> {
     let mut info = BY_HANDLE_FILE_INFORMATION::default();
     unsafe { GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut info) }
         .map_err(|e| e.to_string())?;
@@ -256,6 +261,96 @@ fn owned_shortcut_matches(owned: &OwnedShortcut) -> bool {
         (None, None) => digest_file(&owned.path).ok().as_deref() == Some(&owned.sha256),
         _ => false,
     }
+}
+
+const WINDOWS_FILE_DISPOSITION_INFO_CLASS: i32 = 4;
+
+#[repr(C)]
+struct WindowsShortcutDispositionInfo {
+    delete_file: u8,
+}
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    #[link_name = "SetFileInformationByHandle"]
+    fn set_shortcut_file_information_by_handle(
+        file: *mut std::ffi::c_void,
+        information_class: i32,
+        information: *const std::ffi::c_void,
+        information_size: u32,
+    ) -> i32;
+}
+
+/// @dev-id TI-WIN-LNK-DELETE-001
+/// @purpose Delete only the owned Windows shortcut object, not a replacement path.
+/// @contract Match the recorded file identity for modern receipts and exact
+/// SHA-256 for legacy receipts. Reject reparse/hardlinks and delete by handle.
+/// @tests windows_local_registration::tests::shortcut_handle_delete_preserves_replacement
+fn open_verified_shortcut_handle(owned: &OwnedShortcut) -> Result<Option<File>, String> {
+    let mut file = match OpenOptions::new()
+        .access_mode(FILE_GENERIC_READ.0 | DELETE.0)
+        .share_mode(FILE_SHARE_READ.0 | FILE_SHARE_DELETE.0)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
+        .open(&owned.path)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.to_string()),
+    };
+    let metadata = file.metadata().map_err(|error| error.to_string())?;
+    if !metadata.is_file()
+        || metadata.file_attributes() & FILE_ATTRIBUTE_READONLY.0 != 0
+    {
+        return Err("Salt okunur veya normal olmayan kısayol korundu.".into());
+    }
+    let identity = shortcut_file_identity_handle(&file)?;
+    match (owned.volume_serial_number, owned.file_index) {
+        (Some(volume), Some(index))
+            if identity.volume_serial_number == volume && identity.file_index == index => {}
+        (None, None) => {
+            let mut hasher = Sha256::new();
+            let mut buffer = [0_u8; 64 * 1024];
+            loop {
+                let count = file.read(&mut buffer).map_err(|error| error.to_string())?;
+                if count == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..count]);
+            }
+            if format!("{:x}", hasher.finalize()) != owned.sha256 {
+                return Err("Eski kısayolun içeriği değişti; dosya korundu.".into());
+            }
+        }
+        _ => return Err("Değiştirilmiş veya yabancı kısayol korundu.".into()),
+    }
+    Ok(Some(file))
+}
+
+fn dispose_verified_shortcut_handle(file: File) -> Result<(), String> {
+    let disposition = WindowsShortcutDispositionInfo { delete_file: 1 };
+    // SAFETY: the File owns a DELETE-capable handle and the repr(C) buffer
+    // remains valid throughout this synchronous Win32 call.
+    let status = unsafe {
+        set_shortcut_file_information_by_handle(
+            file.as_raw_handle(),
+            WINDOWS_FILE_DISPOSITION_INFO_CLASS,
+            (&raw const disposition).cast(),
+            std::mem::size_of::<WindowsShortcutDispositionInfo>() as u32,
+        )
+    };
+    if status == 0 {
+        return Err(io::Error::last_os_error().to_string());
+    }
+    drop(file);
+    Ok(())
+}
+
+fn remove_verified_shortcut(owned: &OwnedShortcut) -> Result<bool, String> {
+    let Some(file) = open_verified_shortcut_handle(owned)? else {
+        return Ok(false);
+    };
+    dispose_verified_shortcut_handle(file)?;
+    Ok(true)
 }
 
 fn registration_name(package_id: &str, target: &Path) -> Result<String, String> {
@@ -881,17 +976,13 @@ fn remove_owned_shortcuts(
             }
             Ok(_) => {}
         }
-        if !owned_shortcut_matches(owned) {
-            warnings.push(format!(
-                "Değiştirilmiş veya yabancı kısayol korundu: {}",
+        match remove_verified_shortcut(owned) {
+            Ok(true) => notify_shell_removed(&owned.path),
+            Ok(false) => {}
+            Err(error) => warnings.push(format!(
+                "Kısayol korundu veya kaldırılamadı: {} ({error})",
                 owned.path.display()
-            ));
-            continue;
-        }
-        if let Err(error) = fs::remove_file(&owned.path) {
-            warnings.push(format!("Kısayol kaldırılamadı: {error}"));
-        } else {
-            notify_shell_removed(&owned.path);
+            )),
         }
     }
     let programs = match scope {
@@ -1042,6 +1133,79 @@ mod tests {
         );
         assert!(!unexpected.exists(), "no foreign tree created");
         fs::remove_dir_all(base).expect("remove isolated fixture");
+    }
+
+    #[test]
+    fn shortcut_handle_delete_preserves_replacement() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "turkuaz-owned-link-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&base).expect("isolated shortcut fixture");
+        let link = base.join("App.lnk");
+        let renamed = base.join("original.lnk");
+        fs::write(&link, b"original managed link").expect("owned fixture");
+        let owned = owned_shortcut(link.clone()).expect("capture file identity");
+
+        // Replacing the path before the protected open must not delete the
+        // foreign occupant even if the filename still matches our receipt.
+        fs::rename(&link, &renamed).expect("move original");
+        fs::write(&link, b"foreign link").expect("foreign replacement");
+        assert!(remove_verified_shortcut(&owned).is_err());
+        assert_eq!(fs::read(&link).unwrap(), b"foreign link");
+        assert_eq!(fs::read(&renamed).unwrap(), b"original managed link");
+        fs::remove_file(&link).expect("remove foreign fixture");
+        fs::rename(&renamed, &link).expect("restore owned object");
+
+        // If the path changes after the verified handle was opened, only
+        // the original file object is disposed; the new path remains intact.
+        let handle = open_verified_shortcut_handle(&owned)
+            .expect("verified open")
+            .expect("owned object exists");
+        fs::rename(&link, &renamed).expect("move handle-open original");
+        fs::write(&link, b"foreign second link").expect("second replacement");
+        dispose_verified_shortcut_handle(handle).expect("delete original handle");
+        assert!(!renamed.exists(), "original object was removed");
+        assert_eq!(fs::read(&link).unwrap(), b"foreign second link");
+        fs::remove_dir_all(&base).expect("remove isolated fixture");
+    }
+
+    #[test]
+    fn shortcut_handle_preserves_changed_legacy_and_hardlinks() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "turkuaz-legacy-link-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&base).expect("isolated legacy fixture");
+        let link = base.join("Legacy.lnk");
+        fs::write(&link, b"legacy link").expect("write legacy fixture");
+        let mut legacy = owned_shortcut(link.clone()).expect("owned legacy fixture");
+        legacy.volume_serial_number = None;
+        legacy.file_index = None;
+        fs::write(&link, b"modified by user").expect("modify same file");
+        assert!(remove_verified_shortcut(&legacy).is_err());
+        assert_eq!(fs::read(&link).unwrap(), b"modified by user");
+
+        // A new ownership record uses the object identity, allowing
+        // harmless Shell metadata changes made to that same file object.
+        let owned = owned_shortcut(link.clone()).expect("modern owner record");
+        let hardlink = base.join("Extra.lnk");
+        fs::hard_link(&link, &hardlink).expect("create extra link");
+        assert!(remove_verified_shortcut(&owned).is_err());
+        assert!(link.exists() && hardlink.exists());
+        fs::remove_file(&hardlink).expect("remove hardlink fixture");
+        fs::write(&link, b"shell metadata updated").expect("in-place update");
+        assert!(remove_verified_shortcut(&owned).expect("dispose unchanged identity"));
+        assert!(!link.exists(), "owned file removed");
+        fs::remove_dir_all(&base).expect("remove isolated fixture");
     }
 
     #[test]
