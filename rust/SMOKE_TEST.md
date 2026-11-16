@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.14
-Aciklama: Harici ve payload envanteri eszamanli yazma red testi, GUI kabul rehberi
+Version: 0.3.15
+Aciklama: Windows handle-tabanli payload silme, envanter ve GUI kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -241,6 +241,12 @@ gercek uygulama verilerinden ayri bir paketle calistirin.
    dosyalarini silmeden reddedilmeli; handle kapandiginda
    normal kaldirma tekrar denenebilmeli. Bu iki ayri
    envanter icin testi izole Windows VM'de yapin.
+   Windows dosya taniticisiyla silme regresyonunda SHA-256 ile
+   dogrulanmis uygulama dosyasini baska ada tasiyin; ayni
+   eski yola farkli kullanici dosyasi yerlestirin. Kaldirici
+   yalnizca dogrulanmis dosya nesnesini silmeli ve yeni
+   kullanici dosyasini korumali. Bu senaryoyu yalnizca
+   izole QA fixture'i / test VM'inde calistirin.
    Test kurulumunun HKCU `UninstallString`, `DisplayName` veya
    `DisplayIcon` degerini tek seferde degistirerek kaldiriciyi
    acmayi deneyin: daha payload silme baslamadan reddedilmeli;

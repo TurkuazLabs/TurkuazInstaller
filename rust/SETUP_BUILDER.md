@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.22
-Aciklama: Harici ve payload envanteri yazma paylasimi guvenligi, cleanup kontrati
+Version: 0.9.23
+Aciklama: Handle-tabanli owned payload silme, envanter ve cleanup kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -516,6 +516,16 @@ tutulur; onceden acik yazici veya silici handle'i varsa
 islem fail-closed reddedilir. Dosya kendisi silinmeden once
 okuma taniticisi kapatilir. Bu tum sistem icin atomik
 kaldirma garantisi degildir.
+Windows'ta her kayitli payload dosyasi silinmeden once
+okuma+DELETE handle'i ile yeniden acilir. Dosyanin turu,
+reparse niteliginde olup olmadigi, boyutu ve SHA-256 bilgisi
+ayni dosya taniticisi uzerinden dogrulanir.
+`SetFileInformationByHandle(FileDispositionInfo)` yalnizca
+dogrulanmis dosya nesnesini silinmek uzere isaretler;
+eski dosya tasinmis ve adina yeni kullanici dosyasi gelmisse
+yeni dosya silinmez. Ust klasorlerin eszamanli degistirilmesi
+ve yerel envanterin kriptografik kimligi bu korumanin disindadir.
+Bu butun sistemi kapsayan atomik transaction garantisi degildir.
 
 Yeni kurulumda uygulama dosyalari yayinlandiktan sonra,
 Windows `HKCU` (tek kullanici) veya `HKLM` (tum kullanicilar)
