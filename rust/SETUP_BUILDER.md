@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.19
-Aciklama: Kaldirma envanteri reparse korumasi, recycle ve cleanup kontrati
+Version: 0.9.20
+Aciklama: Windows registry kimlik denetimi, envanter reparse korumasi ve cleanup kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -521,7 +521,14 @@ traversal icermeyen yol, normal dosya ve normal ust klasorler
 zorunludur; junction/reparse yonlendirmeleri izlenmez, buyuk ya da
 ozel dosya icerigi okunmaz. Bu salt-okunur on kontrol eszamanli
 path degisimlerini kilitlemez; kaldirma/cleanup sonraki sahiplik
-kontrolleri de gereklidir. Degistirilmis veya yabanci kisayollar korunur.
+kontrolleri de gereklidir. Kaldirma GUI'si uygulama dosyalarini
+silmeden once Windows `TurkuazOwner`, `InstallLocation`,
+`UninstallString`, `DisplayName` ve `DisplayIcon` degerlerinin
+kayitli envanterle ayni oldugunu dogrular. Bu alanlardan biri
+degismisse kaldirma reddedilir. Kayit silinirken kontrol tekrarlanir;
+kayit korunuyorsa onceki Baslat/masaustu kisayollari da korunur.
+Bu islem eszamanli tum surecleri kilitlemez, atomik transaction
+iddiasi yoktur. Degistirilmis veya yabanci kisayollar korunur.
 Calisan kaldirici EXE'sinin kendi dosyasini silmesi yerine Rust cleanup
 yardimcisi, kaldirici surecinin bitmesini bekler ve dogrulanmis
 EXE/envanter taniticilarini silmeyi dener. Yeniden baslatma veya

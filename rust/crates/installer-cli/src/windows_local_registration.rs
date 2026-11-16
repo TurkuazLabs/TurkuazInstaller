@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.18
-// Aciklama: Reparse guvenli envanter okuma ve kayitli kurulum veri koruma denetimi
+// Version: 0.1.19
+// Aciklama: Silme oncesi Windows kayit alanlarini dogrulayan ve yabanci kisayollari koruyan kaldirici
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -495,8 +495,14 @@ fn uninstall_command(record: &LocalRegistration, manifest: &Path) -> String {
     )
 }
 
-fn remove_key(record: &LocalRegistration) -> Result<(), String> {
-    // An unexpected key or a user-modified InstallLocation is never deleted.
+/// @dev-id TI-WINREG-002
+/// @purpose Verify all Windows Installed Apps ownership fields before uninstallation.
+/// @reason A modified uninstall command or display identity must be detected
+/// before removing the managed payload, not only during registry cleanup.
+/// @contract Read-only. A changed marker, location, command, name or icon
+/// prevents uninstallation; cleanup rechecks before deleting the key.
+/// @tests windows_local_registration::tests::disposable_hkcu_install_registration_and_receipt_uninstall_roundtrip
+fn verified_registration_key(record: &LocalRegistration) -> Result<RegistryKey, String> {
     let key = open_key(record.scope(), &record.key)?;
     if read_value(key.0, MARKER)? != record.marker
         || read_value(key.0, "InstallLocation")? != record.target.to_string_lossy()
@@ -507,7 +513,12 @@ fn remove_key(record: &LocalRegistration) -> Result<(), String> {
     {
         return Err("Windows uygulama kaydı artık bu kurulumla eşleşmiyor.".into());
     }
-    drop(key);
+    Ok(key)
+}
+
+fn remove_key(record: &LocalRegistration) -> Result<(), String> {
+    // Recheck on deletion; a changed key must survive, even after payload cleanup.
+    drop(verified_registration_key(record)?);
     let path = wide(OsStr::new(&key_path(&record.key)));
     let status = unsafe { RegDeleteKeyW(hive(record.scope()), PCWSTR(path.as_ptr())) };
     if status != ERROR_SUCCESS {
@@ -593,12 +604,9 @@ pub(super) fn read_registration(source: &Path) -> Result<LocalRegistration, Stri
     {
         return Err("Kaldırma envanteri bu Windows kurulumuna ait değil.".into());
     }
-    let key = open_key(record.scope(), &record.key)?;
-    if read_value(key.0, MARKER)? != record.marker
-        || read_value(key.0, "InstallLocation")? != record.target.to_string_lossy()
-    {
-        return Err("Windows uygulama kaydı/kurulum eşleşmiyor.".into());
-    }
+    // Before any managed payload removal, require the same ownership
+    // fields that the final Windows uninstall registry deletion requires.
+    drop(verified_registration_key(&record)?);
     record.uninstaller_sha256 = Some(digest_file(&record.uninstaller)?);
     Ok(record)
 }
@@ -853,8 +861,7 @@ fn remove_owned_shortcuts(
 }
 
 pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupReport {
-    let mut warnings =
-        remove_owned_shortcuts(&record.shortcuts, record.scope(), record.display_name());
+    let mut warnings = Vec::new();
     let registry_removed = match remove_key(record) {
         Ok(()) => true,
         Err(error) => {
@@ -862,6 +869,15 @@ pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupRepo
             false
         }
     };
+    // Do not remove an owner's Start/Desktop links when Windows retains a
+    // changed or foreign Installed Apps entry. Preserve evidence for repair.
+    if registry_removed {
+        warnings.extend(remove_owned_shortcuts(
+            &record.shortcuts,
+            record.scope(),
+            record.display_name(),
+        ));
+    }
     CleanupReport {
         warnings,
         registry_removed,
@@ -1154,6 +1170,58 @@ mod tests {
         assert_eq!(record.package_id(), id);
         assert_eq!(record.display_name(), display_name);
         assert_eq!(record.shortcuts.len(), 3);
+
+        // All Installed Apps identity fields must match before the
+        // uninstaller can delete any receipt-owned payload. A tampered
+        // field must also preserve the original Start/Desktop links.
+        let registry_path = wide(OsStr::new(&key_path(&name)));
+        let mut write_handle = HKEY::default();
+        assert_eq!(
+            unsafe {
+                RegOpenKeyExW(
+                    HKEY_CURRENT_USER,
+                    PCWSTR(registry_path.as_ptr()),
+                    None,
+                    KEY_SET_VALUE,
+                    &mut write_handle,
+                )
+            },
+            ERROR_SUCCESS
+        );
+        let writable = RegistryKey(write_handle);
+        for (field, original) in [
+            ("UninstallString", uninstall_command(&record, &manifest)),
+            ("DisplayName", record.display_name().to_owned()),
+            (
+                "DisplayIcon",
+                record.display_icon().to_string_lossy().into_owned(),
+            ),
+        ] {
+            write_string(writable.0, field, "qa-foreign-registration")
+                .expect("tamper isolated HKCU fixture");
+            assert!(
+                read_registration(&manifest).is_err(),
+                "{field} changed: uninstall must stop before payload deletion"
+            );
+            let blocked_cleanup = cleanup_after_uninstall(&record);
+            assert!(
+                !blocked_cleanup.registry_removed,
+                "{field} changed: foreign registry entry must be preserved"
+            );
+            assert!(
+                record.shortcuts.iter().all(|link| link.path.exists()),
+                "{field} changed: original shortcuts must survive"
+            );
+            assert_eq!(
+                fs::read(target.join("hello.txt")).expect("existing payload preserved"),
+                payload
+            );
+            write_string(writable.0, field, &original)
+                .expect("restore isolated HKCU fixture");
+            read_registration(&manifest).expect("restored identity should pass");
+        }
+        drop(writable);
+
         for shortcut in &record.shortcuts {
             let original_digest = shortcut.sha256.clone();
             OpenOptions::new()

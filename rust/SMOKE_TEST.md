@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.11
-Aciklama: Kaldirma envanteri reparse/dir denetimi, UAC ve GUI kabul rehberi
+Version: 0.3.12
+Aciklama: Windows registry kimlik degisikligi ve envanter koruma GUI kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -233,6 +233,11 @@ gercek uygulama verilerinden ayri bir paketle calistirin.
    kayitli kaldirici envanteri icin traversal/relative path,
    directory ve junction/reparse link durumlari da reddedilmeli.
    Bu olumsuz denemeler gercek musteri klasorlerinde yapilmaz.
+   Test kurulumunun HKCU `UninstallString`, `DisplayName` veya
+   `DisplayIcon` degerini tek seferde degistirerek kaldiriciyi
+   acmayi deneyin: daha payload silme baslamadan reddedilmeli;
+   orijinal dosyalar ve kisayollar korunmali. Degerleri geri
+   getirdikten sonra normal kaldirma hala calismali.
 8. Ayrica admin haklariyla **Tum kullanicilar** senaryosunu
    test edin: UAC onayi reddedildiginde kurulum olmamali;
    onaylandiginda Program Files, ortak kisa yol ve HKLM
