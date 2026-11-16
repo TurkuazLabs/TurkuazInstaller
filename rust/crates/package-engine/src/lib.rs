@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/lib.rs
 // Amac: Verified Turkuaz package archive'larini uygulamadan once guvenli staging alanina cikarmak
 // Modul - Rust Library
-// Version: 1.0.11
+// Version: 1.0.12
 // Aciklama: ZIP-slip, Windows path collision, symlink, duplicate entry ve archive bomb sinirlarini uygular
 // Bagimli Oldugu Katman: Service | Tool
 
@@ -24,7 +24,9 @@ pub use clamav_adapter::ClamAvScanner;
 pub use cloudmersive_adapter::{
     CLOUDMERSIVE_KEY_ENV, CloudmersiveScanner, MAX_CLOUD_SCAN_FILE_BYTES,
 };
-pub use local_install_receipt::{LocalUninstallSummary, uninstall_local_install};
+pub use local_install_receipt::{
+    LOCAL_INSTALL_RECEIPT_FILE_NAME, LocalUninstallSummary, uninstall_local_install,
+};
 pub use malware_scan::{
     MalwareScanner, ScanGateError, ScanPhase, ScanSummary, ScanVerdict, scan_directory,
 };

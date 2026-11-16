@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.8
-Aciklama: Windows kayitli hedef recycle preflight, UAC ve gercek GUI kabul rehberi
+Version: 0.3.9
+Aciklama: Windows kayit/yerel envanter recycle preflight, UAC ve GUI kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -125,6 +125,12 @@ Bu testleri yalnizca bos/dedike Windows 10/11 VM kullanarak yapin:
    yeniden kurulum deneyin. Ayrica eski kaldirici envanterinin
    kalmis oldugu yetim-kayit senaryosunda fail-closed davranisi
    ayri inceleyin.
+7. Test uygulamasinin eski Windows kaydi ve harici kaldiricisi
+   yokken hedef dizinde `.turkuaz-local-install.json` yerel payload
+   envanteri bulunsun. Recycle onayi verilse bile kurulum eski
+   dosyayi ve klasoru tasimadan reddedilmeli. Envanter dosyasinin
+   icerigini gecersiz yapan test verisiyle de fail-closed davranisi
+   gozlemleyin. Bu test yalnizca izole test VM'inde yapilir.
 
 `install-local-self` CLI komutu onaysiz oldugu icin
 mevcut klasore kurulum yapmayi reddetmeye devam eder.

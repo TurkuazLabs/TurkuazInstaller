@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/local_install_receipt.rs
 // Amac: Imzasiz yerel kurulumun sahip oldugu payload dosyalarini guvenli kaydetmek ve kaldirmak
 // Modul - Rust Package Lifecycle Service
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: SHA-256 envanter, path siniri, kullanici verisini koruyan no-overwrite uninstall
 // Bagimli Oldugu Katman: Service | Security
 
@@ -17,7 +17,10 @@ use sha2::{Digest, Sha256};
 
 use crate::{PackageEngineError, validate_archive_path};
 
-const RECORD_NAME: &str = ".turkuaz-local-install.json";
+/// Name of the owned payload inventory. Consumers may use it for
+/// read-only collision checks; they must not infer ownership from its presence.
+pub const LOCAL_INSTALL_RECEIPT_FILE_NAME: &str = ".turkuaz-local-install.json";
+const RECORD_NAME: &str = LOCAL_INSTALL_RECEIPT_FILE_NAME;
 const RECORD_VERSION: u32 = 1;
 const MAX_RECORD_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_OWNED_FILES: usize = 100_000;

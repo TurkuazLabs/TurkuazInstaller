@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.15
-// Aciklama: Var olan kaydi salt-okunur denetleyen Baslat/kaldirma ve dosya kimlikli temizlik
+// Version: 0.1.16
+// Aciklama: Windows kaydi ve yerel payload envanterini koruyan salt-okunur tekrar kurulum denetimi
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -15,6 +15,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use turkuaz_installer_package_engine::LOCAL_INSTALL_RECEIPT_FILE_NAME;
 use windows::{
     Win32::{
         Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS, HANDLE},
@@ -385,8 +386,8 @@ fn open_key(scope: InstallScope, name: &str) -> Result<RegistryKey, String> {
 /// @purpose Refuse reuse of an already registered installation target.
 /// @reason Recycling the old target before discovering a registration
 /// collision would leave an Installed Apps entry pointing to moved files.
-/// @contract Read-only preflight: never touch a prior receipt, executable,
-/// shortcut or registry key. Registration must still enforce no-clobber.
+/// @contract Read-only preflight: never touch a prior payload inventory,
+/// receipt, executable, shortcut or registry key. Registration remains no-clobber.
 /// @tests windows_local_registration::tests::preflight_rejects_existing_registry_and_receipt
 pub(super) fn require_unregistered_target(
     package_id: &str,
@@ -397,6 +398,22 @@ pub(super) fn require_unregistered_target(
         return Err("Kurulum kaydı için mutlak hedef gerekli.".into());
     }
     let name = registration_name(package_id, target)?;
+    // The payload inventory remains even if HKCU/HKLM registration or the
+    // independent uninstaller was removed. Do not recycle that installation.
+    match fs::symlink_metadata(target.join(LOCAL_INSTALL_RECEIPT_FILE_NAME)) {
+        Ok(_) => {
+            return Err(
+                "Bu klasörde mevcut kurulum envanteri var; önce uygulamayı güvenle kaldırın."
+                    .into(),
+            );
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(format!(
+                "Mevcut kurulum envanteri denetlenemedi: {error}"
+            ));
+        }
+    }
     let root = owned_root(scope)?;
     for path in [
         root.join(format!("{name}.json")),
@@ -926,6 +943,24 @@ mod tests {
         assert!(receipt.exists(), "preflight must preserve receipt");
         fs::remove_file(&receipt).expect("fixture cleanup");
         require_unregistered_target(&id, &target, scope).expect("no registry or receipt remains");
+
+        // A local payload receipt without the Windows registry or external
+        // uninstaller must still block recycling. Never parse or delete it.
+        fs::create_dir(&target).expect("isolated install target");
+        let local_receipt = target.join(LOCAL_INSTALL_RECEIPT_FILE_NAME);
+        let foreign_contents = b"untrusted existing receipt";
+        fs::write(&local_receipt, foreign_contents).expect("existing payload inventory");
+        let error = require_unregistered_target(&id, &target, scope)
+            .expect_err("orphan payload inventory must block replacing an existing install");
+        assert!(error.contains("kurulum envanteri"), "{error}");
+        assert_eq!(
+            fs::read(&local_receipt).expect("old receipt preserved"),
+            foreign_contents
+        );
+        fs::remove_file(&local_receipt).expect("receipt cleanup");
+        fs::remove_dir(&target).expect("fixture directory cleanup");
+        require_unregistered_target(&id, &target, scope)
+            .expect("no prior payload inventory remains");
     }
 
     #[test]
