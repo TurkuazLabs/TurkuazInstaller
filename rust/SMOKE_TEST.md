@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.20
-Aciklama: Kaldirici sahiplik, UTF-16 ve handle tabanli kisayol silme kabul rehberi
+Version: 0.3.21
+Aciklama: Acik uygulama kaldirma, sahiplik ve Windows kabul matrisi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -241,6 +241,37 @@ sonra temiz kaydi yeniden okuyabilmeli. Bu regresyonlar
 gercek kullanici kaydi veya mevcut kurulumu degistirmez.
 Hosted CI testleri gercek Windows masaustu kabulunun yerine gecmez;
 fiziksel kabul **NOT RUN**.
+
+## Program acikken kaldirma kabul matrisi
+
+Windows 10/11'de yalnizca izole test paketi ve geri alinabilir VM
+kullanin. Programin kendi penceresini gercekten acin, sonra Windows
+Yuklu Uygulamalar uzerinden kaldirmayi baslatin.
+
+1. Program calisirken kaldirmayi onaylayin. Kaldirici uyarmali,
+   uygulamayi zorla kapatmamalidir. Baslangicta kayitli ilk
+   payload dosyasi, EXE, receipt, HKCU/HKLM kaydi ve kisayollar
+   mevcut kalmali. Program verilerini, acik belgeleri kaydetmeli.
+2. Programi normal bicimde kapatin. `Tekrar dene` tusuna basin;
+   kaldirici yeniden onay almali, envanteri ve sahipligi tekrar
+   kontrol etmeli, sonra normal kaldirmayi tamamlamali.
+3. EXE acik degilken paket icindeki yuklenmis DLL/OCX dosyasi
+   baska bir surecte kullanimdaysa kaldirma engellenmeli.
+4. Restart Manager sorgusu hata verirse kaldirma varsayimla
+   devam etmemeli. Hata ayrica loglanmali, kullanici verileri
+   ve receipt korunmali. Hicbir durumda zorla sonlandirma,
+   reboot veya sessiz kapatma kabul edilmez.
+5. Testi hem standard-user HKCU hem de UAC ile onayli
+   all-users HKLM senaryosunda tekrarlayin; sonuc, ekran
+   goruntusu ve kurulum klasoru SHA-256 kaydedin.
+
+Windows CI, `windows_running_application_blocks_removal_until_closed`
+regresyonunda izole fixture EXE'sini gercek subprocess olarak
+calistirir; program acikken silmeyi reddetmeli, ilk payload
+dosyasini korumali, child durduktan sonra temiz kaldirmalidir.
+Bu, acik GUI penceresi ve farkli kullanici oturumlari icin
+fiziksel kabulun yerini **ALMAZ**. Eszamanli yeni program
+baslatma yarisi ayrica **NOT RUN**.
 
 ## Studio, EULA ve Windows uygulama kaydi kabul senaryosu
 
