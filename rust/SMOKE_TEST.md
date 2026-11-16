@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.19
-Aciklama: Kaldirici yol korumasi ve REG_SZ UTF-16 kayit testi kabul rehberi
+Version: 0.3.20
+Aciklama: Kaldirici sahiplik, UTF-16 ve handle tabanli kisayol silme kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -97,7 +97,17 @@ PASS olarak kaydetmeyin.
 
 CI'daki `windows_shortcuts::tests` ve
 `windows_local_registration::tests` Windows COM, known-folder
-ve sahiplik regresyonlaridir. Gercek masaustu, profil politikasi,
+ve sahiplik regresyonlaridir. Ozellikle
+`shortcut_handle_delete_preserves_replacement` dosya kimligi
+kontrolunden once ve dogrulanmis handle acildiktan sonra
+dosya yolunun degistirilmesi halinde yabanci kisa yolun
+korunmasini; `shortcut_handle_preserves_changed_legacy_and_hardlinks`
+eski hash kayitlarinin degisen dosyayi, yeni kimlik kayitlarinin
+coklu baglantili dosyayi korumasini ve ayni dosyada Shell metadata
+degisimini kabul etmesini test eder.
+Bu iki regresyon, izolasyonlu Windows otomatik testleridir;
+gercek masaustunde dosya yolu yarisi ve antivirus etkisi
+**NOT RUN**. Gercek masaustu, profil politikasi,
 yeniden yonlendirme ve Windows 10/11 gorsel kabulu icin yeterli
 degildir. Takip: [Windows manuel kabul #41](https://github.com/TurkuazLabs/TurkuazInstaller/issues/41).
 
