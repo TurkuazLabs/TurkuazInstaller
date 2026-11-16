@@ -740,18 +740,15 @@ mod tests {
     fn windows_locked_later_file_blocks_before_any_deletion() {
         use std::os::windows::fs::OpenOptionsExt;
 
-        let base = std::env::temp_dir().join(format!(
-            "turkuaz-preflight-locked-{}",
-            Uuid::new_v4()
-        ));
+        let base =
+            std::env::temp_dir().join(format!("turkuaz-preflight-locked-{}", Uuid::new_v4()));
         let target = base.join("installed");
         fs::create_dir_all(&target).expect("create isolated target");
         let early = target.join("a-before-locked.txt");
         let later = target.join("z-locked.txt");
         fs::write(&early, b"must survive until full preflight").expect("early payload");
         fs::write(&later, b"another process holds this").expect("later payload");
-        write_local_install_record(&target, "qa.locked", "1.0")
-            .expect("record both payload files");
+        write_local_install_record(&target, "qa.locked", "1.0").expect("record both payload files");
 
         let locked = fs::OpenOptions::new()
             .read(true)
