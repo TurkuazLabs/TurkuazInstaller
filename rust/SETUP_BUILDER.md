@@ -537,8 +537,10 @@ Windows `HKCU` (tek kullanici) veya `HKLM` (tum kullanicilar)
 `Uninstall` kaydi olusturulur. Kalici kaldirici setup EXE'si kurulu
 uygulama kokunun **disinda** `LocalAppData` / korumali `ProgramFiles` altinda
 saklanir. `TurkuazInstaller/Uninstallers` alt dizinleri ayri
-olusturulur ve her seviyenin normal klasor oldugu, junction/reparse
-olmadigi yazma oncesinde denetlenir. Baglantili ust dizin uzerinden
+olusturulur. Yol mutlak olmali, `.` veya `..` gecisi icermemeli;
+beklenen klasor adlari ve her seviyenin normal klasor oldugu,
+junction/reparse olmadigi yazma oncesinde denetlenir. Yabanci
+dosya ustune klasor acilmaz ve baglantili ust dizin uzerinden
 yeni kaldirici yazilmaz. Bu kontroller yolun daha sonra
 eszamanli degistirilmesi riskini tamamen yok etmez.
 Baslat menusu `<urun adi> Kaldır` kisayolu ve kayitli uygulama
