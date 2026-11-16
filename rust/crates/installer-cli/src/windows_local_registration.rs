@@ -405,8 +405,7 @@ pub(super) fn require_unregistered_target(
         match fs::symlink_metadata(&path) {
             Ok(_) => {
                 return Err(
-                    "Bu hedefe ait kaldırıcı zaten kayıtlı; önce mevcut kurulumu kaldırın."
-                        .into(),
+                    "Bu hedefe ait kaldırıcı zaten kayıtlı; önce mevcut kurulumu kaldırın.".into(),
                 );
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -431,12 +430,13 @@ pub(super) fn require_unregistered_target(
     };
     if status == ERROR_SUCCESS {
         drop(RegistryKey(key));
-        return Err(
-            "Bu hedef Windows Yüklü Uygulamalar'a zaten kayıtlı; önce kaldırın.".into(),
-        );
+        return Err("Bu hedef Windows Yüklü Uygulamalar'a zaten kayıtlı; önce kaldırın.".into());
     }
     if status != ERROR_FILE_NOT_FOUND && status != ERROR_PATH_NOT_FOUND {
-        return Err(failure("Mevcut Windows uygulama kaydı denetlenemedi", status));
+        return Err(failure(
+            "Mevcut Windows uygulama kaydı denetlenemedi",
+            status,
+        ));
     }
     Ok(())
 }
@@ -899,8 +899,7 @@ mod tests {
         let scope = InstallScope::CurrentUser;
         let name = registration_name(&id, &target).expect("registration name");
 
-        require_unregistered_target(&id, &target, scope)
-            .expect("new target has no registration");
+        require_unregistered_target(&id, &target, scope).expect("new target has no registration");
         let key = create_key(scope, &name).expect("isolated registry key");
         let error = require_unregistered_target(&id, &target, scope)
             .expect_err("existing registry key must prevent recycle");
@@ -926,8 +925,7 @@ mod tests {
         );
         assert!(receipt.exists(), "preflight must preserve receipt");
         fs::remove_file(&receipt).expect("fixture cleanup");
-        require_unregistered_target(&id, &target, scope)
-            .expect("no registry or receipt remains");
+        require_unregistered_target(&id, &target, scope).expect("no registry or receipt remains");
     }
 
     #[test]
