@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.13
-Aciklama: Kaldirma envanteri eszamanli yazma red testi ve GUI kabul rehberi
+Version: 0.3.14
+Aciklama: Harici ve payload envanteri eszamanli yazma red testi, GUI kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -233,10 +233,14 @@ gercek uygulama verilerinden ayri bir paketle calistirin.
    kayitli kaldirici envanteri icin traversal/relative path,
    directory ve junction/reparse link durumlari da reddedilmeli.
    Bu olumsuz denemeler gercek musteri klasorlerinde yapilmaz.
-   Ayrica envanteri yazma hakkiyla acik tutan test islemi
-   sirasinda kaldiricinin fail-closed davranip payload'a
-   dokunmadigini, yazici handle kapatildiktan sonra tekrar
-   okunabildigini kontrol edin.
+   Harici kaldirici kayit envanterini yazma hakkiyla acik
+   tutan test isleminde kaldirici baslamamali; yazici
+   kapandiginda yeniden denenebilmeli. Ayrica uygulama
+   hedefindeki `.turkuaz-local-install.json` **payload**
+   envanteri yazilabilir handle ile acikken kaldirma payload
+   dosyalarini silmeden reddedilmeli; handle kapandiginda
+   normal kaldirma tekrar denenebilmeli. Bu iki ayri
+   envanter icin testi izole Windows VM'de yapin.
    Test kurulumunun HKCU `UninstallString`, `DisplayName` veya
    `DisplayIcon` degerini tek seferde degistirerek kaldiriciyi
    acmayi deneyin: daha payload silme baslamadan reddedilmeli;

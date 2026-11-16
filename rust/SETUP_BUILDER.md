@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.21
-Aciklama: Windows kayit ve envanter yazma paylasimi denetimi, cleanup kontrati
+Version: 0.9.22
+Aciklama: Harici ve payload envanteri yazma paylasimi guvenligi, cleanup kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -508,6 +508,14 @@ tasir. `turkuaz-installer uninstall-local --package-id ID --target DIR
 --confirm-uninstall YES` sadece degistirilmemis kayitli dosyalari siler;
 taninmayan/degistirilen klasor ve dosyalara dokunulmaz. Onceki
 v0.2.19 kurulumlarinda kayit olmadigi icin otomatik kaldirma reddedilir.
+Windows'ta bu uygulama kokundeki **payload envanteri** de
+normal dosya taniticisi uzerinden, reparse yonlendirmesi
+izlenmeden ve yalnizca okuma paylasimi acik tutularak okunur.
+Envanterdeki dosyalarin kaldirilmasi tamamlanana kadar dosya
+tutulur; onceden acik yazici veya silici handle'i varsa
+islem fail-closed reddedilir. Dosya kendisi silinmeden once
+okuma taniticisi kapatilir. Bu tum sistem icin atomik
+kaldirma garantisi degildir.
 
 Yeni kurulumda uygulama dosyalari yayinlandiktan sonra,
 Windows `HKCU` (tek kullanici) veya `HKLM` (tum kullanicilar)

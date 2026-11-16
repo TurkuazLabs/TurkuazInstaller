@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/local_install_receipt.rs
 // Amac: Imzasiz yerel kurulumun sahip oldugu payload dosyalarini guvenli kaydetmek ve kaldirmak
 // Modul - Rust Package Lifecycle Service
-// Version: 0.1.2
-// Aciklama: SHA-256 envanter, path siniri, kullanici verisini koruyan no-overwrite uninstall
+// Version: 0.1.3
+// Aciklama: Payload envanter dosya taniticisi, SHA-256 ve veri korumali kaldirma
 // Bagimli Oldugu Katman: Service | Security
 
 use std::{
@@ -24,6 +24,15 @@ const RECORD_NAME: &str = LOCAL_INSTALL_RECEIPT_FILE_NAME;
 const RECORD_VERSION: u32 = 1;
 const MAX_RECORD_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_OWNED_FILES: usize = 100_000;
+
+// Windows file sharing/open flags from the platform SDK. Keep the verified
+// payload receipt stable while uninstalling and reject reparse files.
+#[cfg(windows)]
+const WINDOWS_FILE_SHARE_READ: u32 = 0x0000_0001;
+#[cfg(windows)]
+const WINDOWS_FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+#[cfg(all(windows, test))]
+const WINDOWS_FILE_SHARE_ALL: u32 = 0x0000_0007;
 
 fn invalid(reason: &'static str) -> PackageEngineError {
     PackageEngineError::InvalidPackage(reason)
@@ -203,16 +212,42 @@ pub(crate) fn write_local_install_record(
     output.sync_all().map_err(PackageEngineError::Io)
 }
 
-fn checked_record(target: &Path, expected_id: &str) -> Result<InstallRecord, PackageEngineError> {
+/// @dev-id BRK-LOCAL-RECEIPT-003
+/// @purpose Pin a local payload receipt without following Windows reparse links.
+/// @contract On Windows, deny concurrent write/delete access while owned files
+/// are checked and removed; refuse an existing writer before any deletion.
+/// @tests local_install_receipt::tests::concurrent_receipt_writer_blocks_uninstall
+fn open_local_receipt(path: &Path) -> Result<fs::File, PackageEngineError> {
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options
+            .share_mode(WINDOWS_FILE_SHARE_READ)
+            .custom_flags(WINDOWS_FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = options.open(path).map_err(PackageEngineError::Io)?;
+    let meta = file.metadata().map_err(PackageEngineError::Io)?;
+    if !meta.is_file() || meta.file_type().is_symlink() || is_reparse(&meta) {
+        return Err(invalid("local install receipt is not a regular file"));
+    }
+    Ok(file)
+}
+
+fn checked_record(
+    target: &Path,
+    expected_id: &str,
+) -> Result<(InstallRecord, fs::File), PackageEngineError> {
     safe_root(target)?;
     let path = target.join(RECORD_NAME);
-    let metadata = safe_regular(&path)?;
+    let mut receipt_handle = open_local_receipt(&path)?;
+    let metadata = receipt_handle.metadata().map_err(PackageEngineError::Io)?;
     if metadata.len() == 0 || metadata.len() > MAX_RECORD_BYTES {
         return Err(invalid("local install receipt size invalid"));
     }
     let mut raw = Vec::with_capacity(metadata.len() as usize);
-    fs::File::open(path)
-        .map_err(PackageEngineError::Io)?
+    (&mut receipt_handle)
         .take(MAX_RECORD_BYTES + 1)
         .read_to_end(&mut raw)
         .map_err(PackageEngineError::Io)?;
@@ -243,7 +278,7 @@ fn checked_record(target: &Path, expected_id: &str) -> Result<InstallRecord, Pac
             return Err(invalid("local install receipt contains invalid file entry"));
         }
     }
-    Ok(record)
+    Ok((record, receipt_handle))
 }
 
 fn preflight_file(target: &Path, item: &OwnedFile) -> Result<(), PackageEngineError> {
@@ -287,7 +322,9 @@ pub fn uninstall_local_install(
     expected_package_id: &str,
 ) -> Result<LocalUninstallSummary, PackageEngineError> {
     let target = target.as_ref();
-    let record = checked_record(target, expected_package_id)?;
+    // Hold the inventory read handle through owned-file removal so Windows
+    // writers cannot change the receipt after initial validation.
+    let (record, receipt_handle) = checked_record(target, expected_package_id)?;
     // Preflight all entries so a changed file fails without partial deletion.
     for item in &record.files {
         preflight_file(target, item)?;
@@ -316,6 +353,7 @@ pub fn uninstall_local_install(
     }
     let receipt = target.join(RECORD_NAME);
     safe_regular(&receipt)?;
+    drop(receipt_handle);
     fs::remove_file(receipt).map_err(PackageEngineError::Io)?;
     let mut dirs: Vec<_> = dirs.into_iter().collect();
     dirs.sort_by_key(|dir| std::cmp::Reverse(dir.components().count()));
@@ -371,6 +409,36 @@ mod tests {
         assert!(uninstall_local_install(&target, "other.package").is_err());
         assert!(target.join(RECORD_NAME).exists());
         fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn concurrent_receipt_writer_blocks_uninstall() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let (base, target) = fixture();
+        let receipt = target.join(RECORD_NAME);
+        let writer = fs::OpenOptions::new()
+            .write(true)
+            .share_mode(WINDOWS_FILE_SHARE_ALL)
+            .open(&receipt)
+            .expect("open writable test receipt");
+        assert!(
+            uninstall_local_install(&target, "qa.native").is_err(),
+            "concurrently writable receipt cannot authorize removal"
+        );
+        assert!(
+            target.join("bin/hello.txt").exists(),
+            "payload must survive a contested inventory"
+        );
+        assert!(receipt.exists(), "receipt must remain");
+        drop(writer);
+        let removed = uninstall_local_install(&target, "qa.native")
+            .expect("uninstall after writer closes");
+        assert_eq!(removed.removed_files, 1);
+        assert!(!removed.retained_unknown_files);
+        assert!(!receipt.exists());
+        fs::remove_dir(base).expect("remove test root");
     }
 
     #[test]

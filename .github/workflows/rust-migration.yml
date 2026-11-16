@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.3
-# Aciklama: PR degisikliklerinde Rust workspace, PE uygulama manifesti, tek setup lifecycle ve test ornek dagitimini dogrular
+# Version: 0.3.4
+# Aciklama: Windows payload envanteri ve Rust workspace, PE manifest, setup lifecycle testi
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -169,6 +169,9 @@ jobs:
 
       - name: Test Windows installed-app registry ownership
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_local_registration::tests
+
+      - name: Test Windows payload receipt locking and owned-file uninstall
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-package-engine --release local_install_receipt::tests
 
       - name: Test native uninstaller cleanup including a running executable
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_uninstaller_cleanup::tests
