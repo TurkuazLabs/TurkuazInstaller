@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.8
-// Aciklama: Zorunlu Baslat/kaldirma ve varsayilan secili masaustu tercihiyle atomik hata akisi
+// Version: 0.5.9
+// Aciklama: Windows kayit cakismasi on kontrolu ve guvenli yerel kurulum geri alma akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
@@ -27,7 +27,7 @@ use crate::{
         InstallScope, current_process_is_elevated, default_install_directory, known_folder,
         validate_install_scope,
     },
-    windows_local_registration::register_local_install,
+    windows_local_registration::{register_local_install, require_unregistered_target},
     windows_recycle::validate_recycle_target,
     windows_shortcuts::{create_installed_shortcuts, valid_display_name},
     wizard_language::WizardLanguage,
@@ -343,6 +343,7 @@ impl LocalInstaller {
             ).to_owned());
         }
         validate_install_scope(self.scope, &path, &self.program_files_root, elevated)?;
+        require_unregistered_target(&self.package_id, &path, self.scope)?;
         Ok((path, occupied))
     }
 
@@ -458,6 +459,7 @@ impl LocalInstaller {
                 &program_files_root,
                 current_process_is_elevated(),
             )
+            .and_then(|_| require_unregistered_target(&package_id, &target, scope))
             .and_then(|_| {
                 if replacing_existing {
                     install_unsigned_local_setup_with_replacement(
