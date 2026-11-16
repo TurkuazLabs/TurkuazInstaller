@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/local_install_receipt.rs
 // Amac: Imzasiz yerel kurulumun sahip oldugu payload dosyalarini guvenli kaydetmek ve kaldirmak
 // Modul - Rust Package Lifecycle Service
-// Version: 0.1.6
-// Aciklama: Windows acik program on kontrolu, handle ile guvenli silme ve veri koruma
+// Version: 0.1.7
+// Aciklama: Acik Windows program on kontrolu ve executable-first guvenli kaldirma
 // Bagimli Oldugu Katman: Service | Security
 
 use std::{
@@ -118,6 +118,27 @@ fn running_resource(path: &Path) -> bool {
                 .iter()
                 .any(|candidate| ext.eq_ignore_ascii_case(candidate))
         })
+}
+
+/// @dev-id TI-WIN-UNINSTALL-ORDER-001
+/// @purpose Check and remove running-capable files before unrelated payload.
+/// @reason An application could start after Restart Manager preflight. When a
+/// running EXE now denies DELETE access, unrelated data must not already be gone.
+/// @contract Deterministic, allocation-free ordering; only receipt-owned items.
+/// This reduces the race window but cannot guarantee atomic multi-file deletion.
+/// @tests local_install_receipt::tests::windows_uninstall_prioritizes_executable_resources
+#[cfg(windows)]
+fn windows_uninstall_order(record: &InstallRecord) -> impl Iterator<Item = &OwnedFile> {
+    record
+        .files
+        .iter()
+        .filter(|item| running_resource(Path::new(&item.path)))
+        .chain(
+            record
+                .files
+                .iter()
+                .filter(|item| !running_resource(Path::new(&item.path))),
+        )
 }
 
 /// @dev-id TI-WIN-UNINSTALL-RUNNING-001
@@ -592,7 +613,14 @@ pub fn uninstall_local_install(
     refuse_running_application(target, &record)?;
     let mut removed = 0;
     let mut dirs = HashSet::new();
-    for item in &record.files {
+    // Preserve original receipt ordering on non-Windows platforms. On Windows,
+    // verify and delete executable resources before unrelated payload files so
+    // a late process launch cannot strand an already-removed data file first.
+    #[cfg(windows)]
+    let removal_items = windows_uninstall_order(&record);
+    #[cfg(not(windows))]
+    let removal_items = record.files.iter();
+    for item in removal_items {
         // Recheck ancestors before opening the exact file object.
         let file = checked_file_path(target, item)?;
         #[cfg(windows)]
@@ -732,6 +760,32 @@ mod tests {
             original
         );
         fs::remove_dir_all(base).expect("remove isolated fixture");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_uninstall_prioritizes_executable_resources() {
+        let record = InstallRecord {
+            format_version: RECORD_VERSION,
+            package_id: "qa.uninstall.order".into(),
+            version: "1.0".into(),
+            files: ["a-first-data.txt", "b-library.DLL", "c-report.csv", "z-last-app.ExE"]
+                .iter()
+                .map(|name| OwnedFile {
+                    path: (*name).into(),
+                    size_bytes: 0,
+                    sha256: String::new(),
+                })
+                .collect(),
+        };
+        let order = windows_uninstall_order(&record)
+            .map(|item| item.path.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            order,
+            ["b-library.DLL", "z-last-app.ExE", "a-first-data.txt", "c-report.csv"]
+        );
+        assert_eq!(order.len(), record.files.len(), "every owned entry visited once");
     }
 
     #[cfg(windows)]
