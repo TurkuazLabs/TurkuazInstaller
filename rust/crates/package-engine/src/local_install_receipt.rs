@@ -769,23 +769,37 @@ mod tests {
             format_version: RECORD_VERSION,
             package_id: "qa.uninstall.order".into(),
             version: "1.0".into(),
-            files: ["a-first-data.txt", "b-library.DLL", "c-report.csv", "z-last-app.ExE"]
-                .iter()
-                .map(|name| OwnedFile {
-                    path: (*name).into(),
-                    size_bytes: 0,
-                    sha256: String::new(),
-                })
-                .collect(),
+            files: [
+                "a-first-data.txt",
+                "b-library.DLL",
+                "c-report.csv",
+                "z-last-app.ExE",
+            ]
+            .iter()
+            .map(|name| OwnedFile {
+                path: (*name).into(),
+                size_bytes: 0,
+                sha256: String::new(),
+            })
+            .collect(),
         };
         let order = windows_uninstall_order(&record)
             .map(|item| item.path.as_str())
             .collect::<Vec<_>>();
         assert_eq!(
             order,
-            ["b-library.DLL", "z-last-app.ExE", "a-first-data.txt", "c-report.csv"]
+            [
+                "b-library.DLL",
+                "z-last-app.ExE",
+                "a-first-data.txt",
+                "c-report.csv"
+            ]
         );
-        assert_eq!(order.len(), record.files.len(), "every owned entry visited once");
+        assert_eq!(
+            order.len(),
+            record.files.len(),
+            "every owned entry visited once"
+        );
     }
 
     #[cfg(windows)]
