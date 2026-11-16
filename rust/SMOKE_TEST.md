@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.9
-Aciklama: Windows kayit/yerel envanter recycle preflight, UAC ve GUI kabul rehberi
+Version: 0.3.10
+Aciklama: Recycle oncesi yeniden kayit denetimi, UAC ve GUI kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -131,6 +131,13 @@ Bu testleri yalnizca bos/dedike Windows 10/11 VM kullanarak yapin:
    dosyayi ve klasoru tasimadan reddedilmeli. Envanter dosyasinin
    icerigini gecersiz yapan test verisiyle de fail-closed davranisi
    gozlemleyin. Bu test yalnizca izole test VM'inde yapilir.
+8. Paket staging asamasinda baska bir test islemi ayni hedef
+   icin Windows uninstall kaydi veya harici kaldirici EXE'si
+   olusturursa, recycle callback'i kaydi tekrar fark edip islemi
+   durdurmali; hedefteki eski klasor ve kullanici dosyalari
+   degismemelidir. Test tek kullanimlik VM'de, test kimlikleriyle
+   ve kontrollu staging/yarismaya izin veren QA duzenegiyle
+   yapilmalidir. Gercek eszamanli kurulum testi henuz NOT RUN.
 
 `install-local-self` CLI komutu onaysiz oldugu icin
 mevcut klasore kurulum yapmayi reddetmeye devam eder.

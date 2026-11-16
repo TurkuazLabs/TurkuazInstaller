@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.9
-// Aciklama: Windows kayit cakismasi on kontrolu ve guvenli yerel kurulum geri alma akisi
+// Version: 0.5.10
+// Aciklama: Windows kaydini recycle sinirinda yeniden dogrulayan guvenli kurulum akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
@@ -467,6 +467,14 @@ impl LocalInstaller {
                         &target,
                         &mut on_phase,
                         &mut |path| {
+                            // Package staging can take time. A different installer may
+                            // register this target after our initial preflight.
+                            // Recheck at the destructive boundary, immediately before
+                            // asking Windows Shell to recycle the existing directory.
+                            require_unregistered_target(&package_id, path, scope)
+                                .map_err(|error| {
+                                    PackageEngineError::Io(io::Error::other(error))
+                                })?;
                             let _ = sender.send(WorkerEvent::RecyclingExistingTarget);
                             crate::windows_recycle::recycle_existing_target(path, &package_id)
                                 .map_err(|error| PackageEngineError::Io(io::Error::other(error)))?;

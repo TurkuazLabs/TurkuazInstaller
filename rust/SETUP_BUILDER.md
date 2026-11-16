@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.17
-Aciklama: Kayitli hedef ve yerel envanter recycle preflight, kisayol ve kaldirici cleanup kontrati
+Version: 0.9.18
+Aciklama: Iki asamali Windows recycle kayit denetimi ve kaldirici cleanup kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -52,12 +52,16 @@ kaydi veya hedef klasordeki `.turkuaz-local-install.json` yerel
 payload envanteri varsa yeni kurulum, hedef klasoru Geri Donusum
 Kutusu'na tasimadan once reddedilir. Once mevcut urunu normal kaldirma akisi
 ile kaldirin. Bu salt-okunur on kontrol hem secim oncesinde hem
-kurulum is parcaciginda uygulanir; kayit ya da kullanici dosyalari
+kurulum is parcaciginda uygulanir. Paket hazirlama uzun surebilecegi
+icin kurulum motorunun mevcut klasoru recycle etme callback'inde,
+Windows Shell cagrisi hemen oncesinde ayni denetim bir kez daha
+yapilir. Yeni kayit fark edilirse eski klasor tasinmaz; staging
+gecici dosyalari temizlenir. Kayit veya kullanici dosyalari
 silinmez. Envanter dosyasinin varligi tek basina guvenilir sahiplik
-veya gecerli imza kaniti sayilmaz; bu kontrol yalnizca guvenli
-reddetme karari verir. Eszamanli diger islemleri kilitlemediginden,
-son Windows
-kayit asamasindaki no-overwrite korumasi da devam eder.
+veya gecerli imza kaniti sayilmaz; kontrol yalnizca guvenli
+reddetme karari verir. Bu denetim eszamanli islemleri kilitlemez,
+TOCTOU riskini tamamen ortadan kaldirmaz; son Windows kayit
+asamasindaki no-overwrite korumasi da devam eder.
 Manuel kabul icin [Windows smoke rehberi](SMOKE_TEST.md) takip edilir.
 
 ## Mevcut ciktiyi yeniden olusturma

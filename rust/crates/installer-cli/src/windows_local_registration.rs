@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.16
+// Version: 0.1.17
 // Aciklama: Windows kaydi ve yerel payload envanterini koruyan salt-okunur tekrar kurulum denetimi
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -941,6 +941,31 @@ mod tests {
         assert!(receipt.exists(), "preflight must preserve receipt");
         fs::remove_file(&receipt).expect("fixture cleanup");
         require_unregistered_target(&id, &target, scope).expect("no registry or receipt remains");
+
+        // Simulate another installer publishing its external uninstaller
+        // after our first preflight, while our new package is staged.
+        let orphan_exe = root.join(format!("{name}.exe"));
+        let existing_bytes = b"other installer executable";
+        let mut exe_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&orphan_exe)
+            .expect("isolated uninstaller");
+        exe_file
+            .write_all(existing_bytes)
+            .expect("write existing uninstaller");
+        drop(exe_file);
+        assert!(
+            require_unregistered_target(&id, &target, scope).is_err(),
+            "a second pre-recycle check must reject a newly installed EXE"
+        );
+        assert_eq!(
+            fs::read(&orphan_exe).expect("existing EXE preserved"),
+            existing_bytes
+        );
+        fs::remove_file(&orphan_exe).expect("fixture EXE cleanup");
+        require_unregistered_target(&id, &target, scope)
+            .expect("orphan uninstaller removed by fixture");
 
         // A local payload receipt without the Windows registry or external
         // uninstaller must still block recycling. Never parse or delete it.
