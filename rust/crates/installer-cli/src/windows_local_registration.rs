@@ -1014,7 +1014,10 @@ mod tests {
         let foreign_leaf = b"foreign leaf contents";
         fs::write(&root, foreign_leaf).expect("foreign leaf fixture");
         assert!(ensure_managed_directory(&root).is_err());
-        assert_eq!(fs::read(&root).expect("foreign leaf preserved"), foreign_leaf);
+        assert_eq!(
+            fs::read(&root).expect("foreign leaf preserved"),
+            foreign_leaf
+        );
 
         let unexpected = base.join("OtherInstaller").join("Uninstallers");
         assert!(
