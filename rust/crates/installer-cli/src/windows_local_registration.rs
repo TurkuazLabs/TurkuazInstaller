@@ -1072,7 +1072,10 @@ mod tests {
             read_registration_bytes(&oversized).is_err(),
             "oversized inventory must fail closed"
         );
-        assert_eq!(fs::read(&receipt).expect("valid file remains"), data.to_vec());
+        assert_eq!(
+            fs::read(&receipt).expect("valid file remains"),
+            data.to_vec()
+        );
         fs::remove_dir_all(base).expect("remove isolated fixture");
     }
 
