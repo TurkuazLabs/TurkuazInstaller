@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.18
-Aciklama: Kaldirici path/traversal ve yabanci dosya kabul rehberi
+Version: 0.3.19
+Aciklama: Kaldirici yol korumasi ve REG_SZ UTF-16 kayit testi kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -218,6 +218,19 @@ Windows 10/11 temiz VM'de, ozellikle all-users/UAC yolunda junction
 ve eszamanli degisen ust dizin senaryolari ayrica elle denenmeli;
 bu fiziksel kabul **NOT RUN**. Salt otomatik test, race-free yol
 guvenligini kanitlamaz.
+
+### Windows Uninstall kaydi UTF-16 sahiplik kontrolu
+
+Windows CI'da `registry_sz_requires_exact_utf16_terminator` testi,
+gecerli Turkce UTF-16 degerini kabul etmeli; eksik NUL, ara NUL,
+cift NUL, tek bayt boy ve bozuk surrogate dizisini reddetmeli.
+`hkcu_record_is_created_read_and_deleted_without_touching_other_keys`
+testi izole HKCU anahtarinda kayitli `REG_SZ` degerini yerinde
+degistirerek birden fazla metnin tek degerde saklanmasini reddetmeli;
+sonra temiz kaydi yeniden okuyabilmeli. Bu regresyonlar
+gercek kullanici kaydi veya mevcut kurulumu degistirmez.
+Hosted CI testleri gercek Windows masaustu kabulunun yerine gecmez;
+fiziksel kabul **NOT RUN**.
 
 ## Studio, EULA ve Windows uygulama kaydi kabul senaryosu
 
