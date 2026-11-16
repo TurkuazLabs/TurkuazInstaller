@@ -738,8 +738,8 @@ mod tests {
         if std::env::var_os("TURKUAZ_RUNNING_FIXTURE_CHILD").is_none() {
             return;
         }
-        let ready = std::env::var_os("TURKUAZ_RUNNING_FIXTURE_READY")
-            .expect("child readiness signal");
+        let ready =
+            std::env::var_os("TURKUAZ_RUNNING_FIXTURE_READY").expect("child readiness signal");
         fs::write(PathBuf::from(ready), b"ready").expect("child marker");
         std::thread::sleep(std::time::Duration::from_secs(30));
     }
@@ -747,7 +747,11 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn windows_running_application_blocks_removal_until_closed() {
-        use std::{process::{Command, Stdio}, thread, time::Duration};
+        use std::{
+            process::{Command, Stdio},
+            thread,
+            time::Duration,
+        };
 
         struct ChildCleanup(std::process::Child);
         impl Drop for ChildCleanup {
@@ -772,8 +776,7 @@ mod tests {
         let exe = target.join("FixtureApp.exe");
         fs::copy(std::env::current_exe().expect("test binary"), &exe)
             .expect("copy executable fixture");
-        write_local_install_record(&target, "qa.running", "1.0")
-            .expect("create owned receipt");
+        write_local_install_record(&target, "qa.running", "1.0").expect("create owned receipt");
 
         let ready = base.join("child-ready");
         let child = Command::new(&exe)
