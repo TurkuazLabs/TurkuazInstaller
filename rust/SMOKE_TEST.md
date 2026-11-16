@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.21
-Aciklama: Acik uygulama kaldirma, sahiplik ve Windows kabul matrisi
+Version: 0.3.22
+Aciklama: Windows binary-first kaldirma, acik uygulama ve sahiplik kabul matrisi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -265,7 +265,11 @@ Yuklu Uygulamalar uzerinden kaldirmayi baslatin.
    all-users HKLM senaryosunda tekrarlayin; sonuc, ekran
    goruntusu ve kurulum klasoru SHA-256 kaydedin.
 
-Windows CI, `windows_running_application_blocks_removal_until_closed`
+Windows CI, `windows_uninstall_prioritizes_executable_resources`
+regresyonunda kayitli dosyalar alfabetik olarak veri once olsa dahi
+Windows EXE/DLL/COM/OCX siralamasinin once uygulandigini,
+butun envanter girdilerinin bir kez ele alindigini dogrulamali.
+Ayrica `windows_running_application_blocks_removal_until_closed`
 regresyonunda izole fixture EXE'sini gercek subprocess olarak
 calistirir; program acikken silmeyi reddetmeli, ilk payload
 dosyasini korumali, child durduktan sonra temiz kaldirmalidir.
