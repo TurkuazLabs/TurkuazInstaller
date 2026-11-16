@@ -9,7 +9,11 @@ use std::{
     ffi::OsStr,
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
-    os::windows::{ffi::OsStrExt, fs::{MetadataExt, OpenOptionsExt}, io::AsRawHandle},
+    os::windows::{
+        ffi::OsStrExt,
+        fs::{MetadataExt, OpenOptionsExt},
+        io::AsRawHandle,
+    },
     path::{Component, Path, PathBuf},
 };
 
