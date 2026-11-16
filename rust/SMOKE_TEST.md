@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.16
-Aciklama: Urun adli kaldirma LNK basligi, Windows payload ve GUI kabul rehberi
+Version: 0.3.17
+Aciklama: Kaldirici ust dizin junction reddi, Windows GUI ve LNK kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -348,6 +348,13 @@ CI artifact'inin olusmasi kod dogrulamasidir; temiz son kullanici makinesinde el
 
 ### Kaldirici EXE temizligi (Windows)
 
+- Izole test VM'inde `TurkuazInstaller` managed ust klasorunu
+  junction/reparse olarak olusturdugunuzda yeni `Uninstallers`
+  alt klasoru acilmamali; baglantinin hedefindeki kullanici
+  dosyalari degismemeli. Normal owned klasorlerde kurulum ve
+  kaldirma calismali. Eşzamanli path degistirme / gerçek junction
+  GUI kabul testi henuz **NOT RUN**; hosted CI bu testi
+  dogrudan gerceklestirmiyor.
 - Per-user kaldirici `MoveFileExW / DELAY_UNTIL_REBOOT` kullanmaz. Kucuk bir
   Rust yardimci sureci asil kaldiricinin process handle'inin sinyalini bekler.
   Surec bittikten sonra dogrulanmis EXE ve envanter handle'larini siler.

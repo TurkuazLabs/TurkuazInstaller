@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.24
-Aciklama: Urun adli kaldirma kisayolu, eski LNK sahiplik uyumu ve cleanup kontrati
+Version: 0.9.25
+Aciklama: Kaldirici klasoru parent reparse kontrolu ve owned LNK cleanup kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -536,7 +536,12 @@ Yeni kurulumda uygulama dosyalari yayinlandiktan sonra,
 Windows `HKCU` (tek kullanici) veya `HKLM` (tum kullanicilar)
 `Uninstall` kaydi olusturulur. Kalici kaldirici setup EXE'si kurulu
 uygulama kokunun **disinda** `LocalAppData` / korumali `ProgramFiles` altinda
-saklanir. Baslat menusu `Kaldir` kisayolu ve kayitli uygulama
+saklanir. `TurkuazInstaller/Uninstallers` alt dizinleri ayri
+olusturulur ve her seviyenin normal klasor oldugu, junction/reparse
+olmadigi yazma oncesinde denetlenir. Baglantili ust dizin uzerinden
+yeni kaldirici yazilmaz. Bu kontroller yolun daha sonra
+eszamanli degistirilmesi riskini tamamen yok etmez.
+Baslat menusu `<urun adi> Kaldır` kisayolu ve kayitli uygulama
 kisayollari SHA-256 ile sahiplik envanterine alinir. Kaldirma ayri bir
 onay ekrani ile baslatilir ve paket motorunun degistirilmemis dosyalar
 kontrolu kullanilir. Windows kaldirma envanteri okunurken mutlak,

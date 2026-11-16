@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.21
-// Aciklama: Envanter okumada eszamanli yazma/silme paylasimini reddeden kaldirici
+// Version: 0.1.22
+// Aciklama: Kaldirici dizinlerini ebeveyn reparse kontroluyla olusturup dosyalari korur
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -281,13 +281,37 @@ fn owned_root(scope: InstallScope) -> Result<PathBuf, String> {
     Ok(system_root.join("TurkuazInstaller").join("Uninstallers"))
 }
 
+/// @dev-id TI-WIN-UNINSTALL-DIR-001
+/// @purpose Reject a redirected managed parent before creating uninstaller files.
+/// @contract Use the known-folder-derived parent and create the two managed
+/// components separately; never create descendants through a reparse parent.
+/// @tests windows_local_registration::tests::managed_directory_rejects_unsafe_parent
 fn ensure_managed_directory(root: &Path) -> Result<(), String> {
-    fs::create_dir_all(root).map_err(|e| format!("Kaldırıcı dizini oluşturulamadı: {e}"))?;
-    let meta = fs::symlink_metadata(root).map_err(|e| e.to_string())?;
-    #[cfg(windows)]
-    use std::os::windows::fs::MetadataExt;
-    if !meta.is_dir() || meta.file_type().is_symlink() || meta.file_attributes() & 0x400 != 0 {
-        return Err("Kaldırıcı klasörü bağlantı/junction içeriyor.".into());
+    let parent = root
+        .parent()
+        .ok_or("Kaldırıcı için üst klasör gerekli.")?;
+    if root.file_name() != Some(OsStr::new("Uninstallers"))
+        || parent.file_name() != Some(OsStr::new("TurkuazInstaller"))
+    {
+        return Err("Kaldırıcı klasör düzeni geçersiz.".into());
+    }
+    for directory in [parent, root] {
+        // Never create all descendants first: an existing junction in
+        // TurkuazInstaller could otherwise redirect a privileged write.
+        match fs::create_dir(directory) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                return Err(format!("Kaldırıcı dizini oluşturulamadı: {error}"));
+            }
+        }
+        let meta = fs::symlink_metadata(directory).map_err(|e| e.to_string())?;
+        if !meta.is_dir()
+            || meta.file_type().is_symlink()
+            || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+        {
+            return Err("Kaldırıcı klasörü bağlantı/junction içeriyor.".into());
+        }
     }
     Ok(())
 }
@@ -935,6 +959,50 @@ pub(super) fn finalize_uninstaller(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn managed_directory_rejects_unsafe_parent() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "turkuaz-managed-parent-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir(&base).expect("isolated test root");
+        let parent = base.join("TurkuazInstaller");
+        let root = parent.join("Uninstallers");
+        let original = b"foreign parent contents";
+        fs::write(&parent, original).expect("foreign file fixture");
+        assert!(
+            ensure_managed_directory(&root).is_err(),
+            "must not create a directory through a foreign parent file"
+        );
+        assert_eq!(
+            fs::read(&parent).expect("foreign file preserved"),
+            original
+        );
+        assert!(!root.exists(), "no descendant may be created");
+
+        fs::remove_file(&parent).expect("remove isolated fixture file");
+        ensure_managed_directory(&root).expect("create two managed directories");
+        let sentinel = root.join("unrelated-data.txt");
+        fs::write(&sentinel, b"existing user data").expect("write sentinel");
+        ensure_managed_directory(&root).expect("existing normal directories");
+        assert_eq!(
+            fs::read(&sentinel).expect("sentinel preserved"),
+            b"existing user data"
+        );
+
+        let unexpected = base.join("OtherInstaller").join("Uninstallers");
+        assert!(
+            ensure_managed_directory(&unexpected).is_err(),
+            "unexpected directory layout must be rejected"
+        );
+        assert!(!unexpected.exists(), "no foreign tree created");
+        fs::remove_dir_all(base).expect("remove isolated fixture");
+    }
 
     #[test]
     fn registry_names_are_package_scoped_and_not_user_controlled_paths() {
