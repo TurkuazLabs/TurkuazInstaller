@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.26
-Aciklama: Calisan uygulama on kontrolu, korumali kaldirma ve sahipli LNK cleanup
+Version: 0.9.27
+Aciklama: Acik uygulama on kontrolu, binary-first silme ve sahipli LNK cleanup
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -573,6 +573,13 @@ kullaniciyi uygulamayi kendisinin kapatmasi icin uyarir ve
 kayit ve dosya sahipligini tekrar dogrular. Restart Manager
 erisimi basarisizsa varsayimla silmeye devam edilmez.
 Kontrol ile kaldirma arasindaki eszamanlilik riski hala vardir.
+Windows'ta envanterdeki EXE/DLL/COM/OCX dosyalari once,
+diger sahipli dosyalar sonra dogrulanarak kaldirilir. Bu,
+Restart Manager kontrolunden hemen sonra acilan bir program
+EXE/DLL silinmesini kilitlerse, alakasiz dosyalarin onceden
+silinmesi ihtimalini azaltir. Dosyalar tek tek kaldirildigindan
+tum islem atomik degildir; sonradan baslatma veya paylasim
+degisikligi hala kismi kaldirmaya yol acabilir.
 Bu islem eszamanli tum surecleri kilitlemez, atomik transaction
 iddiasi yoktur. Kaldirilacak Windows kisayolu dogrudan dosya
 tanicisinda sahiplik kaydina gore tekrar dogrulanir ve ayni tanitici
