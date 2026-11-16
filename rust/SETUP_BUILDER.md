@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.27
-Aciklama: Acik uygulama on kontrolu, binary-first silme ve sahipli LNK cleanup
+Version: 0.9.28
+Aciklama: Windows DELETE preflight, receipt handle silme ve guvenli kaldirma
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -572,6 +572,16 @@ kullaniciyi uygulamayi kendisinin kapatmasi icin uyarir ve
 `Tekrar dene` ile yeni onayli kaldirma sunar. Yeniden deneme
 kayit ve dosya sahipligini tekrar dogrular. Restart Manager
 erisimi basarisizsa varsayimla silmeye devam edilmez.
+Ek olarak Windows'ta tum sahipli payload dosyalarinin SHA-256
+degeri ve DELETE erisim hakki, ilk dosya silinmeden once
+dogrulanir. Baska surecin DELETE paylasimi vermedigi siradan
+bir veri dosyasi varsa onceki dosyalar silinmeden islem
+reddedilir; kilit kaldirildiktan sonra yeniden denenebilir.
+Kurulum receipt dosyasi Windows'ta silme izniyle acilir ve
+sahiplik kontrolunden son silmeye dek ayni handle tutulur;
+son asamada once handle kapatip ardindan path ile silme
+yapilmaz. Receipt kaydinin kriptografik olarak imzali oldugu
+iddia edilmez.
 Kontrol ile kaldirma arasindaki eszamanlilik riski hala vardir.
 Windows'ta envanterdeki EXE/DLL/COM/OCX dosyalari once,
 diger sahipli dosyalar sonra dogrulanarak kaldirilir. Bu,
