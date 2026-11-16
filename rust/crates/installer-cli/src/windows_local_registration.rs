@@ -547,7 +547,7 @@ fn read_registration_bytes(source: &Path) -> Result<Vec<u8>, String> {
             return Err("Kaldırma envanteri bağlantılı klasörden okunamaz.".into());
         }
     }
-    let mut file = OpenOptions::new()
+    let file = OpenOptions::new()
         .read(true)
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
         .open(source)
@@ -1041,7 +1041,7 @@ mod tests {
         fs::write(&receipt, data).expect("write receipt bytes");
         assert_eq!(
             read_registration_bytes(&receipt).expect("regular receipt bytes"),
-            data
+            data.to_vec()
         );
         assert!(
             read_registration_bytes(Path::new("registration.json")).is_err(),
@@ -1072,7 +1072,7 @@ mod tests {
             read_registration_bytes(&oversized).is_err(),
             "oversized inventory must fail closed"
         );
-        assert_eq!(fs::read(&receipt).expect("valid file remains"), data);
+        assert_eq!(fs::read(&receipt).expect("valid file remains"), data.to_vec());
         fs::remove_dir_all(base).expect("remove isolated fixture");
     }
 
