@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.15
-Aciklama: Guvenli Windows kisayol secimi, kaldirici cleanup ve Studio onizleme kontrati
+Version: 0.9.16
+Aciklama: Kayitli hedef recycle preflight, kisayol ve kaldirici cleanup kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -45,6 +45,16 @@ otomatik restore ve kalici veri garantisi sunulmaz. Windows profilinin
 Recycle Bin ayarlarini, alan yetersizligini ve desteklenmeyen
 suruculeri test VM'inde ayri denetleyin. Pencere uyarisi
 ve bos/var klasor secimi Windows 10/11'de manuel kabul gerektirir.
+
+**Mevcut Windows kurulum kaydi korumasi:** Ayni paket/kurulum hedefine
+ait Windows Yuklu Uygulamalar kaydi veya onceki kaldirici EXE/envanter
+kaydi varsa yeni kurulum, hedef klasoru Geri Donusum Kutusu'na
+tasimadan once reddedilir. Once mevcut urunu normal kaldirma akisi
+ile kaldirin. Bu salt-okunur on kontrol hem secim oncesinde hem
+kurulum is parcaciginda uygulanir; kayit ya da kullanici dosyalari
+silinmez. Eszamanli diger islemleri kilitlemediginden, son Windows
+kayit asamasindaki no-overwrite korumasi da devam eder.
+Manuel kabul icin [Windows smoke rehberi](SMOKE_TEST.md) takip edilir.
 
 ## Mevcut ciktiyi yeniden olusturma
 
