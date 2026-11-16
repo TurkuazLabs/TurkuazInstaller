@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.10
+// Version: 0.5.11
 // Aciklama: Windows kaydini recycle sinirinda yeniden dogrulayan guvenli kurulum akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -782,8 +782,8 @@ impl LocalInstaller {
             WizardStep::Shortcuts => {
                 if self.entry_point.is_some() {
                     ui.label(language.text(
-                        "Başlat menüsündeki uygulama ve Kaldır kısayolları standart olarak oluşturulur.",
-                        "Application and uninstall shortcuts in the Start menu are created as standard.",
+                        "Başlat menüsünde uygulama ve '<Program Adı> Kaldır' kısayolları oluşturulur.",
+                        "The Start menu includes the app shortcut and '<App Name> Kaldır' uninstall shortcut.",
                     ));
                     ui.add_space(12.0);
                     ui.checkbox(

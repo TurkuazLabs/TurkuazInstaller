@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.20
+// Version: 0.1.21
 // Aciklama: Envanter okumada eszamanli yazma/silme paylasimini reddeden kaldirici
 // Bagimli Oldugu Katman: Adapter | Security
 
@@ -1188,6 +1188,15 @@ mod tests {
         assert_eq!(record.package_id(), id);
         assert_eq!(record.display_name(), display_name);
         assert_eq!(record.shortcuts.len(), 3);
+        let named_uninstaller = known_folder(&FOLDERID_Programs)
+            .expect("Start menu")
+            .join(&display_name)
+            .join(format!("{display_name} Kaldır.lnk"));
+        assert!(
+            record.shortcuts.iter().any(|entry| entry.path == named_uninstaller),
+            "new installations must register a product-named uninstall link"
+        );
+        assert!(named_uninstaller.exists(), "named uninstall link missing");
 
         // All Installed Apps identity fields must match before the
         // uninstaller can delete any receipt-owned payload. A tampered

@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.23
-Aciklama: Handle-tabanli owned payload silme, envanter ve cleanup kontrati
+Version: 0.9.24
+Aciklama: Urun adli kaldirma kisayolu, eski LNK sahiplik uyumu ve cleanup kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -487,8 +487,13 @@ kisayolu olusturulur. Tahmini EXE secilmez.
 Tek kullanici icin Windows known-folder API ile kullaniciya ait
 Programs ve masaustu, tum kullanicilar icin Common Programs ve
 Public Desktop kullanilir. Uygulama kisayolu `<urun adi>/<urun adi>.lnk`,
-kaldirma kisayolu `<urun adi>/Kaldir.lnk` (Windows'ta `Kaldır.lnk`)
+kaldirma kisayolu `<urun adi>/<urun adi> Kaldır.lnk`
 ve secilen masaustu kisayolu `<urun adi>.lnk` olur.
+Ornek: `Türkçe Uygulama 2.0/Türkçe Uygulama 2.0 Kaldır.lnk`.
+Kaldirici penceresi de `<urun adi> Kaldır` basligini gosterir.
+Eski surumlerin `Kaldır.lnk` dosyasi yeni kuruluma donusturulmez;
+yalnizca onceki kayitli dosya kimligi dogrulanirsa guvenle temizlenir.
+Kaldirici EXE dosyasinin benzersiz dahili adlandirmasi degismez.
 Uygulama adinda Windows ayraclari, bas/son bosluklar ve
 `CON`, `NUL`, `COM1`, `LPT1` gibi Windows aygit takma adlari
 (uzantili bicimleri dahil) reddedilir. Ucuncu taraf kisayollarinin

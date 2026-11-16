@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_uninstall_gui.rs
 // Amac: Windows yuklu uygulamalar kaydindan cagirilabilen guvenli kaldirma sihirbazi
 // Modul - Rust Windows Uninstall Presentation
-// Version: 0.1.3
-// Aciklama: Acik onay, envanter on kontrolu ve degistirilmis dosyalari koruma
+// Version: 0.1.4
+// Aciklama: Urun adli kaldirici basligi, onay ve degistirilmis dosyalari koruma
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
@@ -24,6 +24,7 @@ use crate::{
     windows_local_registration::{
         LocalRegistration, cleanup_after_uninstall, finalize_uninstaller, read_registration,
     },
+    windows_shortcuts::uninstall_display_label,
 };
 
 enum UninstallPhase {
@@ -111,7 +112,7 @@ impl UninstallApp {
                 };
                 let mut message = format!(
                     "{}: {} uygulama dosyası kaldırıldı.",
-                    latest.package_id(),
+                    latest.display_name(),
                     summary.removed_files
                 );
                 if summary.retained_unknown_files {
@@ -164,7 +165,10 @@ impl eframe::App for UninstallApp {
 
         egui::TopBottomPanel::top("uninstall_header").show(context, |ui| {
             ui.add_space(12.0);
-            ui.heading(egui::RichText::new("Turkuaz Uygulama Kaldırma").size(24.0));
+            ui.heading(
+                egui::RichText::new(uninstall_display_label(self.record.display_name()))
+                    .size(24.0),
+            );
             ui.label(format!(
                 "{} · {}",
                 self.record.package_id(),
@@ -222,7 +226,7 @@ impl eframe::App for UninstallApp {
             match self.phase {
                 UninstallPhase::Confirm => {
                     ui.strong("Kaldırılacak uygulama:");
-                    ui.label(self.record.package_id());
+                    ui.label(self.record.display_name());
                     ui.add_space(12.0);
                     ui.strong("Kurulum konumu:");
                     ui.label(self.record.target().display().to_string());
@@ -279,8 +283,9 @@ pub(super) fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     let manifest = Path::new(&args[3]).to_path_buf();
     let app = UninstallApp::new(manifest)?;
+    let window_title = uninstall_display_label(app.record.display_name());
     eframe::run_native(
-        "Turkuaz Uygulama Kaldırma",
+        &window_title,
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
                 .with_inner_size([760.0, 490.0])

@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.15
-Aciklama: Windows handle-tabanli payload silme, envanter ve GUI kabul rehberi
+Version: 0.3.16
+Aciklama: Urun adli kaldirma LNK basligi, Windows payload ve GUI kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -73,7 +73,10 @@ PASS olarak kaydetmeyin.
 
 1. Ana EXE'si ve guvenli `Turkce Uygulama 2.0` gibi bir adi olan
    test paketiyle kurun. Baslat menusunde uygulama ve
-   `Kaldır.lnk` gorunmeli; masaustu secimi varsayilan isaretli olmali.
+   `Turkce Uygulama 2.0 Kaldır.lnk` gorunmeli; masaustu secimi
+   varsayilan isaretli olmali. Kaldirici pencere basligi da
+   `Turkce Uygulama 2.0 Kaldır` olmali; tek basina
+   `Kaldır.lnk` yeni kurulumlarda olusturulmamali.
 2. Ayni uygulamanin farkli, temiz test kurulumu icin masaustu
    secimini kaldirin. Baslat menusu uygulama/kaldirma kisayollari
    kalmali, masaustu kisayolu olusturulmamali.
@@ -86,7 +89,10 @@ PASS olarak kaydetmeyin.
    degistirmemeli; kismi dosya yayinini/geri almayi dogrulayin.
 5. Kaldirma sonrasinda sadece envanterdeki degismemis kisayollarin
    silindigini, kullanicinin duzenledigi .lnk'nin korundugunu ve
-   cleanup log sonucunu dogrulayin. Tek kullanici ve UAC onayli
+   cleanup log sonucunu dogrulayin. Onceki surumun envanterine
+   ait `Kaldır.lnk` dosyasinin sadece sahipligi dogrulandiginda
+   temizlenebildigini, yabanci bir `Kaldır.lnk` dosyasinin
+   korunmasini da test edin. Tek kullanici ve UAC onayli
    tum kullanicilar akislari ayri raporlansin.
 
 CI'daki `windows_shortcuts::tests` ve

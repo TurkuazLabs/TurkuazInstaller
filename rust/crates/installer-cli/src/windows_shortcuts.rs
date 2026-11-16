@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_shortcuts.rs
 // Amac: Yerel Rust setup icin kullaniciya ait Windows kisayollari olusturmak
 // Modul - Rust Windows Shell Adapter
-// Version: 0.1.10
-// Aciklama: Windows aygit adi ve bosluk denetimli Baslat/masaustu kisayollari, Shell yenileme ve yabanci LNK korumasi
+// Version: 0.1.11
+// Aciklama: Urun adi + Kaldir kisayolu, eski LNK uyumu ve yabanci kisayol korumasi
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -403,6 +403,15 @@ pub(super) fn create_installed_shortcuts(
     Ok(report)
 }
 
+/// @dev-id BRK-WIN-UNINSTALL-NAME-001
+/// @purpose Name each uninstall entry after the installed product.
+/// @contract New visible labels are "<display_name> Kaldır"; existing
+/// legacy "Kaldır.lnk" files remain eligible for owned cleanup only.
+/// @tests windows_shortcuts::tests::uninstall_label_uses_product_name_and_legacy_cleanup
+pub(super) fn uninstall_display_label(display_name: &str) -> String {
+    format!("{display_name} Kaldır")
+}
+
 /// @dev-id BRK-WIN-UNINSTALL-LNK-001
 /// @purpose Verify that a shortcut belongs to the expected Windows shell
 /// locations without accepting arbitrary file paths from JSON.
@@ -423,8 +432,13 @@ pub(super) fn shortcut_location_is_owned(
     let start_dir = known_folder(programs)?.join(display_name);
     let app_link = start_dir.join(format!("{display_name}.lnk"));
     let desktop_link = known_folder(desktop)?.join(format!("{display_name}.lnk"));
-    let uninstall_link = start_dir.join("Kaldır.lnk");
-    Ok(path == app_link || path == desktop_link || (allow_uninstall && path == uninstall_link))
+    let uninstall_link = start_dir.join(format!("{}.lnk", uninstall_display_label(display_name)));
+    // v0.2.24 and older builds created a generic Start menu link.
+    // Keep it removable only when an owned inventory contains its identity.
+    let legacy_uninstall_link = start_dir.join("Kaldır.lnk");
+    Ok(path == app_link
+        || path == desktop_link
+        || (allow_uninstall && (path == uninstall_link || path == legacy_uninstall_link)))
 }
 
 /// @dev-id BRK-WIN-UNINSTALL-LNK-002
@@ -465,7 +479,7 @@ pub(super) fn create_owned_uninstaller_link(
     {
         return Err("Kaldır kısayolu klasörü bir bağlantı veya junction içeriyor.".into());
     }
-    let link = directory.join("Kaldır.lnk");
+    let link = directory.join(format!("{}.lnk", uninstall_display_label(display_name)));
     let arguments = format!(
         "uninstall-local-gui --registration \"{}\"",
         manifest.display()
@@ -632,6 +646,47 @@ mod tests {
         assert_eq!(
             fs::read(&desktop_link).expect("foreign link preserved"),
             foreign
+        );
+    }
+
+    #[test]
+    fn uninstall_label_uses_product_name_and_legacy_cleanup() {
+        let display_name = "Türkçe Uygulama 2.0";
+        assert_eq!(
+            uninstall_display_label(display_name),
+            "Türkçe Uygulama 2.0 Kaldır"
+        );
+        let root = known_folder(&FOLDERID_Programs)
+            .expect("CurrentUser Start menu folder")
+            .join(display_name);
+        let named = root.join("Türkçe Uygulama 2.0 Kaldır.lnk");
+        let legacy = root.join("Kaldır.lnk");
+        let unrelated = root.join("Yabancı Kaldır.lnk");
+        for path in [&named, &legacy] {
+            assert!(
+                shortcut_location_is_owned(path, InstallScope::CurrentUser, display_name, true)
+                    .expect("eligible owned uninstall shortcut"),
+                "{path:?}"
+            );
+            assert!(
+                !shortcut_location_is_owned(
+                    path,
+                    InstallScope::CurrentUser,
+                    display_name,
+                    false
+                )
+                .expect("not a normal application shortcut"),
+                "{path:?}"
+            );
+        }
+        assert!(
+            !shortcut_location_is_owned(
+                &unrelated,
+                InstallScope::CurrentUser,
+                display_name,
+                true
+            )
+            .expect("foreign link must not be owned")
         );
     }
 
