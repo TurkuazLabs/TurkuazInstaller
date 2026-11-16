@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.19
-// Aciklama: Silme oncesi Windows kayit alanlarini dogrulayan ve yabanci kisayollari koruyan kaldirici
+// Version: 0.1.20
+// Aciklama: Envanter okumada eszamanli yazma/silme paylasimini reddeden kaldirici
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -560,6 +560,8 @@ fn read_registration_bytes(source: &Path) -> Result<Vec<u8>, String> {
     }
     let file = OpenOptions::new()
         .read(true)
+        // Keep the inventory stable while parsing it; refuse concurrent writers.
+        .share_mode(FILE_SHARE_READ.0)
         .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
         .open(source)
         .map_err(|e| e.to_string())?;
@@ -1066,6 +1068,22 @@ mod tests {
         assert!(
             read_registration_bytes(&base.join("..").join("registration.json")).is_err(),
             "lexical parent traversal must be rejected before reading"
+        );
+        // Refuse a receipt while another process can modify it, then
+        // allow reading again once that writer has released its handle.
+        let writer = OpenOptions::new()
+            .write(true)
+            .share_mode(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0 | FILE_SHARE_DELETE.0)
+            .open(&receipt)
+            .expect("open test writer");
+        assert!(
+            read_registration_bytes(&receipt).is_err(),
+            "receipt reader must refuse a concurrently writable handle"
+        );
+        drop(writer);
+        assert_eq!(
+            read_registration_bytes(&receipt).expect("receipt read after writer closed"),
+            data.to_vec()
         );
         let directory = base.join("directory.json");
         fs::create_dir(&directory).expect("directory fixture");

@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.20
-Aciklama: Windows registry kimlik denetimi, envanter reparse korumasi ve cleanup kontrati
+Version: 0.9.21
+Aciklama: Windows kayit ve envanter yazma paylasimi denetimi, cleanup kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -519,8 +519,11 @@ onay ekrani ile baslatilir ve paket motorunun degistirilmemis dosyalar
 kontrolu kullanilir. Windows kaldirma envanteri okunurken mutlak,
 traversal icermeyen yol, normal dosya ve normal ust klasorler
 zorunludur; junction/reparse yonlendirmeleri izlenmez, buyuk ya da
-ozel dosya icerigi okunmaz. Bu salt-okunur on kontrol eszamanli
-path degisimlerini kilitlemez; kaldirma/cleanup sonraki sahiplik
+ozel dosya icerigi okunmaz. Envanter Windows `FILE_SHARE_READ`
+paylasim modunda acilir, okuma sirasinda baska bir yazici veya
+silici dosyayi acamaz. Zaten yazilabilir handle varsa okuma
+basarisiz olur. Bu kontrol tum path eszamanlilik risklerini
+ortadan kaldirmaz; kaldirma/cleanup sonraki sahiplik
 kontrolleri de gereklidir. Kaldirma GUI'si uygulama dosyalarini
 silmeden once Windows `TurkuazOwner`, `InstallLocation`,
 `UninstallString`, `DisplayName` ve `DisplayIcon` degerlerinin
