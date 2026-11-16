@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.17
-Aciklama: Kaldirici ust dizin junction reddi, Windows GUI ve LNK kabul rehberi
+Version: 0.3.18
+Aciklama: Kaldirici path/traversal ve yabanci dosya kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -206,6 +206,18 @@ gercek yayinci sertifikasi ile Authenticode dogrulamasi,
 imzali CMS release ve guven politikasi ayri kabul kapilaridir.
 Islem gercek dosyalar uzerinde degil VM fixture'larinda
 yapilmalidir.
+
+### Kaldirici yonetilen dizini - yol ve yabanci dosya korunumu
+
+Otomatik Windows regresyonu:
+`windows_local_registration::tests::managed_directory_rejects_unsafe_parent`
+goreli yol ve `..` iceren yolu dizin olusturmadan reddetmeli; yabanci
+ebeveyn/son klasor dosyasini oldugu gibi birakmali. Normal mevcut
+`TurkuazInstaller/Uninstallers` dizinindeki kullanici dosyalari korunmali.
+Windows 10/11 temiz VM'de, ozellikle all-users/UAC yolunda junction
+ve eszamanli degisen ust dizin senaryolari ayrica elle denenmeli;
+bu fiziksel kabul **NOT RUN**. Salt otomatik test, race-free yol
+guvenligini kanitlamaz.
 
 ## Studio, EULA ve Windows uygulama kaydi kabul senaryosu
 
