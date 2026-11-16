@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.4
-# Aciklama: Windows payload envanteri ve Rust workspace, PE manifest, setup lifecycle testi
+# Version: 0.3.5
+# Aciklama: Windows payload testleri ve artifact SHA-256 roundtrip dogrulamasi
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -291,3 +291,46 @@ jobs:
           path: ${{ runner.temp }}/turkuaz-example-test-setup/**
           if-no-files-found: error
           retention-days: 7
+
+      
+      # @dev-id TI-RC-ARTIFACT-001
+      # CI evidence only: compare the decompressed contents of all uploaded
+      # test artifact ZIPs with an exact, unsigned SHA-256/length inventory.
+      - name: Generate test-only artifact SHA-256 inventory
+        shell: pwsh
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          & rust/scripts/windows-test-artifact-inventory.ps1 -Mode Generate `
+            -Version $env:RUST_CLI_VERSION `
+            -SourceCommit $env:RC_SOURCE_COMMIT `
+            -ExampleRoot (Join-Path $env:RUNNER_TEMP 'turkuaz-example-test-setup') `
+            -InventoryPath (Join-Path $env:RUNNER_TEMP 'test-artifact-inventory.json')
+
+      - name: Upload test-only SHA-256 inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-test-artifact-inventory-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: ${{ runner.temp }}/test-artifact-inventory.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Download test artifact ZIPs for roundtrip verification
+        uses: actions/download-artifact@v4
+        with:
+          pattern: turkuaz-*-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: ${{ runner.temp }}/turkuaz-test-artifacts-roundtrip
+          merge-multiple: false
+
+      - name: Verify downloaded test artifact sizes and SHA-256
+        shell: pwsh
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $roundtrip = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $inventory = Join-Path $roundtrip "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64/test-artifact-inventory.json"
+          & rust/scripts/windows-test-artifact-inventory.ps1 -Mode Verify `
+            -Version $env:RUST_CLI_VERSION `
+            -SourceCommit $env:RC_SOURCE_COMMIT `
+            -InventoryPath $inventory `
+            -ArtifactRoot $roundtrip
