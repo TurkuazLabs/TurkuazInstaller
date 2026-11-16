@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/local_install_receipt.rs
 // Amac: Imzasiz yerel kurulumun sahip oldugu payload dosyalarini guvenli kaydetmek ve kaldirmak
 // Modul - Rust Package Lifecycle Service
-// Version: 0.1.5
-// Aciklama: Windows handle ile sahipli dosya silme, SHA-256 ve veri koruma
+// Version: 0.1.6
+// Aciklama: Windows acik program on kontrolu, handle ile guvenli silme ve veri koruma
 // Bagimli Oldugu Katman: Service | Security
 
 use std::{
@@ -25,6 +25,11 @@ const RECORD_VERSION: u32 = 1;
 const MAX_RECORD_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_OWNED_FILES: usize = 100_000;
 
+/// Used by Windows presentation to offer an actionable retry instead of a
+/// generic package corruption message; this does not request process termination.
+pub const LOCAL_INSTALL_RUNNING_APPLICATION_ERROR: &str =
+    "installed application or one of its modules is still running";
+
 // Windows file sharing/open flags from the platform SDK. Keep the verified
 // payload receipt stable while uninstalling and reject reparse files.
 #[cfg(windows)]
@@ -41,6 +46,167 @@ const WINDOWS_DELETE_ACCESS: u32 = 0x0001_0000;
 const WINDOWS_GENERIC_READ_ACCESS: u32 = 0x8000_0000;
 #[cfg(windows)]
 const WINDOWS_FILE_DISPOSITION_INFO_CLASS: i32 = 4;
+#[cfg(windows)]
+const WINDOWS_RESTART_MANAGER_MORE_DATA: u32 = 234;
+#[cfg(windows)]
+const WINDOWS_RESTART_MANAGER_RESOURCE_BATCH: usize = 128;
+
+#[cfg(windows)]
+#[link(name = "rstrtmgr")]
+unsafe extern "system" {
+    #[link_name = "RmStartSession"]
+    fn restart_manager_start_session(
+        session_handle: *mut u32,
+        session_flags: u32,
+        session_key: *mut u16,
+    ) -> u32;
+    #[link_name = "RmRegisterResources"]
+    fn restart_manager_register_resources(
+        session_handle: u32,
+        file_count: u32,
+        filenames: *const *const u16,
+        application_count: u32,
+        applications: *const std::ffi::c_void,
+        service_count: u32,
+        services: *const *const u16,
+    ) -> u32;
+    #[link_name = "RmGetList"]
+    fn restart_manager_get_list(
+        session_handle: u32,
+        processes_needed: *mut u32,
+        processes_capacity: *mut u32,
+        processes: *mut std::ffi::c_void,
+        reboot_reasons: *mut u32,
+    ) -> u32;
+    #[link_name = "RmEndSession"]
+    fn restart_manager_end_session(session_handle: u32) -> u32;
+}
+
+#[cfg(windows)]
+struct RestartManagerSession(u32);
+
+#[cfg(windows)]
+impl RestartManagerSession {
+    fn start() -> Result<Self, PackageEngineError> {
+        // CCH_RM_SESSION_KEY is 32 WCHARs plus the final terminator.
+        let mut session_key = [0_u16; 33];
+        let mut handle = 0_u32;
+        let result =
+            unsafe { restart_manager_start_session(&mut handle, 0, session_key.as_mut_ptr()) };
+        if result != 0 {
+            return Err(PackageEngineError::Io(io::Error::from_raw_os_error(
+                result as i32,
+            )));
+        }
+        Ok(Self(handle))
+    }
+}
+
+#[cfg(windows)]
+impl Drop for RestartManagerSession {
+    fn drop(&mut self) {
+        let _ = unsafe { restart_manager_end_session(self.0) };
+    }
+}
+
+#[cfg(windows)]
+fn running_resource(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| {
+        ["exe", "dll", "com", "ocx"]
+            .iter()
+            .any(|candidate| ext.eq_ignore_ascii_case(candidate))
+    })
+}
+
+/// @dev-id TI-WIN-UNINSTALL-RUNNING-001
+/// @purpose Refuse removal before deleting anything while installed executables
+/// or modules are in use by another Windows process.
+/// @contract Inspect only receipt-owned, existing binary paths. Never shut down
+/// a process or silently restart Windows; fail closed on Restart Manager errors.
+/// @tests local_install_receipt::tests::windows_running_application_blocks_removal_until_closed
+#[cfg(windows)]
+fn refuse_running_application(
+    target: &Path,
+    record: &InstallRecord,
+) -> Result<(), PackageEngineError> {
+    use std::os::windows::ffi::OsStrExt;
+
+    let mut paths = Vec::new();
+    for item in &record.files {
+        if !running_resource(Path::new(&item.path)) {
+            continue;
+        }
+        let full = checked_file_path(target, item)?;
+        match fs::symlink_metadata(&full) {
+            Ok(metadata) if metadata.is_file() && !is_reparse(&metadata) => paths.push(full),
+            Ok(_) => return Err(invalid("installed application contains an unsafe binary")),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(PackageEngineError::Io(error)),
+        }
+    }
+    if paths.is_empty() {
+        return Ok(());
+    }
+
+    let session = RestartManagerSession::start()?;
+    for batch in paths.chunks(WINDOWS_RESTART_MANAGER_RESOURCE_BATCH) {
+        let wide_paths = batch
+            .iter()
+            .map(|path| {
+                path.as_os_str()
+                    .encode_wide()
+                    .chain(std::iter::once(0))
+                    .collect::<Vec<u16>>()
+            })
+            .collect::<Vec<_>>();
+        let pointers = wide_paths
+            .iter()
+            .map(|path| path.as_ptr())
+            .collect::<Vec<_>>();
+        let status = unsafe {
+            restart_manager_register_resources(
+                session.0,
+                pointers.len() as u32,
+                pointers.as_ptr(),
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+            )
+        };
+        if status != 0 {
+            return Err(PackageEngineError::Io(io::Error::from_raw_os_error(
+                status as i32,
+            )));
+        }
+    }
+
+    // With zero output slots, a process using any registered resource
+    // produces ERROR_MORE_DATA. We need no PID or other personal process data.
+    let mut needed = 0_u32;
+    let mut capacity = 0_u32;
+    let mut reboot_reasons = 0_u32;
+    let result = unsafe {
+        restart_manager_get_list(
+            session.0,
+            &mut needed,
+            &mut capacity,
+            std::ptr::null_mut(),
+            &mut reboot_reasons,
+        )
+    };
+    if (result == 0 || result == WINDOWS_RESTART_MANAGER_MORE_DATA)
+        && (needed > 0 || reboot_reasons != 0)
+    {
+        return Err(invalid(LOCAL_INSTALL_RUNNING_APPLICATION_ERROR));
+    }
+    if result != 0 {
+        return Err(PackageEngineError::Io(io::Error::from_raw_os_error(
+            result as i32,
+        )));
+    }
+    Ok(())
+}
 
 #[cfg(windows)]
 #[repr(C)]
@@ -420,6 +586,8 @@ pub fn uninstall_local_install(
     for item in &record.files {
         preflight_file(target, item)?;
     }
+    #[cfg(windows)]
+    refuse_running_application(target, &record)?;
     let mut removed = 0;
     let mut dirs = HashSet::new();
     for item in &record.files {
@@ -562,6 +730,99 @@ mod tests {
             original
         );
         fs::remove_dir_all(base).expect("remove isolated fixture");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_running_fixture_child_waits() {
+        if std::env::var_os("TURKUAZ_RUNNING_FIXTURE_CHILD").is_none() {
+            return;
+        }
+        let ready = std::env::var_os("TURKUAZ_RUNNING_FIXTURE_READY")
+            .expect("child readiness signal");
+        fs::write(PathBuf::from(ready), b"ready").expect("child marker");
+        std::thread::sleep(std::time::Duration::from_secs(30));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_running_application_blocks_removal_until_closed() {
+        use std::{process::{Command, Stdio}, thread, time::Duration};
+
+        struct ChildCleanup(std::process::Child);
+        impl Drop for ChildCleanup {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "turkuaz-running-uninstall-{}-{nonce}",
+            std::process::id()
+        ));
+        let target = base.join("installed");
+        fs::create_dir_all(&target).expect("create isolated install root");
+        let first_file = target.join("aaa-before-exe.txt");
+        fs::write(&first_file, b"owned early file").expect("write early owned file");
+        let exe = target.join("FixtureApp.exe");
+        fs::copy(std::env::current_exe().expect("test binary"), &exe)
+            .expect("copy executable fixture");
+        write_local_install_record(&target, "qa.running", "1.0")
+            .expect("create owned receipt");
+
+        let ready = base.join("child-ready");
+        let child = Command::new(&exe)
+            .args([
+                "--exact",
+                "local_install_receipt::tests::windows_running_fixture_child_waits",
+                "--nocapture",
+            ])
+            .env("TURKUAZ_RUNNING_FIXTURE_CHILD", "1")
+            .env("TURKUAZ_RUNNING_FIXTURE_READY", &ready)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("launch installed executable fixture");
+        let mut child = ChildCleanup(child);
+        for _ in 0..100 {
+            if ready.exists() {
+                break;
+            }
+            assert!(
+                child.0.try_wait().expect("poll child").is_none(),
+                "test executable quit before becoming ready"
+            );
+            thread::sleep(Duration::from_millis(100));
+        }
+        assert!(ready.exists(), "installed executable became ready");
+
+        let error = uninstall_local_install(&target, "qa.running")
+            .expect_err("running installed executable must prevent uninstall");
+        assert!(
+            matches!(error, PackageEngineError::InvalidPackage(text)
+                if text == LOCAL_INSTALL_RUNNING_APPLICATION_ERROR),
+            "unexpected removal rejection: {error}"
+        );
+        assert_eq!(fs::read(&first_file).unwrap(), b"owned early file");
+        assert!(exe.exists(), "running executable was not deleted");
+        assert!(
+            target.join(RECORD_NAME).exists(),
+            "receipt must remain for a later retry"
+        );
+        child.0.kill().expect("stop test child");
+        child.0.wait().expect("child exit");
+        let summary = uninstall_local_install(&target, "qa.running")
+            .expect("retry after application is closed");
+        assert_eq!(summary.removed_files, 2);
+        assert!(!summary.retained_unknown_files);
+        fs::remove_file(ready).expect("remove child marker");
+        fs::remove_dir(base).expect("cleanup test root");
     }
 
     #[cfg(windows)]
