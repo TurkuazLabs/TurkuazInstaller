@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/local_install_receipt.rs
 // Amac: Imzasiz yerel kurulumun sahip oldugu payload dosyalarini guvenli kaydetmek ve kaldirmak
 // Modul - Rust Package Lifecycle Service
-// Version: 0.1.7
-// Aciklama: Acik Windows program on kontrolu ve executable-first guvenli kaldirma
+// Version: 0.1.8
+// Aciklama: Windows DELETE yetkisi on kontrolu ve handle ile envanter silme
 // Bagimli Oldugu Katman: Service | Security
 
 use std::{
@@ -432,9 +432,11 @@ pub(crate) fn write_local_install_record(
 
 /// @dev-id BRK-LOCAL-RECEIPT-003
 /// @purpose Pin a local payload receipt without following Windows reparse links.
-/// @contract On Windows, deny concurrent write/delete access while owned files
-/// are checked and removed; refuse an existing writer before any deletion.
+/// @contract On Windows, hold a DELETE-capable handle and deny concurrent
+/// write/delete access through final receipt disposition. An existing writer
+/// refuses the operation before any payload deletion.
 /// @tests local_install_receipt::tests::concurrent_receipt_writer_blocks_uninstall
+/// @tests local_install_receipt::tests::windows_receipt_handle_stays_pinned_until_deletion
 fn open_local_receipt(path: &Path) -> Result<fs::File, PackageEngineError> {
     // Retain the cross-platform no-symlink policy. On Windows, the
     // checked open handle adds protection against replacement after this.
@@ -445,6 +447,7 @@ fn open_local_receipt(path: &Path) -> Result<fs::File, PackageEngineError> {
     {
         use std::os::windows::fs::OpenOptionsExt;
         options
+            .access_mode(WINDOWS_GENERIC_READ_ACCESS | WINDOWS_DELETE_ACCESS)
             .share_mode(WINDOWS_FILE_SHARE_READ)
             .custom_flags(WINDOWS_FILE_FLAG_OPEN_REPARSE_POINT);
     }
@@ -519,6 +522,7 @@ fn checked_file_path(target: &Path, item: &OwnedFile) -> Result<PathBuf, Package
     Ok(full)
 }
 
+#[cfg(not(windows))]
 fn preflight_file(target: &Path, item: &OwnedFile) -> Result<(), PackageEngineError> {
     let full = checked_file_path(target, item)?;
     match fs::symlink_metadata(&full) {
@@ -605,8 +609,16 @@ pub fn uninstall_local_install(
     // Hold the inventory read handle through owned-file removal so Windows
     // writers cannot change the receipt after initial validation.
     let (record, receipt_handle) = checked_record(target, expected_package_id)?;
-    // Preflight all entries so a changed file fails without partial deletion.
+    // Preflight all entries before any deletion. On Windows, check both
+    // payload digest and DELETE access while the verified file handle is open:
+    // a locked later file must not strand previously removed owned data.
     for item in &record.files {
+        #[cfg(windows)]
+        {
+            let file = checked_file_path(target, item)?;
+            drop(open_verified_windows_file(&file, item)?);
+        }
+        #[cfg(not(windows))]
         preflight_file(target, item)?;
     }
     #[cfg(windows)]
@@ -657,8 +669,16 @@ pub fn uninstall_local_install(
     }
     let receipt = target.join(RECORD_NAME);
     safe_regular(&receipt)?;
-    drop(receipt_handle);
-    fs::remove_file(receipt).map_err(PackageEngineError::Io)?;
+    // The Windows receipt was opened with DELETE access and without delete
+    // sharing. Disposing that same pinned object avoids a drop-then-unlink
+    // path swap at the final uninstall step.
+    #[cfg(windows)]
+    remove_verified_windows_handle(receipt_handle)?;
+    #[cfg(not(windows))]
+    {
+        drop(receipt_handle);
+        fs::remove_file(receipt).map_err(PackageEngineError::Io)?;
+    }
     let mut dirs: Vec<_> = dirs.into_iter().collect();
     dirs.sort_by_key(|dir| std::cmp::Reverse(dir.components().count()));
     for dir in dirs {
@@ -713,6 +733,72 @@ mod tests {
         assert!(uninstall_local_install(&target, "other.package").is_err());
         assert!(target.join(RECORD_NAME).exists());
         fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_locked_later_file_blocks_before_any_deletion() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let base = std::env::temp_dir().join(format!(
+            "turkuaz-preflight-locked-{}",
+            Uuid::new_v4()
+        ));
+        let target = base.join("installed");
+        fs::create_dir_all(&target).expect("create isolated target");
+        let early = target.join("a-before-locked.txt");
+        let later = target.join("z-locked.txt");
+        fs::write(&early, b"must survive until full preflight").expect("early payload");
+        fs::write(&later, b"another process holds this").expect("later payload");
+        write_local_install_record(&target, "qa.locked", "1.0")
+            .expect("record both payload files");
+
+        let locked = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(WINDOWS_FILE_SHARE_READ)
+            .open(&later)
+            .expect("hold later file without delete sharing");
+        assert!(
+            uninstall_local_install(&target, "qa.locked").is_err(),
+            "missing DELETE share must stop preflight before any deletion"
+        );
+        assert_eq!(
+            fs::read(&early).expect("early file preserved"),
+            b"must survive until full preflight"
+        );
+        assert_eq!(
+            fs::read(&later).expect("locked file preserved"),
+            b"another process holds this"
+        );
+        assert!(target.join(RECORD_NAME).exists(), "receipt preserved");
+        drop(locked);
+
+        let summary = uninstall_local_install(&target, "qa.locked")
+            .expect("retry after the lock is released");
+        assert_eq!(summary.removed_files, 2);
+        assert!(!summary.retained_unknown_files);
+        assert!(!target.exists());
+        fs::remove_dir(base).expect("remove isolated fixture");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_receipt_handle_stays_pinned_until_deletion() {
+        let (base, target) = fixture();
+        let receipt = target.join(RECORD_NAME);
+        let (_, pinned) = checked_record(&target, "qa.native")
+            .expect("open receipt with exclusive delete sharing policy");
+        let replacement_path = target.join("replacement-record.json");
+        assert!(
+            fs::rename(&receipt, &replacement_path).is_err(),
+            "a pinned receipt must not be renamed between verification and deletion"
+        );
+        assert!(receipt.exists());
+        remove_verified_windows_handle(pinned).expect("dispose only verified receipt handle");
+        assert!(!receipt.exists(), "verified receipt object removed");
+        assert!(!replacement_path.exists(), "no path replacement");
+        assert!(target.join("bin/hello.txt").exists(), "payload untouched");
+        fs::remove_dir_all(base).expect("cleanup fixture");
     }
 
     #[cfg(windows)]
