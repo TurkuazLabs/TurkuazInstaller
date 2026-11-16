@@ -472,9 +472,7 @@ impl LocalInstaller {
                             // Recheck at the destructive boundary, immediately before
                             // asking Windows Shell to recycle the existing directory.
                             require_unregistered_target(&package_id, path, scope)
-                                .map_err(|error| {
-                                    PackageEngineError::Io(io::Error::other(error))
-                                })?;
+                                .map_err(|error| PackageEngineError::Io(io::Error::other(error)))?;
                             let _ = sender.send(WorkerEvent::RecyclingExistingTarget);
                             crate::windows_recycle::recycle_existing_target(path, &package_id)
                                 .map_err(|error| PackageEngineError::Io(io::Error::other(error)))?;
