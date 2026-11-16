@@ -25,7 +25,8 @@ pub use cloudmersive_adapter::{
     CLOUDMERSIVE_KEY_ENV, CloudmersiveScanner, MAX_CLOUD_SCAN_FILE_BYTES,
 };
 pub use local_install_receipt::{
-    LOCAL_INSTALL_RECEIPT_FILE_NAME, LocalUninstallSummary, uninstall_local_install,
+    LOCAL_INSTALL_RECEIPT_FILE_NAME, LOCAL_INSTALL_RUNNING_APPLICATION_ERROR,
+    LocalUninstallSummary, uninstall_local_install,
 };
 pub use malware_scan::{
     MalwareScanner, ScanGateError, ScanPhase, ScanSummary, ScanVerdict, scan_directory,
