@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.5
-# Aciklama: Windows payload testleri ve artifact SHA-256 roundtrip dogrulamasi
+# Version: 0.3.6
+# Aciklama: Test artifact SHA-256 roundtrip ve bozulmus dosya negatif testi
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -334,3 +334,32 @@ jobs:
             -SourceCommit $env:RC_SOURCE_COMMIT `
             -InventoryPath $inventory `
             -ArtifactRoot $roundtrip
+
+      - name: Reject same-length modification of downloaded test artifact
+        shell: pwsh
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $roundtrip = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $inventory = Join-Path $roundtrip "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64/test-artifact-inventory.json"
+          $readme = Join-Path $roundtrip "turkuaz-example-test-setup-v$env:RUST_CLI_VERSION-windows-x64/README-TR.txt"
+          $bytes = [IO.File]::ReadAllBytes($readme)
+          if ($bytes.Length -eq 0) { throw 'Cannot test a missing or empty artifact file.' }
+          $bytes[0] = $bytes[0] -bxor 1
+          [IO.File]::WriteAllBytes($readme, $bytes)
+          $rejected = $false
+          try {
+            & rust/scripts/windows-test-artifact-inventory.ps1 -Mode Verify `
+              -Version $env:RUST_CLI_VERSION `
+              -SourceCommit $env:RC_SOURCE_COMMIT `
+              -InventoryPath $inventory `
+              -ArtifactRoot $roundtrip
+          } catch {
+            if ($_.Exception.Message -like 'Downloaded artifact file differs from inventory:*') {
+              $rejected = $true
+            } else {
+              throw
+            }
+          }
+          if (!$rejected) { throw 'Modified artifact bytes were accepted by SHA-256 verification.' }
+          Write-Host 'Same-length tampering of a downloaded TEST-ONLY artifact was rejected.'
