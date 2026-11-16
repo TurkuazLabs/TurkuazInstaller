@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.7
-Aciklama: UAC, kisayol adi guvenligi ve gercek Windows kurulum kabulune gecis rehberi
+Version: 0.3.8
+Aciklama: Windows kayitli hedef recycle preflight, UAC ve gercek GUI kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -116,6 +116,15 @@ Bu testleri yalnizca bos/dedike Windows 10/11 VM kullanarak yapin:
    junction/symlink ve disaridan gelen degisiklik senaryolarinin
    reddedildigini gozlemleyin. Gercek Windows recycle davranisi,
    yalnızca headless/UI unit testleriyle dogrulanmis sayilmaz.
+6. Bir `package-id` icin normal kurulum yapip Windows Yuklu
+   Uygulamalar kaydini ve kaldirici envanterini koruyun. Ayni
+   hedefe temiz/recycle kurulum denemesi, onay isaretlense bile
+   onceki klasoru tasimadan reddedilmeli. Windows uygulama
+   kaydi, kisayollar ve kullanici dosyalari dokunulmadan kalmali.
+   Once normal kaldirma akisini gerceklestirin; sonra ayni hedefe
+   yeniden kurulum deneyin. Ayrica eski kaldirici envanterinin
+   kalmis oldugu yetim-kayit senaryosunda fail-closed davranisi
+   ayri inceleyin.
 
 `install-local-self` CLI komutu onaysiz oldugu icin
 mevcut klasore kurulum yapmayi reddetmeye devam eder.
