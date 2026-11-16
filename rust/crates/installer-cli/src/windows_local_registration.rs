@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.22
-// Aciklama: Kaldirici dizinlerini ebeveyn reparse kontroluyla olusturup dosyalari korur
+// Version: 0.1.23
+// Aciklama: Kaldirici dizinlerinde traversal, goreli yol, reparse ve yabanci dosyalari korur
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -288,7 +288,13 @@ fn owned_root(scope: InstallScope) -> Result<PathBuf, String> {
 /// @tests windows_local_registration::tests::managed_directory_rejects_unsafe_parent
 fn ensure_managed_directory(root: &Path) -> Result<(), String> {
     let parent = root.parent().ok_or("Kaldırıcı için üst klasör gerekli.")?;
-    if root.file_name() != Some(OsStr::new("Uninstallers"))
+    // The path is derived from a Windows known folder; reject any unexpected
+    // relative or traversing input before creating even the first directory.
+    if !root.is_absolute()
+        || root
+            .components()
+            .any(|part| matches!(part, Component::CurDir | Component::ParentDir))
+        || root.file_name() != Some(OsStr::new("Uninstallers"))
         || parent.file_name() != Some(OsStr::new("TurkuazInstaller"))
     {
         return Err("Kaldırıcı klasör düzeni geçersiz.".into());
@@ -989,6 +995,26 @@ mod tests {
             fs::read(&sentinel).expect("sentinel preserved"),
             b"existing user data"
         );
+
+        // Refuse to create through a relative or traversing path. Such a path
+        // must not turn the current working directory into an implicit root.
+        let relative = Path::new("TurkuazInstaller").join("Uninstallers");
+        assert!(ensure_managed_directory(&relative).is_err());
+        let traversal = base
+            .join("untrusted")
+            .join("..")
+            .join("TurkuazInstaller")
+            .join("Uninstallers");
+        assert!(ensure_managed_directory(&traversal).is_err());
+        assert!(!base.join("untrusted").exists());
+
+        // An unrelated file occupying the leaf must never be overwritten.
+        fs::remove_file(&sentinel).expect("remove test sentinel");
+        fs::remove_dir(&root).expect("remove isolated managed leaf");
+        let foreign_leaf = b"foreign leaf contents";
+        fs::write(&root, foreign_leaf).expect("foreign leaf fixture");
+        assert!(ensure_managed_directory(&root).is_err());
+        assert_eq!(fs::read(&root).expect("foreign leaf preserved"), foreign_leaf);
 
         let unexpected = base.join("OtherInstaller").join("Uninstallers");
         assert!(
