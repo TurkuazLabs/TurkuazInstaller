@@ -1216,8 +1216,7 @@ mod tests {
                 fs::read(target.join("hello.txt")).expect("existing payload preserved"),
                 payload
             );
-            write_string(writable.0, field, &original)
-                .expect("restore isolated HKCU fixture");
+            write_string(writable.0, field, &original).expect("restore isolated HKCU fixture");
             read_registration(&manifest).expect("restored identity should pass");
         }
         drop(writable);
