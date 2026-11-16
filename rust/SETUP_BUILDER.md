@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.18
-Aciklama: Iki asamali Windows recycle kayit denetimi ve kaldirici cleanup kontrati
+Version: 0.9.19
+Aciklama: Kaldirma envanteri reparse korumasi, recycle ve cleanup kontrati
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -516,7 +516,12 @@ uygulama kokunun **disinda** `LocalAppData` / korumali `ProgramFiles` altinda
 saklanir. Baslat menusu `Kaldir` kisayolu ve kayitli uygulama
 kisayollari SHA-256 ile sahiplik envanterine alinir. Kaldirma ayri bir
 onay ekrani ile baslatilir ve paket motorunun degistirilmemis dosyalar
-kontrolu kullanilir. Degistirilmis veya yabanci kisayollar korunur.
+kontrolu kullanilir. Windows kaldirma envanteri okunurken mutlak,
+traversal icermeyen yol, normal dosya ve normal ust klasorler
+zorunludur; junction/reparse yonlendirmeleri izlenmez, buyuk ya da
+ozel dosya icerigi okunmaz. Bu salt-okunur on kontrol eszamanli
+path degisimlerini kilitlemez; kaldirma/cleanup sonraki sahiplik
+kontrolleri de gereklidir. Degistirilmis veya yabanci kisayollar korunur.
 Calisan kaldirici EXE'sinin kendi dosyasini silmesi yerine Rust cleanup
 yardimcisi, kaldirici surecinin bitmesini bekler ve dogrulanmis
 EXE/envanter taniticilarini silmeyi dener. Yeniden baslatma veya

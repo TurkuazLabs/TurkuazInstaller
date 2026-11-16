@@ -1,16 +1,16 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.17
-// Aciklama: Windows kaydi ve yerel payload envanterini koruyan salt-okunur tekrar kurulum denetimi
+// Version: 0.1.18
+// Aciklama: Reparse guvenli envanter okuma ve kayitli kurulum veri koruma denetimi
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
     ffi::OsStr,
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
-    os::windows::{ffi::OsStrExt, fs::OpenOptionsExt, io::AsRawHandle},
-    path::{Path, PathBuf},
+    os::windows::{ffi::OsStrExt, fs::{MetadataExt, OpenOptionsExt}, io::AsRawHandle},
+    path::{Component, Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
@@ -517,20 +517,58 @@ fn registration_path(record: &LocalRegistration) -> Result<PathBuf, String> {
     Ok(root.join(format!("{}.json", record.key)))
 }
 
-pub(super) fn read_registration(source: &Path) -> Result<LocalRegistration, String> {
-    let meta = fs::symlink_metadata(source).map_err(|e| e.to_string())?;
-    if !meta.is_file() || meta.file_type().is_symlink() || meta.len() > MAX_JSON_BYTES {
+/// @dev-id TI-UNINSTALL-RECEIPT-READ-001
+/// @purpose Read the uninstall inventory without following Windows reparse links.
+/// @reason The registration path can be passed by an external uninstall caller.
+/// @contract Read-only; reject unsafe ancestors, reparse files, oversized data
+/// and lexical traversal before reading the receipt. Not a race-free sandbox.
+/// @tests windows_local_registration::tests::registration_reader_rejects_unsafe_paths
+fn read_registration_bytes(source: &Path) -> Result<Vec<u8>, String> {
+    if !source.is_absolute()
+        || source
+            .components()
+            .any(|part| matches!(part, Component::CurDir | Component::ParentDir))
+    {
+        return Err("Kaldırma envanteri için mutlak ve güvenli yol gerekli.".into());
+    }
+    let parent = source
+        .parent()
+        .ok_or("Kaldırma envanteri için üst klasör gerekli.")?;
+    for ancestor in parent.ancestors() {
+        let meta = fs::symlink_metadata(ancestor).map_err(|e| e.to_string())?;
+        if !meta.is_dir()
+            || meta.file_type().is_symlink()
+            || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+        {
+            return Err("Kaldırma envanteri bağlantılı klasörden okunamaz.".into());
+        }
+    }
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
+        .open(source)
+        .map_err(|e| e.to_string())?;
+    let meta = file.metadata().map_err(|e| e.to_string())?;
+    if !meta.is_file()
+        || meta.file_type().is_symlink()
+        || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+        || meta.len() == 0
+        || meta.len() > MAX_JSON_BYTES
+    {
         return Err("Kaldırma envanter dosyası güvenli değil.".into());
     }
-    let mut input = Vec::new();
-    File::open(source)
-        .map_err(|e| e.to_string())?
-        .take(MAX_JSON_BYTES + 1)
+    let mut input = Vec::with_capacity(meta.len() as usize);
+    file.take(MAX_JSON_BYTES + 1)
         .read_to_end(&mut input)
         .map_err(|e| e.to_string())?;
     if input.len() as u64 > MAX_JSON_BYTES {
         return Err("Kaldırma envanteri aşırı büyük.".into());
     }
+    Ok(input)
+}
+
+pub(super) fn read_registration(source: &Path) -> Result<LocalRegistration, String> {
+    let input = read_registration_bytes(source)?;
     let mut record: LocalRegistration =
         serde_json::from_slice(&input).map_err(|e| e.to_string())?;
     if record.version != 1
@@ -984,6 +1022,54 @@ mod tests {
         fs::remove_dir(&target).expect("fixture directory cleanup");
         require_unregistered_target(&id, &target, scope)
             .expect("no prior payload inventory remains");
+    }
+
+    #[test]
+    fn registration_reader_rejects_unsafe_paths() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("turkuaz-receipt-read-{nonce}"));
+        fs::create_dir(&base).expect("isolated fixture root");
+        let receipt = base.join("registration.json");
+        let data = b"safe fixture bytes";
+        fs::write(&receipt, data).expect("write receipt bytes");
+        assert_eq!(
+            read_registration_bytes(&receipt).expect("regular receipt bytes"),
+            data
+        );
+        assert!(
+            read_registration_bytes(Path::new("registration.json")).is_err(),
+            "relative inventory path must not be read"
+        );
+        assert!(
+            read_registration_bytes(&base.join("..").join("registration.json")).is_err(),
+            "lexical parent traversal must be rejected before reading"
+        );
+        let directory = base.join("directory.json");
+        fs::create_dir(&directory).expect("directory fixture");
+        assert!(
+            read_registration_bytes(&directory).is_err(),
+            "a directory is not a regular inventory file"
+        );
+        assert!(directory.is_dir(), "failed read never modifies directory");
+        let oversized = base.join("oversized.json");
+        let large_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&oversized)
+            .expect("oversized fixture");
+        large_file
+            .set_len(MAX_JSON_BYTES + 1)
+            .expect("set length without allocating memory");
+        drop(large_file);
+        assert!(
+            read_registration_bytes(&oversized).is_err(),
+            "oversized inventory must fail closed"
+        );
+        assert_eq!(fs::read(&receipt).expect("valid file remains"), data);
+        fs::remove_dir_all(base).expect("remove isolated fixture");
     }
 
     #[test]

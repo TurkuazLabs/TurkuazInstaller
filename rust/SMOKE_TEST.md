@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SMOKE_TEST.md
 Amac: Community Rust gelistirme ciktisi icin Windows kabul adimlarini ve basari kanitlarini tanimlamak
 Modul - Markdown
-Version: 0.3.10
-Aciklama: Recycle oncesi yeniden kayit denetimi, UAC ve GUI kabul rehberi
+Version: 0.3.11
+Aciklama: Kaldirma envanteri reparse/dir denetimi, UAC ve GUI kabul rehberi
 Bagimli Oldugu Katman: QA | Documentation
 -->
 
@@ -229,7 +229,10 @@ gercek uygulama verilerinden ayri bir paketle calistirin.
 7. Kaldirici penceresini acin: acik onay istenmeli.
    Kurulum sonrasinda elle olusturulan kullanici dosyasi
    silinmemeli. Degistirilmis paket dosyasi varsa kaldirma
-   fail-closed davranip veriyi korumali.
+   fail-closed davranip veriyi korumali. Izole test VM'inde
+   kayitli kaldirici envanteri icin traversal/relative path,
+   directory ve junction/reparse link durumlari da reddedilmeli.
+   Bu olumsuz denemeler gercek musteri klasorlerinde yapilmaz.
 8. Ayrica admin haklariyla **Tum kullanicilar** senaryosunu
    test edin: UAC onayi reddedildiginde kurulum olmamali;
    onaylandiginda Program Files, ortak kisa yol ve HKLM
