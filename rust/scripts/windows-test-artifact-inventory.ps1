@@ -34,7 +34,11 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
-if ($env:GITHUB_SHA -cnotmatch '^[a-fA-F0-9]{40} = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../target/release'))
+if ($env:GITHUB_SHA -cnotmatch '^[a-fA-F0-9]{40}$') {
+    throw 'A valid GitHub checkout commit SHA is required for artifact provenance.'
+}
+
+$releaseRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../target/release'))
 $exampleFiles = @(
     'TurkuazSetup.exe',
     "turkuaz-installer-v$Version-windows-x64.exe",
