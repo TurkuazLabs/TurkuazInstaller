@@ -24,10 +24,10 @@ use windows::{
     Win32::{
         Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS, HANDLE},
         Storage::FileSystem::{
-            BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ATTRIBUTE_DIRECTORY,
-            FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT,
-            FILE_GENERIC_READ, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
-            FILE_SHARE_WRITE, GetFileInformationByHandle,
+            BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_READONLY,
+            FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ,
+            FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+            GetFileInformationByHandle,
         },
         System::Registry::{
             HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, KEY_SET_VALUE,
@@ -299,9 +299,7 @@ fn open_verified_shortcut_handle(owned: &OwnedShortcut) -> Result<Option<File>, 
         Err(error) => return Err(error.to_string()),
     };
     let metadata = file.metadata().map_err(|error| error.to_string())?;
-    if !metadata.is_file()
-        || metadata.file_attributes() & FILE_ATTRIBUTE_READONLY.0 != 0
-    {
+    if !metadata.is_file() || metadata.file_attributes() & FILE_ATTRIBUTE_READONLY.0 != 0 {
         return Err("Salt okunur veya normal olmayan kısayol korundu.".into());
     }
     let identity = shortcut_file_identity_handle(&file)?;
@@ -1142,10 +1140,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("test clock")
             .as_nanos();
-        let base = std::env::temp_dir().join(format!(
-            "turkuaz-owned-link-{}-{nonce}",
-            std::process::id()
-        ));
+        let base =
+            std::env::temp_dir().join(format!("turkuaz-owned-link-{}-{nonce}", std::process::id()));
         fs::create_dir(&base).expect("isolated shortcut fixture");
         let link = base.join("App.lnk");
         let renamed = base.join("original.lnk");
