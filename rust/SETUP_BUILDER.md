@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.25
-Aciklama: Kaldirici klasoru parent reparse kontrolu ve owned LNK cleanup kontrati
+Version: 0.9.26
+Aciklama: Calisan uygulama on kontrolu, korumali kaldirma ve sahipli LNK cleanup
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -563,6 +563,16 @@ gecerli UTF-16 olarak kabul edilir. Eksik/bozuk sonlandirma veya
 sondaki gizli veri ile envanter eslesmesi kurulmaz. Bu alanlardan biri
 degismisse kaldirma reddedilir. Kayit silinirken kontrol tekrarlanir;
 kayit korunuyorsa onceki Baslat/masaustu kisayollari da korunur.
+Kaldirma motoru, sahipli kurulumdaki mevcut EXE, DLL, COM ve OCX
+dosyalarini Windows Restart Manager ile okuma amacli sorgular.
+Bunlari kullanan bir program veya servis tespit edilirse tek bir
+uygulama dosyasi silinmeden islem reddedilir. Kaldirici zorla
+program kapatmaz, veriyi kaybettirecek bir kapanis baslatmaz,
+kullaniciyi uygulamayi kendisinin kapatmasi icin uyarir ve
+`Tekrar dene` ile yeni onayli kaldirma sunar. Yeniden deneme
+kayit ve dosya sahipligini tekrar dogrular. Restart Manager
+erisimi basarisizsa varsayimla silmeye devam edilmez.
+Kontrol ile kaldirma arasindaki eszamanlilik riski hala vardir.
 Bu islem eszamanli tum surecleri kilitlemez, atomik transaction
 iddiasi yoktur. Kaldirilacak Windows kisayolu dogrudan dosya
 tanicisinda sahiplik kaydina gore tekrar dogrulanir ve ayni tanitici
