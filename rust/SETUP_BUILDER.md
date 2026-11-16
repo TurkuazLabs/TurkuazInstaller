@@ -564,7 +564,14 @@ sondaki gizli veri ile envanter eslesmesi kurulmaz. Bu alanlardan biri
 degismisse kaldirma reddedilir. Kayit silinirken kontrol tekrarlanir;
 kayit korunuyorsa onceki Baslat/masaustu kisayollari da korunur.
 Bu islem eszamanli tum surecleri kilitlemez, atomik transaction
-iddiasi yoktur. Degistirilmis veya yabanci kisayollar korunur.
+iddiasi yoktur. Kaldirilacak Windows kisayolu dogrudan dosya
+tanicisinda sahiplik kaydina gore tekrar dogrulanir ve ayni tanitici
+uzerinden silinir. Yeni sahiplik kayitlarinda Windows dosya kimligi,
+eski kayitlarda ise SHA-256 kullanilir. Shell tarafindan ayni dosya
+uzerinde yapilan metadata degisiklikleri yeni kimlik kaydini bozmaz.
+Yabanci, degistirilmis eski kayitli, reparse veya hardlink
+kisayollar korunur; bu islem ust dizinlerin eszamanli yonlendirme
+risklerini tamamen ortadan kaldirmaz.
 Calisan kaldirici EXE'sinin kendi dosyasini silmesi yerine Rust cleanup
 yardimcisi, kaldirici surecinin bitmesini bekler ve dogrulanmis
 EXE/envanter taniticilarini silmeyi dener. Yeniden baslatma veya
