@@ -433,8 +433,8 @@ mod tests {
         );
         assert!(receipt.exists(), "receipt must remain");
         drop(writer);
-        let removed = uninstall_local_install(&target, "qa.native")
-            .expect("uninstall after writer closes");
+        let removed =
+            uninstall_local_install(&target, "qa.native").expect("uninstall after writer closes");
         assert_eq!(removed.removed_files, 1);
         assert!(!removed.retained_unknown_files);
         assert!(!receipt.exists());
