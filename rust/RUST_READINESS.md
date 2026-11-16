@@ -20,13 +20,13 @@ kaniti olusturmaz.
 [PR #76](https://github.com/TurkuazLabs/TurkuazInstaller/pull/76)
 kod temeli `83a5418fa6f9ffe1231b85f8db20ac87b182d4cc`,
 [Linux ve Windows CI #43952156847](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/43952156847)
-**SUCCESS**. Cargo CLI paketi `0.2.24` ve beş adet Windows
+**SUCCESS**. Cargo CLI paketi `0.2.24` ve bes adet Windows
 TEST-ONLY artifact'i uretildi; 23 Kasim 2026'da suresi dolar.
 Yeni kilitli dosya ve acik uygulama kaldirma regresyonlari da
 Windows'ta basarili. Bu, ek bir production imza/Windows 10/11
 GUI kabulu kaniti degildir. Artifact'lar production release degildir.
 
-Kanit, indirilecek test ciktisi ve manual/yayinci kabul kapilari
+Kanit, indirilecek test ciktisi ve manuel/yayinci kabul kapilari
 [RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md) belgesinde
 tek tek kayitlidir. Bu belgeyi degistiren yeni commit'in CI durumu
 ayri kontrol edilir. Acik production kapilari asagida kalir.
