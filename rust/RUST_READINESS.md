@@ -2,18 +2,34 @@
 Dosya Yolu: REPO_ROOT/rust/RUST_READINESS.md
 Amac: Community Rust test kaniti ve production kabul eksiklerini ayri izlemek
 Modul - Markdown
-Version: 1.2.0
-Aciklama: CI kaniti, yerel installer, signed workflow ve acik Windows kabul kapilari
+Version: 1.2.1
+Aciklama: v0.2.24 RC kaniti, yerel installer ve production kabul kapilari
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
 
 # Rust Installer - Kanitlanmis durum ve production sinirlari
 
-Bu belge, **4 Kasim 2026** tarihinde `ed2724609e311f6d31aefbfab9a0ec497179ed81`
+Bu belgenin tarihsel referansi **4 Kasim 2026** tarihinde `ed2724609e311f6d31aefbfab9a0ec497179ed81`
 revizyonunda [CI #41913467340](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/41913467340)
 ile dogrulanan Rust Community kodunu anlatir. Belge commit'leri,
 `main` merge islemi ve test artifact'lari yeni bir production kabul
 kaniti olusturmaz.
+
+## 17 Kasim 2026 - RC test adayi kaniti
+
+[PR #76](https://github.com/TurkuazLabs/TurkuazInstaller/pull/76)
+kod temeli `83a5418fa6f9ffe1231b85f8db20ac87b182d4cc`,
+[Linux ve Windows CI #43952156847](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/43952156847)
+**SUCCESS**. Cargo CLI paketi `0.2.24` ve beş adet Windows
+TEST-ONLY artifact'i uretildi; 23 Kasim 2026'da suresi dolar.
+Yeni kilitli dosya ve acik uygulama kaldirma regresyonlari da
+Windows'ta basarili. Bu, ek bir production imza/Windows 10/11
+GUI kabulu kaniti degildir. Artifact'lar production release degildir.
+
+Kanit, indirilecek test ciktisi ve manual/yayinci kabul kapilari
+[RELEASE_CANDIDATE.md](RELEASE_CANDIDATE.md) belgesinde
+tek tek kayitlidir. Bu belgeyi degistiren yeni commit'in CI durumu
+ayri kontrol edilir. Acik production kapilari asagida kalir.
 
 ## Aktif islevler
 
