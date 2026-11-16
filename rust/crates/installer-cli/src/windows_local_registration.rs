@@ -394,7 +394,7 @@ pub(super) fn require_unregistered_target(
     scope: InstallScope,
 ) -> Result<(), String> {
     if !target.is_absolute() {
-        return Err("Kurulum kaydi icin mutlak hedef gerekli.".into());
+        return Err("Kurulum kaydı için mutlak hedef gerekli.".into());
     }
     let name = registration_name(package_id, target)?;
     let root = owned_root(scope)?;
@@ -405,14 +405,14 @@ pub(super) fn require_unregistered_target(
         match fs::symlink_metadata(&path) {
             Ok(_) => {
                 return Err(
-                    "Bu hedefe ait kaldirici zaten kayitli; once mevcut kurulumu kaldirin."
+                    "Bu hedefe ait kaldırıcı zaten kayıtlı; önce mevcut kurulumu kaldırın."
                         .into(),
                 );
             }
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => {
                 return Err(format!(
-                    "Mevcut kaldirici kaydi guvenle denetlenemedi: {error}"
+                    "Mevcut kaldırıcı kaydı güvenle denetlenemedi: {error}"
                 ));
             }
         }
@@ -432,11 +432,11 @@ pub(super) fn require_unregistered_target(
     if status == ERROR_SUCCESS {
         drop(RegistryKey(key));
         return Err(
-            "Bu hedef Windows Yuklu Uygulamalar'a zaten kayitli; once kaldirin.".into(),
+            "Bu hedef Windows Yüklü Uygulamalar'a zaten kayıtlı; önce kaldırın.".into(),
         );
     }
     if status != ERROR_FILE_NOT_FOUND && status != ERROR_PATH_NOT_FOUND {
-        return Err(failure("Mevcut Windows uygulama kaydi denetlenemedi", status));
+        return Err(failure("Mevcut Windows uygulama kaydı denetlenemedi", status));
     }
     Ok(())
 }
@@ -904,7 +904,7 @@ mod tests {
         let key = create_key(scope, &name).expect("isolated registry key");
         let error = require_unregistered_target(&id, &target, scope)
             .expect_err("existing registry key must prevent recycle");
-        assert!(error.contains("zaten kayitli"), "{error}");
+        assert!(error.contains("zaten kayıtlı"), "{error}");
         drop(key);
         let key_path = wide(OsStr::new(&key_path(&name)));
         assert_eq!(
