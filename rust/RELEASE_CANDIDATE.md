@@ -35,7 +35,7 @@ Windows hosted runner `windows-2025` ortamindadir. Bu kanit,
 kullanicinin Windows 10/11 masaustunde elle tiklayarak yaptigi test
 veya production Authenticode imza/itibar kaniti **degildir**.
 
-## Sadece test icin indirilebilir ciktılar
+## Sadece test icin indirilebilir ciktilar
 
 CI #43952156847 `rust-windows` isinden uretildi. Dosya adlarindaki
 `v0.2.24`, Cargo CLI surumudur; imzali RC tag'i veya onayli
@@ -91,7 +91,7 @@ Bagimsiz dagitim SHA-256 listesi ve gercek yayinci imzasi
    test kanitina ekleyin; uydurma/varsayilan hash kullanmayin.
 2. **Temiz VM** icinde Setup Studio ile yalnizca ornek
    dosyalar iceren standart kurulumu uretin. EULA, dil,
-   kullanici kapsamı, varsayilan hedef, kisayol ve uninstall
+   kullanici kapsami, varsayilan hedef, kisayol ve uninstall
    ekranlarini [SMOKE_TEST.md](SMOKE_TEST.md) adimlariyla deneyin.
 3. Uygulamayi acik tutup kaldirmayi deneyin: kullanici uyarisini,
    zorla kapatmama ve dosyalarin korunmasini kaydedin.
