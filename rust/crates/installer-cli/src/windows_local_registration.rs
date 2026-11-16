@@ -251,6 +251,7 @@ fn owned_shortcut(path: PathBuf) -> Result<OwnedShortcut, String> {
     })
 }
 
+#[cfg(test)]
 fn owned_shortcut_matches(owned: &OwnedShortcut) -> bool {
     match (owned.volume_serial_number, owned.file_index) {
         (Some(volume_serial_number), Some(file_index)) => shortcut_file_identity(&owned.path)
