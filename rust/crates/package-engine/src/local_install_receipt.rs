@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/package-engine/src/local_install_receipt.rs
 // Amac: Imzasiz yerel kurulumun sahip oldugu payload dosyalarini guvenli kaydetmek ve kaldirmak
 // Modul - Rust Package Lifecycle Service
-// Version: 0.1.4
-// Aciklama: Payload envanter dosya taniticisi, SHA-256 ve veri korumali kaldirma
+// Version: 0.1.5
+// Aciklama: Windows handle ile sahipli dosya silme, SHA-256 ve veri koruma
 // Bagimli Oldugu Katman: Service | Security
 
 use std::{
@@ -33,6 +33,32 @@ const WINDOWS_FILE_SHARE_READ: u32 = 0x0000_0001;
 const WINDOWS_FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 #[cfg(all(windows, test))]
 const WINDOWS_FILE_SHARE_ALL: u32 = 0x0000_0007;
+#[cfg(windows)]
+const WINDOWS_FILE_SHARE_DELETE: u32 = 0x0000_0004;
+#[cfg(windows)]
+const WINDOWS_DELETE_ACCESS: u32 = 0x0001_0000;
+#[cfg(windows)]
+const WINDOWS_GENERIC_READ_ACCESS: u32 = 0x8000_0000;
+#[cfg(windows)]
+const WINDOWS_FILE_DISPOSITION_INFO_CLASS: i32 = 4;
+
+#[cfg(windows)]
+#[repr(C)]
+struct WindowsFileDispositionInfo {
+    delete_file: u8,
+}
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    #[link_name = "SetFileInformationByHandle"]
+    fn set_file_information_by_handle(
+        file: *mut std::ffi::c_void,
+        information_class: i32,
+        information: *const std::ffi::c_void,
+        information_size: u32,
+    ) -> i32;
+}
 
 fn invalid(reason: &'static str) -> PackageEngineError {
     PackageEngineError::InvalidPackage(reason)
@@ -108,13 +134,11 @@ fn safe_root(path: &Path) -> Result<(), PackageEngineError> {
     Ok(())
 }
 
-fn digest_file(path: &Path) -> Result<String, PackageEngineError> {
-    safe_regular(path)?;
-    let mut file = fs::File::open(path).map_err(PackageEngineError::Io)?;
+fn digest_reader(mut reader: impl Read) -> Result<String, PackageEngineError> {
     let mut hash = Sha256::new();
     let mut block = [0u8; 64 * 1024];
     loop {
-        let count = file.read(&mut block).map_err(PackageEngineError::Io)?;
+        let count = reader.read(&mut block).map_err(PackageEngineError::Io)?;
         if count == 0 {
             break;
         }
@@ -125,6 +149,11 @@ fn digest_file(path: &Path) -> Result<String, PackageEngineError> {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect::<String>())
+}
+
+fn digest_file(path: &Path) -> Result<String, PackageEngineError> {
+    safe_regular(path)?;
+    digest_reader(fs::File::open(path).map_err(PackageEngineError::Io)?)
 }
 
 fn relative_name(root: &Path, file: &Path) -> Result<String, PackageEngineError> {
@@ -284,7 +313,7 @@ fn checked_record(
     Ok((record, receipt_handle))
 }
 
-fn preflight_file(target: &Path, item: &OwnedFile) -> Result<(), PackageEngineError> {
+fn checked_file_path(target: &Path, item: &OwnedFile) -> Result<PathBuf, PackageEngineError> {
     let relative = validate_archive_path(&item.path)?;
     let full = target.join(relative);
     let mut parent = full.parent();
@@ -298,6 +327,11 @@ fn preflight_file(target: &Path, item: &OwnedFile) -> Result<(), PackageEngineEr
         }
         parent = dir.parent();
     }
+    Ok(full)
+}
+
+fn preflight_file(target: &Path, item: &OwnedFile) -> Result<(), PackageEngineError> {
+    let full = checked_file_path(target, item)?;
     match fs::symlink_metadata(&full) {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(PackageEngineError::Io(error)),
@@ -313,6 +347,60 @@ fn preflight_file(target: &Path, item: &OwnedFile) -> Result<(), PackageEngineEr
             Ok(())
         }
     }
+}
+
+/// @dev-id BRK-LOCAL-WIN-DELETE-001
+/// @purpose Delete a verified Windows file object, never its replacement path.
+/// @contract Open with DELETE+read access and no write sharing; reject reparse
+/// files and SHA-256 mismatch; mark only the verified handle for deletion.
+/// @tests local_install_receipt::tests::windows_verified_handle_preserves_replacement
+#[cfg(windows)]
+fn open_verified_windows_file(
+    path: &Path,
+    item: &OwnedFile,
+) -> Result<Option<fs::File>, PackageEngineError> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    let mut options = fs::OpenOptions::new();
+    options
+        .access_mode(WINDOWS_GENERIC_READ_ACCESS | WINDOWS_DELETE_ACCESS)
+        .share_mode(WINDOWS_FILE_SHARE_READ | WINDOWS_FILE_SHARE_DELETE)
+        .custom_flags(WINDOWS_FILE_FLAG_OPEN_REPARSE_POINT);
+    let mut handle = match options.open(path) {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(PackageEngineError::Io(error)),
+    };
+    let meta = handle.metadata().map_err(PackageEngineError::Io)?;
+    if !meta.is_file() || meta.file_type().is_symlink() || is_reparse(&meta) {
+        return Err(invalid("local install file is not a regular file"));
+    }
+    if meta.len() != item.size_bytes || digest_reader(&mut handle)? != item.sha256 {
+        return Err(invalid("local install file was changed; uninstall refused"));
+    }
+    Ok(Some(handle))
+}
+
+#[cfg(windows)]
+fn remove_verified_windows_handle(handle: fs::File) -> Result<(), PackageEngineError> {
+    use std::os::windows::io::AsRawHandle;
+
+    let disposition = WindowsFileDispositionInfo { delete_file: 1 };
+    // SAFETY: File owns a DELETE-capable handle. The repr(C) buffer
+    // is valid for the duration of this synchronous Win32 call.
+    let status = unsafe {
+        set_file_information_by_handle(
+            handle.as_raw_handle(),
+            WINDOWS_FILE_DISPOSITION_INFO_CLASS,
+            (&raw const disposition).cast(),
+            std::mem::size_of::<WindowsFileDispositionInfo>() as u32,
+        )
+    };
+    if status == 0 {
+        return Err(PackageEngineError::Io(io::Error::last_os_error()));
+    }
+    drop(handle);
+    Ok(())
 }
 
 /// @dev-id BRK-LOCAL-RECEIPT-002
@@ -335,15 +423,30 @@ pub fn uninstall_local_install(
     let mut removed = 0;
     let mut dirs = HashSet::new();
     for item in &record.files {
-        preflight_file(target, item)?;
-        let file = target.join(validate_archive_path(&item.path)?);
-        match fs::symlink_metadata(&file) {
-            Ok(_) => {
-                fs::remove_file(&file).map_err(PackageEngineError::Io)?;
-                removed += 1;
+        // Recheck ancestors before opening the exact file object.
+        let file = checked_file_path(target, item)?;
+        #[cfg(windows)]
+        let removed_this = match open_verified_windows_file(&file, item)? {
+            Some(handle) => {
+                remove_verified_windows_handle(handle)?;
+                true
             }
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-            Err(error) => return Err(PackageEngineError::Io(error)),
+            None => false,
+        };
+        #[cfg(not(windows))]
+        let removed_this = {
+            preflight_file(target, item)?;
+            match fs::symlink_metadata(&file) {
+                Ok(_) => {
+                    fs::remove_file(&file).map_err(PackageEngineError::Io)?;
+                    true
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+                Err(error) => return Err(PackageEngineError::Io(error)),
+            }
+        };
+        if removed_this {
+            removed += 1;
         }
         let mut parent = file.parent();
         while let Some(dir) = parent {
@@ -412,6 +515,29 @@ mod tests {
         assert!(uninstall_local_install(&target, "other.package").is_err());
         assert!(target.join(RECORD_NAME).exists());
         fs::remove_dir_all(base).expect("cleanup");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_verified_handle_preserves_replacement() {
+        let (base, target) = fixture();
+        let original = target.join("bin/hello.txt");
+        let record = checked_record(&target, "qa.native")
+            .expect("validated inventory")
+            .0;
+        let verified = open_verified_windows_file(&original, &record.files[0])
+            .expect("verified file open")
+            .expect("owned file present");
+        let moved = target.join("bin/renamed-owned.txt");
+        fs::rename(&original, &moved).expect("rename while verified handle is open");
+        fs::write(&original, b"unrelated user data").expect("new path occupant");
+        remove_verified_windows_handle(verified).expect("delete only the original file");
+        assert!(!moved.exists(), "original object must be deleted");
+        assert_eq!(
+            fs::read(&original).expect("new occupant preserved"),
+            b"unrelated user data"
+        );
+        fs::remove_dir_all(base).expect("cleanup isolated fixture");
     }
 
     #[cfg(unix)]
