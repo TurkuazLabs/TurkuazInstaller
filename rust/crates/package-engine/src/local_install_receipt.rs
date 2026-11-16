@@ -431,7 +431,10 @@ mod tests {
             "linked receipt must not authorize payload removal"
         );
         assert!(target.join("bin/hello.txt").exists());
-        assert_eq!(fs::read(&foreign).expect("foreign bytes preserved"), original);
+        assert_eq!(
+            fs::read(&foreign).expect("foreign bytes preserved"),
+            original
+        );
         fs::remove_dir_all(base).expect("remove isolated fixture");
     }
 
