@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.14
-// Aciklama: Zorunlu Baslat/kaldirma, secilebilir masaustu kaydi ve dosya kimlikli temizlik
+// Version: 0.1.15
+// Aciklama: Var olan kaydi salt-okunur denetleyen Baslat/kaldirma ve dosya kimlikli temizlik
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use windows::{
     Win32::{
-        Foundation::{ERROR_SUCCESS, HANDLE},
+        Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS, HANDLE},
         Storage::FileSystem::{
             BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT,
             FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
@@ -379,6 +379,66 @@ fn open_key(scope: InstallScope, name: &str) -> Result<RegistryKey, String> {
         return Err(failure("Windows uygulama kaydı bulunamadı", status));
     }
     Ok(RegistryKey(output))
+}
+
+/// @dev-id TI-WINREG-001
+/// @purpose Refuse reuse of an already registered installation target.
+/// @reason Recycling the old target before discovering a registration
+/// collision would leave an Installed Apps entry pointing to moved files.
+/// @contract Read-only preflight: never touch a prior receipt, executable,
+/// shortcut or registry key. Registration must still enforce no-clobber.
+/// @tests windows_local_registration::tests::preflight_rejects_existing_registry_and_receipt
+pub(super) fn require_unregistered_target(
+    package_id: &str,
+    target: &Path,
+    scope: InstallScope,
+) -> Result<(), String> {
+    if !target.is_absolute() {
+        return Err("Kurulum kaydi icin mutlak hedef gerekli.".into());
+    }
+    let name = registration_name(package_id, target)?;
+    let root = owned_root(scope)?;
+    for path in [
+        root.join(format!("{name}.json")),
+        root.join(format!("{name}.exe")),
+    ] {
+        match fs::symlink_metadata(&path) {
+            Ok(_) => {
+                return Err(
+                    "Bu hedefe ait kaldirici zaten kayitli; once mevcut kurulumu kaldirin."
+                        .into(),
+                );
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "Mevcut kaldirici kaydi guvenle denetlenemedi: {error}"
+                ));
+            }
+        }
+    }
+
+    let mut key = HKEY::default();
+    let path = wide(OsStr::new(&key_path(&name)));
+    let status = unsafe {
+        RegOpenKeyExW(
+            hive(scope),
+            PCWSTR(path.as_ptr()),
+            None,
+            KEY_QUERY_VALUE,
+            &mut key,
+        )
+    };
+    if status == ERROR_SUCCESS {
+        drop(RegistryKey(key));
+        return Err(
+            "Bu hedef Windows Yuklu Uygulamalar'a zaten kayitli; once kaldirin.".into(),
+        );
+    }
+    if status != ERROR_FILE_NOT_FOUND && status != ERROR_PATH_NOT_FOUND {
+        return Err(failure("Mevcut Windows uygulama kaydi denetlenemedi", status));
+    }
+    Ok(())
 }
 
 fn create_key(scope: InstallScope, name: &str) -> Result<RegistryKey, String> {
@@ -826,6 +886,48 @@ mod tests {
         let path = wide(OsStr::new(&key_path(&name)));
         let result = unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, PCWSTR(path.as_ptr())) };
         assert_eq!(result, ERROR_SUCCESS);
+    }
+
+    #[test]
+    fn preflight_rejects_existing_registry_and_receipt() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let id = format!("qa.preflight.{}.{nonce}", std::process::id());
+        let target = std::env::temp_dir().join(format!("turkuaz-preflight-{nonce}"));
+        let scope = InstallScope::CurrentUser;
+        let name = registration_name(&id, &target).expect("registration name");
+
+        require_unregistered_target(&id, &target, scope)
+            .expect("new target has no registration");
+        let key = create_key(scope, &name).expect("isolated registry key");
+        let error = require_unregistered_target(&id, &target, scope)
+            .expect_err("existing registry key must prevent recycle");
+        assert!(error.contains("zaten kayitli"), "{error}");
+        drop(key);
+        let key_path = wide(OsStr::new(&key_path(&name)));
+        assert_eq!(
+            unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, PCWSTR(key_path.as_ptr())) },
+            ERROR_SUCCESS
+        );
+
+        let root = owned_root(scope).expect("owned root");
+        fs::create_dir_all(&root).expect("test-owned root");
+        let receipt = root.join(format!("{name}.json"));
+        let _ = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&receipt)
+            .expect("test receipt");
+        assert!(
+            require_unregistered_target(&id, &target, scope).is_err(),
+            "orphan receipt must block replacement"
+        );
+        assert!(receipt.exists(), "preflight must preserve receipt");
+        fs::remove_file(&receipt).expect("fixture cleanup");
+        require_unregistered_target(&id, &target, scope)
+            .expect("no registry or receipt remains");
     }
 
     #[test]
