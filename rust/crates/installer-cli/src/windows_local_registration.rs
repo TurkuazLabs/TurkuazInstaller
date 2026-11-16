@@ -409,9 +409,7 @@ pub(super) fn require_unregistered_target(
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => {
-            return Err(format!(
-                "Mevcut kurulum envanteri denetlenemedi: {error}"
-            ));
+            return Err(format!("Mevcut kurulum envanteri denetlenemedi: {error}"));
         }
     }
     let root = owned_root(scope)?;
