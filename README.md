@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/README.md
 Amac: TurkuazInstaller Community Rust projesi, kurulum ve dogrulama giris sayfasi
 Modul - Markdown
-Version: 2.3.1
-Aciklama: Aktif Rust uygulamasi, test ciktisi, kaynak yapisi ve production sinirlari
+Version: 2.3.2
+Aciklama: Aktif Rust uygulamasi, v0.2.24 RC kaniti ve production sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
 
@@ -30,6 +30,7 @@ olusturulur. Community kodu private Pro deposuna bagli degildir.
 | Imzali yayin ve guven | [Release signing](rust/RELEASE_SIGNING.md) |
 | Mimari ve workspace | [Rust README](rust/README.md) |
 | Production hazirlik kontrolu | [Rust readiness](rust/RUST_READINESS.md) |
+| v0.2.24 test surum adayi kanitlari | [RC hazirlik ve kabul matrisi](rust/RELEASE_CANDIDATE.md) |
 | Belge dizini | [docs/README.md](docs/README.md) |
 
 ### Studio'da standart kurulum hazirlama
@@ -81,6 +82,15 @@ icin [Linux ve Windows CI #41913467340](https://github.com/TurkuazLabs/TurkuazIn
 Studio derlemesini ve otomatik paketleme/kurulum testlerini tamamlamistir.
 Bu kanit yalniz belirtilen commit icin gecerlidir; yeni commit veya
 merge testlerini otomatik olarak kanitlamaz.
+
+**17 Kasim 2026 RC kaniti:** `83a5418f` kaynak temelinde
+[Linux ve Windows CI #43952156847](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/43952156847)
+**SUCCESS**. v0.2.24 Windows test artifact'lari gecicidir ve
+23 Kasim 2026'da suresi dolar. Indirilebilen test ciktisi,
+kanitlanan kapsam ve release oncesi acik kapilar
+[RC hazirlik belgesinde](rust/RELEASE_CANDIDATE.md) kayitlidir.
+Bu gelistirme CI'si, production sertifikasi ya da gercek
+Windows 10/11 manuel kabul testinin yerine gecmez.
 
 **Henuz production kabulune girmeyenler:** temiz Windows 10/11
 masaustunde tam sihirbaz / kaldirma / tum kullanicilar UAC elle kabul,
