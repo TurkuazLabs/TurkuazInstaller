@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_uninstall_gui.rs
 // Amac: Windows yuklu uygulamalar kaydindan cagirilabilen guvenli kaldirma sihirbazi
 // Modul - Rust Windows Uninstall Presentation
-// Version: 0.1.4
-// Aciklama: Urun adli kaldirici basligi, onay ve degistirilmis dosyalari koruma
+// Version: 0.1.5
+// Aciklama: Acik uygulama uyarisi, kapatip yeniden dene ve korumali kaldirma
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
@@ -13,7 +13,9 @@ use std::{
 };
 
 use eframe::egui;
-use turkuaz_installer_package_engine::uninstall_local_install;
+use turkuaz_installer_package_engine::{
+    LOCAL_INSTALL_RUNNING_APPLICATION_ERROR, PackageEngineError, uninstall_local_install,
+};
 use windows::Win32::UI::Shell::FOLDERID_ProgramFiles;
 
 use crate::{
@@ -26,6 +28,9 @@ use crate::{
     },
     windows_shortcuts::uninstall_display_label,
 };
+
+const RUNNING_APPLICATION_WARNING: &str =
+    "Uygulama hâlâ çalışıyor. Önce uygulamayı ve açık pencerelerini kapatın, ardından tekrar deneyin. Kaldırma başlatılmadı; kurulum dosyaları ve kayıtları korundu.";
 
 enum UninstallPhase {
     Confirm,
@@ -100,7 +105,14 @@ impl UninstallApp {
                     return Err("Tüm kullanıcılar kaldırması yönetici yetkisi gerektirir.".into());
                 }
                 let summary = uninstall_local_install(latest.target(), latest.package_id())
-                    .map_err(|e| format!("Dosyalar güvenli biçimde kaldırılamadı: {e}"))?;
+                    .map_err(|error| match error {
+                        PackageEngineError::InvalidPackage(reason)
+                            if reason == LOCAL_INSTALL_RUNNING_APPLICATION_ERROR =>
+                        {
+                            RUNNING_APPLICATION_WARNING.to_owned()
+                        }
+                        other => format!("Dosyalar güvenli biçimde kaldırılamadı: {other}"),
+                    })?;
                 let cleanup = cleanup_after_uninstall(&latest);
                 let mut warnings = cleanup.warnings;
                 let pending_removal = if cleanup.registry_removed {
@@ -212,6 +224,17 @@ impl eframe::App for UninstallApp {
                         {
                             context.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
+                        if matches!(
+                            &self.result,
+                            Some(Err(error)) if error == RUNNING_APPLICATION_WARNING
+                        ) && ui
+                            .add_sized([150.0, 40.0], egui::Button::new("Tekrar dene"))
+                            .clicked()
+                        {
+                            self.result = None;
+                            self.confirmed = false;
+                            self.phase = UninstallPhase::Confirm;
+                        }
                     }
                 },
             );
@@ -232,6 +255,7 @@ impl eframe::App for UninstallApp {
                     ui.add_space(12.0);
                     ui.label("Yalnızca kurulum envanterinde kayıtlı ve değiştirilmemiş uygulama dosyaları kaldırılır.");
                     ui.label("Kullanıcı dosyaları, değiştirilmiş dosyalar ve yabancı kısayollar korunur.");
+                    ui.label("Uygulama açıkken kaldırma başlatılmaz; uygulamayı kapatıp yeniden deneyebilirsiniz.");
                     if self.record.scope() == InstallScope::AllUsers {
                         ui.colored_label(
                             egui::Color32::from_rgb(180, 105, 30),
@@ -261,7 +285,11 @@ impl eframe::App for UninstallApp {
                             ui.heading("Kaldırma tamamlanamadı");
                             ui.add_space(12.0);
                             ui.colored_label(egui::Color32::RED, message);
-                            ui.label("Değişmiş uygulama dosyaları ve mevcut veriler korunmuştur.");
+                            if message == RUNNING_APPLICATION_WARNING {
+                                ui.label("Uygulama kapandıktan sonra 'Tekrar dene' seçeneğini kullanabilirsiniz.");
+                            } else {
+                                ui.label("Hata nedeniyle kaldırma tamamlanmamış olabilir; kurulum dosyalarını ve kayıtlarını kontrol edin.");
+                            }
                         }
                         None => {}
                     }
