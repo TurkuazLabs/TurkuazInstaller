@@ -83,7 +83,7 @@ farkli CI calismalari arasinda karistirmayin. Dosyalari once izole,
 bos bir klasore acin; test kurulumunu bu asamada calistirmayin.
 
 ```powershell
-# Ornek dizin: C:\Turkuaz-RC\downloads icinde altı ZIP.
+# Ornek dizin: C:\Turkuaz-RC\downloads icinde alti ZIP.
 $download = 'C:\Turkuaz-RC\downloads'
 $unpacked = 'C:\Turkuaz-RC\unpacked'
 New-Item -ItemType Directory -Path $unpacked -Force | Out-Null
