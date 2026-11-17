@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-test-artifact-inventory.ps1
 # Amac: Windows CI test artifact dosyalarini SHA-256 ve boyutla dogrulamak
 # Modul - PowerShell QA Tool
-# Version: 0.1.2
-# Aciklama: RC dosya ve indirilebilir script SHA-256 kontrolu
+# Version: 0.1.3
+# Aciklama: RC SHA-256 kontrolu ve indirilen artifact junction/reparse reddi
 # Bagimli Oldugu Katman: QA | Tool
 
 # @dev-id TI-RC-ARTIFACT-001
@@ -56,6 +56,20 @@ $inventoryArtifact = "turkuaz-test-artifact-inventory-v$Version-windows-x64"
 $inventoryFileName = 'test-artifact-inventory.json'
 $verificationToolNames = @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1')
 
+# @dev-id TI-RC-ARTIFACT-004
+# @purpose Reject junction/symlink artifact roots before hashing files.
+# @contract A downloaded test directory must be a real directory; no
+# reparse directory is accepted even when the contents match the inventory.
+function Assert-DirectoryNotReparse {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $info = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+    if (!$info.PSIsContainer -or
+        ($info.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Downloaded artifact directory is not a regular directory: $Path"
+    }
+}
+
 function Assert-FilesExact {
     param(
         [Parameter(Mandatory = $true)][string]$Root,
@@ -65,6 +79,7 @@ function Assert-FilesExact {
     if (!(Test-Path -LiteralPath $Root -PathType Container)) {
         throw "Required artifact directory does not exist: $Root"
     }
+    Assert-DirectoryNotReparse -Path $Root
     $found = @(Get-ChildItem -LiteralPath $Root -Force)
     $actualNames = @($found | ForEach-Object { $_.Name } | Sort-Object)
     $expectedNames = @($Expected | Sort-Object)
@@ -168,6 +183,7 @@ if (!(Test-Path -LiteralPath $InventoryPath -PathType Leaf)) {
     throw 'Downloaded artifact SHA-256 inventory is missing.'
 }
 $root = [IO.Path]::GetFullPath($ArtifactRoot)
+Assert-DirectoryNotReparse -Path $root
 Assert-FilesExact -Root (Join-Path $root $inventoryArtifact) -Expected (@($inventoryFileName) + $verificationToolNames)
 $expectedInventoryPath = [IO.Path]::GetFullPath((Join-Path (Join-Path $root $inventoryArtifact) $inventoryFileName))
 if (![string]::Equals([IO.Path]::GetFullPath($InventoryPath), $expectedInventoryPath, [StringComparison]::OrdinalIgnoreCase)) {
