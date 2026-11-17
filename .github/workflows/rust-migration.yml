@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.9
+# Version: 0.3.10
 # Aciklama: RC artifact icindeki scriptlerin kaynak/hash ve bozulma reddi testleri
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -390,6 +390,40 @@ jobs:
           }
           if (!$denied) { throw 'The local helper accepted an incorrect CI checkout commit.' }
           Write-Host 'Local RC verifier rejected incorrect expected CI checkout commit.'
+
+      # @dev-id TI-RC-ARTIFACT-003
+      # Windows 10 ships with Windows PowerShell 5.1, not necessarily pwsh 7.
+      # Exercise the operator-facing downloaded kit under that native shell,
+      # a different CWD, and a space/Unicode-containing extraction root.
+      - name: Test Windows PowerShell 5.1 RC verification from Unicode path
+        shell: powershell
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) {
+            throw "Expected Windows PowerShell 5.x, got $($PSVersionTable.PSVersion)."
+          }
+          $source = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $unicodeRoot = 'Turkuaz RC ' + [char]0x0130 + 'zole Test'
+          $target = Join-Path $env:RUNNER_TEMP $unicodeRoot
+          if (Test-Path -LiteralPath $target) { throw 'Refusing to overwrite an existing test directory.' }
+          New-Item -ItemType Directory -Path $target -ErrorAction Stop | Out-Null
+          Get-ChildItem -LiteralPath $source -Directory -ErrorAction Stop | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $target -Recurse -ErrorAction Stop
+          }
+          $kit = Join-Path $target "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
+          $verifier = Join-Path $kit 'windows-rc-verify-download.ps1'
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & $verifier -ArtifactRoot $target `
+              -Version $env:RUST_CLI_VERSION `
+              -SourceCommit $env:RC_SOURCE_COMMIT `
+              -ExpectedCheckoutCommit $env:GITHUB_SHA
+          } finally {
+            Pop-Location
+            Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
+          }
+          Write-Host 'Windows PowerShell 5.1: downloaded RC kit verified from a relocated Unicode path.'
 
       - name: Reject same-length modification of downloaded test artifact
         shell: pwsh
