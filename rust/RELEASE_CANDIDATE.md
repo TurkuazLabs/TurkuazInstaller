@@ -2,14 +2,14 @@
 Dosya Yolu: REPO_ROOT/rust/RELEASE_CANDIDATE.md
 Amac: Community Rust surum adayi icin kanit, artifact ve yayin kapilarini tek yerde izlemek
 Modul - Markdown
-Version: 0.1.5
-Aciklama: Kendi icinde dogrulayici tasiyan RC artifact'in gecerli CI kaniti
+Version: 0.1.6
+Aciklama: WinPS 5.1 ve Unicode testleriyle dogrulanmis RC kitinin kullanim kilavuzu
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
 
 # TurkuazInstaller v0.2.24 - surum adayi hazirligi
 
-**Durum (2026-11-17):** TEST / RC DEGERLENDIRMESI. Bu dosya GitHub
+**Durum (2026-11-18):** TEST / RC DEGERLENDIRMESI. Bu dosya GitHub
 Release, imzali son kullanici surumu veya yayin onayi degildir.
 Kaynak gelistirme dali `fix/native-wizard-visible-content-20261111`,
 [PR #76](https://github.com/TurkuazLabs/TurkuazInstaller/pull/76).
@@ -41,13 +41,22 @@ Ayrica ayni boyuttaki degistirilmis dosya reddedilir.
 Envanter PR head SHA ve gercek CI checkout SHA'yi ayri kaydeder.
 Bu SHA-256 envanteri test kanitidir, imzali attestation degildir.
 
+[CI #44186183796](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44186183796)
+`8037dccd793ae43c07d79fc31219c53a734849bd` icin Linux ve
+Windows **SUCCESS**. Windows PowerShell 5.1 (Windows 10 varsayilan
+kabuk) ile indirilen alti artifact'in Unicode karakter ve bosluk
+tasiyan yeni klasorde, farkli CWD'den dogrulanmasi PASS.
+Toplam 8 payload dosyasi ve 2 dogrulayici scripti kontrol edildi;
+esit boyutta dosya degisikligi reddi de PASS. Bu hosted CI testi,
+gercek Windows 10 masaustu GUI/UAC kabulu **degildir**.
+
 Windows hosted runner `windows-2025` ortamindadir. Bu kanit,
 kullanicinin Windows 10/11 masaustunde elle tiklayarak yaptigi test
 veya production Authenticode imza/itibar kaniti **degildir**.
 
 ## Sadece test icin indirilebilir ciktilar
 
-CI #43966467156 `rust-windows` isinden uretildi. Dosya adlarindaki
+CI #44186183796 `rust-windows` isinden uretildi. Dosya adlarindaki
 `v0.2.24`, Cargo CLI surumudur; imzali RC tag'i veya onayli
 production yayin adi degildir.
 
@@ -61,7 +70,7 @@ production yayin adi degildir.
 | `turkuaz-test-artifact-inventory-v0.2.24-windows-x64` | 8 payload dosyasi ile 2 dogrulayici scriptinin SHA-256 envanteri ve scriptler | TEST-ONLY |
 
 Bu artifact'lar 7 gunluk CI saklama politikasina sahiptir.
-Son tamamlanan [CI #44179175870](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44179175870)
+Son tamamlanan [CI #44186183796](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44186183796)
 basarili; GitHub kayitlarinda bu calismanin 6 artifact'i
 **24 Kasim 2026** tarihinde sona eriyor. Her yeni CI calismasinin
 artifact saklama tarihi ayri oldugundan kesin tarihi GitHub'daki
@@ -83,25 +92,38 @@ farkli CI calismalari arasinda karistirmayin. Dosyalari once izole,
 bos bir klasore acin; test kurulumunu bu asamada calistirmayin.
 
 ```powershell
-# Ornek dizin: C:\Turkuaz-RC\downloads icinde alti ZIP.
+# Windows PowerShell 5.1 oturumunda; ornek CI: #44186183796
+# Bu run icin PR source commit: 8037dccd793ae43c07d79fc31219c53a734849bd
 $download = 'C:\Turkuaz-RC\downloads'
 $unpacked = 'C:\Turkuaz-RC\unpacked'
-New-Item -ItemType Directory -Path $unpacked -Force | Out-Null
-Get-ChildItem -LiteralPath $download -File -Filter 'turkuaz-*.zip' |
-    ForEach-Object {
-        Expand-Archive -LiteralPath $_.FullName `
-            -DestinationPath (Join-Path $unpacked $_.BaseName)
-    }
+if (Test-Path -LiteralPath $unpacked) {
+    throw 'Fresh extraction directory required.'
+}
+$zipFiles = @(Get-ChildItem -LiteralPath $download -File -Filter 'turkuaz-*.zip')
+if ($zipFiles.Count -ne 6) {
+    throw 'Exactly six ZIP artifacts from a single successful run are required.'
+}
+New-Item -ItemType Directory -Path $unpacked -ErrorAction Stop | Out-Null
+$zipFiles | ForEach-Object {
+    Expand-Archive -LiteralPath $_.FullName `
+        -DestinationPath (Join-Path $unpacked $_.BaseName) -ErrorAction Stop
+}
 
-# Altinci ZIP, gerekli iki dogrulama scriptini de tasir.
-# Git deposunu indirmeniz gerekmez. Kaynak SHA degerini
-# basarili GitHub Actions PR calismasindan ayri dogrulayin.
+# Altinci ZIP iki dogrulama scriptini tasir. Once GitHub'daki
+# kaynak dosyalarla karsilastirin; imzasiz script guven kokunuz degildir.
 $verifier = Join-Path $unpacked 'turkuaz-test-artifact-inventory-v0.2.24-windows-x64\windows-rc-verify-download.ps1'
-pwsh -NoProfile -File $verifier `
-    -ArtifactRoot $unpacked `
+& $verifier -ArtifactRoot $unpacked `
     -Version '0.2.24' `
-    -SourceCommit '<40-karakter-PR-head-SHA>'
+    -SourceCommit '8037dccd793ae43c07d79fc31219c53a734849bd'
 ```
+
+Ornek, [CI #44186183796](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44186183796)
+icin sabitlenmistir. Baska CI calismasindan ZIP alirsaniz,
+`-SourceCommit` degerini **o calismanin PR head SHA'si** ile
+degistirin. Komut Windows PowerShell 5.1 icinde `& $verifier`
+seklinde calisir; PowerShell 7 kurulumu gerektirmez.
+Execution Policy engeline rastlanirsa dogrulamayi durdurun;
+guvenlik politikasini sessizce devre disi birakmayin.
 
 Komut, test envanterini, kendi iki dogrulayici scriptinin SHA-256
 ve boyutunu, diger bes artifact klasorunu ve toplam 8 payload
@@ -146,6 +168,9 @@ production imzasi/attestation mevcut degil.
 - [x] Altinci artifact'ta iki dogrulayici scripti bulunur;
       indirilen script kaynaklari ve hash'i dogrulandi,
       script bozulmasi reddedildi (CI #44179175870).
+- [x] Windows PowerShell 5.1 hosted CI'da Unicode/space klasor ve
+      farkli CWD'den indirilen RC kitinin dogrulanmasi basarili
+      (CI #44186183796). Gercek Windows 10 UAT yerine gecmez.
 - [ ] PR #76 icin bagimsiz kod/guvenlik incelemesi onayi.
       Otomatik Codex review denemesi kullanim siniri nedeniyle
       tamamlanmadi; bu basarisiz kod veya temiz guvenlik raporu degildir.
