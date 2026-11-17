@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.8
-# Aciklama: Kendi kendine dogrulanabilen Windows RC test artifact ZIP'i
+# Version: 0.3.9
+# Aciklama: RC artifact icindeki scriptlerin kaynak/hash ve bozulma reddi testleri
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -419,3 +419,33 @@ jobs:
           }
           if (!$rejected) { throw 'Modified artifact bytes were accepted by SHA-256 verification.' }
           Write-Host 'Same-length tampering of a downloaded TEST-ONLY artifact was rejected.'
+
+      - name: Reject downloaded RC verifier script tampering
+        shell: pwsh
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $roundtrip = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $kit = Join-Path $roundtrip "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
+          $inventory = Join-Path $kit 'test-artifact-inventory.json'
+          $scriptPath = Join-Path $kit 'windows-rc-verify-download.ps1'
+          $bytes = [IO.File]::ReadAllBytes($scriptPath)
+          if ($bytes.Length -eq 0) { throw 'Cannot test an empty RC verifier script.' }
+          $bytes[0] = $bytes[0] -bxor 1
+          [IO.File]::WriteAllBytes($scriptPath, $bytes)
+          $rejected = $false
+          try {
+            & rust/scripts/windows-test-artifact-inventory.ps1 -Mode Verify `
+              -Version $env:RUST_CLI_VERSION `
+              -SourceCommit $env:RC_SOURCE_COMMIT `
+              -InventoryPath $inventory `
+              -ArtifactRoot $roundtrip
+          } catch {
+            if ($_.Exception.Message -like 'Downloaded verifier tool differs from inventory:*') {
+              $rejected = $true
+            } else {
+              throw
+            }
+          }
+          if (!$rejected) { throw 'Modified downloaded RC verifier script was accepted.' }
+          Write-Host 'Downloaded RC verifier script tampering was rejected.'
