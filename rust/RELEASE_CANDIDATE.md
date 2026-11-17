@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/RELEASE_CANDIDATE.md
 Amac: Community Rust surum adayi icin kanit, artifact ve yayin kapilarini tek yerde izlemek
 Modul - Markdown
-Version: 0.1.2
-Aciklama: Windows yerel RC SHA-256 dogrulamasi ve hosted CI kabul sinirlari
+Version: 0.1.3
+Aciklama: Yerel Windows SHA-256 kontrolu ve dogrulanmis hosted CI kaniti
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
 
@@ -61,7 +61,7 @@ production yayin adi degildir.
 | `turkuaz-test-artifact-inventory-v0.2.24-windows-x64` | 8 dosyanin boyut/SHA-256 ve commit envanteri | TEST-ONLY |
 
 Bu artifact'lar 7 gunluk CI saklama politikasina sahiptir.
-Son tamamlanan [CI #44158290090](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44158290090)
+Son tamamlanan [CI #44168436408](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44168436408)
 basarili; GitHub kayitlarinda bu calismanin 6 artifact'i
 **24 Kasim 2026** tarihinde sona eriyor. Her yeni CI calismasinin
 artifact saklama tarihi ayri oldugundan kesin tarihi GitHub'daki
@@ -113,10 +113,12 @@ Envanterle birlikte dosyalar da degistirildiyse hash eslesmesi
 tek basina guven garantisi saglamaz. Bu kontrol, imzali Authenticode
 ve gercek yayinci guven zincirinin yerini almaz.
 
-Windows CI, bu yerel komutu dogru ve yanlis checkout SHA ile
-sinayacak sekilde genisletilmistir. Ilk kaynak kodu
-`239704b9` olup [CI #44168274032](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44168274032)
-sonucu gorulmeden yeni yardimci icin PASS iddia edilmez.
+Windows CI #44168436408, bu yerel komutun dogru checkout SHA
+ile PASS, yanlis 40 haneli checkout SHA ile RED sonucunu
+ve ayni uzunlukta degisen dosyanin SHA-256 reddini dogruladi.
+Dogrulanan kod head'i `fe5a3838734a6f98a9ee3194c1e7437efe885cbd`.
+Bu sonuclar hosted Windows 2025 CI ortamindan gelir; kullanicinin
+gercek Windows 10/11 masaustunde acceptance testi **NOT RUN**.
 
 ## RC kabul matrisi
 
