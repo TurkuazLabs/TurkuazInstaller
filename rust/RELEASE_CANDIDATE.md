@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/RELEASE_CANDIDATE.md
 Amac: Community Rust surum adayi icin kanit, artifact ve yayin kapilarini tek yerde izlemek
 Modul - Markdown
-Version: 0.1.3
-Aciklama: Yerel Windows SHA-256 kontrolu ve dogrulanmis hosted CI kaniti
+Version: 0.1.4
+Aciklama: Kendi icinde dogrulayici tasiyan RC artifact ve hosted CI kaniti
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
 
@@ -58,7 +58,7 @@ production yayin adi degildir.
 | `turkuaz-setup-gui-stub-v0.2.24-windows-x64` | Native GUI test stub'i | TEST-ONLY |
 | `turkuaz-web-setup-test-v0.2.24-windows-x64` | Ornek URL'li imzasiz WebSetup | TEST-ONLY |
 | `turkuaz-example-test-setup-v0.2.24-windows-x64` | Yerel kurulum smoke ornegi | TEST-ONLY |
-| `turkuaz-test-artifact-inventory-v0.2.24-windows-x64` | 8 dosyanin boyut/SHA-256 ve commit envanteri | TEST-ONLY |
+| `turkuaz-test-artifact-inventory-v0.2.24-windows-x64` | 8 payload dosyasi ile 2 dogrulayici scriptinin SHA-256 envanteri ve scriptler | TEST-ONLY |
 
 Bu artifact'lar 7 gunluk CI saklama politikasina sahiptir.
 Son tamamlanan [CI #44168436408](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44168436408)
@@ -93,23 +93,26 @@ Get-ChildItem -LiteralPath $download -File -Filter 'turkuaz-*.zip' |
             -DestinationPath (Join-Path $unpacked $_.BaseName)
     }
 
-# Bu komut, checkout'un rust/scripts klasorundeki iki
-# PowerShell script'ini kullanir. Kaynak SHA'yi GitHub
-# Actions calismasinin PR head bilgisinden alin.
-pwsh -NoProfile -File .\rust\scripts\windows-rc-verify-download.ps1 `
+# Altinci ZIP, gerekli iki dogrulama scriptini de tasir.
+# Git deposunu indirmeniz gerekmez. Kaynak SHA degerini
+# basarili GitHub Actions PR calismasindan ayri dogrulayin.
+$verifier = Join-Path $unpacked 'turkuaz-test-artifact-inventory-v0.2.24-windows-x64\windows-rc-verify-download.ps1'
+pwsh -NoProfile -File $verifier `
     -ArtifactRoot $unpacked `
     -Version '0.2.24' `
     -SourceCommit '<40-karakter-PR-head-SHA>'
 ```
 
-Komut, test envanterini ve diger bes artifact klasorunu; toplam
-8 dosyanin beklenen adini, adetini, boyutunu ve SHA-256 degerini
-kontrol eder. Eksik/fazla/degistirilmis dosyada hata verir.
+Komut, test envanterini, kendi iki dogrulayici scriptinin SHA-256
+ve boyutunu, diger bes artifact klasorunu ve toplam 8 payload
+dosyasinin adini, adetini, boyutunu ve SHA-256 degerini kontrol eder. Eksik/fazla/degistirilmis dosyada hata verir.
 `-ExpectedCheckoutCommit` parametresi ancak **ayri ve guvenilir
 bir kaynaktan** dogrulanan CI checkout SHA biliniyorsa eklenmelidir.
 Aksi durumda o deger imzasiz envanterden okunur ve uyari verilir:
 bu, CI kaynaginin kimligini **bagimsiz dogrulamak degildir**.
-Envanterle birlikte dosyalar da degistirildiyse hash eslesmesi
+Indirdiginiz scriptleri calistirmadan once guvenilir GitHub
+kaynaklariyla ve depo koduyla karsilastirin. Envanterle birlikte
+scriptler ve diger dosyalar degistirildiyse hash eslesmesi
 tek basina guven garantisi saglamaz. Bu kontrol, imzali Authenticode
 ve gercek yayinci guven zincirinin yerini almaz.
 
@@ -119,6 +122,12 @@ ve ayni uzunlukta degisen dosyanin SHA-256 reddini dogruladi.
 Dogrulanan kod head'i `fe5a3838734a6f98a9ee3194c1e7437efe885cbd`.
 Bu sonuclar hosted Windows 2025 CI ortamindan gelir; kullanicinin
 gercek Windows 10/11 masaustunde acceptance testi **NOT RUN**.
+
+Yeni self-contained script dagitimini ve indirilen scriptin depo
+kaynaklariyla eslestirilmesini dogrulayan Windows CI calismasi
+bu belge guncellenirken **HENUZ SONUCLANMADI**. Sonucunu
+[PR #76](https://github.com/TurkuazLabs/TurkuazInstaller/pull/76)
+kayitlarindan kontrol edin; production imzasi yerine gecmez.
 
 ## RC kabul matrisi
 
