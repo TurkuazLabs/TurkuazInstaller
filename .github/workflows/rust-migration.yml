@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.7
-# Aciklama: SHA-256 test artifact roundtrip, offline Windows verifier ve negatif kontroller
+# Version: 0.3.8
+# Aciklama: Kendi kendine dogrulanabilen Windows RC test artifact ZIP'i
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -307,11 +307,23 @@ jobs:
             -ExampleRoot (Join-Path $env:RUNNER_TEMP 'turkuaz-example-test-setup') `
             -InventoryPath (Join-Path $env:RUNNER_TEMP 'test-artifact-inventory.json')
 
+      - name: Package self-contained Windows RC verification scripts
+        shell: pwsh
+        run: |
+          $directory = Join-Path $env:RUNNER_TEMP 'turkuaz-rc-verifier-package'
+          New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
+          Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'test-artifact-inventory.json') -Destination $directory -ErrorAction Stop
+          foreach ($scriptName in @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1')) {
+            Copy-Item -LiteralPath (Join-Path 'rust/scripts' $scriptName) -Destination $directory -ErrorAction Stop
+          }
+          $names = @(Get-ChildItem -LiteralPath $directory -File)
+          if ($names.Count -ne 3) { throw 'RC verifier kit must contain exactly three files.' }
+
       - name: Upload test-only SHA-256 inventory
         uses: actions/upload-artifact@v4
         with:
           name: turkuaz-test-artifact-inventory-v${{ env.RUST_CLI_VERSION }}-windows-x64
-          path: ${{ runner.temp }}/test-artifact-inventory.json
+          path: ${{ runner.temp }}/turkuaz-rc-verifier-package/**
           if-no-files-found: error
           retention-days: 7
 
@@ -321,6 +333,20 @@ jobs:
           pattern: turkuaz-*-v${{ env.RUST_CLI_VERSION }}-windows-x64
           path: ${{ runner.temp }}/turkuaz-test-artifacts-roundtrip
           merge-multiple: false
+
+      - name: Verify downloaded RC scripts match source checkout
+        shell: pwsh
+        run: |
+          $directory = Join-Path $env:RUNNER_TEMP "turkuaz-test-artifacts-roundtrip/turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
+          foreach ($scriptName in @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1')) {
+            $source = Join-Path 'rust/scripts' $scriptName
+            $downloaded = Join-Path $directory $scriptName
+            if (!(Test-Path -LiteralPath $downloaded -PathType Leaf)) { throw "Missing downloadable RC script: $scriptName" }
+            $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+            $downloadedHash = (Get-FileHash -LiteralPath $downloaded -Algorithm SHA256).Hash
+            if ($sourceHash -cne $downloadedHash) { throw "RC verifier script does not match checkout: $scriptName" }
+          }
+          Write-Host 'Downloaded RC verifier scripts exactly match the CI source checkout.'
 
       - name: Verify downloaded test artifact sizes and SHA-256
         shell: pwsh
@@ -348,12 +374,13 @@ jobs:
             Version = $env:RUST_CLI_VERSION
             SourceCommit = $env:RC_SOURCE_COMMIT
           }
-          & rust/scripts/windows-rc-verify-download.ps1 @args -ExpectedCheckoutCommit $env:GITHUB_SHA
+          $verifier = Join-Path $roundtrip "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64/windows-rc-verify-download.ps1"
+          & $verifier @args -ExpectedCheckoutCommit $env:GITHUB_SHA
           $wrongCommit = '0' * 40
           if ($wrongCommit -eq $env:GITHUB_SHA) { throw 'Invalid negative test commit choice.' }
           $denied = $false
           try {
-            & rust/scripts/windows-rc-verify-download.ps1 @args -ExpectedCheckoutCommit $wrongCommit
+            & $verifier @args -ExpectedCheckoutCommit $wrongCommit
           } catch {
             if ($_.Exception.Message -like 'Downloaded test artifact inventory does not match the independently provided CI checkout commit.*') {
               $denied = $true
