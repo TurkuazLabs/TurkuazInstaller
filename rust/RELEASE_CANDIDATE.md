@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/RELEASE_CANDIDATE.md
 Amac: Community Rust surum adayi icin kanit, artifact ve yayin kapilarini tek yerde izlemek
 Modul - Markdown
-Version: 0.1.4
-Aciklama: Kendi icinde dogrulayici tasiyan RC artifact ve hosted CI kaniti
+Version: 0.1.5
+Aciklama: Kendi icinde dogrulayici tasiyan RC artifact'in gecerli CI kaniti
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
 
@@ -61,7 +61,7 @@ production yayin adi degildir.
 | `turkuaz-test-artifact-inventory-v0.2.24-windows-x64` | 8 payload dosyasi ile 2 dogrulayici scriptinin SHA-256 envanteri ve scriptler | TEST-ONLY |
 
 Bu artifact'lar 7 gunluk CI saklama politikasina sahiptir.
-Son tamamlanan [CI #44168436408](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44168436408)
+Son tamamlanan [CI #44179175870](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44179175870)
 basarili; GitHub kayitlarinda bu calismanin 6 artifact'i
 **24 Kasim 2026** tarihinde sona eriyor. Her yeni CI calismasinin
 artifact saklama tarihi ayri oldugundan kesin tarihi GitHub'daki
@@ -123,11 +123,15 @@ Dogrulanan kod head'i `fe5a3838734a6f98a9ee3194c1e7437efe885cbd`.
 Bu sonuclar hosted Windows 2025 CI ortamindan gelir; kullanicinin
 gercek Windows 10/11 masaustunde acceptance testi **NOT RUN**.
 
-Yeni self-contained script dagitimini ve indirilen scriptin depo
-kaynaklariyla eslestirilmesini dogrulayan Windows CI calismasi
-bu belge guncellenirken **HENUZ SONUCLANMADI**. Sonucunu
-[PR #76](https://github.com/TurkuazLabs/TurkuazInstaller/pull/76)
-kayitlarindan kontrol edin; production imzasi yerine gecmez.
+[CI #44179175870](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44179175870)
+(`ab4a849af1e14c5ece29d4885c79bb14896d2dab`) Linux ve
+Windows **SUCCESS**. Windows CI, altinci ZIP'deki iki
+PowerShell scriptinin git checkout ile ayni SHA-256'ya sahip
+oldugunu, indirilen test paketlerinin 8 dosyasini ve 2 scripti
+kontrol etti. Yanlis checkout SHA, degistirilmis payload ve
+ayrica degistirilmis script fail-closed reddedildi.
+Gercek Windows 10/11 masaustu kabul testi **NOT RUN**;
+production imzasi/attestation mevcut degil.
 
 ## RC kabul matrisi
 
@@ -136,9 +140,12 @@ kayitlarindan kontrol edin; production imzasi yerine gecmez.
 - [x] Windows hosted GUI/Studio build, kayit ve local uninstall
       negatif senaryolari basarili.
 - [x] Windows hosted native setup ve signed offline smoke basarili.
-- [x] CI tarafinda 5 test artifact'i / 8 dosya icin SHA-256
-      envanteri, GitHub'dan indirme-sonrasi dogrulama ve
-      ayni boyutta bozulma reddi basarili (CI #43966467156).
+- [x] CI tarafinda 5 test artifact'i / 8 payload dosyasi icin
+      SHA-256 envanteri, indirme-sonrasi dogrulama ve bozulma
+      reddi basarili (CI #43966467156).
+- [x] Altinci artifact'ta iki dogrulayici scripti bulunur;
+      indirilen script kaynaklari ve hash'i dogrulandi,
+      script bozulmasi reddedildi (CI #44179175870).
 - [ ] PR #76 icin bagimsiz kod/guvenlik incelemesi onayi.
       Otomatik Codex review denemesi kullanim siniri nedeniyle
       tamamlanmadi; bu basarisiz kod veya temiz guvenlik raporu degildir.
