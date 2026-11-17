@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.11
+# Version: 0.3.12
 # Aciklama: RC artifact icindeki scriptlerin kaynak/hash ve bozulma reddi testleri
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -428,7 +428,7 @@ jobs:
       # @dev-id TI-RC-ARTIFACT-004
       # The real artifact root must not be an NTFS junction to an external
       # directory, even when the linked bytes and their digests are unchanged.
-      - name: Reject junction-based downloaded RC artifact root
+      - name: Reject junction-based downloaded RC artifact root and ancestors
         shell: powershell
         env:
           RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -469,6 +469,44 @@ jobs:
             }
           }
           Write-Host 'Downloaded RC artifact root junction was rejected (Windows PowerShell 5.1).'
+
+          # The selected root is a normal directory; only its parent is
+          # the junction. The parent redirect must also be rejected.
+          $parentAlias = Join-Path $env:RUNNER_TEMP 'turkuaz-rc-parent-junction-negative'
+          if (Test-Path -LiteralPath $parentAlias) { throw 'Parent junction fixture path exists.' }
+          $parentCreated = $false
+          try {
+            $parentJunction = New-Item -ItemType Junction -Path $parentAlias -Target $env:RUNNER_TEMP -ErrorAction Stop
+            $parentCreated = $true
+            if (!(($parentJunction.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+              throw 'Parent junction fixture was not a reparse directory.'
+            }
+            $nestedRoot = Join-Path $parentAlias 'turkuaz-test-artifacts-roundtrip'
+            $nested = Get-Item -LiteralPath $nestedRoot -Force -ErrorAction Stop
+            if (($nested.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw 'Expected the selected artifact root itself to be a regular directory.'
+            }
+            $parentRejected = $false
+            try {
+              & $verifier -ArtifactRoot $nestedRoot `
+                -Version $env:RUST_CLI_VERSION `
+                -SourceCommit $env:RC_SOURCE_COMMIT `
+                -ExpectedCheckoutCommit $env:GITHUB_SHA
+            } catch {
+              if ($_.Exception.Message -like 'Downloaded artifact directory is not a regular directory:*') {
+                $parentRejected = $true
+              } else {
+                throw
+              }
+            }
+            if (!$parentRejected) { throw 'Downloaded verifier accepted an ancestor junction.' }
+          } finally {
+            if ($parentCreated) {
+              # Delete only the test junction; never recurse into its target.
+              [IO.Directory]::Delete($parentAlias)
+            }
+          }
+          Write-Host 'Downloaded RC artifact ancestor junction was rejected (Windows PowerShell 5.1).'
 
       - name: Reject same-length modification of downloaded test artifact
         shell: pwsh
