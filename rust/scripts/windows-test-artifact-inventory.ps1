@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-test-artifact-inventory.ps1
 # Amac: Windows CI test artifact dosyalarini SHA-256 ve boyutla dogrulamak
 # Modul - PowerShell QA Tool
-# Version: 0.1.3
+# Version: 0.1.4
 # Aciklama: RC SHA-256 kontrolu ve indirilen artifact junction/reparse reddi
 # Bagimli Oldugu Katman: QA | Tool
 
@@ -57,16 +57,20 @@ $inventoryFileName = 'test-artifact-inventory.json'
 $verificationToolNames = @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1')
 
 # @dev-id TI-RC-ARTIFACT-004
-# @purpose Reject junction/symlink artifact roots before hashing files.
-# @contract A downloaded test directory must be a real directory; no
-# reparse directory is accepted even when the contents match the inventory.
+# @purpose Reject junction/symlink artifact paths before hashing files.
+# @contract The selected directory and every lexical ancestor must be a
+# regular directory. A normal-looking child under a junction is also denied.
 function Assert-DirectoryNotReparse {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $info = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
-    if (!$info.PSIsContainer -or
-        ($info.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
-        throw "Downloaded artifact directory is not a regular directory: $Path"
+    $directory = [IO.DirectoryInfo]::new([IO.Path]::GetFullPath($Path))
+    while ($null -ne $directory) {
+        $info = Get-Item -LiteralPath $directory.FullName -Force -ErrorAction Stop
+        if (!$info.PSIsContainer -or
+            ($info.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw "Downloaded artifact directory is not a regular directory: $($directory.FullName)"
+        }
+        $directory = $directory.Parent
     }
 }
 
