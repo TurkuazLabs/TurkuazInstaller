@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.6
-# Aciklama: Test artifact SHA-256 roundtrip ve bozulmus dosya negatif testi
+# Version: 0.3.7
+# Aciklama: SHA-256 test artifact roundtrip, offline Windows verifier ve negatif kontroller
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -334,6 +334,35 @@ jobs:
             -SourceCommit $env:RC_SOURCE_COMMIT `
             -InventoryPath $inventory `
             -ArtifactRoot $roundtrip
+
+      # Operator-facing entrypoint uses the same byte-level verifier.
+      # The independent expected CI checkout SHA is checked before hashing.
+      - name: Test Windows local RC verification helper
+        shell: pwsh
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $roundtrip = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $args = @{
+            ArtifactRoot = $roundtrip
+            Version = $env:RUST_CLI_VERSION
+            SourceCommit = $env:RC_SOURCE_COMMIT
+          }
+          & rust/scripts/windows-rc-verify-download.ps1 @args -ExpectedCheckoutCommit $env:GITHUB_SHA
+          $wrongCommit = '0' * 40
+          if ($wrongCommit -eq $env:GITHUB_SHA) { throw 'Invalid negative test commit choice.' }
+          $denied = $false
+          try {
+            & rust/scripts/windows-rc-verify-download.ps1 @args -ExpectedCheckoutCommit $wrongCommit
+          } catch {
+            if ($_.Exception.Message -like 'Downloaded test artifact inventory does not match the independently provided CI checkout commit.*') {
+              $denied = $true
+            } else {
+              throw
+            }
+          }
+          if (!$denied) { throw 'The local helper accepted an incorrect CI checkout commit.' }
+          Write-Host 'Local RC verifier rejected incorrect expected CI checkout commit.'
 
       - name: Reject same-length modification of downloaded test artifact
         shell: pwsh
