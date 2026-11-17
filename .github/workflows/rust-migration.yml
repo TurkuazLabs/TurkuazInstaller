@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.12
+# Version: 0.3.13
 # Aciklama: RC artifact icindeki scriptlerin kaynak/hash ve bozulma reddi testleri
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -313,11 +313,11 @@ jobs:
           $directory = Join-Path $env:RUNNER_TEMP 'turkuaz-rc-verifier-package'
           New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
           Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'test-artifact-inventory.json') -Destination $directory -ErrorAction Stop
-          foreach ($scriptName in @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1')) {
+          foreach ($scriptName in @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1', 'windows-rc-uat-report.ps1')) {
             Copy-Item -LiteralPath (Join-Path 'rust/scripts' $scriptName) -Destination $directory -ErrorAction Stop
           }
           $names = @(Get-ChildItem -LiteralPath $directory -File)
-          if ($names.Count -ne 3) { throw 'RC verifier kit must contain exactly three files.' }
+          if ($names.Count -ne 4) { throw 'RC verifier kit must contain exactly four files.' }
 
       - name: Upload test-only SHA-256 inventory
         uses: actions/upload-artifact@v4
@@ -338,7 +338,7 @@ jobs:
         shell: pwsh
         run: |
           $directory = Join-Path $env:RUNNER_TEMP "turkuaz-test-artifacts-roundtrip/turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
-          foreach ($scriptName in @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1')) {
+          foreach ($scriptName in @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1', 'windows-rc-uat-report.ps1')) {
             $source = Join-Path 'rust/scripts' $scriptName
             $downloaded = Join-Path $directory $scriptName
             if (!(Test-Path -LiteralPath $downloaded -PathType Leaf)) { throw "Missing downloadable RC script: $scriptName" }
@@ -507,6 +507,64 @@ jobs:
             }
           }
           Write-Host 'Downloaded RC artifact ancestor junction was rejected (Windows PowerShell 5.1).'
+
+      # @dev-id TI-RC-UAT-001
+      # Generation of a manual acceptance report is not manual GUI acceptance.
+      # Every test case must stay NOT_RUN until a real operator records evidence.
+      - name: Generate read-only Windows RC manual UAT report template
+        shell: powershell
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) {
+            throw 'Manual UAT report generator must support Windows PowerShell 5.1.'
+          }
+          $root = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $kit = Join-Path $root "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
+          $generator = Join-Path $kit 'windows-rc-uat-report.ps1'
+          $output = Join-Path $env:RUNNER_TEMP 'turkuaz-rc-uat-evidence-test.json'
+          $args = @{
+            ArtifactRoot = $root
+            Version = $env:RUST_CLI_VERSION
+            SourceCommit = $env:RC_SOURCE_COMMIT
+            RunUrl = "https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/$env:GITHUB_RUN_ID"
+            OutputPath = $output
+            ExpectedCheckoutCommit = $env:GITHUB_SHA
+          }
+          & $generator @args
+          $report = Get-Content -LiteralPath $output -Raw -ErrorAction Stop | ConvertFrom-Json
+          if ($report.schema_version -ne 1 -or $report.test_only -cne $true -or
+              $report.manual_acceptance -cne 'NOT_RUN' -or
+              $report.local_integrity -cne 'PASS_UNSIGNED_ONLY' -or
+              $report.checkout_commit_independently_pinned -cne $true -or
+              $report.source_commit -cne $env:RC_SOURCE_COMMIT.ToLowerInvariant()) {
+            throw 'Manual UAT report metadata was not fail-closed.'
+          }
+          $cases = @($report.manual_cases)
+          if ($cases.Count -ne 12 -or @($cases | Where-Object { $_.status -cne 'NOT_RUN' -or
+              ![string]::IsNullOrEmpty($_.evidence) }).Count -ne 0) {
+            throw 'A manually untested scenario was marked as accepted.'
+          }
+          $overwriteRejected = $false
+          try {
+            & $generator @args
+          } catch {
+            if ($_.Exception.Message -eq 'Refusing to overwrite existing UAT report.') {
+              $overwriteRejected = $true
+            } else { throw }
+          }
+          if (!$overwriteRejected) { throw 'UAT generator overwrote an existing report.' }
+          $args.OutputPath = Join-Path $root 'unsafe-uat-report.json'
+          $insideRejected = $false
+          try {
+            & $generator @args
+          } catch {
+            if ($_.Exception.Message -eq 'Refusing to write manual UAT evidence inside the downloaded artifact tree.') {
+              $insideRejected = $true
+            } else { throw }
+          }
+          if (!$insideRejected) { throw 'UAT generator wrote inside the downloaded artifact tree.' }
+          Write-Host 'Windows PowerShell 5.1 UAT report generated with 12 manual NOT_RUN cases; overwrites and artifact-tree writes rejected.'
 
       - name: Reject same-length modification of downloaded test artifact
         shell: pwsh
