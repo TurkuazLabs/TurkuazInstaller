@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-test-artifact-inventory.ps1
 # Amac: Windows CI test artifact dosyalarini SHA-256 ve boyutla dogrulamak
 # Modul - PowerShell QA Tool
-# Version: 0.1.1
-# Aciklama: CI checkout SHA ve kaynak head kimligiyle artifact dogrulamasi
+# Version: 0.1.2
+# Aciklama: RC dosya ve indirilebilir script SHA-256 kontrolu
 # Bagimli Oldugu Katman: QA | Tool
 
 # @dev-id TI-RC-ARTIFACT-001
@@ -54,6 +54,7 @@ $artifactNames = [ordered]@{
 }
 $inventoryArtifact = "turkuaz-test-artifact-inventory-v$Version-windows-x64"
 $inventoryFileName = 'test-artifact-inventory.json'
+$verificationToolNames = @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1')
 
 function Assert-FilesExact {
     param(
@@ -136,6 +137,11 @@ if ($Mode -eq 'Generate') {
         $checkoutCommit.ToLowerInvariant() -cne $env:GITHUB_SHA.ToLowerInvariant()) {
         throw 'GitHub checkout commit differs from the tested build revision.'
     }
+    $toolRecords = @(
+        foreach ($toolName in $verificationToolNames) {
+            Get-Record -Artifact $inventoryArtifact -Root $PSScriptRoot -RelativePath $toolName
+        }
+    )
     $inventory = [ordered]@{
         schema_version = 1
         test_only = $true
@@ -143,6 +149,7 @@ if ($Mode -eq 'Generate') {
         source_commit = $SourceCommit.ToLowerInvariant()
         checkout_commit = $checkoutCommit.ToLowerInvariant()
         files = $records
+        verification_tools = $toolRecords
     }
     $serialized = ConvertTo-Json -InputObject $inventory -Depth 6
     [IO.File]::WriteAllText(
@@ -161,7 +168,7 @@ if (!(Test-Path -LiteralPath $InventoryPath -PathType Leaf)) {
     throw 'Downloaded artifact SHA-256 inventory is missing.'
 }
 $root = [IO.Path]::GetFullPath($ArtifactRoot)
-Assert-FilesExact -Root (Join-Path $root $inventoryArtifact) -Expected @($inventoryFileName)
+Assert-FilesExact -Root (Join-Path $root $inventoryArtifact) -Expected (@($inventoryFileName) + $verificationToolNames)
 $expectedInventoryPath = [IO.Path]::GetFullPath((Join-Path (Join-Path $root $inventoryArtifact) $inventoryFileName))
 if (![string]::Equals([IO.Path]::GetFullPath($InventoryPath), $expectedInventoryPath, [StringComparison]::OrdinalIgnoreCase)) {
     throw 'Verify must read the round-tripped downloaded inventory, not a local source copy.'
@@ -173,6 +180,26 @@ if ($inventory.schema_version -ne 1 -or $inventory.test_only -cne $true -or
     $inventory.source_commit -cne $SourceCommit.ToLowerInvariant() -or
     $inventory.checkout_commit -cne $env:GITHUB_SHA.ToLowerInvariant()) {
     throw 'Test artifact inventory provenance or schema mismatch.'
+}
+$toolEntries = @($inventory.verification_tools)
+if ($toolEntries.Count -ne $verificationToolNames.Count) {
+    throw 'Downloaded test verifier tool inventory count mismatch.'
+}
+$seenTools = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($tool in $toolEntries) {
+    $toolName = [string]$tool.path
+    if ([string]$tool.artifact -cne $inventoryArtifact -or
+        $verificationToolNames -cnotcontains $toolName -or
+        !$seenTools.Add($toolName) -or
+        [string]$tool.sha256 -cnotmatch '^[a-f0-9]{64}$' -or
+        [long]$tool.size_bytes -le 0) {
+        throw 'Downloaded verifier tool inventory contains invalid or duplicate entry.'
+    }
+    $actualTool = Get-Record -Artifact $inventoryArtifact -Root (Join-Path $root $inventoryArtifact) -RelativePath $toolName
+    if ($actualTool.size_bytes -ne [long]$tool.size_bytes -or
+        $actualTool.sha256 -cne [string]$tool.sha256) {
+        throw "Downloaded verifier tool differs from inventory: $toolName"
+    }
 }
 $expectedFolders = @($artifactNames.Keys) + @($inventoryArtifact)
 $actualFolders = @(Get-ChildItem -LiteralPath $root -Force)
@@ -217,4 +244,4 @@ foreach ($entry in $entries) {
         throw "Downloaded artifact file differs from inventory: $artifact/$fileName"
     }
 }
-Write-Host "Verified $($entries.Count) TEST-ONLY files, $($artifactNames.Count) artifact ZIP payloads, exact names, lengths and SHA-256."
+Write-Host "Verified $($entries.Count) TEST-ONLY payload files, $($verificationToolNames.Count) verifier scripts, and $($artifactNames.Count) artifact ZIP payloads by name, length and SHA-256."
