@@ -1,7 +1,7 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.10
+# Version: 0.3.11
 # Aciklama: RC artifact icindeki scriptlerin kaynak/hash ve bozulma reddi testleri
 # Bagimli Oldugu Katman: Tool | Repo
 
@@ -424,6 +424,51 @@ jobs:
             Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
           }
           Write-Host 'Windows PowerShell 5.1: downloaded RC kit verified from a relocated Unicode path.'
+
+      # @dev-id TI-RC-ARTIFACT-004
+      # The real artifact root must not be an NTFS junction to an external
+      # directory, even when the linked bytes and their digests are unchanged.
+      - name: Reject junction-based downloaded RC artifact root
+        shell: powershell
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) {
+            throw 'Junction negative test must run under Windows PowerShell 5.1.'
+          }
+          $source = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $alias = Join-Path $env:RUNNER_TEMP 'turkuaz-rc-junction-negative'
+          if (Test-Path -LiteralPath $alias) { throw 'Junction fixture path already exists.' }
+          $created = $false
+          try {
+            $junction = New-Item -ItemType Junction -Path $alias -Target $source -ErrorAction Stop
+            $created = $true
+            if (!(($junction.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+              throw 'Junction fixture was not created as a reparse directory.'
+            }
+            $kit = Join-Path $source "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
+            $verifier = Join-Path $kit 'windows-rc-verify-download.ps1'
+            $rejected = $false
+            try {
+              & $verifier -ArtifactRoot $alias `
+                -Version $env:RUST_CLI_VERSION `
+                -SourceCommit $env:RC_SOURCE_COMMIT `
+                -ExpectedCheckoutCommit $env:GITHUB_SHA
+            } catch {
+              if ($_.Exception.Message -like 'Downloaded artifact directory is not a regular directory:*') {
+                $rejected = $true
+              } else {
+                throw
+              }
+            }
+            if (!$rejected) { throw 'Downloaded verifier accepted a junction artifact root.' }
+          } finally {
+            if ($created) {
+              # Nonrecursive delete removes the junction itself, not its target.
+              [IO.Directory]::Delete($alias)
+            }
+          }
+          Write-Host 'Downloaded RC artifact root junction was rejected (Windows PowerShell 5.1).'
 
       - name: Reject same-length modification of downloaded test artifact
         shell: pwsh
