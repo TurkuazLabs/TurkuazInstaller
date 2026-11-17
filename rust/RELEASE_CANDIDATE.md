@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/RELEASE_CANDIDATE.md
 Amac: Community Rust surum adayi icin kanit, artifact ve yayin kapilarini tek yerde izlemek
 Modul - Markdown
-Version: 0.1.1
-Aciklama: v0.2.24 hash envanteri, CI ve production kabul sinirlari
+Version: 0.1.2
+Aciklama: Windows yerel RC SHA-256 dogrulamasi ve hosted CI kabul sinirlari
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
 
@@ -60,9 +60,13 @@ production yayin adi degildir.
 | `turkuaz-example-test-setup-v0.2.24-windows-x64` | Yerel kurulum smoke ornegi | TEST-ONLY |
 | `turkuaz-test-artifact-inventory-v0.2.24-windows-x64` | 8 dosyanin boyut/SHA-256 ve commit envanteri | TEST-ONLY |
 
-Bu artifact'lar 7 gunluk CI saklama politikasina sahiptir ve
-GitHub kayitlarina gore **23 Kasim 2026** tarihinde sona erer.
-Indirme baglantisi icin yukaridaki CI sayfasini kullanin;
+Bu artifact'lar 7 gunluk CI saklama politikasina sahiptir.
+Son tamamlanan [CI #44158290090](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44158290090)
+basarili; GitHub kayitlarinda bu calismanin 6 artifact'i
+**24 Kasim 2026** tarihinde sona eriyor. Her yeni CI calismasinin
+artifact saklama tarihi ayri oldugundan kesin tarihi GitHub'daki
+ilgili Actions calismasindan kontrol edin.
+Indirme baglantisi icin ilgili CI sayfasini kullanin;
 artifact'lar GitHub Release asset'i degildir.
 CI artifact'lari icindeki dosyalar icin SHA-256 envanteri **KAYDEDILDI**
 ve GitHub Actions ayni paketleri yeniden indirip dogruladi.
@@ -70,6 +74,49 @@ Bu envanterin imzali bagimsiz yayinci onayi/attestation oldugu
 iddia edilmez. Gercek yayinci Authenticode imzasi ve production
 yayin envanteri **HENUZ KAYDEDILMEDI**. Paketleri public stable
 feed'e tasimayin.
+
+## Yerel Windows indirme butunlugu on kontrolu (TEST-ONLY)
+
+Windows kabul testlerinden once **ayni basarili CI calismasindan**
+alti artifact ZIP'ini indirin. Surumu `0.2.24` olan dosyalari
+farkli CI calismalari arasinda karistirmayin. Dosyalari once izole,
+bos bir klasore acin; test kurulumunu bu asamada calistirmayin.
+
+```powershell
+# Ornek dizin: C:\Turkuaz-RC\downloads icinde altı ZIP.
+$download = 'C:\Turkuaz-RC\downloads'
+$unpacked = 'C:\Turkuaz-RC\unpacked'
+New-Item -ItemType Directory -Path $unpacked -Force | Out-Null
+Get-ChildItem -LiteralPath $download -File -Filter 'turkuaz-*.zip' |
+    ForEach-Object {
+        Expand-Archive -LiteralPath $_.FullName `
+            -DestinationPath (Join-Path $unpacked $_.BaseName)
+    }
+
+# Bu komut, checkout'un rust/scripts klasorundeki iki
+# PowerShell script'ini kullanir. Kaynak SHA'yi GitHub
+# Actions calismasinin PR head bilgisinden alin.
+pwsh -NoProfile -File .\rust\scripts\windows-rc-verify-download.ps1 `
+    -ArtifactRoot $unpacked `
+    -Version '0.2.24' `
+    -SourceCommit '<40-karakter-PR-head-SHA>'
+```
+
+Komut, test envanterini ve diger bes artifact klasorunu; toplam
+8 dosyanin beklenen adini, adetini, boyutunu ve SHA-256 degerini
+kontrol eder. Eksik/fazla/degistirilmis dosyada hata verir.
+`-ExpectedCheckoutCommit` parametresi ancak **ayri ve guvenilir
+bir kaynaktan** dogrulanan CI checkout SHA biliniyorsa eklenmelidir.
+Aksi durumda o deger imzasiz envanterden okunur ve uyari verilir:
+bu, CI kaynaginin kimligini **bagimsiz dogrulamak degildir**.
+Envanterle birlikte dosyalar da degistirildiyse hash eslesmesi
+tek basina guven garantisi saglamaz. Bu kontrol, imzali Authenticode
+ve gercek yayinci guven zincirinin yerini almaz.
+
+Windows CI, bu yerel komutu dogru ve yanlis checkout SHA ile
+sinayacak sekilde genisletilmistir. Ilk kaynak kodu
+`239704b9` olup [CI #44168274032](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44168274032)
+sonucu gorulmeden yeni yardimci icin PASS iddia edilmez.
 
 ## RC kabul matrisi
 
