@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/rust/scripts/windows-test-artifact-inventory.ps1
 # Amac: Windows CI test artifact dosyalarini SHA-256 ve boyutla dogrulamak
 # Modul - PowerShell QA Tool
-# Version: 0.1.4
-# Aciklama: RC SHA-256 kontrolu ve indirilen artifact junction/reparse reddi
+# Version: 0.1.5
+# Aciklama: RC dosya, 3 yardimci script ve junction SHA-256 kontrolu
 # Bagimli Oldugu Katman: QA | Tool
 
 # @dev-id TI-RC-ARTIFACT-001
@@ -54,7 +54,7 @@ $artifactNames = [ordered]@{
 }
 $inventoryArtifact = "turkuaz-test-artifact-inventory-v$Version-windows-x64"
 $inventoryFileName = 'test-artifact-inventory.json'
-$verificationToolNames = @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1')
+$verificationToolNames = @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1', 'windows-rc-uat-report.ps1')
 
 # @dev-id TI-RC-ARTIFACT-004
 # @purpose Reject junction/symlink artifact paths before hashing files.
