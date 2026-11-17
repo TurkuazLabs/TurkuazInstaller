@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/RELEASE_CANDIDATE.md
 Amac: Community Rust surum adayi icin kanit, artifact ve yayin kapilarini tek yerde izlemek
 Modul - Markdown
-Version: 0.1.6
-Aciklama: WinPS 5.1 ve Unicode testleriyle dogrulanmis RC kitinin kullanim kilavuzu
+Version: 0.1.7
+Aciklama: RC indirme butunlugu ve manuel Windows UAT raporu kanitlari
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
 
@@ -56,7 +56,7 @@ veya production Authenticode imza/itibar kaniti **degildir**.
 
 ## Sadece test icin indirilebilir ciktilar
 
-CI #44186183796 `rust-windows` isinden uretildi. Dosya adlarindaki
+CI #44194993875 `rust-windows` isinden uretildi. Dosya adlarindaki
 `v0.2.24`, Cargo CLI surumudur; imzali RC tag'i veya onayli
 production yayin adi degildir.
 
@@ -67,10 +67,10 @@ production yayin adi degildir.
 | `turkuaz-setup-gui-stub-v0.2.24-windows-x64` | Native GUI test stub'i | TEST-ONLY |
 | `turkuaz-web-setup-test-v0.2.24-windows-x64` | Ornek URL'li imzasiz WebSetup | TEST-ONLY |
 | `turkuaz-example-test-setup-v0.2.24-windows-x64` | Yerel kurulum smoke ornegi | TEST-ONLY |
-| `turkuaz-test-artifact-inventory-v0.2.24-windows-x64` | 8 payload dosyasi ile 2 dogrulayici scriptinin SHA-256 envanteri ve scriptler | TEST-ONLY |
+| `turkuaz-test-artifact-inventory-v0.2.24-windows-x64` | 8 payload, 2 dogrulayici ve 1 UAT rapor scriptinin SHA-256 envanteri | TEST-ONLY |
 
 Bu artifact'lar 7 gunluk CI saklama politikasina sahiptir.
-Son tamamlanan [CI #44186183796](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44186183796)
+Son tamamlanan [CI #44194993875](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44194993875)
 basarili; GitHub kayitlarinda bu calismanin 6 artifact'i
 **24 Kasim 2026** tarihinde sona eriyor. Her yeni CI calismasinin
 artifact saklama tarihi ayri oldugundan kesin tarihi GitHub'daki
@@ -109,7 +109,8 @@ $zipFiles | ForEach-Object {
         -DestinationPath (Join-Path $unpacked $_.BaseName) -ErrorAction Stop
 }
 
-# Altinci ZIP iki dogrulama scriptini tasir. Once GitHub'daki
+# Altinci ZIP iki dogrulama ve bir UAT rapor scripti tasir.
+# Once GitHub'daki
 # kaynak dosyalarla karsilastirin; imzasiz script guven kokunuz degildir.
 $verifier = Join-Path $unpacked 'turkuaz-test-artifact-inventory-v0.2.24-windows-x64\windows-rc-verify-download.ps1'
 & $verifier -ArtifactRoot $unpacked `
@@ -125,8 +126,8 @@ seklinde calisir; PowerShell 7 kurulumu gerektirmez.
 Execution Policy engeline rastlanirsa dogrulamayi durdurun;
 guvenlik politikasini sessizce devre disi birakmayin.
 
-Komut, test envanterini, kendi iki dogrulayici scriptinin SHA-256
-ve boyutunu, diger bes artifact klasorunu ve toplam 8 payload
+Komut, test envanterini, iki dogrulayici ve UAT rapor scriptinin
+SHA-256 ve boyutunu, diger bes artifact klasorunu ve toplam 8 payload
 dosyasinin adini, adetini, boyutunu ve SHA-256 degerini kontrol eder. Eksik/fazla/degistirilmis dosyada hata verir.
 `-ExpectedCheckoutCommit` parametresi ancak **ayri ve guvenilir
 bir kaynaktan** dogrulanan CI checkout SHA biliniyorsa eklenmelidir.
@@ -155,6 +156,48 @@ ayrica degistirilmis script fail-closed reddedildi.
 Gercek Windows 10/11 masaustu kabul testi **NOT RUN**;
 production imzasi/attestation mevcut degil.
 
+## Windows 10/11 manuel UAT kanit dosyasi (TEST-ONLY)
+
+[CI #44194993875](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44194993875)
+`bff1729f5733a0e9cb29ef8cb9f3256979101032` icin Linux ve
+Windows **SUCCESS**. Windows PowerShell 5.1 testi ile altinci ZIP'deki
+`windows-rc-uat-report.ps1` calistirildi. 12 manuel kabul satirinin
+`NOT_RUN` kaldigi, var olan raporun degistirilmedigi ve artifact
+klasorune rapor yazilamadigi dogrulandi. CI bir manuel UAT yapmadi.
+
+Ayni basarili CI'dan indirilen alti ZIP'i yukaridaki gibi ayri,
+bos klasorlere cikartin. Scripti kaynak GitHub commit'iyle
+karsilastirdiktan sonra izole Windows 10/11 VM icinde,
+Windows PowerShell 5.1 oturumunda calistirin:
+
+```powershell
+$unpacked = 'C:\Turkuaz-RC\unpacked'
+$kit = Join-Path $unpacked 'turkuaz-test-artifact-inventory-v0.2.24-windows-x64'
+$uat = Join-Path $kit 'windows-rc-uat-report.ps1'
+& $uat -ArtifactRoot $unpacked `
+    -Version '0.2.24' `
+    -SourceCommit 'bff1729f5733a0e9cb29ef8cb9f3256979101032' `
+    -RunUrl 'https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44194993875' `
+    -OutputPath 'C:\Turkuaz-RC\rc-uat-evidence.json'
+```
+
+Bu SHA ve run URL'si sadece **CI #44194993875** icindir.
+Farkli bir CI'dan artifact indirilirse ikisi de degistirilmelidir.
+`-ExpectedCheckoutCommit` yalnizca bagimsiz dogrulanan GitHub
+Actions checkout SHA biliniyorsa eklenir. Imzasiz envanter,
+script ve kaynak baglantisi production yayinci kaniti degildir.
+Execution Policy engelini sessizce devre disi birakmayin.
+
+JSON; Windows surumu, kaynak SHA, envanter SHA-256 ve
+12 ayri test satiri icerir. Her satir `NOT_RUN` baslar.
+GUI, UAC, HKCU/HKLM, kurulum, kaldirma ve kullanici veri
+koruma senaryolarini gercekte denedikten sonra PASS/FAIL,
+reproduction ve maskelenmis ekran/log kanitlarini
+[Windows kabul Issue #41](https://github.com/TurkuazLabs/TurkuazInstaller/issues/41)
+icinde raporlayin. Kullanici verisi, secret veya private key
+eklemeyin. Bu script kurulum calistirmaz, yetki yukseltmez,
+Windows kabulunu otomatik PASS yapmaz.
+
 ## RC kabul matrisi
 
 - [x] Kaynak commit, PR ve test artifact'lari ayri kimliklerle belirlendi.
@@ -171,6 +214,9 @@ production imzasi/attestation mevcut degil.
 - [x] Windows PowerShell 5.1 hosted CI'da Unicode/space klasor ve
       farkli CWD'den indirilen RC kitinin dogrulanmasi basarili
       (CI #44186183796). Gercek Windows 10 UAT yerine gecmez.
+- [x] Windows PowerShell 5.1 ile UAT rapor scripti, 12 NOT_RUN
+      senaryo, mevcut raporu ezmeme ve artifact dizinine yazmama
+      testleri basarili (CI #44194993875). Manuel UAT degildir.
 - [ ] PR #76 icin bagimsiz kod/guvenlik incelemesi onayi.
       Otomatik Codex review denemesi kullanim siniri nedeniyle
       tamamlanmadi; bu basarisiz kod veya temiz guvenlik raporu degildir.
