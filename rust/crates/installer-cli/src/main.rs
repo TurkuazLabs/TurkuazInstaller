@@ -75,6 +75,8 @@ mod windows_local_registration;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod windows_owned_browser_cleanup;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod windows_local_uninstall_gui;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
