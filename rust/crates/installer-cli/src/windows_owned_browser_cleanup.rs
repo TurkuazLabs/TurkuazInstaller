@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_owned_browser_cleanup.rs
 // Amac: Bilinen urun icin native messaging HKCU registry sahiplik temizligi
 // Modul - Rust Windows Adapter
-// Version: 0.1.4
+// Version: 0.1.5
 // Aciklama: Yalniz sabit TPM package ID, manifest ve registry sahipligi; script calistirilmaz
 // Bagimli Oldugu Katman: Tool | Security | Windows Uninstall
 
@@ -146,28 +146,47 @@ fn verify_regular_file(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn verify_manifest(path: &Path, host: &Path, chromium: bool) -> Result<(), String> {
-    verify_regular_file(path)?;
-    let body = fs::read(path).map_err(|e| e.to_string())?;
-    let manifest: Value = serde_json::from_slice(&body).map_err(|e| e.to_string())?;
+fn validate_manifest_value(
+    manifest: &Value,
+    host: &Path,
+    chromium: bool,
+) -> Result<(), String> {
+    let object = manifest.as_object()
+        .ok_or("Native Messaging manifest must be a JSON object")?;
+    const COMMON_FIELDS: [&str; 4] = ["name", "description", "path", "type"];
+    let permission_field = if chromium { "allowed_origins" } else { "allowed_extensions" };
+    if object.len() != COMMON_FIELDS.len() + 1
+        || !object.keys().all(|key| COMMON_FIELDS.contains(&key.as_str()) || key == permission_field)
+    {
+        return Err("Native Messaging manifest contains unexpected fields".into());
+    }
     if manifest.get("name").and_then(Value::as_str) != Some(HOST_ID)
         || manifest.get("type").and_then(Value::as_str) != Some("stdio")
+        || manifest.get("description").and_then(Value::as_str)
+            != Some("Turkuaz Password Manager Native Messaging Host")
         || !manifest.get("path").and_then(Value::as_str)
             .is_some_and(|value| same_path(Path::new(value), host))
     {
         return Err("Foreign or modified native messaging manifest".into());
     }
-    let (field, expected) = if chromium {
-        ("allowed_origins", format!("chrome-extension://{CHROME_ID}/"))
+    let expected = if chromium {
+        format!("chrome-extension://{CHROME_ID}/")
     } else {
-        ("allowed_extensions", FIREFOX_ID.to_owned())
+        FIREFOX_ID.to_owned()
     };
-    if manifest.get(field).and_then(Value::as_array).is_none_or(|values| {
+    if manifest.get(permission_field).and_then(Value::as_array).is_none_or(|values| {
         values.len() != 1 || values[0].as_str() != Some(expected.as_str())
     }) {
         return Err("Native messaging extension permissions mismatch".into());
     }
     Ok(())
+}
+
+fn verify_manifest(path: &Path, host: &Path, chromium: bool) -> Result<(), String> {
+    verify_regular_file(path)?;
+    let body = fs::read(path).map_err(|e| e.to_string())?;
+    let manifest: Value = serde_json::from_slice(&body).map_err(|e| e.to_string())?;
+    validate_manifest_value(&manifest, host, chromium)
 }
 
 /// @dev-id TI-WIN-BROWSER-CLEANUP-001
@@ -271,6 +290,36 @@ mod tests {
         assert!(decode_registry_utf16(&[0x41]).is_err());
         assert!(decode_registry_utf16(&[0x41, 0, 0, 0, 0x42, 0, 0, 0]).is_err());
         assert!(decode_registry_utf16(&[0x41, 0]).is_err());
+    }
+
+    #[test]
+    fn manifest_rejects_extra_extension_permissions() {
+        let host = Path::new(r"C:\TurkuazPM\tpm-native-host.exe");
+        let mut manifest = serde_json::json!({
+            "name": HOST_ID,
+            "description": "Turkuaz Password Manager Native Messaging Host",
+            "path": host.to_string_lossy(),
+            "type": "stdio",
+            "allowed_origins": [format!("chrome-extension://{CHROME_ID}/")]
+        });
+        assert!(validate_manifest_value(&manifest, host, true).is_ok());
+        manifest["allowed_extensions"] = serde_json::json!(["foreign@extension"]);
+        assert!(validate_manifest_value(&manifest, host, true).is_err());
+    }
+
+    #[test]
+    fn manifest_rejects_unknown_fields_and_modified_host_path() {
+        let host = Path::new(r"C:\TurkuazPM\tpm-native-host.exe");
+        let mut manifest = serde_json::json!({
+            "name": HOST_ID,
+            "description": "Turkuaz Password Manager Native Messaging Host",
+            "path": host.to_string_lossy(),
+            "type": "stdio",
+            "allowed_extensions": [FIREFOX_ID]
+        });
+        assert!(validate_manifest_value(&manifest, host, false).is_ok());
+        manifest["path"] = serde_json::json!(r"C:\Other\tpm-native-host.exe");
+        assert!(validate_manifest_value(&manifest, host, false).is_err());
     }
 
     #[test]
