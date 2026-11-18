@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_owned_browser_cleanup.rs
 // Amac: Bilinen urun icin native messaging HKCU registry sahiplik temizligi
 // Modul - Rust Windows Adapter
-// Version: 0.1.3
+// Version: 0.1.4
 // Aciklama: Yalniz sabit TPM package ID, manifest ve registry sahipligi; script calistirilmaz
 // Bagimli Oldugu Katman: Tool | Security | Windows Uninstall
 
@@ -106,19 +106,24 @@ fn registry_default(key: &str) -> Result<Option<String>, String> {
     {
         return Err(format!("Native Messaging registry value changed: {key}"));
     }
-    let units = bytes[..needed as usize]
-        .chunks_exact(2)
+    decode_registry_utf16(&bytes[..needed as usize]).map(Some)
+        .map_err(|error| format!("Invalid Native Messaging registry value for {key}: {error}"))
+}
+
+fn decode_registry_utf16(bytes: &[u8]) -> Result<String, &'static str> {
+    if bytes.len() < 2 || bytes.len() % 2 != 0 {
+        return Err("Invalid UTF-16 byte count");
+    }
+    let units = bytes.chunks_exact(2)
         .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
         .collect::<Vec<_>>();
     let Some(end) = units.iter().position(|unit| *unit == 0) else {
-        return Err(format!("Native Messaging registry value is not terminated: {key}"));
+        return Err("Missing UTF-16 terminator");
     };
     if end == 0 || units[end..].iter().any(|unit| *unit != 0) {
-        return Err(format!("Native Messaging registry value contains invalid data: {key}"));
+        return Err("Empty path or unexpected data after terminator");
     }
-    String::from_utf16(&units[..end])
-        .map(Some)
-        .map_err(|_| format!("Native Messaging registry value is not Unicode: {key}"))
+    String::from_utf16(&units[..end]).map_err(|_| "Malformed UTF-16")
 }
 
 fn delete_owned_key(key: &str) -> Result<(), String> {
@@ -253,6 +258,21 @@ mod tests {
         assert!(hkcu_path(r"HKLM\Software\Microsoft").is_err());
         assert!(hkcu_path(r"Software\Google").is_err());
     }
+    #[test]
+    fn registry_utf16_decoder_accepts_unicode_install_path() {
+        let path = r"C:\Users\Çağrı\AppData\Local\Türkçe\chrome.json";
+        let bytes = path.encode_utf16().chain(std::iter::once(0))
+            .flat_map(u16::to_le_bytes).collect::<Vec<u8>>();
+        assert_eq!(decode_registry_utf16(&bytes).unwrap(), path);
+    }
+
+    #[test]
+    fn registry_utf16_decoder_rejects_embedded_nul_and_odd_bytes() {
+        assert!(decode_registry_utf16(&[0x41]).is_err());
+        assert!(decode_registry_utf16(&[0x41, 0, 0, 0, 0x42, 0, 0, 0]).is_err());
+        assert!(decode_registry_utf16(&[0x41, 0]).is_err());
+    }
+
     #[test]
     fn manifest_path_match_is_case_insensitive_on_windows() {
         assert!(same_path(Path::new(r"C:\Apps\Chrome.json"), Path::new(r"c:\apps\chrome.json")));
