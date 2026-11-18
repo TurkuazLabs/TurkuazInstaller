@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_owned_browser_cleanup.rs
 // Amac: Bilinen urun icin native messaging HKCU registry sahiplik temizligi
 // Modul - Rust Windows Adapter
-// Version: 0.1.6
+// Version: 0.1.7
 // Aciklama: Yalniz sabit TPM package ID, manifest ve registry sahipligi; script calistirilmaz
 // Bagimli Oldugu Katman: Tool | Security | Windows Uninstall
 
@@ -251,6 +251,25 @@ pub(super) fn preflight(package_id: &str, target: &Path) -> Result<Option<Verifi
     }))
 }
 
+/// Check every browser owner, not only the keys observed during preflight.
+/// Missing keys are safe; unreadable or newly registered keys prevent cleanup.
+fn manifest_is_unreferenced<F>(
+    manifest: &Path,
+    mut lookup: F,
+) -> Result<bool, String>
+where
+    F: FnMut(&str) -> Result<Option<String>, String>,
+{
+    for key in KEYS {
+        if let Some(value) = lookup(key)? {
+            if same_path(Path::new(&value), manifest) {
+                return Ok(false);
+            }
+        }
+    }
+    Ok(true)
+}
+
 /// @dev-id TI-WIN-BROWSER-CLEANUP-002
 /// @purpose Remove only keys revalidated against their original manifest,
 /// preserving all unrelated registry entries and password vault data.
@@ -271,14 +290,38 @@ pub(super) fn remove_verified(verified: VerifiedHost) -> Vec<String> {
             warnings.push(error);
         }
     }
-    // Do not remove a manifest while any corresponding registry entry is
-    // present; a missing key does not authorize deletion of a user's file.
+    // Recheck ALL three browsers immediately before deleting any manifest.
+    // In particular, a second process might register a key during uninstall.
+    // User-controlled manifest directories must still be ordinary directories.
     if all_removed {
         for manifest in verified.manifest_paths {
+            let safe_root = manifest.parent().is_some_and(|folder| {
+                verify_manifest_directory(folder).is_ok()
+                    && folder.parent().is_some_and(|parent| {
+                        verify_manifest_directory(parent).is_ok()
+                    })
+            });
+            if !safe_root {
+                warnings.push(format!("Native Messaging directory changed; preserved: {}", manifest.display()));
+                continue;
+            }
+            match manifest_is_unreferenced(&manifest, registry_default) {
+                Ok(true) => {}
+                Ok(false) => {
+                    warnings.push(format!("Native Messaging manifest is still registered; preserved: {}", manifest.display()));
+                    continue;
+                }
+                Err(error) => {
+                    warnings.push(format!("Cannot confirm Native Messaging ownership; preserved: {error}"));
+                    continue;
+                }
+            }
             if verify_manifest(&manifest, &verified.installed_host, !manifest.ends_with("firefox.json")).is_ok() {
                 if let Err(error) = fs::remove_file(&manifest) {
                     warnings.push(format!("Native Messaging manifest preserved: {error}"));
                 }
+            } else {
+                warnings.push(format!("Native Messaging manifest changed; preserved: {}", manifest.display()));
             }
         }
     }
@@ -341,6 +384,36 @@ mod tests {
         assert!(validate_manifest_value(&manifest, host, false).is_ok());
         manifest["path"] = serde_json::json!(r"C:\Other\tpm-native-host.exe");
         assert!(validate_manifest_value(&manifest, host, false).is_err());
+    }
+
+    #[test]
+    fn newly_registered_browser_key_blocks_manifest_deletion() {
+        let manifest = Path::new(r"C:\Users\Test\chrome.json");
+        let mut checked = 0;
+        let can_delete = manifest_is_unreferenced(manifest, |key| {
+            checked += 1;
+            Ok((key == KEYS[1]).then(|| r"c:\users\test\chrome.json".to_owned()))
+        }).unwrap();
+        assert!(!can_delete);
+        assert_eq!(checked, 2);
+    }
+
+    #[test]
+    fn unreadable_registry_prevents_manifest_deletion() {
+        let manifest = Path::new(r"C:\Users\Test\chrome.json");
+        let decision = manifest_is_unreferenced(manifest, |_key| Err("denied".to_owned()));
+        assert!(decision.is_err());
+    }
+
+    #[test]
+    fn manifest_deletion_requires_all_browser_keys_absent() {
+        let manifest = Path::new(r"C:\Users\Test\chrome.json");
+        let mut checked = 0;
+        assert!(manifest_is_unreferenced(manifest, |_key| {
+            checked += 1;
+            Ok(None)
+        }).unwrap());
+        assert_eq!(checked, KEYS.len());
     }
 
     #[test]
