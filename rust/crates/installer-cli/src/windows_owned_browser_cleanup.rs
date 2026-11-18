@@ -1,11 +1,12 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_owned_browser_cleanup.rs
 // Amac: Bilinen urun icin native messaging HKCU registry sahiplik temizligi
 // Modul - Rust Windows Adapter
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: Yalniz sabit TPM package ID, manifest ve registry sahipligi; script calistirilmaz
 // Bagimli Oldugu Katman: Tool | Security | Windows Uninstall
 
-use std::{fs, path::{Path, PathBuf}, process::{Command, Stdio}};
+use std::{ffi::OsStr, fs, os::windows::ffi::OsStrExt, path::{Path, PathBuf}};
+use windows::{core::PCWSTR, Win32::{Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS}, System::Registry::{HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, REG_SZ, RegCloseKey, RegDeleteKeyW, RegOpenKeyExW, RegQueryValueExW}}};
 use serde_json::Value;
 
 const PACKAGE_ID: &str = "com.turkuazlabs.passwordmanager";
@@ -31,41 +32,102 @@ fn same_path(left: &Path, right: &Path) -> bool {
     left.to_string_lossy().eq_ignore_ascii_case(&right.to_string_lossy())
 }
 
-fn reg(args: &[&str]) -> Result<std::process::Output, String> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    // Resolve from the operating system root, not PATH or the package CWD.
-    let system_root = std::env::var_os("SystemRoot")
-        .filter(|value| !value.is_empty())
-        .ok_or("Windows SystemRoot is unavailable")?;
-    let reg_exe = PathBuf::from(system_root).join("System32").join("reg.exe");
-    Command::new(reg_exe)
-        .args(args)
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| e.to_string())
+fn wide(value: &OsStr) -> Vec<u16> {
+    value.encode_wide().chain(std::iter::once(0)).collect()
+}
+
+struct OpenRegistryKey(HKEY);
+impl Drop for OpenRegistryKey {
+    fn drop(&mut self) {
+        unsafe { RegCloseKey(self.0) };
+    }
+}
+
+fn hkcu_path(key: &str) -> Result<&str, String> {
+    key.strip_prefix("HKCU\\")
+        .ok_or_else(|| "Only HKCU native messaging entries are allowed".to_owned())
+}
+
+fn open_registry_key(key: &str) -> Result<Option<OpenRegistryKey>, String> {
+    let path = wide(OsStr::new(hkcu_path(key)?));
+    let mut handle = HKEY::default();
+    let status = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            PCWSTR(path.as_ptr()),
+            None,
+            KEY_QUERY_VALUE,
+            &mut handle,
+        )
+    };
+    if status == ERROR_FILE_NOT_FOUND {
+        return Ok(None);
+    }
+    if status != ERROR_SUCCESS {
+        return Err(format!("Could not read Native Messaging registry key: {key} ({})", status.0));
+    }
+    Ok(Some(OpenRegistryKey(handle)))
 }
 
 fn registry_default(key: &str) -> Result<Option<String>, String> {
-    let queried = reg(&["query", key, "/ve"])?;
-    if !queried.status.success() {
-        if reg(&["query", key])?.status.success() {
-            return Err(format!("Native Messaging key exists without a default value: {key}"));
-        }
+    let Some(handle) = open_registry_key(key)? else {
         return Ok(None);
+    };
+    let mut value_type = REG_SZ;
+    let mut needed = 0_u32;
+    let status = unsafe {
+        RegQueryValueExW(
+            handle.0,
+            PCWSTR::null(),
+            None,
+            Some(&mut value_type),
+            None,
+            Some(&mut needed),
+        )
+    };
+    if status != ERROR_SUCCESS || value_type != REG_SZ || needed < 2
+        || needed > 32_768 || needed % 2 != 0
+    {
+        return Err(format!("Native Messaging default is missing or invalid: {key}"));
     }
-    let stdout = String::from_utf8_lossy(&queried.stdout);
-    for line in stdout.lines() {
-        if let Some((_, raw)) = line.split_once("REG_SZ") {
-            let value = raw.trim();
-            if value.is_empty() {
-                return Err(format!("Native Messaging key has an empty value: {key}"));
-            }
-            return Ok(Some(value.to_owned()));
-        }
+    let mut bytes = vec![0_u8; needed as usize];
+    let read = unsafe {
+        RegQueryValueExW(
+            handle.0,
+            PCWSTR::null(),
+            None,
+            Some(&mut value_type),
+            Some(bytes.as_mut_ptr()),
+            Some(&mut needed),
+        )
+    };
+    if read != ERROR_SUCCESS || value_type != REG_SZ
+        || needed as usize > bytes.len() || needed % 2 != 0
+    {
+        return Err(format!("Native Messaging registry value changed: {key}"));
     }
-    Err(format!("Native Messaging registry value is not a readable REG_SZ: {key}"))
+    let units = bytes[..needed as usize]
+        .chunks_exact(2)
+        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+        .collect::<Vec<_>>();
+    let Some(end) = units.iter().position(|unit| *unit == 0) else {
+        return Err(format!("Native Messaging registry value is not terminated: {key}"));
+    };
+    if end == 0 || units[end..].iter().any(|unit| *unit != 0) {
+        return Err(format!("Native Messaging registry value contains invalid data: {key}"));
+    }
+    String::from_utf16(&units[..end])
+        .map(Some)
+        .map_err(|_| format!("Native Messaging registry value is not Unicode: {key}"))
+}
+
+fn delete_owned_key(key: &str) -> Result<(), String> {
+    let path = wide(OsStr::new(hkcu_path(key)?));
+    let status = unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, PCWSTR(path.as_ptr())) };
+    if status != ERROR_SUCCESS {
+        return Err(format!("Native Messaging key could not be deleted: {key} ({})", status.0));
+    }
+    Ok(())
 }
 
 fn verify_regular_file(path: &Path) -> Result<(), String> {
@@ -159,12 +221,9 @@ pub(super) fn remove_verified(verified: VerifiedHost) -> Vec<String> {
             warnings.push(format!("Native Messaging ownership changed; preserved: {key}"));
             continue;
         }
-        match reg(&["delete", key, "/f"]) {
-            Ok(result) if result.status.success() => {},
-            _ => {
-                all_removed = false;
-                warnings.push(format!("Native Messaging registry could not be removed: {key}"));
-            }
+        if let Err(error) = delete_owned_key(key) {
+            all_removed = false;
+            warnings.push(error);
         }
     }
     // Do not remove a manifest while any corresponding registry entry is
