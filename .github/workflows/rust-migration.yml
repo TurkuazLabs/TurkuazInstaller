@@ -578,6 +578,43 @@ jobs:
           if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'turkuaz-uat-ads-host.txt')) {
             throw 'UAT ADS rejection unexpectedly created a host file.'
           }
+
+          # A normal-looking output file beneath a parent junction must not
+          # escape the requested evidence directory or create any evidence.
+          $uatAlias = Join-Path $env:RUNNER_TEMP 'turkuaz-uat-output-junction'
+          $uatTarget = Join-Path $env:RUNNER_TEMP 'turkuaz-uat-output-target'
+          $uatTargetFile = Join-Path $uatTarget 'report.json'
+          if ((Test-Path -LiteralPath $uatAlias) -or (Test-Path -LiteralPath $uatTarget)) {
+            throw 'UAT junction negative fixture already exists.'
+          }
+          [IO.Directory]::CreateDirectory($uatTarget) | Out-Null
+          $uatJunctionCreated = $false
+          try {
+            $uatLink = New-Item -ItemType Junction -Path $uatAlias -Target $uatTarget -ErrorAction Stop
+            $uatJunctionCreated = $true
+            if (($uatLink.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {
+              throw 'UAT junction fixture is not a reparse directory.'
+            }
+            $args.OutputPath = Join-Path $uatAlias 'report.json'
+            $junctionRejected = $false
+            try {
+              & $generator @args
+            } catch {
+              if ($_.Exception.Message -eq 'Manual UAT report output parent must not contain junctions or symlinks.') {
+                $junctionRejected = $true
+              } else { throw }
+            }
+            if (!$junctionRejected) { throw 'UAT generator accepted an output parent junction.' }
+            if (Test-Path -LiteralPath $uatTargetFile) {
+              throw 'UAT output parent junction created an unintended report.'
+            }
+          } finally {
+            if ($uatJunctionCreated) {
+              # Remove only the test junction, never its target.
+              [IO.Directory]::Delete($uatAlias)
+            }
+            [IO.Directory]::Delete($uatTarget)
+          }
           Write-Host 'Windows PowerShell 5.1 UAT report generated with 12 manual NOT_RUN cases; overwrites and artifact-tree writes rejected.'
 
       - name: Reject same-length modification of downloaded test artifact
