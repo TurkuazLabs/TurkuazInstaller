@@ -39,13 +39,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$root = [IO.Path]::GetFullPath($ArtifactRoot)
-$output = [IO.Path]::GetFullPath($OutputPath)
-# NTFS alternate data streams use ':' in the final component. An ADS would
-# hide UAT evidence inside an existing file rather than create a standalone JSON.
-if ([IO.Path]::GetFileName($output).Contains(':')) {
+# Windows PowerShell 5.1/.NET can reject ADS syntax during GetFullPath,
+# so inspect the raw final filename before path normalization.
+# A drive-letter colon is not part of the final filename.
+if ([IO.Path]::GetFileName($OutputPath).Contains(':')) {
     throw 'Manual UAT report output must not use an NTFS alternate data stream.'
 }
+$root = [IO.Path]::GetFullPath($ArtifactRoot)
+$output = [IO.Path]::GetFullPath($OutputPath)
 $separator = [string][IO.Path]::DirectorySeparatorChar
 $rootPrefix = $root.TrimEnd([IO.Path]::DirectorySeparatorChar) + $separator
 if ([string]::Equals($root, $output, [StringComparison]::OrdinalIgnoreCase) -or
