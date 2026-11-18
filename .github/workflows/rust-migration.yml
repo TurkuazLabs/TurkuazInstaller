@@ -564,6 +564,20 @@ jobs:
             } else { throw }
           }
           if (!$insideRejected) { throw 'UAT generator wrote inside the downloaded artifact tree.' }
+          # Windows ADS paths must not be accepted as independent JSON reports.
+          $args.OutputPath = Join-Path $env:RUNNER_TEMP 'turkuaz-uat-ads-host.txt:report.json'
+          $adsRejected = $false
+          try {
+            & $generator @args
+          } catch {
+            if ($_.Exception.Message -eq 'Manual UAT report output must not use an NTFS alternate data stream.') {
+              $adsRejected = $true
+            } else { throw }
+          }
+          if (!$adsRejected) { throw 'UAT generator accepted an NTFS alternate data stream.' }
+          if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'turkuaz-uat-ads-host.txt')) {
+            throw 'UAT ADS rejection unexpectedly created a host file.'
+          }
           Write-Host 'Windows PowerShell 5.1 UAT report generated with 12 manual NOT_RUN cases; overwrites and artifact-tree writes rejected.'
 
       - name: Reject same-length modification of downloaded test artifact
