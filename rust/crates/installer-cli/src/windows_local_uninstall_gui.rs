@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_uninstall_gui.rs
 // Amac: Windows yuklu uygulamalar kaydindan cagirilabilen guvenli kaldirma sihirbazi
 // Modul - Rust Windows Uninstall Presentation
-// Version: 0.1.1
+// Version: 0.1.2
 // Aciklama: Acik onay, envanter on kontrolu ve degistirilmis dosyalari koruma
 // Bagimli Oldugu Katman: Presentation | Application
 
@@ -91,10 +91,17 @@ impl UninstallApp {
                 if latest.scope() == InstallScope::AllUsers && !current_process_is_elevated() {
                     return Err("Tüm kullanıcılar kaldırması yönetici yetkisi gerektirir.".into());
                 }
-                let native_host = crate::windows_owned_browser_cleanup::preflight(
-                    latest.package_id(),
-                    latest.target(),
-                )?;
+                // HKCU belongs to the account running the uninstaller. For
+                // all-users installations UAC may switch to an administrator
+                // account, so its HKCU cannot represent other users' browsers.
+                let native_host = if latest.scope() == InstallScope::CurrentUser {
+                    crate::windows_owned_browser_cleanup::preflight(
+                        latest.package_id(),
+                        latest.target(),
+                    )?
+                } else {
+                    None
+                };
                 let summary = uninstall_local_install(latest.target(), latest.package_id())
                     .map_err(|e| format!("Dosyalar güvenli biçimde kaldırılamadı: {e}"))?;
                 let native_warnings = native_host
@@ -103,6 +110,11 @@ impl UninstallApp {
                 let cleanup = cleanup_after_uninstall(&latest);
                 let mut warnings = cleanup.warnings;
                 warnings.extend(native_warnings);
+                if latest.scope() == InstallScope::AllUsers
+                    && latest.package_id() == "com.turkuazlabs.passwordmanager"
+                {
+                    warnings.push("Tum kullanicilar kurulumunda diger hesaplarin HKCU Native Messaging kayitlari otomatik kaldirilmaz.".into());
+                }
                 if cleanup.registry_removed {
                     warnings.extend(finalize_uninstaller(&latest, &manifest));
                 }
