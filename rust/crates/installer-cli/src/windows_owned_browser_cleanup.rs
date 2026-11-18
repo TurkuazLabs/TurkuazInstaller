@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_owned_browser_cleanup.rs
 // Amac: Bilinen urun icin native messaging HKCU registry sahiplik temizligi
 // Modul - Rust Windows Adapter
-// Version: 0.1.5
+// Version: 0.1.6
 // Aciklama: Yalniz sabit TPM package ID, manifest ve registry sahipligi; script calistirilmaz
 // Bagimli Oldugu Katman: Tool | Security | Windows Uninstall
 
@@ -135,6 +135,24 @@ fn delete_owned_key(key: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn verify_manifest_directory(root: &Path) -> Result<(), String> {
+    // Never traverse a user-controlled junction when deleting a manifest.
+    // Missing folders are safe only when no existing registry entry refers
+    // to them, which the manifest preflight handles separately.
+    let metadata = match fs::symlink_metadata(root) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.to_string()),
+    };
+    use std::os::windows::fs::MetadataExt;
+    if !metadata.is_dir() || metadata.file_type().is_symlink()
+        || metadata.file_attributes() & 0x400 != 0
+    {
+        return Err("Native Messaging manifest root is a reparse point or is not a directory".into());
+    }
+    Ok(())
+}
+
 fn verify_regular_file(path: &Path) -> Result<(), String> {
     let meta = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     #[cfg(windows)]
@@ -200,7 +218,10 @@ pub(super) fn preflight(package_id: &str, target: &Path) -> Result<Option<Verifi
     let local_app_data = std::env::var_os("LOCALAPPDATA")
         .filter(|value| !value.is_empty())
         .ok_or("LOCALAPPDATA is unavailable")?;
-    let root = PathBuf::from(local_app_data).join("TurkuazPasswordManager").join("native-messaging");
+    let product_root = PathBuf::from(local_app_data).join("TurkuazPasswordManager");
+    verify_manifest_directory(&product_root)?;
+    let root = product_root.join("native-messaging");
+    verify_manifest_directory(&root)?;
     let chrome = root.join("chrome.json");
     let firefox = root.join("firefox.json");
     let host = target.join("tpm-native-host.exe");
