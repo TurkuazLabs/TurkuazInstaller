@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_owned_browser_cleanup.rs
 // Amac: Bilinen urun icin native messaging HKCU registry sahiplik temizligi
 // Modul - Rust Windows Adapter
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Yalniz sabit TPM package ID, manifest ve registry sahipligi; script calistirilmaz
 // Bagimli Oldugu Katman: Tool | Security | Windows Uninstall
 
@@ -34,7 +34,12 @@ fn same_path(left: &Path, right: &Path) -> bool {
 fn reg(args: &[&str]) -> Result<std::process::Output, String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    Command::new("reg.exe")
+    // Resolve from the operating system root, not PATH or the package CWD.
+    let system_root = std::env::var_os("SystemRoot")
+        .filter(|value| !value.is_empty())
+        .ok_or("Windows SystemRoot is unavailable")?;
+    let reg_exe = PathBuf::from(system_root).join("System32").join("reg.exe");
+    Command::new(reg_exe)
         .args(args)
         .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::null())
