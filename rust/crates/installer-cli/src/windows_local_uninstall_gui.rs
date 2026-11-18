@@ -91,10 +91,18 @@ impl UninstallApp {
                 if latest.scope() == InstallScope::AllUsers && !current_process_is_elevated() {
                     return Err("Tüm kullanıcılar kaldırması yönetici yetkisi gerektirir.".into());
                 }
+                let native_host = crate::windows_owned_browser_cleanup::preflight(
+                    latest.package_id(),
+                    latest.target(),
+                )?;
                 let summary = uninstall_local_install(latest.target(), latest.package_id())
                     .map_err(|e| format!("Dosyalar güvenli biçimde kaldırılamadı: {e}"))?;
+                let native_warnings = native_host
+                    .map(crate::windows_owned_browser_cleanup::remove_verified)
+                    .unwrap_or_default();
                 let cleanup = cleanup_after_uninstall(&latest);
                 let mut warnings = cleanup.warnings;
+                warnings.extend(native_warnings);
                 if cleanup.registry_removed {
                     warnings.extend(finalize_uninstaller(&latest, &manifest));
                 }
