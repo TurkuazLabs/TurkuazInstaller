@@ -1,12 +1,12 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_owned_browser_cleanup.rs
 // Amac: Bilinen urun icin native messaging HKCU registry sahiplik temizligi
 // Modul - Rust Windows Adapter
-// Version: 0.1.2
+// Version: 0.1.3
 // Aciklama: Yalniz sabit TPM package ID, manifest ve registry sahipligi; script calistirilmaz
 // Bagimli Oldugu Katman: Tool | Security | Windows Uninstall
 
 use std::{ffi::OsStr, fs, os::windows::ffi::OsStrExt, path::{Path, PathBuf}};
-use windows::{core::PCWSTR, Win32::{Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS}, System::Registry::{HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, REG_SZ, RegCloseKey, RegDeleteKeyW, RegOpenKeyExW, RegQueryValueExW}}};
+use windows::{core::PCWSTR, Win32::{Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS}, System::Registry::{HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, REG_SZ, RegCloseKey, RegDeleteKeyW, RegOpenKeyExW, RegQueryValueExW}}};
 use serde_json::Value;
 
 const PACKAGE_ID: &str = "com.turkuazlabs.passwordmanager";
@@ -60,7 +60,7 @@ fn open_registry_key(key: &str) -> Result<Option<OpenRegistryKey>, String> {
             &mut handle,
         )
     };
-    if status == ERROR_FILE_NOT_FOUND {
+    if status == ERROR_FILE_NOT_FOUND || status == ERROR_PATH_NOT_FOUND {
         return Ok(None);
     }
     if status != ERROR_SUCCESS {
@@ -246,6 +246,12 @@ mod tests {
     #[test]
     fn unknown_packages_never_require_browser_cleanup() {
         assert!(preflight("com.example.other", Path::new(r"C:\Program Files\Example")).unwrap().is_none());
+    }
+    #[test]
+    fn cleanup_registry_paths_reject_non_hkcu_roots() {
+        assert_eq!(hkcu_path(KEYS[0]).unwrap(), r"Software\Google\Chrome\NativeMessagingHosts\com.turkuazlabs.passwordmanager");
+        assert!(hkcu_path(r"HKLM\Software\Microsoft").is_err());
+        assert!(hkcu_path(r"Software\Google").is_err());
     }
     #[test]
     fn manifest_path_match_is_case_insensitive_on_windows() {
