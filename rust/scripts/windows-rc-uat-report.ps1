@@ -39,10 +39,13 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# Windows PowerShell 5.1/.NET can reject ADS syntax during GetFullPath,
-# so inspect the raw final filename before path normalization.
-# A drive-letter colon is not part of the final filename.
-if ([IO.Path]::GetFileName($OutputPath).Contains(':')) {
+# Windows PowerShell 5.1 Path.GetFileName may treat the ADS colon as a
+# separator, while GetFullPath rejects the path before policy checks.
+# Split the raw input on directory separators only, then reject a colon in
+# the leaf (not the drive-letter colon preceding a directory separator).
+$lastSeparator = $OutputPath.LastIndexOfAny([char[]]@('\', '/'))
+$outputLeaf = $OutputPath.Substring($lastSeparator + 1)
+if ($outputLeaf.Contains(':')) {
     throw 'Manual UAT report output must not use an NTFS alternate data stream.'
 }
 $root = [IO.Path]::GetFullPath($ArtifactRoot)
