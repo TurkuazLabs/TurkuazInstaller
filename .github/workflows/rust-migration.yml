@@ -1,8 +1,8 @@
 # Dosya Yolu: REPO_ROOT/.github/workflows/rust-migration.yml
 # Amac: Asamali Rust gecisindeki kodu release olusturmadan derleme seviyesinde dogrulamak
 # Modul - GitHub Actions YAML
-# Version: 0.3.1
-# Aciklama: PR degisikliklerinde Rust workspace, PE uygulama manifesti, tek setup lifecycle ve test ornek dagitimini dogrular
+# Version: 0.3.13
+# Aciklama: RC artifact icindeki scriptlerin kaynak/hash ve bozulma reddi testleri
 # Bagimli Oldugu Katman: Tool | Repo
 
 name: Rust Migration CI
@@ -170,11 +170,23 @@ jobs:
       - name: Test Windows installed-app registry ownership
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_local_registration::tests
 
+      - name: Test Windows payload receipt locking and owned-file uninstall
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-package-engine --release local_install_receipt::tests
+
+      - name: Test native uninstaller cleanup including a running executable
+        run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_uninstaller_cleanup::tests
+
       - name: Test current-user and all-users scope guard
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_install_scope::tests
 
       - name: Test multi-step unsigned local setup wizard navigation
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui unsigned_local_gui::tests
+
+      - name: Test Studio rebuild refresh and output preservation
+        shell: pwsh
+        run: |
+          $env:TURKUAZ_STUDIO_TEST_CLI = (Resolve-Path "rust/target/release/turkuaz-installer-v$env:RUST_CLI_VERSION-windows-x64.exe").Path
+          cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui studio_rebuild -- --include-ignored
 
       - name: Test Windows Recycle Bin path guard (no deletion)
         run: cargo test --locked --manifest-path rust/Cargo.toml -p turkuaz-installer-cli --release --bin turkuaz-installer --features setup-authoring-gui windows_recycle::tests
@@ -279,3 +291,387 @@ jobs:
           path: ${{ runner.temp }}/turkuaz-example-test-setup/**
           if-no-files-found: error
           retention-days: 7
+
+      
+      # @dev-id TI-RC-ARTIFACT-001
+      # CI evidence only: compare the decompressed contents of all uploaded
+      # test artifact ZIPs with an exact, unsigned SHA-256/length inventory.
+      - name: Generate test-only artifact SHA-256 inventory
+        shell: pwsh
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          & rust/scripts/windows-test-artifact-inventory.ps1 -Mode Generate `
+            -Version $env:RUST_CLI_VERSION `
+            -SourceCommit $env:RC_SOURCE_COMMIT `
+            -ExampleRoot (Join-Path $env:RUNNER_TEMP 'turkuaz-example-test-setup') `
+            -InventoryPath (Join-Path $env:RUNNER_TEMP 'test-artifact-inventory.json')
+
+      - name: Package self-contained Windows RC verification scripts
+        shell: pwsh
+        run: |
+          $directory = Join-Path $env:RUNNER_TEMP 'turkuaz-rc-verifier-package'
+          New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
+          Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP 'test-artifact-inventory.json') -Destination $directory -ErrorAction Stop
+          foreach ($scriptName in @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1', 'windows-rc-uat-report.ps1')) {
+            Copy-Item -LiteralPath (Join-Path 'rust/scripts' $scriptName) -Destination $directory -ErrorAction Stop
+          }
+          $names = @(Get-ChildItem -LiteralPath $directory -File)
+          if ($names.Count -ne 4) { throw 'RC verifier kit must contain exactly four files.' }
+
+      - name: Upload test-only SHA-256 inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: turkuaz-test-artifact-inventory-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: ${{ runner.temp }}/turkuaz-rc-verifier-package/**
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Download test artifact ZIPs for roundtrip verification
+        uses: actions/download-artifact@v4
+        with:
+          pattern: turkuaz-*-v${{ env.RUST_CLI_VERSION }}-windows-x64
+          path: ${{ runner.temp }}/turkuaz-test-artifacts-roundtrip
+          merge-multiple: false
+
+      - name: Verify downloaded RC scripts match source checkout
+        shell: pwsh
+        run: |
+          $directory = Join-Path $env:RUNNER_TEMP "turkuaz-test-artifacts-roundtrip/turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
+          foreach ($scriptName in @('windows-test-artifact-inventory.ps1', 'windows-rc-verify-download.ps1', 'windows-rc-uat-report.ps1')) {
+            $source = Join-Path 'rust/scripts' $scriptName
+            $downloaded = Join-Path $directory $scriptName
+            if (!(Test-Path -LiteralPath $downloaded -PathType Leaf)) { throw "Missing downloadable RC script: $scriptName" }
+            $sourceHash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
+            $downloadedHash = (Get-FileHash -LiteralPath $downloaded -Algorithm SHA256).Hash
+            if ($sourceHash -cne $downloadedHash) { throw "RC verifier script does not match checkout: $scriptName" }
+          }
+          Write-Host 'Downloaded RC verifier scripts exactly match the CI source checkout.'
+
+      - name: Verify downloaded test artifact sizes and SHA-256
+        shell: pwsh
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $roundtrip = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $inventory = Join-Path $roundtrip "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64/test-artifact-inventory.json"
+          & rust/scripts/windows-test-artifact-inventory.ps1 -Mode Verify `
+            -Version $env:RUST_CLI_VERSION `
+            -SourceCommit $env:RC_SOURCE_COMMIT `
+            -InventoryPath $inventory `
+            -ArtifactRoot $roundtrip
+
+      # Operator-facing entrypoint uses the same byte-level verifier.
+      # The independent expected CI checkout SHA is checked before hashing.
+      - name: Test Windows local RC verification helper
+        shell: pwsh
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $roundtrip = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $args = @{
+            ArtifactRoot = $roundtrip
+            Version = $env:RUST_CLI_VERSION
+            SourceCommit = $env:RC_SOURCE_COMMIT
+          }
+          $verifier = Join-Path $roundtrip "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64/windows-rc-verify-download.ps1"
+          & $verifier @args -ExpectedCheckoutCommit $env:GITHUB_SHA
+          $wrongCommit = '0' * 40
+          if ($wrongCommit -eq $env:GITHUB_SHA) { throw 'Invalid negative test commit choice.' }
+          $denied = $false
+          try {
+            & $verifier @args -ExpectedCheckoutCommit $wrongCommit
+          } catch {
+            if ($_.Exception.Message -like 'Downloaded test artifact inventory does not match the independently provided CI checkout commit.*') {
+              $denied = $true
+            } else {
+              throw
+            }
+          }
+          if (!$denied) { throw 'The local helper accepted an incorrect CI checkout commit.' }
+          Write-Host 'Local RC verifier rejected incorrect expected CI checkout commit.'
+
+      # @dev-id TI-RC-ARTIFACT-003
+      # Windows 10 ships with Windows PowerShell 5.1, not necessarily pwsh 7.
+      # Exercise the operator-facing downloaded kit under that native shell,
+      # a different CWD, and a space/Unicode-containing extraction root.
+      - name: Test Windows PowerShell 5.1 RC verification from Unicode path
+        shell: powershell
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) {
+            throw "Expected Windows PowerShell 5.x, got $($PSVersionTable.PSVersion)."
+          }
+          $source = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $unicodeRoot = 'Turkuaz RC ' + [char]0x0130 + 'zole Test'
+          $target = Join-Path $env:RUNNER_TEMP $unicodeRoot
+          if (Test-Path -LiteralPath $target) { throw 'Refusing to overwrite an existing test directory.' }
+          New-Item -ItemType Directory -Path $target -ErrorAction Stop | Out-Null
+          Get-ChildItem -LiteralPath $source -Directory -ErrorAction Stop | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $target -Recurse -ErrorAction Stop
+          }
+          $kit = Join-Path $target "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
+          $verifier = Join-Path $kit 'windows-rc-verify-download.ps1'
+          Push-Location $env:RUNNER_TEMP
+          try {
+            & $verifier -ArtifactRoot $target `
+              -Version $env:RUST_CLI_VERSION `
+              -SourceCommit $env:RC_SOURCE_COMMIT `
+              -ExpectedCheckoutCommit $env:GITHUB_SHA
+          } finally {
+            Pop-Location
+            Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop
+          }
+          Write-Host 'Windows PowerShell 5.1: downloaded RC kit verified from a relocated Unicode path.'
+
+      # @dev-id TI-RC-ARTIFACT-004
+      # The real artifact root must not be an NTFS junction to an external
+      # directory, even when the linked bytes and their digests are unchanged.
+      - name: Reject junction-based downloaded RC artifact root and ancestors
+        shell: powershell
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) {
+            throw 'Junction negative test must run under Windows PowerShell 5.1.'
+          }
+          $source = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $alias = Join-Path $env:RUNNER_TEMP 'turkuaz-rc-junction-negative'
+          if (Test-Path -LiteralPath $alias) { throw 'Junction fixture path already exists.' }
+          $created = $false
+          try {
+            $junction = New-Item -ItemType Junction -Path $alias -Target $source -ErrorAction Stop
+            $created = $true
+            if (!(($junction.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+              throw 'Junction fixture was not created as a reparse directory.'
+            }
+            $kit = Join-Path $source "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
+            $verifier = Join-Path $kit 'windows-rc-verify-download.ps1'
+            $rejected = $false
+            try {
+              & $verifier -ArtifactRoot $alias `
+                -Version $env:RUST_CLI_VERSION `
+                -SourceCommit $env:RC_SOURCE_COMMIT `
+                -ExpectedCheckoutCommit $env:GITHUB_SHA
+            } catch {
+              if ($_.Exception.Message -like 'Downloaded artifact directory is not a regular directory:*') {
+                $rejected = $true
+              } else {
+                throw
+              }
+            }
+            if (!$rejected) { throw 'Downloaded verifier accepted a junction artifact root.' }
+          } finally {
+            if ($created) {
+              # Nonrecursive delete removes the junction itself, not its target.
+              [IO.Directory]::Delete($alias)
+            }
+          }
+          Write-Host 'Downloaded RC artifact root junction was rejected (Windows PowerShell 5.1).'
+
+          # The selected root is a normal directory; only its parent is
+          # the junction. The parent redirect must also be rejected.
+          $parentAlias = Join-Path $env:RUNNER_TEMP 'turkuaz-rc-parent-junction-negative'
+          if (Test-Path -LiteralPath $parentAlias) { throw 'Parent junction fixture path exists.' }
+          $parentCreated = $false
+          try {
+            $parentJunction = New-Item -ItemType Junction -Path $parentAlias -Target $env:RUNNER_TEMP -ErrorAction Stop
+            $parentCreated = $true
+            if (!(($parentJunction.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) {
+              throw 'Parent junction fixture was not a reparse directory.'
+            }
+            $nestedRoot = Join-Path $parentAlias 'turkuaz-test-artifacts-roundtrip'
+            $nested = Get-Item -LiteralPath $nestedRoot -Force -ErrorAction Stop
+            if (($nested.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+              throw 'Expected the selected artifact root itself to be a regular directory.'
+            }
+            $parentRejected = $false
+            try {
+              & $verifier -ArtifactRoot $nestedRoot `
+                -Version $env:RUST_CLI_VERSION `
+                -SourceCommit $env:RC_SOURCE_COMMIT `
+                -ExpectedCheckoutCommit $env:GITHUB_SHA
+            } catch {
+              if ($_.Exception.Message -like 'Downloaded artifact directory is not a regular directory:*') {
+                $parentRejected = $true
+              } else {
+                throw
+              }
+            }
+            if (!$parentRejected) { throw 'Downloaded verifier accepted an ancestor junction.' }
+          } finally {
+            if ($parentCreated) {
+              # Delete only the test junction; never recurse into its target.
+              [IO.Directory]::Delete($parentAlias)
+            }
+          }
+          Write-Host 'Downloaded RC artifact ancestor junction was rejected (Windows PowerShell 5.1).'
+
+      # @dev-id TI-RC-UAT-001
+      # Generation of a manual acceptance report is not manual GUI acceptance.
+      # Every test case must stay NOT_RUN until a real operator records evidence.
+      - name: Generate read-only Windows RC manual UAT report template
+        shell: powershell
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) {
+            throw 'Manual UAT report generator must support Windows PowerShell 5.1.'
+          }
+          $root = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $kit = Join-Path $root "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
+          $generator = Join-Path $kit 'windows-rc-uat-report.ps1'
+          $output = Join-Path $env:RUNNER_TEMP 'turkuaz-rc-uat-evidence-test.json'
+          $args = @{
+            ArtifactRoot = $root
+            Version = $env:RUST_CLI_VERSION
+            SourceCommit = $env:RC_SOURCE_COMMIT
+            RunUrl = "https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/$env:GITHUB_RUN_ID"
+            OutputPath = $output
+            ExpectedCheckoutCommit = $env:GITHUB_SHA
+          }
+          & $generator @args
+          $report = Get-Content -LiteralPath $output -Raw -ErrorAction Stop | ConvertFrom-Json
+          if ($report.schema_version -ne 1 -or $report.test_only -cne $true -or
+              $report.manual_acceptance -cne 'NOT_RUN' -or
+              $report.local_integrity -cne 'PASS_UNSIGNED_ONLY' -or
+              $report.checkout_commit_independently_pinned -cne $true -or
+              $report.source_commit -cne $env:RC_SOURCE_COMMIT.ToLowerInvariant()) {
+            throw 'Manual UAT report metadata was not fail-closed.'
+          }
+          $cases = @($report.manual_cases)
+          if ($cases.Count -ne 12 -or @($cases | Where-Object { $_.status -cne 'NOT_RUN' -or
+              ![string]::IsNullOrEmpty($_.evidence) }).Count -ne 0) {
+            throw 'A manually untested scenario was marked as accepted.'
+          }
+          $overwriteRejected = $false
+          try {
+            & $generator @args
+          } catch {
+            if ($_.Exception.Message -eq 'Refusing to overwrite existing UAT report.') {
+              $overwriteRejected = $true
+            } else { throw }
+          }
+          if (!$overwriteRejected) { throw 'UAT generator overwrote an existing report.' }
+          $args.OutputPath = Join-Path $root 'unsafe-uat-report.json'
+          $insideRejected = $false
+          try {
+            & $generator @args
+          } catch {
+            if ($_.Exception.Message -eq 'Refusing to write manual UAT evidence inside the downloaded artifact tree.') {
+              $insideRejected = $true
+            } else { throw }
+          }
+          if (!$insideRejected) { throw 'UAT generator wrote inside the downloaded artifact tree.' }
+          # Windows ADS paths must not be accepted as independent JSON reports.
+          $args.OutputPath = Join-Path $env:RUNNER_TEMP 'turkuaz-uat-ads-host.txt:report.json'
+          $adsRejected = $false
+          try {
+            & $generator @args
+          } catch {
+            if ($_.Exception.Message -eq 'Manual UAT report output must not use an NTFS alternate data stream.') {
+              $adsRejected = $true
+            } else { throw }
+          }
+          if (!$adsRejected) { throw 'UAT generator accepted an NTFS alternate data stream.' }
+          if (Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP 'turkuaz-uat-ads-host.txt')) {
+            throw 'UAT ADS rejection unexpectedly created a host file.'
+          }
+
+          # A normal-looking output file beneath a parent junction must not
+          # escape the requested evidence directory or create any evidence.
+          $uatAlias = Join-Path $env:RUNNER_TEMP 'turkuaz-uat-output-junction'
+          $uatTarget = Join-Path $env:RUNNER_TEMP 'turkuaz-uat-output-target'
+          $uatTargetFile = Join-Path $uatTarget 'report.json'
+          if ((Test-Path -LiteralPath $uatAlias) -or (Test-Path -LiteralPath $uatTarget)) {
+            throw 'UAT junction negative fixture already exists.'
+          }
+          [IO.Directory]::CreateDirectory($uatTarget) | Out-Null
+          $uatJunctionCreated = $false
+          try {
+            $uatLink = New-Item -ItemType Junction -Path $uatAlias -Target $uatTarget -ErrorAction Stop
+            $uatJunctionCreated = $true
+            if (($uatLink.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) {
+              throw 'UAT junction fixture is not a reparse directory.'
+            }
+            $args.OutputPath = Join-Path $uatAlias 'report.json'
+            $junctionRejected = $false
+            try {
+              & $generator @args
+            } catch {
+              if ($_.Exception.Message -eq 'Manual UAT report output parent must not contain junctions or symlinks.') {
+                $junctionRejected = $true
+              } else { throw }
+            }
+            if (!$junctionRejected) { throw 'UAT generator accepted an output parent junction.' }
+            if (Test-Path -LiteralPath $uatTargetFile) {
+              throw 'UAT output parent junction created an unintended report.'
+            }
+          } finally {
+            if ($uatJunctionCreated) {
+              # Remove only the test junction, never its target.
+              [IO.Directory]::Delete($uatAlias)
+            }
+            [IO.Directory]::Delete($uatTarget)
+          }
+          Write-Host 'Windows PowerShell 5.1 UAT report generated with 12 manual NOT_RUN cases; overwrites and artifact-tree writes rejected.'
+
+      - name: Reject same-length modification of downloaded test artifact
+        shell: pwsh
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $roundtrip = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $inventory = Join-Path $roundtrip "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64/test-artifact-inventory.json"
+          $readme = Join-Path $roundtrip "turkuaz-example-test-setup-v$env:RUST_CLI_VERSION-windows-x64/README-TR.txt"
+          $bytes = [IO.File]::ReadAllBytes($readme)
+          if ($bytes.Length -eq 0) { throw 'Cannot test a missing or empty artifact file.' }
+          $bytes[0] = $bytes[0] -bxor 1
+          [IO.File]::WriteAllBytes($readme, $bytes)
+          $rejected = $false
+          try {
+            & rust/scripts/windows-test-artifact-inventory.ps1 -Mode Verify `
+              -Version $env:RUST_CLI_VERSION `
+              -SourceCommit $env:RC_SOURCE_COMMIT `
+              -InventoryPath $inventory `
+              -ArtifactRoot $roundtrip
+          } catch {
+            if ($_.Exception.Message -like 'Downloaded artifact file differs from inventory:*') {
+              $rejected = $true
+            } else {
+              throw
+            }
+          }
+          if (!$rejected) { throw 'Modified artifact bytes were accepted by SHA-256 verification.' }
+          Write-Host 'Same-length tampering of a downloaded TEST-ONLY artifact was rejected.'
+
+      - name: Reject downloaded RC verifier script tampering
+        shell: pwsh
+        env:
+          RC_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $roundtrip = Join-Path $env:RUNNER_TEMP 'turkuaz-test-artifacts-roundtrip'
+          $kit = Join-Path $roundtrip "turkuaz-test-artifact-inventory-v$env:RUST_CLI_VERSION-windows-x64"
+          $inventory = Join-Path $kit 'test-artifact-inventory.json'
+          $scriptPath = Join-Path $kit 'windows-rc-verify-download.ps1'
+          $bytes = [IO.File]::ReadAllBytes($scriptPath)
+          if ($bytes.Length -eq 0) { throw 'Cannot test an empty RC verifier script.' }
+          $bytes[0] = $bytes[0] -bxor 1
+          [IO.File]::WriteAllBytes($scriptPath, $bytes)
+          $rejected = $false
+          try {
+            & rust/scripts/windows-test-artifact-inventory.ps1 -Mode Verify `
+              -Version $env:RUST_CLI_VERSION `
+              -SourceCommit $env:RC_SOURCE_COMMIT `
+              -InventoryPath $inventory `
+              -ArtifactRoot $roundtrip
+          } catch {
+            if ($_.Exception.Message -like 'Downloaded verifier tool differs from inventory:*') {
+              $rejected = $true
+            } else {
+              throw
+            }
+          }
+          if (!$rejected) { throw 'Modified downloaded RC verifier script was accepted.' }
+          Write-Host 'Downloaded RC verifier script tampering was rejected.'

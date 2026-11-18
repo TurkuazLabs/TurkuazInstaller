@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/rust/SETUP_BUILDER.md
 Amac: Windows Setup Studio tam boy proje panellerini ve derleme akisini anlatmak
 Modul - Markdown
-Version: 0.9.12
-Aciklama: Studio tasarim onizlemesi EULA kabul sifirlama ve tema regresyonu
+Version: 0.9.28
+Aciklama: Windows DELETE preflight, receipt handle silme ve guvenli kaldirma
 Bagimli Oldugu Katman: View | Service | Documentation
 -->
 
@@ -45,6 +45,50 @@ otomatik restore ve kalici veri garantisi sunulmaz. Windows profilinin
 Recycle Bin ayarlarini, alan yetersizligini ve desteklenmeyen
 suruculeri test VM'inde ayri denetleyin. Pencere uyarisi
 ve bos/var klasor secimi Windows 10/11'de manuel kabul gerektirir.
+
+**Mevcut Windows kurulum kaydi korumasi:** Ayni paket/kurulum hedefine
+ait Windows Yuklu Uygulamalar kaydi, onceki kaldirici EXE/envanter
+kaydi veya hedef klasordeki `.turkuaz-local-install.json` yerel
+payload envanteri varsa yeni kurulum, hedef klasoru Geri Donusum
+Kutusu'na tasimadan once reddedilir. Once mevcut urunu normal kaldirma akisi
+ile kaldirin. Bu salt-okunur on kontrol hem secim oncesinde hem
+kurulum is parcaciginda uygulanir. Paket hazirlama uzun surebilecegi
+icin kurulum motorunun mevcut klasoru recycle etme callback'inde,
+Windows Shell cagrisi hemen oncesinde ayni denetim bir kez daha
+yapilir. Yeni kayit fark edilirse eski klasor tasinmaz; staging
+gecici dosyalari temizlenir. Kayit veya kullanici dosyalari
+silinmez. Envanter dosyasinin varligi tek basina guvenilir sahiplik
+veya gecerli imza kaniti sayilmaz; kontrol yalnizca guvenli
+reddetme karari verir. Bu denetim eszamanli islemleri kilitlemez,
+TOCTOU riskini tamamen ortadan kaldirmaz; son Windows kayit
+asamasindaki no-overwrite korumasi da devam eder.
+Manuel kabul icin [Windows smoke rehberi](SMOKE_TEST.md) takip edilir.
+
+## Mevcut ciktiyi yeniden olusturma
+
+Tam Kurulum projesinin cikti klasoru mevcutsa Genel bakis ekraninda
+**Cikti klasorunu ac** yaninda **Yeniden olustur** gorunur. Bu dugme,
+ayarlar ayni kalsa bile kaynak dosyalarini tekrar paketler; secili AV
+taramasini uygular ve guncel Studio motoruyla standart EXE'yi hazirlar.
+Paket ve EXE once gecici klasorde tamamlanir. Ancak ikisi de basariliysa
+taninan eski cikti klasoru zaman damgali bir yedege tasinir ve yeni
+cikti yerine konur. Yedegin yolu sonuc mesajinda gosterilir; eski
+klasordeki ek kullanici dosyalari da yedekte korunur. Taninmayan klasor
+ve basarisiz derleme mevcut ciktinin uzerine yazmaz.
+
+Islem surerken dugme devre disidir. Bu eylem yalnizca Tam Kurulum
+icin standart imzasiz EXE uretir; imzali/cevrimici dagitim otomatik
+yeniden yayinlanmaz. Cikti klasoru yoksa mevcut 1/2 adimli ilk olusturma
+akisi kullanilir.
+
+Windows CI `studio_rebuild` testinde ayni proje ayarlariyla kaynak
+icerigini degistirir, yeni EXE'den cikan dosyayi ve eski yedegi kontrol
+eder; derleme hatasi ve taninmayan klasor korumasini da sinar.
+E2E testi icin once CLI derlenmeli; `TURKUAZ_STUDIO_TEST_CLI` tam EXE
+yoluna ayarlanip `cargo test --locked --manifest-path rust/Cargo.toml
+-p turkuaz-installer-cli --features setup-authoring-gui studio_rebuild
+-- --include-ignored` calistirilmalidir. Normal test kosusunda bu harici
+CLI gerektiren E2E testi `ignored` olarak raporlanir.
 
 ## Windows GUI derlemesi
 
@@ -360,8 +404,10 @@ Kuruluyor -> Kurulum sonucu**.
 - Hedef klasor secimi sadece on denetim yapar. Gercek yol/reparse,
   dosya butunlugu ve mevcut klasor korumasi paket motorundadir.
   `Gozat` secilen ust klasore `package-id` adinda yeni hedef ekler.
-- Ek seceneklerde, pakette guvenli ana `.exe` bulunursa kullanici
-  `Baslat menusu` ve `Masaustu` kisayollarini ayri secer.
+- Ek seceneklerde, pakette guvenli ana `.exe` bulunursa `Baslat menusu`
+  uygulama/kaldirma kisayollari standart olarak olusturulur. `Masaustu`
+  uygulama kisayolu varsayilan olarak isaretlidir; kullanici istemiyorsa
+  kutunun isaretini kaldirabilir.
   Ana EXE yoksa gereksiz kisayol sayfasi atlanir; hazirlik adim sayisi
   4 yerine 3 olur.
 - Alt navigasyon duğmeleri sagda konumlandirilir, kademeli
@@ -371,10 +417,12 @@ Kuruluyor -> Kurulum sonucu**.
   navigasyon kapanir. Paket motoru dogrudan `LocalInstallPhase`
   olaylarini yayimlar: gomulu paket dogrulama, arsiv cikarma ve
   sahiplik envanteri hazirlama, son klasore yayinlama. Ardindan secili
-  Windows kisayollari yapilir. Olaylar gercek motor adimlaridir,
+  zorunlu Baslat menusu/kaldirma ve secilmis masaustu kisayollari yapilir.
+  Olaylar gercek motor adimlaridir,
   dosya bazli yuzde veya kesin sure vaadi degildir.
-- Kurulum tamamlandiginda basari / kisayol uyarisi / hata ayrilir.
-  Hatadan sonra yeni hedef secmek icin duzenleme sayfasina donulebilir.
+- Zorunlu ya da kullanici tarafindan secilmis kisayollardan veya kaldirma kaydindan biri olusmazsa kurulum
+  basarili sayilmaz ve yonetilen dosyalar geri alinir. Hatadan sonra yeni
+  hedef secmek icin duzenleme sayfasina donulebilir.
 - Kurulum sirasinda guvenli iptal destegi olmadigindan pencere
   kapatilma istegi ertelenir. `CancelClose` arayuz denetimidir;
   guc kesintisi veya zorla proses kapatma durumunda ayri recovery
@@ -426,20 +474,38 @@ dokunulmaz.
 
 ### Windows kisayollari (gelistirme, imzasiz standart kurulum)
 
-`02 Uygulama dosyalari` bolumunde **ana uygulama EXE'si** (kaynak
-dizinine gore goreli `entryPoint`) secilirse yeni Rust kurulum
-penceresinde **Baslat menusunde kisayol olustur** varsayilan acik,
-**Masaustunde kisayol olustur** ise varsayilan kapali olarak gorunur.
-EXE tanimlanmazsa ya da paket ana uygulama yolu EXE degilse kisayol
-olusturulmaz; tahmini EXE secimi yapilmaz.
+`02 Uygulama dosyalari` bolumunde kaynaga gore goreli ana EXE
+(`entryPoint`) secildiyse standart kurulum, uygulama adiyla bir
+**Baslat menusu uygulama kisayolu** ve **Kaldir kisayolu** olusturur.
+**Masaustu kisayolu** varsayilan olarak isaretlidir; kullanici kisayol
+sayfasindan secimi kaldirabilir. Masaustu secimini kaldirmak zorunlu
+Baslat menusu ve kaldirma kisayollarini kapatmaz. Pakette ana EXE
+tanimli degilse uygulama/masaustu kisayollari ve secim sayfasi
+atlanir; yine de kayitli kaldirici icin Baslat menusu Kaldir
+kisayolu olusturulur. Tahmini EXE secilmez.
 
-Kisayollar Windows known-folder API ile mevcut kullaniciya ait gercek
-Baslat Menusu/Programs ve yonlendirilmis Masaustu yolunda olusturulur.
-`<package-id>/<package-id>.lnk` ve `<package-id>.lnk` adlandirmasi
-kullanilir. Ucuncu taraf kisayollari ve mevcut Baslat menusu gruplari
-asla ezilmez. Yalnizca kurulmus ve kurulum koku icinde dogrulanan EXE
-hedeflenir. Kisayol hatasinda yuklenen dosyalar saklanir, son durum
-eksik Windows butunlesmesi olarak acikca raporlanir.
+Tek kullanici icin Windows known-folder API ile kullaniciya ait
+Programs ve masaustu, tum kullanicilar icin Common Programs ve
+Public Desktop kullanilir. Uygulama kisayolu `<urun adi>/<urun adi>.lnk`,
+kaldirma kisayolu `<urun adi>/<urun adi> Kaldır.lnk`
+ve secilen masaustu kisayolu `<urun adi>.lnk` olur.
+Ornek: `Türkçe Uygulama 2.0/Türkçe Uygulama 2.0 Kaldır.lnk`.
+Kaldirici penceresi de `<urun adi> Kaldır` basligini gosterir.
+Eski surumlerin `Kaldır.lnk` dosyasi yeni kuruluma donusturulmez;
+yalnizca onceki kayitli dosya kimligi dogrulanirsa guvenle temizlenir.
+Kaldirici EXE dosyasinin benzersiz dahili adlandirmasi degismez.
+Uygulama adinda Windows ayraclari, bas/son bosluklar ve
+`CON`, `NUL`, `COM1`, `LPT1` gibi Windows aygit takma adlari
+(uzantili bicimleri dahil) reddedilir. Ucuncu taraf kisayollarinin
+uzerine yazilmaz, dolu/yabanci Baslat menusu gruplari korunur.
+
+Yalnizca kurulum koku icinde dogrulanmis EXE hedeflenir.
+Zorunlu veya kullanicinin sectigi kisayol olusmazsa kurulum hata
+verir ve envantere gore guvenli payload geri alma denenir;
+geri alma basarisizsa hata acikca raporlanir. Hata durumunda
+yabanci ve degistirilmis dosyalar otomatik silinmez.
+Windows hosted CI'nin kisayol/registry testleri, gercek
+Windows 10/11 desktop ve all-users UAC kabul testlerinin yerine gecmez.
 
 Yeni yerel kurulumlar `.turkuaz-local-install.json` sahiplik kaydi ile
 yayinlanir: kayit tam payload dosya yollari, SHA-256 ozetleri ve boyutlari
@@ -447,18 +513,97 @@ tasir. `turkuaz-installer uninstall-local --package-id ID --target DIR
 --confirm-uninstall YES` sadece degistirilmemis kayitli dosyalari siler;
 taninmayan/degistirilen klasor ve dosyalara dokunulmaz. Onceki
 v0.2.19 kurulumlarinda kayit olmadigi icin otomatik kaldirma reddedilir.
+Windows'ta bu uygulama kokundeki **payload envanteri** de
+normal dosya taniticisi uzerinden, reparse yonlendirmesi
+izlenmeden ve yalnizca okuma paylasimi acik tutularak okunur.
+Envanterdeki dosyalarin kaldirilmasi tamamlanana kadar dosya
+tutulur; onceden acik yazici veya silici handle'i varsa
+islem fail-closed reddedilir. Dosya kendisi silinmeden once
+okuma taniticisi kapatilir. Bu tum sistem icin atomik
+kaldirma garantisi degildir.
+Windows'ta her kayitli payload dosyasi silinmeden once
+okuma+DELETE handle'i ile yeniden acilir. Dosyanin turu,
+reparse niteliginde olup olmadigi, boyutu ve SHA-256 bilgisi
+ayni dosya taniticisi uzerinden dogrulanir.
+`SetFileInformationByHandle(FileDispositionInfo)` yalnizca
+dogrulanmis dosya nesnesini silinmek uzere isaretler;
+eski dosya tasinmis ve adina yeni kullanici dosyasi gelmisse
+yeni dosya silinmez. Ust klasorlerin eszamanli degistirilmesi
+ve yerel envanterin kriptografik kimligi bu korumanin disindadir.
+Bu butun sistemi kapsayan atomik transaction garantisi degildir.
 
 Yeni kurulumda uygulama dosyalari yayinlandiktan sonra,
 Windows `HKCU` (tek kullanici) veya `HKLM` (tum kullanicilar)
 `Uninstall` kaydi olusturulur. Kalici kaldirici setup EXE'si kurulu
 uygulama kokunun **disinda** `LocalAppData` / korumali `ProgramFiles` altinda
-saklanir. Baslat menusu `Kaldir` kisayolu ve kayitli uygulama
+saklanir. `TurkuazInstaller/Uninstallers` alt dizinleri ayri
+olusturulur. Yol mutlak olmali ve `..` gecisi icermemeli;
+beklenen klasor adlari ve her seviyenin normal klasor oldugu,
+junction/reparse olmadigi yazma oncesinde denetlenir. Yabanci
+dosya ustune klasor acilmaz ve baglantili ust dizin uzerinden
+yeni kaldirici yazilmaz. Bu kontroller yolun daha sonra
+eszamanli degistirilmesi riskini tamamen yok etmez.
+Baslat menusu `<urun adi> Kaldır` kisayolu ve kayitli uygulama
 kisayollari SHA-256 ile sahiplik envanterine alinir. Kaldirma ayri bir
 onay ekrani ile baslatilir ve paket motorunun degistirilmemis dosyalar
-kontrolu kullanilir. Degistirilmis veya yabanci kisayollar korunur.
-Kaldirici EXE calisirken silinemeyebileceginden Windows'un yeniden
-baslangicta silme mekanizmasi denenir; yetki yoksa kalici kaldirici
-dosyasi kalabilir ve kullaniciya raporlanir.
+kontrolu kullanilir. Windows kaldirma envanteri okunurken mutlak,
+traversal icermeyen yol, normal dosya ve normal ust klasorler
+zorunludur; junction/reparse yonlendirmeleri izlenmez, buyuk ya da
+ozel dosya icerigi okunmaz. Envanter Windows `FILE_SHARE_READ`
+paylasim modunda acilir, okuma sirasinda baska bir yazici veya
+silici dosyayi acamaz. Zaten yazilabilir handle varsa okuma
+basarisiz olur. Bu kontrol tum path eszamanlilik risklerini
+ortadan kaldirmaz; kaldirma/cleanup sonraki sahiplik
+kontrolleri de gereklidir. Kaldirma GUI'si uygulama dosyalarini
+silmeden once Windows `TurkuazOwner`, `InstallLocation`,
+`UninstallString`, `DisplayName` ve `DisplayIcon` degerlerinin
+kayitli envanterle ayni oldugunu dogrular. `REG_SZ` sahiplik degerleri
+yalnizca cift baytli, tam tek NUL ile biten, ara NUL icermeyen
+gecerli UTF-16 olarak kabul edilir. Eksik/bozuk sonlandirma veya
+sondaki gizli veri ile envanter eslesmesi kurulmaz. Bu alanlardan biri
+degismisse kaldirma reddedilir. Kayit silinirken kontrol tekrarlanir;
+kayit korunuyorsa onceki Baslat/masaustu kisayollari da korunur.
+Kaldirma motoru, sahipli kurulumdaki mevcut EXE, DLL, COM ve OCX
+dosyalarini Windows Restart Manager ile okuma amacli sorgular.
+Bunlari kullanan bir program veya servis tespit edilirse tek bir
+uygulama dosyasi silinmeden islem reddedilir. Kaldirici zorla
+program kapatmaz, veriyi kaybettirecek bir kapanis baslatmaz,
+kullaniciyi uygulamayi kendisinin kapatmasi icin uyarir ve
+`Tekrar dene` ile yeni onayli kaldirma sunar. Yeniden deneme
+kayit ve dosya sahipligini tekrar dogrular. Restart Manager
+erisimi basarisizsa varsayimla silmeye devam edilmez.
+Ek olarak Windows'ta tum sahipli payload dosyalarinin SHA-256
+degeri ve DELETE erisim hakki, ilk dosya silinmeden once
+dogrulanir. Baska surecin DELETE paylasimi vermedigi siradan
+bir veri dosyasi varsa onceki dosyalar silinmeden islem
+reddedilir; kilit kaldirildiktan sonra yeniden denenebilir.
+Kurulum receipt dosyasi Windows'ta silme izniyle acilir ve
+sahiplik kontrolunden son silmeye dek ayni handle tutulur;
+son asamada once handle kapatip ardindan path ile silme
+yapilmaz. Receipt kaydinin kriptografik olarak imzali oldugu
+iddia edilmez.
+Kontrol ile kaldirma arasindaki eszamanlilik riski hala vardir.
+Windows'ta envanterdeki EXE/DLL/COM/OCX dosyalari once,
+diger sahipli dosyalar sonra dogrulanarak kaldirilir. Bu,
+Restart Manager kontrolunden hemen sonra acilan bir program
+EXE/DLL silinmesini kilitlerse, alakasiz dosyalarin onceden
+silinmesi ihtimalini azaltir. Dosyalar tek tek kaldirildigindan
+tum islem atomik degildir; sonradan baslatma veya paylasim
+degisikligi hala kismi kaldirmaya yol acabilir.
+Bu islem eszamanli tum surecleri kilitlemez, atomik transaction
+iddiasi yoktur. Kaldirilacak Windows kisayolu dogrudan dosya
+tanicisinda sahiplik kaydina gore tekrar dogrulanir ve ayni tanitici
+uzerinden silinir. Yeni sahiplik kayitlarinda Windows dosya kimligi,
+eski kayitlarda ise SHA-256 kullanilir. Shell tarafindan ayni dosya
+uzerinde yapilan metadata degisiklikleri yeni kimlik kaydini bozmaz.
+Yabanci, degistirilmis eski kayitli, reparse veya hardlink
+kisayollar korunur; bu islem ust dizinlerin eszamanli yonlendirme
+risklerini tamamen ortadan kaldirmaz.
+Calisan kaldirici EXE'sinin kendi dosyasini silmesi yerine Rust cleanup
+yardimcisi, kaldirici surecinin bitmesini bekler ve dogrulanmis
+EXE/envanter taniticilarini silmeyi dener. Yeniden baslatma veya
+ek yetki fallback'i kullanilmaz. Hazirlik basarisizsa dosyalar korunur;
+kapanis sonrasi sonuc ayri cleanup log'una yazilir.
 
 Kurulum dili hos geldiniz ekraninda `Turkce` veya `English` olarak
 secilir. Degistirilme yalnizca gorunum metinlerini etkiler; paket

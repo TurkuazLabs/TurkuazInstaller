@@ -1,11 +1,12 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/unsigned_local_gui.rs
 // Amac: Rust yerel standart kurulumunu cok asamali Windows sihirbazi ile sunmak
 // Modul - Rust GUI
-// Version: 0.5.1
-// Aciklama: Hos geldiniz, hedef, kisayollar, son kontrol, kurulum ve sonuc akisi
+// Version: 0.5.11
+// Aciklama: Windows kaydini recycle sinirinda yeniden dogrulayan guvenli kurulum akisi
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
+    ffi::OsStr,
     fs, io,
     path::{Component, Path, PathBuf},
     sync::mpsc::{self, Receiver, TryRecvError},
@@ -17,7 +18,7 @@ use eframe::egui;
 use turkuaz_installer_package_engine::{
     LocalInstallPhase, PackageEngineError, WizardConfig, WizardPageId,
     install_unsigned_local_setup_with_progress, install_unsigned_local_setup_with_replacement,
-    read_unsigned_local_wizard_config, unsigned_local_identity,
+    read_unsigned_local_wizard_config, uninstall_local_install, unsigned_local_identity,
 };
 
 use crate::{
@@ -26,12 +27,16 @@ use crate::{
         InstallScope, current_process_is_elevated, default_install_directory, known_folder,
         validate_install_scope,
     },
-    windows_local_registration::register_local_install,
+    windows_local_registration::{register_local_install, require_unregistered_target},
     windows_recycle::validate_recycle_target,
-    windows_shortcuts::create_installed_shortcuts,
+    windows_shortcuts::{create_installed_shortcuts, valid_display_name},
     wizard_language::WizardLanguage,
 };
 use windows::Win32::UI::Shell::FOLDERID_ProgramFiles;
+
+// Reserve the action row, separator and padding before egui has measured it.
+// Without this initial estimate, the first frame clips the navigation labels.
+const INITIAL_ACTION_PANEL_HEIGHT: f32 = 100.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WizardStep {
@@ -168,9 +173,34 @@ fn phase_label(phase: LocalInstallPhase, language: WizardLanguage) -> &'static s
     language.text(tr, en)
 }
 
+fn rollback_failed_standard_install(
+    target: &Path,
+    package_id: &str,
+    error: String,
+    language: WizardLanguage,
+) -> String {
+    match uninstall_local_install(target, package_id) {
+        Ok(_) => format!(
+            "{error} {}",
+            language.text(
+                "Kurulum dosyaları güvenli biçimde geri alındı.",
+                "Installation files were safely rolled back."
+            )
+        ),
+        Err(rollback) => format!(
+            "{error} {}: {rollback}",
+            language.text(
+                "Otomatik geri alma tamamlanamadı; Yüklü Uygulamalar kaydı oluşturulmadı",
+                "Automatic rollback could not be completed; no Installed Apps entry was created"
+            )
+        ),
+    }
+}
+
 struct LocalInstaller {
     executable: PathBuf,
     package_id: String,
+    display_name: String,
     package_label: String,
     target: String,
     program_files_root: PathBuf,
@@ -180,9 +210,8 @@ struct LocalInstaller {
     wizard: WizardConfig,
     license_accepted: bool,
     recycle_approved: bool,
+    desktop_shortcut: bool,
     entry_point: Option<String>,
-    start_menu: bool,
-    desktop: bool,
     step: WizardStep,
     path_error: Option<String>,
     busy: Option<Receiver<WorkerEvent>>,
@@ -213,18 +242,25 @@ impl LocalInstaller {
                     .extension()
                     .is_some_and(|ext| ext.eq_ignore_ascii_case("exe"))
         });
+        let display_name = entry_point
+            .as_deref()
+            .and_then(|entry| Path::new(entry).file_stem())
+            .and_then(OsStr::to_str)
+            .map(str::trim)
+            .filter(|name| valid_display_name(name))
+            .unwrap_or(&identity.package_id)
+            .to_owned();
         let supports_shortcuts = entry_point.is_some();
         let first_page = wizard
             .visible_pages(supports_shortcuts)
             .into_iter()
             .next()
             .ok_or("Kurulumda gösterilecek sayfa bulunamadı.")?;
-        let shortcut_default = supports_shortcuts && wizard.is_enabled(WizardPageId::Shortcuts);
-
         Ok(Self {
             executable,
             package_id: identity.package_id.clone(),
-            package_label: format!("{} · v{}", identity.package_id, identity.version),
+            display_name: display_name.clone(),
+            package_label: format!("{} · v{}", display_name, identity.version),
             target,
             program_files_root,
             current_user_root,
@@ -233,9 +269,8 @@ impl LocalInstaller {
             wizard,
             license_accepted: false,
             recycle_approved: false,
+            desktop_shortcut: true,
             entry_point,
-            start_menu: shortcut_default,
-            desktop: false,
             step: WizardStep::from_page(first_page),
             path_error: None,
             busy: None,
@@ -308,6 +343,7 @@ impl LocalInstaller {
             ).to_owned());
         }
         validate_install_scope(self.scope, &path, &self.program_files_root, elevated)?;
+        require_unregistered_target(&self.package_id, &path, self.scope)?;
         Ok((path, occupied))
     }
 
@@ -384,9 +420,8 @@ impl LocalInstaller {
                 &self.executable,
                 &self.package_id,
                 &target,
-                self.start_menu,
-                self.desktop,
                 self.language,
+                self.desktop_shortcut,
             ) {
                 Ok(()) => return true,
                 Err(error) => {
@@ -397,12 +432,12 @@ impl LocalInstaller {
         }
         let executable = self.executable.clone();
         let source_uninstaller = executable.clone();
-        let start_menu = self.start_menu;
-        let desktop = self.desktop;
         let scope = self.scope;
         let language = self.language;
         let program_files_root = self.program_files_root.clone();
         let package_id = self.package_id.clone();
+        let display_name = self.display_name.clone();
+        let desktop_shortcut = self.desktop_shortcut;
         let (sender, receiver) = mpsc::channel();
         self.busy = Some(receiver);
         self.status = None;
@@ -424,6 +459,7 @@ impl LocalInstaller {
                 &program_files_root,
                 current_process_is_elevated(),
             )
+            .and_then(|_| require_unregistered_target(&package_id, &target, scope))
             .and_then(|_| {
                 if replacing_existing {
                     install_unsigned_local_setup_with_replacement(
@@ -431,6 +467,12 @@ impl LocalInstaller {
                         &target,
                         &mut on_phase,
                         &mut |path| {
+                            // Package staging can take time. A different installer may
+                            // register this target after our initial preflight.
+                            // Recheck at the destructive boundary, immediately before
+                            // asking Windows Shell to recycle the existing directory.
+                            require_unregistered_target(&package_id, path, scope)
+                                .map_err(|error| PackageEngineError::Io(io::Error::other(error)))?;
                             let _ = sender.send(WorkerEvent::RecyclingExistingTarget);
                             crate::windows_recycle::recycle_existing_target(path, &package_id)
                                 .map_err(|error| PackageEngineError::Io(io::Error::other(error)))?;
@@ -443,10 +485,10 @@ impl LocalInstaller {
                 }
                 .map_err(|error| error.to_string())
             })
-            .map(|identity| {
+            .and_then(|identity| {
                 let mut message = format!(
                     "{} v{} {}: {}",
-                    identity.package_id,
+                    display_name,
                     identity.version,
                     language.text("kuruldu", "installed"),
                     target.display()
@@ -459,66 +501,59 @@ impl LocalInstaller {
                     ));
                 }
                 let mut owned_links = Vec::new();
-                if start_menu || desktop {
+                if identity.entry_point.is_some() {
                     let _ = sender.send(WorkerEvent::CreatingShortcuts);
                     match identity.entry_point.as_deref() {
-                        Some(entry) => match create_installed_shortcuts(
-                            &target,
-                            entry,
-                            &identity.package_id,
-                            start_menu,
-                            desktop,
-                            scope,
-                        ) {
-                            Ok(report) => {
-                                owned_links = report.created;
-                                if !owned_links.is_empty() {
-                                    message.push_str(&format!(
-                                        "\n{} {}",
-                                        owned_links.len(),
-                                        language.text(
-                                            "Windows kısayolu oluşturuldu.",
-                                            "Windows shortcut(s) created."
-                                        )
-                                    ));
+                        Some(entry) => {
+                            match create_installed_shortcuts(
+                                &target,
+                                entry,
+                                &display_name,
+                                scope,
+                                desktop_shortcut,
+                            ) {
+                                Ok(report) => {
+                                    owned_links = report.created;
+                                    if !owned_links.is_empty() {
+                                        message.push_str(&format!(
+                                            "\n{} {}",
+                                            owned_links.len(),
+                                            language.text(
+                                                "Windows kısayolu oluşturuldu.",
+                                                "Windows shortcut(s) created."
+                                            )
+                                        ));
+                                    }
                                 }
-                                if !report.warnings.is_empty() {
-                                    warning = true;
-                                    message.push_str(&format!(
-                                        "\n{}: {}",
-                                        language.text("Kısayol uyarısı", "Shortcut warning"),
-                                        report.warnings.join("; ")
+                                Err(error) => {
+                                    return Err(rollback_failed_standard_install(
+                                        &target,
+                                        &identity.package_id,
+                                        format!(
+                                            "{}: {error}",
+                                            language.text(
+                                                "Seçilen Windows kısayolları oluşturulamadı",
+                                                "Selected Windows shortcuts could not be created"
+                                            )
+                                        ),
+                                        language,
                                     ));
                                 }
                             }
-                            Err(error) => {
-                                warning = true;
-                                message.push_str(&format!(
-                                    "{}: {error}",
-                                    language.text(
-                                        "\nDosyalar kuruldu ancak kısayol oluşturulamadı",
-                                        "\nFiles installed, but shortcuts could not be created"
-                                    )
-                                ));
-                            }
-                        },
-                        None => {
-                            warning = true;
-                            message
-                                .push_str(language.text(
-                                    "\nPakette ana EXE tanımı yok; kısayol oluşturulamadı.",
-                                    "\nNo main EXE is defined in the package; shortcuts were not created."
-                                ));
                         }
+                        None => unreachable!("entry point checked above"),
                     }
                 }
                 let _ = sender.send(WorkerEvent::RegisteringUninstaller);
                 match register_local_install(
                     &source_uninstaller,
                     &identity.package_id,
+                    &display_name,
                     &identity.version,
                     &target,
+                    identity.entry_point.as_deref(),
                     scope,
+                    desktop_shortcut,
                     &owned_links,
                 ) {
                     Ok(warnings) => {
@@ -533,17 +568,21 @@ impl LocalInstaller {
                         }
                     }
                     Err(error) => {
-                        warning = true;
-                        message.push_str(&format!(
-                            "{}: {error}",
-                            language.text(
-                                "\nWindows kaldırma kaydı oluşturulamadı",
-                                "\nWindows uninstall registration failed"
-                            )
+                        return Err(rollback_failed_standard_install(
+                            &target,
+                            &identity.package_id,
+                            format!(
+                                "{}: {error}",
+                                language.text(
+                                    "Windows kaldırma kaydı oluşturulamadı",
+                                    "Windows uninstall registration failed"
+                                )
+                            ),
+                            language,
                         ));
                     }
                 }
-                (message, warning)
+                Ok((message, warning))
             });
             let _ = sender.send(WorkerEvent::Finished(result));
         });
@@ -743,22 +782,19 @@ impl LocalInstaller {
             WizardStep::Shortcuts => {
                 if self.entry_point.is_some() {
                     ui.label(language.text(
-                        "Kurulumdan sonra oluşturulacak Windows kısayollarını seçin.",
-                        "Choose Windows shortcuts to create after installation.",
+                        "Başlat menüsünde uygulama ve '<Program Adı> Kaldır' kısayolları oluşturulur.",
+                        "The Start menu includes the app shortcut and '<App Name> Kaldır' uninstall shortcut.",
                     ));
                     ui.add_space(12.0);
                     ui.checkbox(
-                        &mut self.start_menu,
-                        language.text(
-                            "Başlat menüsünde kısayol oluştur",
-                            "Create Start menu shortcut",
-                        ),
+                        &mut self.desktop_shortcut,
+                        language.text("Masaüstü kısayolu oluştur", "Create a Desktop shortcut"),
                     );
-                    ui.checkbox(
-                        &mut self.desktop,
-                        language.text("Masaüstünde kısayol oluştur", "Create Desktop shortcut"),
-                    );
-                    ui.add_space(12.0);
+                    ui.small(language.text(
+                        "Bu seçenek varsayılan olarak işaretlidir; masaüstü kısayolu istemiyorsanız işareti kaldırın.",
+                        "This option is selected by default; clear it if you do not want a Desktop shortcut.",
+                    ));
+                    ui.add_space(8.0);
                     ui.small(language.text(
                         "Kısayollar yalnızca pakette tanımlı uygulama EXE'sine bağlanır.",
                         "Shortcuts are created only for the EXE declared in the package.",
@@ -798,7 +834,7 @@ impl LocalInstaller {
                         ui.end_row();
 
                         ui.strong(language.text("Başlat menüsü", "Start menu"));
-                        ui.label(if self.entry_point.is_some() && self.start_menu {
+                        ui.label(if self.entry_point.is_some() {
                             language.text("Kısayol oluşturulacak", "Shortcut will be created")
                         } else {
                             language.text("Oluşturulmayacak", "No shortcut")
@@ -806,7 +842,7 @@ impl LocalInstaller {
                         ui.end_row();
 
                         ui.strong(language.text("Masaüstü", "Desktop"));
-                        ui.label(if self.entry_point.is_some() && self.desktop {
+                        ui.label(if self.entry_point.is_some() && self.desktop_shortcut {
                             language.text("Kısayol oluşturulacak", "Shortcut will be created")
                         } else {
                             language.text("Oluşturulmayacak", "No shortcut")
@@ -916,8 +952,8 @@ impl LocalInstaller {
     }
 }
 
-impl eframe::App for LocalInstaller {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+impl LocalInstaller {
+    fn show(&mut self, ctx: &egui::Context) {
         let language = self.language;
         self.poll(ctx);
         if self.busy.is_some() && ctx.input(|input| input.viewport().close_requested()) {
@@ -964,132 +1000,151 @@ impl eframe::App for LocalInstaller {
             ui.separator();
         });
 
-        egui::TopBottomPanel::bottom("local_setup_footer").show(ctx, |ui| {
+        let footer = egui::TopBottomPanel::bottom("local_setup_footer")
+            .default_height(INITIAL_ACTION_PANEL_HEIGHT);
+        footer.show(ctx, |ui| {
             ui.separator();
             ui.add_space(10.0);
-            // In right-to-left layout the primary action is anchored to
-            // the bottom-right edge; back remains to its left.
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if self.busy.is_some() {
-                    ui.label(
-                        self.language
-                            .text("Kurulum devam ediyor…", "Installation in progress…"),
-                    );
-                    return;
-                }
-                let primary = egui::Color32::from_rgb(6, 123, 134);
-                match self.step {
-                    WizardStep::Welcome
-                    | WizardStep::License
-                    | WizardStep::Destination
-                    | WizardStep::Shortcuts => {
-                        if ui
-                            .add_enabled(
-                                self.step != WizardStep::License || self.license_accepted,
-                                egui::Button::new(
-                                    egui::RichText::new(language.text("İleri  ›", "Next  ›"))
-                                        .color(egui::Color32::WHITE),
+            // @dev-id TI-WIZARD-LAYOUT-001
+            // @purpose Reserve only one action row and keep the page visible.
+            // @reason with_layout inherits the full remaining height, making
+            // the bottom panel consume the body and clip every page control.
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), 38.0),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    if self.busy.is_some() {
+                        ui.label(
+                            self.language
+                                .text("Kurulum devam ediyor…", "Installation in progress…"),
+                        );
+                        return;
+                    }
+                    let primary = egui::Color32::from_rgb(6, 123, 134);
+                    match self.step {
+                        WizardStep::Welcome
+                        | WizardStep::License
+                        | WizardStep::Destination
+                        | WizardStep::Shortcuts => {
+                            if ui
+                                .add_enabled(
+                                    self.step != WizardStep::License || self.license_accepted,
+                                    egui::Button::new(
+                                        egui::RichText::new(language.text("İleri  ›", "Next  ›"))
+                                            .color(egui::Color32::WHITE),
+                                    )
+                                    .fill(primary)
+                                    .min_size(egui::vec2(110.0, 38.0)),
                                 )
-                                .fill(primary)
-                                .min_size(egui::vec2(110.0, 38.0)),
-                            )
-                            .clicked()
-                        {
-                            self.advance();
+                                .clicked()
+                            {
+                                self.advance();
+                            }
+                            if ui
+                                .add_sized(
+                                    [95.0, 38.0],
+                                    egui::Button::new(language.text("İptal", "Cancel")),
+                                )
+                                .clicked()
+                            {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            if self.previous_step().is_some()
+                                && ui
+                                    .add_sized(
+                                        [95.0, 38.0],
+                                        egui::Button::new(language.text("‹  Geri", "‹  Back")),
+                                    )
+                                    .clicked()
+                            {
+                                self.back();
+                            }
                         }
-                        if ui
-                            .add_sized(
-                                [95.0, 38.0],
-                                egui::Button::new(language.text("İptal", "Cancel")),
-                            )
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if self.previous_step().is_some()
-                            && ui
+                        WizardStep::Review => {
+                            if ui
+                                .add_sized(
+                                    [175.0, 38.0],
+                                    egui::Button::new(
+                                        egui::RichText::new(
+                                            language.text("Kurulumu başlat", "Install"),
+                                        )
+                                        .color(egui::Color32::WHITE),
+                                    )
+                                    .fill(primary),
+                                )
+                                .clicked()
+                            {
+                                if self.begin_install() {
+                                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                                }
+                            }
+                            if ui
+                                .add_sized(
+                                    [95.0, 38.0],
+                                    egui::Button::new(language.text("İptal", "Cancel")),
+                                )
+                                .clicked()
+                            {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            if ui
                                 .add_sized(
                                     [95.0, 38.0],
                                     egui::Button::new(language.text("‹  Geri", "‹  Back")),
                                 )
                                 .clicked()
-                        {
-                            self.back();
-                        }
-                    }
-                    WizardStep::Review => {
-                        if ui
-                            .add_sized(
-                                [175.0, 38.0],
-                                egui::Button::new(
-                                    egui::RichText::new(
-                                        language.text("Kurulumu başlat", "Install"),
-                                    )
-                                    .color(egui::Color32::WHITE),
-                                )
-                                .fill(primary),
-                            )
-                            .clicked()
-                        {
-                            if self.begin_install() {
-                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            {
+                                self.back();
                             }
                         }
-                        if ui
-                            .add_sized(
-                                [95.0, 38.0],
-                                egui::Button::new(language.text("İptal", "Cancel")),
-                            )
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if ui
-                            .add_sized(
-                                [95.0, 38.0],
-                                egui::Button::new(language.text("‹  Geri", "‹  Back")),
-                            )
-                            .clicked()
-                        {
-                            self.back();
-                        }
-                    }
-                    WizardStep::Installing => {}
-                    WizardStep::Finished => {
-                        if ui
-                            .add_sized(
-                                [105.0, 38.0],
-                                egui::Button::new(language.text("Kapat", "Close")),
-                            )
-                            .clicked()
-                        {
-                            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                        }
-                        if self.status.as_ref().is_some_and(Result::is_err)
-                            && ui
+                        WizardStep::Installing => {}
+                        WizardStep::Finished => {
+                            if ui
                                 .add_sized(
-                                    [165.0, 38.0],
-                                    egui::Button::new(
-                                        language.text("Seçimleri düzenle", "Change settings"),
-                                    ),
+                                    [105.0, 38.0],
+                                    egui::Button::new(language.text("Kapat", "Close")),
                                 )
                                 .clicked()
-                        {
-                            self.step = WizardStep::Destination;
-                            self.status = None;
-                            self.path_error = None;
+                            {
+                                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                            }
+                            if self.status.as_ref().is_some_and(Result::is_err)
+                                && ui
+                                    .add_sized(
+                                        [165.0, 38.0],
+                                        egui::Button::new(
+                                            language.text("Seçimleri düzenle", "Change settings"),
+                                        ),
+                                    )
+                                    .clicked()
+                            {
+                                self.step = WizardStep::Destination;
+                                self.status = None;
+                                self.path_error = None;
+                            }
                         }
                     }
-                }
-            });
+                },
+            );
             ui.add_space(10.0);
         });
 
         // egui CentralPanel must come after all top/bottom panels.
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.add_space(22.0);
-            self.page(ui);
+            egui::ScrollArea::vertical()
+                .id_salt(("local_setup_page", self.step.page_id()))
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.add_space(22.0);
+                    self.page(ui);
+                });
         });
+    }
+}
+
+impl eframe::App for LocalInstaller {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.show(ctx);
     }
 }
 
@@ -1153,8 +1208,7 @@ pub fn run_resumed() -> Result<(), Box<dyn std::error::Error>> {
     app.scope = InstallScope::AllUsers;
     app.target = path.to_string_lossy().into_owned();
     app.language = args.language;
-    app.start_menu = app.entry_point.is_some() && args.start_menu;
-    app.desktop = app.entry_point.is_some() && args.desktop;
+    app.desktop_shortcut = args.desktop_shortcut;
     app.step = if app.wizard.is_enabled(WizardPageId::License) {
         // An elevated restart must never inherit unsigned acceptance state
         // from command-line arguments. Require consent in this process too.
@@ -1176,9 +1230,10 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 fn launch(app: LocalInstaller) -> Result<(), Box<dyn std::error::Error>> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([860.0, 550.0])
-            .with_min_inner_size([760.0, 490.0])
+            .with_inner_size(crate::setup_window_layout::DEFAULT_INNER_SIZE)
             .with_title("Turkuaz Standart Kurulum"),
+        centered: true,
+        persist_window: false,
         ..Default::default()
     };
     eframe::run_native(
@@ -1186,6 +1241,9 @@ fn launch(app: LocalInstaller) -> Result<(), Box<dyn std::error::Error>> {
         options,
         Box::new(move |creation_context| {
             configure_local_style(&creation_context.egui_ctx);
+            if let Err(error) = crate::setup_window_layout::center_on_work_area(creation_context) {
+                eprintln!("TI-GUI-001: setup window placement failed: {error}");
+            }
             Ok(Box::new(app))
         }),
     )?;
@@ -1195,6 +1253,124 @@ fn launch(app: LocalInstaller) -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn layout_fixture() -> LocalInstaller {
+        let user = PathBuf::from(r"C:\Users\Test\AppData\Local\Programs");
+        let machine = PathBuf::from(r"C:\Program Files");
+        LocalInstaller {
+            executable: PathBuf::from("fixture.exe"),
+            package_id: "qa.scope".into(),
+            display_name: "QA Scope".into(),
+            package_label: "QA Scope · 1.0.0".into(),
+            target: user.join("qa.scope").to_string_lossy().into_owned(),
+            program_files_root: machine.clone(),
+            current_user_root: user.clone(),
+            scope: InstallScope::CurrentUser,
+            language: WizardLanguage::Turkish,
+            wizard: WizardConfig::default(),
+            license_accepted: false,
+            recycle_approved: true,
+            desktop_shortcut: true,
+            entry_point: None,
+            step: WizardStep::Destination,
+            path_error: Some("previous error".into()),
+            busy: None,
+            progress_label: "",
+            status: None,
+        }
+    }
+
+    fn visible_text(shapes: &[egui::epaint::ClippedShape], expected: &str) -> bool {
+        fn contains(shape: &egui::Shape, clip: egui::Rect, expected: &str) -> bool {
+            match shape {
+                egui::Shape::Text(text) => {
+                    text.galley.text().contains(expected)
+                        && clip.contains_rect(text.galley.rect.translate(text.pos.to_vec2()))
+                }
+                egui::Shape::Vec(shapes) => shapes.iter().any(|s| contains(s, clip, expected)),
+                _ => false,
+            }
+        }
+        shapes
+            .iter()
+            .any(|s| contains(&s.shape, s.clip_rect, expected))
+    }
+
+    #[test]
+    fn destination_controls_remain_visible_beside_header_and_footer() {
+        let default_size = crate::setup_window_layout::DEFAULT_INNER_SIZE;
+        for size in [default_size, [860.0, 550.0], [760.0, 490.0]] {
+            for dark in [false, true] {
+                for language in [WizardLanguage::Turkish, WizardLanguage::English] {
+                    let ctx = egui::Context::default();
+                    configure_local_style(&ctx);
+                    ctx.set_visuals(if dark {
+                        egui::Visuals::dark()
+                    } else {
+                        egui::Visuals::light()
+                    });
+                    let mut app = layout_fixture();
+                    app.language = language;
+                    app.path_error = None;
+                    let input = egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size.into())),
+                        ..Default::default()
+                    };
+                    // Panels remember their size, so verify settled frames too.
+                    for frame in 0..3 {
+                        let output = ctx.run(input.clone(), |ctx| app.show(ctx));
+                        for expected in [
+                            language.text("Kurulum kapsamı", "Installation scope"),
+                            language.text("Yalnızca bu kullanıcı", "Only for this user"),
+                            language.text("İleri", "Next"),
+                        ] {
+                            assert!(
+                                visible_text(&output.shapes, expected),
+                                "missing {expected:?}, size={size:?}, dark={dark}, frame={frame}"
+                            );
+                        }
+                        if size == default_size {
+                            for expected in [
+                                app.target.as_str(),
+                                language.text("Gözat…", "Browse…"),
+                                language.text(
+                                    "Var olan klasör, yalnızca açık onayınızla Geri Dönüşüm Kutusu'na taşınabilir; üzerine yazılmaz.",
+                                    "An existing folder can be moved to the Recycle Bin only with your explicit approval; no overwrite.",
+                                ),
+                            ] {
+                                assert!(
+                                    visible_text(&output.shapes, expected),
+                                    "default window clips {expected:?} before scrolling, dark={dark}, language={language:?}, frame={frame}"
+                                );
+                            }
+                        }
+                    }
+                    // Small windows may need scrolling to reach the path controls.
+                    let mut browse_visible = false;
+                    for _ in 0..8 {
+                        let mut scroll_input = input.clone();
+                        scroll_input.events = vec![
+                            egui::Event::PointerMoved(egui::pos2(size[0] / 2.0, size[1] / 2.0)),
+                            egui::Event::MouseWheel {
+                                unit: egui::MouseWheelUnit::Point,
+                                delta: egui::vec2(0.0, -40.0),
+                                modifiers: egui::Modifiers::NONE,
+                            },
+                        ];
+                        let output = ctx.run(scroll_input, |ctx| app.show(ctx));
+                        browse_visible |=
+                            visible_text(&output.shapes, language.text("Gözat…", "Browse…"));
+                    }
+                    assert!(
+                        browse_visible,
+                        "path controls unreachable, size={size:?}, dark={dark}"
+                    );
+                    assert!(app.busy.is_none());
+                    assert_eq!(app.step, WizardStep::Destination);
+                }
+            }
+        }
+    }
 
     #[test]
     fn wizard_requires_explicit_install_after_review() {
@@ -1227,6 +1403,31 @@ mod tests {
         );
         assert_eq!(WizardStep::Review.decision_index(false), Some((3, 3)));
         assert_eq!(WizardStep::Shortcuts.decision_index(false), None);
+    }
+
+    #[test]
+    fn desktop_shortcut_is_selected_by_default_and_review_reflects_opt_out() {
+        let mut app = layout_fixture();
+        app.entry_point = Some("PixelTone.exe".into());
+        app.step = WizardStep::Shortcuts;
+        assert!(app.desktop_shortcut);
+
+        let context = egui::Context::default();
+        configure_local_style(&context);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                crate::setup_window_layout::DEFAULT_INNER_SIZE.into(),
+            )),
+            ..Default::default()
+        };
+        let output = context.run(input.clone(), |context| app.show(context));
+        assert!(visible_text(&output.shapes, "Masaüstü kısayolu oluştur"));
+
+        app.desktop_shortcut = false;
+        app.step = WizardStep::Review;
+        let output = context.run(input, |context| app.show(context));
+        assert!(visible_text(&output.shapes, "Oluşturulmayacak"));
     }
 
     #[test]
@@ -1271,7 +1472,8 @@ mod tests {
         let mut app = LocalInstaller {
             executable: PathBuf::from("fixture.exe"),
             package_id: "qa.scope".into(),
-            package_label: "qa.scope · 1.0.0".into(),
+            display_name: "QA Scope".into(),
+            package_label: "QA Scope · 1.0.0".into(),
             target: user.join("qa.scope").to_string_lossy().into_owned(),
             program_files_root: machine.clone(),
             current_user_root: user.clone(),
@@ -1280,9 +1482,8 @@ mod tests {
             wizard: WizardConfig::default(),
             license_accepted: false,
             recycle_approved: true,
+            desktop_shortcut: true,
             entry_point: None,
-            start_menu: false,
-            desktop: false,
             step: WizardStep::Destination,
             path_error: Some("previous error".into()),
             busy: None,

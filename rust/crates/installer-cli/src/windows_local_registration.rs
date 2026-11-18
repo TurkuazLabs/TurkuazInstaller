@@ -1,24 +1,34 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_registration.rs
 // Amac: Imzasiz yerel kurulum icin Windows uygulama kaydi ve sahiplik dosyasi
 // Modul - Rust Windows Lifecycle Adapter
-// Version: 0.1.7
-// Aciklama: HKCU/HKLM Uninstall, harici kaldirici, degismeyen kisayollari koruma
+// Version: 0.1.25
+// Aciklama: Windows kaldirici kaydi, UTF-16 ve file-handle tabanli kisayol silme
 // Bagimli Oldugu Katman: Adapter | Security
 
 use std::{
     ffi::OsStr,
     fs::{self, File, OpenOptions},
     io::{self, Read, Write},
-    os::windows::ffi::OsStrExt,
-    path::{Path, PathBuf},
+    os::windows::{
+        ffi::OsStrExt,
+        fs::{MetadataExt, OpenOptionsExt},
+        io::AsRawHandle,
+    },
+    path::{Component, Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use turkuaz_installer_package_engine::LOCAL_INSTALL_RECEIPT_FILE_NAME;
 use windows::{
     Win32::{
-        Foundation::ERROR_SUCCESS,
-        Storage::FileSystem::{MOVEFILE_DELAY_UNTIL_REBOOT, MoveFileExW},
+        Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS, HANDLE},
+        Storage::FileSystem::{
+            BY_HANDLE_FILE_INFORMATION, DELETE, FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_READONLY,
+            FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT, FILE_GENERIC_READ,
+            FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+            GetFileInformationByHandle,
+        },
         System::Registry::{
             HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_QUERY_VALUE, KEY_SET_VALUE,
             REG_CREATE_KEY_DISPOSITION, REG_CREATED_NEW_KEY, REG_DWORD, REG_OPTION_NON_VOLATILE,
@@ -26,8 +36,8 @@ use windows::{
             RegSetValueExW,
         },
         UI::Shell::{
-            FOLDERID_CommonPrograms, FOLDERID_LocalAppData, FOLDERID_ProgramFiles,
-            FOLDERID_Programs,
+            FOLDERID_CommonPrograms, FOLDERID_Desktop, FOLDERID_LocalAppData,
+            FOLDERID_ProgramFiles, FOLDERID_Programs, FOLDERID_PublicDesktop,
         },
     },
     core::PCWSTR,
@@ -35,13 +45,16 @@ use windows::{
 
 use crate::{
     windows_install_scope::{InstallScope, current_process_is_elevated, known_folder},
-    windows_shortcuts::{create_owned_uninstaller_link, shortcut_location_is_owned},
+    windows_shortcuts::{
+        create_owned_uninstaller_link, notify_shell_directory_removed, notify_shell_removed,
+        resolve_installed_executable, shortcut_location_is_owned, valid_display_name,
+    },
 };
 
 const UNINSTALL_ROOT: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
 const MARKER: &str = "TurkuazOwner";
 const MAX_JSON_BYTES: u64 = 256 * 1024;
-const MAX_EXECUTABLE_BYTES: u64 = 512 * 1024 * 1024;
+pub(super) const MAX_EXECUTABLE_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -73,6 +86,10 @@ impl RegisteredScope {
 struct OwnedShortcut {
     path: PathBuf,
     sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    volume_serial_number: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    file_index: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -80,18 +97,32 @@ struct OwnedShortcut {
 pub(super) struct LocalRegistration {
     version: u32,
     package_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    display_name: Option<String>,
     display_version: String,
     target: PathBuf,
     scope: RegisteredScope,
     key: String,
     marker: String,
     uninstaller: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    display_icon: Option<PathBuf>,
     shortcuts: Vec<OwnedShortcut>,
+    #[serde(skip)]
+    uninstaller_sha256: Option<String>,
 }
 
 impl LocalRegistration {
+    pub(super) fn same_uninstaller(&self, other: &Self) -> bool {
+        self.uninstaller == other.uninstaller
+            && self.uninstaller_sha256.is_some()
+            && self.uninstaller_sha256 == other.uninstaller_sha256
+    }
     pub(super) fn package_id(&self) -> &str {
         &self.package_id
+    }
+    pub(super) fn display_name(&self) -> &str {
+        self.display_name.as_deref().unwrap_or(&self.package_id)
     }
     pub(super) fn target(&self) -> &Path {
         &self.target
@@ -101,6 +132,9 @@ impl LocalRegistration {
     }
     pub(super) fn display_version(&self) -> &str {
         &self.display_version
+    }
+    fn display_icon(&self) -> &Path {
+        self.display_icon.as_deref().unwrap_or(&self.uninstaller)
     }
 }
 
@@ -115,7 +149,7 @@ fn failure(action: &str, code: windows::Win32::Foundation::WIN32_ERROR) -> Strin
 struct RegistryKey(HKEY);
 impl Drop for RegistryKey {
     fn drop(&mut self) {
-        unsafe { RegCloseKey(self.0) };
+        let _ = unsafe { RegCloseKey(self.0) };
     }
 }
 
@@ -175,6 +209,149 @@ fn digest_file(path: &Path) -> Result<String, String> {
         .collect())
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ShortcutFileIdentity {
+    volume_serial_number: u32,
+    file_index: u64,
+}
+
+fn shortcut_file_identity(path: &Path) -> Result<ShortcutFileIdentity, String> {
+    let file = OpenOptions::new()
+        .access_mode(FILE_READ_ATTRIBUTES.0)
+        .share_mode(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0 | FILE_SHARE_DELETE.0)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
+        .open(path)
+        .map_err(|e| e.to_string())?;
+    shortcut_file_identity_handle(&file)
+}
+
+fn shortcut_file_identity_handle(file: &File) -> Result<ShortcutFileIdentity, String> {
+    let mut info = BY_HANDLE_FILE_INFORMATION::default();
+    unsafe { GetFileInformationByHandle(HANDLE(file.as_raw_handle()), &mut info) }
+        .map_err(|e| e.to_string())?;
+    if info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT.0 | FILE_ATTRIBUTE_DIRECTORY.0) != 0
+        || info.nNumberOfLinks != 1
+    {
+        return Err("Kısayol normal, tek bağlantılı bir Windows dosyası değil.".into());
+    }
+    Ok(ShortcutFileIdentity {
+        volume_serial_number: info.dwVolumeSerialNumber,
+        file_index: ((info.nFileIndexHigh as u64) << 32) | info.nFileIndexLow as u64,
+    })
+}
+
+fn owned_shortcut(path: PathBuf) -> Result<OwnedShortcut, String> {
+    let sha256 = digest_file(&path)?;
+    let identity = shortcut_file_identity(&path)?;
+    Ok(OwnedShortcut {
+        path,
+        sha256,
+        volume_serial_number: Some(identity.volume_serial_number),
+        file_index: Some(identity.file_index),
+    })
+}
+
+#[cfg(test)]
+fn owned_shortcut_matches(owned: &OwnedShortcut) -> bool {
+    match (owned.volume_serial_number, owned.file_index) {
+        (Some(volume_serial_number), Some(file_index)) => shortcut_file_identity(&owned.path)
+            .is_ok_and(|identity| {
+                identity.volume_serial_number == volume_serial_number
+                    && identity.file_index == file_index
+            }),
+        (None, None) => digest_file(&owned.path).ok().as_deref() == Some(&owned.sha256),
+        _ => false,
+    }
+}
+
+const WINDOWS_FILE_DISPOSITION_INFO_CLASS: i32 = 4;
+
+#[repr(C)]
+struct WindowsShortcutDispositionInfo {
+    delete_file: u8,
+}
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    #[link_name = "SetFileInformationByHandle"]
+    fn set_shortcut_file_information_by_handle(
+        file: *mut std::ffi::c_void,
+        information_class: i32,
+        information: *const std::ffi::c_void,
+        information_size: u32,
+    ) -> i32;
+}
+
+/// @dev-id TI-WIN-LNK-DELETE-001
+/// @purpose Delete only the owned Windows shortcut object, not a replacement path.
+/// @contract Match the recorded file identity for modern receipts and exact
+/// SHA-256 for legacy receipts. Reject reparse/hardlinks and delete by handle.
+/// @tests windows_local_registration::tests::shortcut_handle_delete_preserves_replacement
+fn open_verified_shortcut_handle(owned: &OwnedShortcut) -> Result<Option<File>, String> {
+    let mut file = match OpenOptions::new()
+        .access_mode(FILE_GENERIC_READ.0 | DELETE.0)
+        .share_mode(FILE_SHARE_READ.0 | FILE_SHARE_DELETE.0)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
+        .open(&owned.path)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.to_string()),
+    };
+    let metadata = file.metadata().map_err(|error| error.to_string())?;
+    if !metadata.is_file() || metadata.file_attributes() & FILE_ATTRIBUTE_READONLY.0 != 0 {
+        return Err("Salt okunur veya normal olmayan kısayol korundu.".into());
+    }
+    let identity = shortcut_file_identity_handle(&file)?;
+    match (owned.volume_serial_number, owned.file_index) {
+        (Some(volume), Some(index))
+            if identity.volume_serial_number == volume && identity.file_index == index => {}
+        (None, None) => {
+            let mut hasher = Sha256::new();
+            let mut buffer = [0_u8; 64 * 1024];
+            loop {
+                let count = file.read(&mut buffer).map_err(|error| error.to_string())?;
+                if count == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..count]);
+            }
+            if format!("{:x}", hasher.finalize()) != owned.sha256 {
+                return Err("Eski kısayolun içeriği değişti; dosya korundu.".into());
+            }
+        }
+        _ => return Err("Değiştirilmiş veya yabancı kısayol korundu.".into()),
+    }
+    Ok(Some(file))
+}
+
+fn dispose_verified_shortcut_handle(file: File) -> Result<(), String> {
+    let disposition = WindowsShortcutDispositionInfo { delete_file: 1 };
+    // SAFETY: the File owns a DELETE-capable handle and the repr(C) buffer
+    // remains valid throughout this synchronous Win32 call.
+    let status = unsafe {
+        set_shortcut_file_information_by_handle(
+            file.as_raw_handle(),
+            WINDOWS_FILE_DISPOSITION_INFO_CLASS,
+            (&raw const disposition).cast(),
+            std::mem::size_of::<WindowsShortcutDispositionInfo>() as u32,
+        )
+    };
+    if status == 0 {
+        return Err(io::Error::last_os_error().to_string());
+    }
+    drop(file);
+    Ok(())
+}
+
+fn remove_verified_shortcut(owned: &OwnedShortcut) -> Result<bool, String> {
+    let Some(file) = open_verified_shortcut_handle(owned)? else {
+        return Ok(false);
+    };
+    dispose_verified_shortcut_handle(file)?;
+    Ok(true)
+}
+
 fn registration_name(package_id: &str, target: &Path) -> Result<String, String> {
     if !valid_id(package_id) {
         return Err("Paket kimliği Windows kayıt defteri için güvenli değil.".into());
@@ -198,15 +375,63 @@ fn owned_root(scope: InstallScope) -> Result<PathBuf, String> {
     Ok(system_root.join("TurkuazInstaller").join("Uninstallers"))
 }
 
+/// @dev-id TI-WIN-UNINSTALL-DIR-001
+/// @purpose Reject a redirected managed parent before creating uninstaller files.
+/// @contract Use the known-folder-derived parent and create the two managed
+/// components separately; never create descendants through a reparse parent.
+/// @tests windows_local_registration::tests::managed_directory_rejects_unsafe_parent
 fn ensure_managed_directory(root: &Path) -> Result<(), String> {
-    fs::create_dir_all(root).map_err(|e| format!("Kaldırıcı dizini oluşturulamadı: {e}"))?;
-    let meta = fs::symlink_metadata(root).map_err(|e| e.to_string())?;
-    #[cfg(windows)]
-    use std::os::windows::fs::MetadataExt;
-    if !meta.is_dir() || meta.file_type().is_symlink() || meta.file_attributes() & 0x400 != 0 {
-        return Err("Kaldırıcı klasörü bağlantı/junction içeriyor.".into());
+    let parent = root.parent().ok_or("Kaldırıcı için üst klasör gerekli.")?;
+    // The path is derived from a Windows known folder; reject any unexpected
+    // relative or traversing input before creating even the first directory.
+    if !root.is_absolute()
+        || root
+            .components()
+            .any(|part| matches!(part, Component::CurDir | Component::ParentDir))
+        || root.file_name() != Some(OsStr::new("Uninstallers"))
+        || parent.file_name() != Some(OsStr::new("TurkuazInstaller"))
+    {
+        return Err("Kaldırıcı klasör düzeni geçersiz.".into());
+    }
+    for directory in [parent, root] {
+        // Never create all descendants first: an existing junction in
+        // TurkuazInstaller could otherwise redirect a privileged write.
+        match fs::create_dir(directory) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => {
+                return Err(format!("Kaldırıcı dizini oluşturulamadı: {error}"));
+            }
+        }
+        let meta = fs::symlink_metadata(directory).map_err(|e| e.to_string())?;
+        if !meta.is_dir()
+            || meta.file_type().is_symlink()
+            || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+        {
+            return Err("Kaldırıcı klasörü bağlantı/junction içeriyor.".into());
+        }
     }
     Ok(())
+}
+
+/// @dev-id TI-WINREG-SZ-001
+/// @purpose Decode only an unambiguous, exactly terminated UTF-16 REG_SZ.
+/// @reason Ignoring data after the first NUL can hide a changed registry
+/// ownership field and make a foreign value appear to match our receipt.
+/// @contract Reject odd lengths, missing or embedded NUL and invalid UTF-16.
+/// @tests windows_local_registration::tests::registry_sz_requires_exact_utf16_terminator
+fn decode_registry_sz(bytes: &[u8]) -> Result<String, String> {
+    if bytes.len() < 2 || bytes.len() % 2 != 0 {
+        return Err("REG_SZ boyutu geçersiz.".into());
+    }
+    let words = bytes
+        .chunks_exact(2)
+        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+        .collect::<Vec<_>>();
+    if words.last() != Some(&0) || words[..words.len() - 1].contains(&0) {
+        return Err("REG_SZ sonlandırması geçersiz.".into());
+    }
+    String::from_utf16(&words[..words.len() - 1]).map_err(|e| e.to_string())
 }
 
 fn read_value(key: HKEY, name: &str) -> Result<String, String> {
@@ -244,12 +469,8 @@ fn read_value(key: HKEY, name: &str) -> Result<String, String> {
     {
         return Err(format!("Windows kayıt değeri değişti: {name}"));
     }
-    let words = bytes[..needed as usize]
-        .chunks_exact(2)
-        .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-        .take_while(|word| *word != 0)
-        .collect::<Vec<_>>();
-    String::from_utf16(&words).map_err(|e| e.to_string())
+    decode_registry_sz(&bytes[..needed as usize])
+        .map_err(|error| format!("Windows kayıt değeri bozuk: {name} ({error})"))
 }
 
 fn write_string(key: HKEY, name: &str, value: &str) -> Result<(), String> {
@@ -303,6 +524,80 @@ fn open_key(scope: InstallScope, name: &str) -> Result<RegistryKey, String> {
     Ok(RegistryKey(output))
 }
 
+/// @dev-id TI-WINREG-001
+/// @purpose Refuse reuse of an already registered installation target.
+/// @reason Recycling the old target before discovering a registration
+/// collision would leave an Installed Apps entry pointing to moved files.
+/// @contract Read-only preflight: never touch a prior payload inventory,
+/// receipt, executable, shortcut or registry key. Registration remains no-clobber.
+/// @tests windows_local_registration::tests::preflight_rejects_existing_registry_and_receipt
+pub(super) fn require_unregistered_target(
+    package_id: &str,
+    target: &Path,
+    scope: InstallScope,
+) -> Result<(), String> {
+    if !target.is_absolute() {
+        return Err("Kurulum kaydı için mutlak hedef gerekli.".into());
+    }
+    let name = registration_name(package_id, target)?;
+    // The payload inventory remains even if HKCU/HKLM registration or the
+    // independent uninstaller was removed. Do not recycle that installation.
+    match fs::symlink_metadata(target.join(LOCAL_INSTALL_RECEIPT_FILE_NAME)) {
+        Ok(_) => {
+            return Err(
+                "Bu klasörde mevcut kurulum envanteri var; önce uygulamayı güvenle kaldırın."
+                    .into(),
+            );
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(format!("Mevcut kurulum envanteri denetlenemedi: {error}"));
+        }
+    }
+    let root = owned_root(scope)?;
+    for path in [
+        root.join(format!("{name}.json")),
+        root.join(format!("{name}.exe")),
+    ] {
+        match fs::symlink_metadata(&path) {
+            Ok(_) => {
+                return Err(
+                    "Bu hedefe ait kaldırıcı zaten kayıtlı; önce mevcut kurulumu kaldırın.".into(),
+                );
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "Mevcut kaldırıcı kaydı güvenle denetlenemedi: {error}"
+                ));
+            }
+        }
+    }
+
+    let mut key = HKEY::default();
+    let path = wide(OsStr::new(&key_path(&name)));
+    let status = unsafe {
+        RegOpenKeyExW(
+            hive(scope),
+            PCWSTR(path.as_ptr()),
+            None,
+            KEY_QUERY_VALUE,
+            &mut key,
+        )
+    };
+    if status == ERROR_SUCCESS {
+        drop(RegistryKey(key));
+        return Err("Bu hedef Windows Yüklü Uygulamalar'a zaten kayıtlı; önce kaldırın.".into());
+    }
+    if status != ERROR_FILE_NOT_FOUND && status != ERROR_PATH_NOT_FOUND {
+        return Err(failure(
+            "Mevcut Windows uygulama kaydı denetlenemedi",
+            status,
+        ));
+    }
+    Ok(())
+}
+
 fn create_key(scope: InstallScope, name: &str) -> Result<RegistryKey, String> {
     let mut output = HKEY::default();
     let mut disposition = REG_CREATE_KEY_DISPOSITION::default();
@@ -338,17 +633,30 @@ fn uninstall_command(record: &LocalRegistration, manifest: &Path) -> String {
     )
 }
 
-fn remove_key(record: &LocalRegistration) -> Result<(), String> {
-    // An unexpected key or a user-modified InstallLocation is never deleted.
+/// @dev-id TI-WINREG-002
+/// @purpose Verify all Windows Installed Apps ownership fields before uninstallation.
+/// @reason A modified uninstall command or display identity must be detected
+/// before removing the managed payload, not only during registry cleanup.
+/// @contract Read-only. A changed marker, location, command, name or icon
+/// prevents uninstallation; cleanup rechecks before deleting the key.
+/// @tests windows_local_registration::tests::disposable_hkcu_install_registration_and_receipt_uninstall_roundtrip
+fn verified_registration_key(record: &LocalRegistration) -> Result<RegistryKey, String> {
     let key = open_key(record.scope(), &record.key)?;
     if read_value(key.0, MARKER)? != record.marker
         || read_value(key.0, "InstallLocation")? != record.target.to_string_lossy()
         || read_value(key.0, "UninstallString")?
             != uninstall_command(record, &registration_path(record)?)
+        || read_value(key.0, "DisplayName")? != record.display_name()
+        || read_value(key.0, "DisplayIcon")? != record.display_icon().to_string_lossy()
     {
         return Err("Windows uygulama kaydı artık bu kurulumla eşleşmiyor.".into());
     }
-    drop(key);
+    Ok(key)
+}
+
+fn remove_key(record: &LocalRegistration) -> Result<(), String> {
+    // Recheck on deletion; a changed key must survive, even after payload cleanup.
+    drop(verified_registration_key(record)?);
     let path = wide(OsStr::new(&key_path(&record.key)));
     let status = unsafe { RegDeleteKeyW(hive(record.scope()), PCWSTR(path.as_ptr())) };
     if status != ERROR_SUCCESS {
@@ -362,38 +670,84 @@ fn registration_path(record: &LocalRegistration) -> Result<PathBuf, String> {
     Ok(root.join(format!("{}.json", record.key)))
 }
 
-pub(super) fn read_registration(source: &Path) -> Result<LocalRegistration, String> {
-    let meta = fs::symlink_metadata(source).map_err(|e| e.to_string())?;
-    if !meta.is_file() || meta.file_type().is_symlink() || meta.len() > MAX_JSON_BYTES {
+/// @dev-id TI-UNINSTALL-RECEIPT-READ-001
+/// @purpose Read the uninstall inventory without following Windows reparse links.
+/// @reason The registration path can be passed by an external uninstall caller.
+/// @contract Read-only; reject unsafe ancestors, reparse files, oversized data
+/// and lexical traversal before reading the receipt. Not a race-free sandbox.
+/// @tests windows_local_registration::tests::registration_reader_rejects_unsafe_paths
+fn read_registration_bytes(source: &Path) -> Result<Vec<u8>, String> {
+    if !source.is_absolute()
+        || source
+            .components()
+            .any(|part| matches!(part, Component::CurDir | Component::ParentDir))
+    {
+        return Err("Kaldırma envanteri için mutlak ve güvenli yol gerekli.".into());
+    }
+    let parent = source
+        .parent()
+        .ok_or("Kaldırma envanteri için üst klasör gerekli.")?;
+    for ancestor in parent.ancestors() {
+        let meta = fs::symlink_metadata(ancestor).map_err(|e| e.to_string())?;
+        if !meta.is_dir()
+            || meta.file_type().is_symlink()
+            || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+        {
+            return Err("Kaldırma envanteri bağlantılı klasörden okunamaz.".into());
+        }
+    }
+    let file = OpenOptions::new()
+        .read(true)
+        // Keep the inventory stable while parsing it; refuse concurrent writers.
+        .share_mode(FILE_SHARE_READ.0)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
+        .open(source)
+        .map_err(|e| e.to_string())?;
+    let meta = file.metadata().map_err(|e| e.to_string())?;
+    if !meta.is_file()
+        || meta.file_type().is_symlink()
+        || meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+        || meta.len() == 0
+        || meta.len() > MAX_JSON_BYTES
+    {
         return Err("Kaldırma envanter dosyası güvenli değil.".into());
     }
-    let mut input = Vec::new();
-    File::open(source)
-        .map_err(|e| e.to_string())?
-        .take(MAX_JSON_BYTES + 1)
+    let mut input = Vec::with_capacity(meta.len() as usize);
+    file.take(MAX_JSON_BYTES + 1)
         .read_to_end(&mut input)
         .map_err(|e| e.to_string())?;
     if input.len() as u64 > MAX_JSON_BYTES {
         return Err("Kaldırma envanteri aşırı büyük.".into());
     }
-    let record: LocalRegistration = serde_json::from_slice(&input).map_err(|e| e.to_string())?;
+    Ok(input)
+}
+
+pub(super) fn read_registration(source: &Path) -> Result<LocalRegistration, String> {
+    let input = read_registration_bytes(source)?;
+    let mut record: LocalRegistration =
+        serde_json::from_slice(&input).map_err(|e| e.to_string())?;
     if record.version != 1
         || !valid_id(&record.package_id)
+        || !valid_display_name(record.display_name())
         || record.key != registration_name(&record.package_id, &record.target)?
         || record.shortcuts.len() > 8
         || source != registration_path(&record)?
         || !record.uninstaller.is_absolute()
         || record.uninstaller.parent() != source.parent()
         || record.uninstaller.file_name() != Some(OsStr::new(&format!("{}.exe", record.key)))
+        || record.display_icon.as_ref().is_some_and(|icon| {
+            !icon.is_absolute() || !icon.starts_with(&record.target) || !icon.is_file()
+        })
+        || record.shortcuts.iter().any(|shortcut| {
+            shortcut.volume_serial_number.is_some() != shortcut.file_index.is_some()
+        })
     {
         return Err("Kaldırma envanteri bu Windows kurulumuna ait değil.".into());
     }
-    let key = open_key(record.scope(), &record.key)?;
-    if read_value(key.0, MARKER)? != record.marker
-        || read_value(key.0, "InstallLocation")? != record.target.to_string_lossy()
-    {
-        return Err("Windows uygulama kaydı/kurulum eşleşmiyor.".into());
-    }
+    // Before any managed payload removal, require the same ownership
+    // fields that the final Windows uninstall registry deletion requires.
+    drop(verified_registration_key(&record)?);
+    record.uninstaller_sha256 = Some(digest_file(&record.uninstaller)?);
     Ok(record)
 }
 
@@ -402,12 +756,16 @@ fn register_key(record: &LocalRegistration, manifest: &Path) -> Result<(), Strin
     let arguments = uninstall_command(record, manifest);
     let result = (|| {
         write_string(key.0, MARKER, &record.marker)?;
-        write_string(key.0, "DisplayName", &record.package_id)?;
+        write_string(key.0, "DisplayName", record.display_name())?;
         write_string(key.0, "DisplayVersion", &record.display_version)?;
         write_string(key.0, "Publisher", "TurkuazInstaller local package")?;
         write_string(key.0, "InstallLocation", &record.target.to_string_lossy())?;
         write_string(key.0, "UninstallString", &arguments)?;
-        write_string(key.0, "DisplayIcon", &record.uninstaller.to_string_lossy())?;
+        write_string(
+            key.0,
+            "DisplayIcon",
+            &record.display_icon().to_string_lossy(),
+        )?;
         write_u32(key.0, "NoModify", 1)?;
         write_u32(key.0, "NoRepair", 1)?;
         Ok::<(), String>(())
@@ -415,7 +773,7 @@ fn register_key(record: &LocalRegistration, manifest: &Path) -> Result<(), Strin
     drop(key);
     if result.is_err() {
         let path = wide(OsStr::new(&key_path(&record.key)));
-        unsafe { RegDeleteKeyW(hive(record.scope()), PCWSTR(path.as_ptr())) };
+        let _ = unsafe { RegDeleteKeyW(hive(record.scope()), PCWSTR(path.as_ptr())) };
     }
     result
 }
@@ -443,19 +801,31 @@ fn create_copy_no_clobber(source: &Path, destination: &Path) -> Result<(), Strin
 /// @dev-id BRK-WIN-UNINSTALL-001
 /// @purpose Register Windows Apps entry and an independent persistent
 /// uninstaller outside the package root with no overwrite policy.
-/// @contract Failed registration never changes the installed payload and
-/// reports partial integration.
+/// @contract Failed registration removes integration artifacts created by this
+/// attempt; the caller rolls back the receipt-owned payload.
 pub(super) fn register_local_install(
     source_setup: &Path,
     package_id: &str,
+    display_name: &str,
     display_version: &str,
     target: &Path,
+    entry_point: Option<&str>,
     scope: InstallScope,
+    desktop_shortcut_required: bool,
     previously_created_shortcuts: &[PathBuf],
 ) -> Result<Vec<String>, String> {
     if scope == InstallScope::AllUsers && !current_process_is_elevated() {
         return Err("Tüm kullanıcılar kaldırıcı kaydı yönetici yetkisi gerektirir.".into());
     }
+    if !valid_display_name(display_name) {
+        return Err("Windows uygulama kaydı için güvenli bir ürün adı gerekli.".into());
+    }
+    let display_icon = entry_point
+        .map(|entry| {
+            resolve_installed_executable(target, entry)?;
+            Ok::<PathBuf, String>(target.join(entry))
+        })
+        .transpose()?;
     let name = registration_name(package_id, target)?;
     let root = owned_root(scope)?;
     ensure_managed_directory(&root)?;
@@ -470,44 +840,59 @@ pub(super) fn register_local_install(
     if open_key(scope, &name).is_ok() {
         return Err("Mevcut Windows uygulama kaydının üzerine yazılmadı.".into());
     }
-    create_copy_no_clobber(source_setup, &uninstaller)?;
-
-    let mut warnings = Vec::new();
+    let warnings = Vec::new();
     let mut shortcuts = Vec::new();
-    let mut uninstall_link = None;
     for path in previously_created_shortcuts {
-        if shortcut_location_is_owned(path, scope, package_id, false)? {
-            shortcuts.push(OwnedShortcut {
-                path: path.clone(),
-                sha256: digest_file(path)?,
-            });
+        if shortcut_location_is_owned(path, scope, display_name, false)? {
+            shortcuts.push(owned_shortcut(path.clone())?);
         }
     }
     let programs = match scope {
         InstallScope::CurrentUser => &FOLDERID_Programs,
         InstallScope::AllUsers => &FOLDERID_CommonPrograms,
     };
-    let group = known_folder(programs)?.join(package_id);
-    let expected_application_link = group.join(format!("{package_id}.lnk"));
+    let group = known_folder(programs)?.join(display_name);
+    let expected_application_link = group.join(format!("{display_name}.lnk"));
     let owns_start_group = previously_created_shortcuts
         .iter()
         .any(|path| path == &expected_application_link);
+    let owns_selected_desktop = if desktop_shortcut_required {
+        let desktop = match scope {
+            InstallScope::CurrentUser => &FOLDERID_Desktop,
+            InstallScope::AllUsers => &FOLDERID_PublicDesktop,
+        };
+        let expected = known_folder(desktop)?.join(format!("{display_name}.lnk"));
+        previously_created_shortcuts
+            .iter()
+            .any(|path| path == &expected)
+    } else {
+        true
+    };
+    if entry_point.is_some() && (!owns_start_group || !owns_selected_desktop) {
+        let _ = remove_owned_shortcuts(&shortcuts, scope, display_name);
+        let _ = fs::remove_file(&uninstaller);
+        return Err(
+            "Zorunlu Başlat menüsü veya seçilmiş masaüstü uygulama kısayolu doğrulanamadı.".into(),
+        );
+    }
+    create_copy_no_clobber(source_setup, &uninstaller)?;
     match create_owned_uninstaller_link(
         &uninstaller,
         &manifest,
-        package_id,
+        display_name,
+        display_icon.as_deref().unwrap_or(&uninstaller),
         scope,
         owns_start_group,
     ) {
         Ok(path) => {
-            let digest = digest_file(&path)?;
-            uninstall_link = Some((path.clone(), digest.clone()));
-            shortcuts.push(OwnedShortcut {
-                sha256: digest,
-                path,
-            });
+            let owned = owned_shortcut(path)?;
+            shortcuts.push(owned);
         }
-        Err(error) => warnings.push(format!("Kaldır kısayolu oluşturulamadı: {error}")),
+        Err(error) => {
+            let _ = remove_owned_shortcuts(&shortcuts, scope, display_name);
+            let _ = fs::remove_file(&uninstaller);
+            return Err(format!("Zorunlu Kaldır kısayolu oluşturulamadı: {error}"));
+        }
     }
     let marker = hash_bytes(
         format!(
@@ -521,13 +906,16 @@ pub(super) fn register_local_install(
     let record = LocalRegistration {
         version: 1,
         package_id: package_id.to_owned(),
+        display_name: Some(display_name.to_owned()),
         display_version: display_version.to_owned(),
         target: target.to_path_buf(),
         scope: scope.into(),
         key: name,
         marker,
         uninstaller,
+        display_icon,
         shortcuts,
+        uninstaller_sha256: None,
     };
     let manifest_data = serde_json::to_vec(&record).map_err(|e| e.to_string())?;
     if manifest_data.len() as u64 > MAX_JSON_BYTES {
@@ -544,14 +932,9 @@ pub(super) fn register_local_install(
         register_key(&record, &manifest)
     })();
     if let Err(error) = registration_result {
-        if let Some((path, digest)) = uninstall_link {
-            if digest_file(&path).ok().as_deref() == Some(&digest) {
-                let _ = fs::remove_file(&path);
-            }
-        }
+        let _ = remove_owned_shortcuts(&record.shortcuts, scope, display_name);
         let _ = fs::remove_file(&manifest);
         let _ = fs::remove_file(&record.uninstaller);
-        // Payload and user-selected shortcuts remain untouched.
         return Err(format!(
             "Windows Yüklü Uygulamalar kaydı tamamlanamadı: {error}"
         ));
@@ -568,36 +951,53 @@ pub(super) struct CleanupReport {
     pub(super) registry_removed: bool,
 }
 
-pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupReport {
+fn remove_owned_shortcuts(
+    shortcuts: &[OwnedShortcut],
+    scope: InstallScope,
+    display_name: &str,
+) -> Vec<String> {
     let mut warnings = Vec::new();
-    for owned in &record.shortcuts {
+    for owned in shortcuts {
         let allowed =
-            shortcut_location_is_owned(&owned.path, record.scope(), &record.package_id, true)
-                .unwrap_or(false);
-        if !allowed || digest_file(&owned.path).ok().as_deref() != Some(&owned.sha256) {
+            shortcut_location_is_owned(&owned.path, scope, display_name, true).unwrap_or(false);
+        if !allowed {
             warnings.push(format!(
-                "Değiştirilmiş veya yabancı kısayol korundu: {}",
+                "Yabancı kısayol konumu korundu: {}",
                 owned.path.display()
             ));
             continue;
         }
-        if let Err(error) = fs::remove_file(&owned.path) {
-            warnings.push(format!("Kısayol kaldırılamadı: {error}"));
-        }
-        if let Some(folder) = owned.path.parent() {
-            // Never delete an empty Desktop, Programs root, or foreign folder.
-            let programs = match record.scope() {
-                InstallScope::CurrentUser => &windows::Win32::UI::Shell::FOLDERID_Programs,
-                InstallScope::AllUsers => &windows::Win32::UI::Shell::FOLDERID_CommonPrograms,
-            };
-            if known_folder(programs)
-                .ok()
-                .is_some_and(|root| folder == root.join(&record.package_id))
-            {
-                let _ = fs::remove_dir(folder);
+        match fs::symlink_metadata(&owned.path) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                warnings.push(format!("Kısayol denetlenemedi: {error}"));
+                continue;
             }
+            Ok(_) => {}
+        }
+        match remove_verified_shortcut(owned) {
+            Ok(true) => notify_shell_removed(&owned.path),
+            Ok(false) => {}
+            Err(error) => warnings.push(format!(
+                "Kısayol korundu veya kaldırılamadı: {} ({error})",
+                owned.path.display()
+            )),
         }
     }
+    let programs = match scope {
+        InstallScope::CurrentUser => &windows::Win32::UI::Shell::FOLDERID_Programs,
+        InstallScope::AllUsers => &windows::Win32::UI::Shell::FOLDERID_CommonPrograms,
+    };
+    if let Ok(group) = known_folder(programs).map(|root| root.join(display_name)) {
+        if fs::remove_dir(&group).is_ok() {
+            notify_shell_directory_removed(&group);
+        }
+    }
+    warnings
+}
+
+pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupReport {
+    let mut warnings = Vec::new();
     let registry_removed = match remove_key(record) {
         Ok(()) => true,
         Err(error) => {
@@ -605,6 +1005,15 @@ pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupRepo
             false
         }
     };
+    // Do not remove an owner's Start/Desktop links when Windows retains a
+    // changed or foreign Installed Apps entry. Preserve evidence for repair.
+    if registry_removed {
+        warnings.extend(remove_owned_shortcuts(
+            &record.shortcuts,
+            record.scope(),
+            record.display_name(),
+        ));
+    }
     CleanupReport {
         warnings,
         registry_removed,
@@ -612,43 +1021,189 @@ pub(super) fn cleanup_after_uninstall(record: &LocalRegistration) -> CleanupRepo
 }
 
 /// @dev-id BRK-WIN-UNINSTALL-003
-/// @purpose Dispose of the owner receipt and request deferred uninstaller
-/// removal once the program is no longer running. No untrusted commands.
-/// @contract Only called after the owned registry entry was removed.
-pub(super) fn finalize_uninstaller(record: &LocalRegistration, manifest: &Path) -> Vec<String> {
-    let mut warnings = Vec::new();
-    if manifest
-        != registration_path(record)
-            .ok()
+/// @purpose Schedule verified EXE and receipt cleanup after process exit.
+/// @contract Called after owned registry removal. Failed preparation preserves
+/// both EXE and receipt; no system-wide reboot operation or shell is used.
+pub(super) fn finalize_uninstaller(
+    record: &LocalRegistration,
+    manifest: &Path,
+) -> (
+    Option<crate::windows_uninstaller_cleanup::PendingUninstallerRemoval>,
+    Vec<String>,
+) {
+    let prepare = || {
+        let root = owned_root(record.scope())?;
+        if record.key != registration_name(&record.package_id, &record.target)?
+            || manifest != registration_path(record)?
+            || record.uninstaller != root.join(format!("{}.exe", record.key))
+        {
+            return Err("TI-UNINSTALL-CLEANUP-001: Kaldırıcı konum doğrulaması başarısız.".into());
+        }
+        let digest = record
+            .uninstaller_sha256
             .as_deref()
-            .unwrap_or(Path::new(""))
-    {
-        return vec!["Kaldırıcı konum doğrulaması başarısız oldu.".into()];
-    }
-    if let Err(error) = fs::remove_file(manifest) {
-        warnings.push(format!("Kaldırıcı envanteri silinemedi: {error}"));
-    }
-    let path_w = wide(record.uninstaller.as_os_str());
-    if let Err(error) = unsafe {
-        MoveFileExW(
-            PCWSTR(path_w.as_ptr()),
-            PCWSTR::null(),
-            MOVEFILE_DELAY_UNTIL_REBOOT,
-        )
-    } {
-        // On non-elevated per-user installs Windows can deny the system-wide
-        // delayed-delete registry operation. Preserve rather than force delete.
-        warnings.push(format!(
-            "Kaldırıcı EXE daha sonra temizlenmelidir: {} ({error})",
-            record.uninstaller.display()
-        ));
-    }
-    warnings
+            .ok_or("TI-UNINSTALL-CLEANUP-001: Kaldırıcı içerik doğrulaması eksik.")?;
+        let target =
+            crate::windows_uninstaller_cleanup::prepare_removal(&record.uninstaller, digest)?;
+        let receipt =
+            crate::windows_uninstaller_cleanup::prepare_removal(manifest, &digest_file(manifest)?)?;
+        crate::windows_uninstaller_cleanup::schedule_removal(target, receipt, unsafe {
+            windows::Win32::System::Threading::GetCurrentProcess()
+        })
+    };
+    let pending = match prepare() {
+        Ok(pending) => pending,
+        Err(error) => {
+            return (
+                None,
+                vec![format!(
+                    "Kaldırıcı EXE ve envanteri korundu: {} ({error})",
+                    record.uninstaller.display()
+                )],
+            );
+        }
+    };
+    (Some(pending), Vec::new())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn managed_directory_rejects_unsafe_parent() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "turkuaz-managed-parent-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir(&base).expect("isolated test root");
+        let parent = base.join("TurkuazInstaller");
+        let root = parent.join("Uninstallers");
+        let original = b"foreign parent contents";
+        fs::write(&parent, original).expect("foreign file fixture");
+        assert!(
+            ensure_managed_directory(&root).is_err(),
+            "must not create a directory through a foreign parent file"
+        );
+        assert_eq!(fs::read(&parent).expect("foreign file preserved"), original);
+        assert!(!root.exists(), "no descendant may be created");
+
+        fs::remove_file(&parent).expect("remove isolated fixture file");
+        ensure_managed_directory(&root).expect("create two managed directories");
+        let sentinel = root.join("unrelated-data.txt");
+        fs::write(&sentinel, b"existing user data").expect("write sentinel");
+        ensure_managed_directory(&root).expect("existing normal directories");
+        assert_eq!(
+            fs::read(&sentinel).expect("sentinel preserved"),
+            b"existing user data"
+        );
+
+        // Refuse to create through a relative or traversing path. Such a path
+        // must not turn the current working directory into an implicit root.
+        let relative = Path::new("TurkuazInstaller").join("Uninstallers");
+        assert!(ensure_managed_directory(&relative).is_err());
+        let traversal = base
+            .join("untrusted")
+            .join("..")
+            .join("TurkuazInstaller")
+            .join("Uninstallers");
+        assert!(ensure_managed_directory(&traversal).is_err());
+        assert!(!base.join("untrusted").exists());
+
+        // An unrelated file occupying the leaf must never be overwritten.
+        fs::remove_file(&sentinel).expect("remove test sentinel");
+        fs::remove_dir(&root).expect("remove isolated managed leaf");
+        let foreign_leaf = b"foreign leaf contents";
+        fs::write(&root, foreign_leaf).expect("foreign leaf fixture");
+        assert!(ensure_managed_directory(&root).is_err());
+        assert_eq!(
+            fs::read(&root).expect("foreign leaf preserved"),
+            foreign_leaf
+        );
+
+        let unexpected = base.join("OtherInstaller").join("Uninstallers");
+        assert!(
+            ensure_managed_directory(&unexpected).is_err(),
+            "unexpected directory layout must be rejected"
+        );
+        assert!(!unexpected.exists(), "no foreign tree created");
+        fs::remove_dir_all(base).expect("remove isolated fixture");
+    }
+
+    #[test]
+    fn shortcut_handle_delete_preserves_replacement() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let base =
+            std::env::temp_dir().join(format!("turkuaz-owned-link-{}-{nonce}", std::process::id()));
+        fs::create_dir(&base).expect("isolated shortcut fixture");
+        let link = base.join("App.lnk");
+        let renamed = base.join("original.lnk");
+        fs::write(&link, b"original managed link").expect("owned fixture");
+        let owned = owned_shortcut(link.clone()).expect("capture file identity");
+
+        // Replacing the path before the protected open must not delete the
+        // foreign occupant even if the filename still matches our receipt.
+        fs::rename(&link, &renamed).expect("move original");
+        fs::write(&link, b"foreign link").expect("foreign replacement");
+        assert!(remove_verified_shortcut(&owned).is_err());
+        assert_eq!(fs::read(&link).unwrap(), b"foreign link");
+        assert_eq!(fs::read(&renamed).unwrap(), b"original managed link");
+        fs::remove_file(&link).expect("remove foreign fixture");
+        fs::rename(&renamed, &link).expect("restore owned object");
+
+        // If the path changes after the verified handle was opened, only
+        // the original file object is disposed; the new path remains intact.
+        let handle = open_verified_shortcut_handle(&owned)
+            .expect("verified open")
+            .expect("owned object exists");
+        fs::rename(&link, &renamed).expect("move handle-open original");
+        fs::write(&link, b"foreign second link").expect("second replacement");
+        dispose_verified_shortcut_handle(handle).expect("delete original handle");
+        assert!(!renamed.exists(), "original object was removed");
+        assert_eq!(fs::read(&link).unwrap(), b"foreign second link");
+        fs::remove_dir_all(&base).expect("remove isolated fixture");
+    }
+
+    #[test]
+    fn shortcut_handle_preserves_changed_legacy_and_hardlinks() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "turkuaz-legacy-link-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir(&base).expect("isolated legacy fixture");
+        let link = base.join("Legacy.lnk");
+        fs::write(&link, b"legacy link").expect("write legacy fixture");
+        let mut legacy = owned_shortcut(link.clone()).expect("owned legacy fixture");
+        legacy.volume_serial_number = None;
+        legacy.file_index = None;
+        fs::write(&link, b"modified by user").expect("modify same file");
+        assert!(remove_verified_shortcut(&legacy).is_err());
+        assert_eq!(fs::read(&link).unwrap(), b"modified by user");
+
+        // A new ownership record uses the object identity, allowing
+        // harmless Shell metadata changes made to that same file object.
+        let owned = owned_shortcut(link.clone()).expect("modern owner record");
+        let hardlink = base.join("Extra.lnk");
+        fs::hard_link(&link, &hardlink).expect("create extra link");
+        assert!(remove_verified_shortcut(&owned).is_err());
+        assert!(link.exists() && hardlink.exists());
+        fs::remove_file(&hardlink).expect("remove hardlink fixture");
+        fs::write(&link, b"shell metadata updated").expect("in-place update");
+        assert!(remove_verified_shortcut(&owned).expect("dispose unchanged identity"));
+        assert!(!link.exists(), "owned file removed");
+        fs::remove_dir_all(&base).expect("remove isolated fixture");
+    }
 
     #[test]
     fn registry_names_are_package_scoped_and_not_user_controlled_paths() {
@@ -661,6 +1216,24 @@ mod tests {
     }
 
     #[test]
+    fn registry_sz_requires_exact_utf16_terminator() {
+        let valid = wide(OsStr::new("Türkçe Uygulama 2.0"))
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            decode_registry_sz(&valid).expect("valid unicode registry value"),
+            "Türkçe Uygulama 2.0"
+        );
+        assert!(decode_registry_sz(&[]).is_err());
+        assert!(decode_registry_sz(&[0]).is_err());
+        assert!(decode_registry_sz(&valid[..valid.len() - 2]).is_err());
+        assert!(decode_registry_sz(&[b'a', 0, 0, 0, b'b', 0, 0, 0]).is_err());
+        assert!(decode_registry_sz(&[b'a', 0, 0, 0, 0, 0]).is_err());
+        assert!(decode_registry_sz(&[0x00, 0xD8, 0, 0]).is_err());
+    }
+
+    #[test]
     fn hkcu_record_is_created_read_and_deleted_without_touching_other_keys() {
         let unique = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -670,11 +1243,181 @@ mod tests {
         let key = create_key(InstallScope::CurrentUser, &name).expect("new CI-only key");
         write_string(key.0, MARKER, "test-owner").expect("write marker");
         assert_eq!(read_value(key.0, MARKER).unwrap(), "test-owner");
+        let marker = wide(OsStr::new(MARKER));
+        let ambiguous = [b't', 0, 0, 0, b'x', 0, 0, 0];
+        assert_eq!(
+            unsafe {
+                RegSetValueExW(
+                    key.0,
+                    PCWSTR(marker.as_ptr()),
+                    None,
+                    REG_SZ,
+                    Some(&ambiguous),
+                )
+            },
+            ERROR_SUCCESS
+        );
+        assert!(
+            read_value(key.0, MARKER).is_err(),
+            "embedded-NUL ownership marker must be rejected"
+        );
+        write_string(key.0, MARKER, "test-owner").expect("restore valid marker");
+        assert_eq!(read_value(key.0, MARKER).unwrap(), "test-owner");
         assert!(create_key(InstallScope::CurrentUser, &name).is_err());
         drop(key);
         let path = wide(OsStr::new(&key_path(&name)));
         let result = unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, PCWSTR(path.as_ptr())) };
         assert_eq!(result, ERROR_SUCCESS);
+    }
+
+    #[test]
+    fn preflight_rejects_existing_registry_and_receipt() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let id = format!("qa.preflight.{}.{nonce}", std::process::id());
+        let target = std::env::temp_dir().join(format!("turkuaz-preflight-{nonce}"));
+        let scope = InstallScope::CurrentUser;
+        let name = registration_name(&id, &target).expect("registration name");
+
+        require_unregistered_target(&id, &target, scope).expect("new target has no registration");
+        let key = create_key(scope, &name).expect("isolated registry key");
+        let error = require_unregistered_target(&id, &target, scope)
+            .expect_err("existing registry key must prevent recycle");
+        assert!(error.contains("zaten kayıtlı"), "{error}");
+        drop(key);
+        let key_path = wide(OsStr::new(&key_path(&name)));
+        assert_eq!(
+            unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, PCWSTR(key_path.as_ptr())) },
+            ERROR_SUCCESS
+        );
+
+        let root = owned_root(scope).expect("owned root");
+        fs::create_dir_all(&root).expect("test-owned root");
+        let receipt = root.join(format!("{name}.json"));
+        let _ = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&receipt)
+            .expect("test receipt");
+        assert!(
+            require_unregistered_target(&id, &target, scope).is_err(),
+            "orphan receipt must block replacement"
+        );
+        assert!(receipt.exists(), "preflight must preserve receipt");
+        fs::remove_file(&receipt).expect("fixture cleanup");
+        require_unregistered_target(&id, &target, scope).expect("no registry or receipt remains");
+
+        // Simulate another installer publishing its external uninstaller
+        // after our first preflight, while our new package is staged.
+        let orphan_exe = root.join(format!("{name}.exe"));
+        let existing_bytes = b"other installer executable";
+        let mut exe_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&orphan_exe)
+            .expect("isolated uninstaller");
+        exe_file
+            .write_all(existing_bytes)
+            .expect("write existing uninstaller");
+        drop(exe_file);
+        assert!(
+            require_unregistered_target(&id, &target, scope).is_err(),
+            "a second pre-recycle check must reject a newly installed EXE"
+        );
+        assert_eq!(
+            fs::read(&orphan_exe).expect("existing EXE preserved"),
+            existing_bytes
+        );
+        fs::remove_file(&orphan_exe).expect("fixture EXE cleanup");
+        require_unregistered_target(&id, &target, scope)
+            .expect("orphan uninstaller removed by fixture");
+
+        // A local payload receipt without the Windows registry or external
+        // uninstaller must still block recycling. Never parse or delete it.
+        fs::create_dir(&target).expect("isolated install target");
+        let local_receipt = target.join(LOCAL_INSTALL_RECEIPT_FILE_NAME);
+        let foreign_contents = b"untrusted existing receipt";
+        fs::write(&local_receipt, foreign_contents).expect("existing payload inventory");
+        let error = require_unregistered_target(&id, &target, scope)
+            .expect_err("orphan payload inventory must block replacing an existing install");
+        assert!(error.contains("kurulum envanteri"), "{error}");
+        assert_eq!(
+            fs::read(&local_receipt).expect("old receipt preserved"),
+            foreign_contents
+        );
+        fs::remove_file(&local_receipt).expect("receipt cleanup");
+        fs::remove_dir(&target).expect("fixture directory cleanup");
+        require_unregistered_target(&id, &target, scope)
+            .expect("no prior payload inventory remains");
+    }
+
+    #[test]
+    fn registration_reader_rejects_unsafe_paths() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("turkuaz-receipt-read-{nonce}"));
+        fs::create_dir(&base).expect("isolated fixture root");
+        let receipt = base.join("registration.json");
+        let data = b"safe fixture bytes";
+        fs::write(&receipt, data).expect("write receipt bytes");
+        assert_eq!(
+            read_registration_bytes(&receipt).expect("regular receipt bytes"),
+            data.to_vec()
+        );
+        assert!(
+            read_registration_bytes(Path::new("registration.json")).is_err(),
+            "relative inventory path must not be read"
+        );
+        assert!(
+            read_registration_bytes(&base.join("..").join("registration.json")).is_err(),
+            "lexical parent traversal must be rejected before reading"
+        );
+        // Refuse a receipt while another process can modify it, then
+        // allow reading again once that writer has released its handle.
+        let writer = OpenOptions::new()
+            .write(true)
+            .share_mode(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0 | FILE_SHARE_DELETE.0)
+            .open(&receipt)
+            .expect("open test writer");
+        assert!(
+            read_registration_bytes(&receipt).is_err(),
+            "receipt reader must refuse a concurrently writable handle"
+        );
+        drop(writer);
+        assert_eq!(
+            read_registration_bytes(&receipt).expect("receipt read after writer closed"),
+            data.to_vec()
+        );
+        let directory = base.join("directory.json");
+        fs::create_dir(&directory).expect("directory fixture");
+        assert!(
+            read_registration_bytes(&directory).is_err(),
+            "a directory is not a regular inventory file"
+        );
+        assert!(directory.is_dir(), "failed read never modifies directory");
+        let oversized = base.join("oversized.json");
+        let large_file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&oversized)
+            .expect("oversized fixture");
+        large_file
+            .set_len(MAX_JSON_BYTES + 1)
+            .expect("set length without allocating memory");
+        drop(large_file);
+        assert!(
+            read_registration_bytes(&oversized).is_err(),
+            "oversized inventory must fail closed"
+        );
+        assert_eq!(
+            fs::read(&receipt).expect("valid file remains"),
+            data.to_vec()
+        );
+        fs::remove_dir_all(base).expect("remove isolated fixture");
     }
 
     #[test]
@@ -686,20 +1429,31 @@ mod tests {
             .expect("test clock")
             .as_nanos();
         let id = format!("qa.native.{}.{}", std::process::id(), unique);
+        let display_name = format!("QA Native {} {unique}", std::process::id());
         let base = std::env::temp_dir().join(format!("turkuaz-local-lifecycle-{unique}"));
         let target = base.join("installed");
         fs::create_dir_all(&target).expect("fixture target");
         let payload = b"installed fixture data";
+        let executable_payload = b"MZ fixture executable";
+        let executable_name = "QA-Native.exe";
         fs::write(target.join("hello.txt"), payload).expect("fixture payload");
+        fs::write(target.join(executable_name), executable_payload).expect("fixture executable");
         let receipt = serde_json::json!({
             "formatVersion": 1,
             "packageId": id,
             "version": "1.0.0",
-            "files": [{
-                "path": "hello.txt",
-                "sizeBytes": payload.len(),
-                "sha256": hash_bytes(payload),
-            }],
+            "files": [
+                {
+                    "path": "hello.txt",
+                    "sizeBytes": payload.len(),
+                    "sha256": hash_bytes(payload),
+                },
+                {
+                    "path": executable_name,
+                    "sizeBytes": executable_payload.len(),
+                    "sha256": hash_bytes(executable_payload),
+                }
+            ],
         });
         fs::write(
             target.join(".turkuaz-local-install.json"),
@@ -708,13 +1462,25 @@ mod tests {
         .expect("receipt");
 
         let source = std::env::current_exe().expect("test exe");
+        let shortcut_report = crate::windows_shortcuts::create_installed_shortcuts(
+            &target,
+            executable_name,
+            &display_name,
+            InstallScope::CurrentUser,
+            true,
+        )
+        .expect("required Start menu and selected Desktop shortcuts");
+        assert_eq!(shortcut_report.created.len(), 2);
         let warnings = register_local_install(
             &source,
             &id,
+            &display_name,
             "1.0.0",
             &target,
+            Some(executable_name),
             InstallScope::CurrentUser,
-            &[],
+            true,
+            &shortcut_report.created,
         )
         .expect("register standalone install");
         assert!(
@@ -727,9 +1493,84 @@ mod tests {
         let record = read_registration(&manifest).expect("registered identity");
         assert_eq!(record.target(), target.as_path());
         assert_eq!(record.package_id(), id);
+        assert_eq!(record.display_name(), display_name);
+        assert_eq!(record.shortcuts.len(), 3);
+        let named_uninstaller = known_folder(&FOLDERID_Programs)
+            .expect("Start menu")
+            .join(&display_name)
+            .join(format!("{display_name} Kaldır.lnk"));
+        assert!(
+            record
+                .shortcuts
+                .iter()
+                .any(|entry| entry.path == named_uninstaller),
+            "new installations must register a product-named uninstall link"
+        );
+        assert!(named_uninstaller.exists(), "named uninstall link missing");
+
+        // All Installed Apps identity fields must match before the
+        // uninstaller can delete any receipt-owned payload. A tampered
+        // field must also preserve the original Start/Desktop links.
+        let registry_path = wide(OsStr::new(&key_path(&name)));
+        let mut write_handle = HKEY::default();
+        assert_eq!(
+            unsafe {
+                RegOpenKeyExW(
+                    HKEY_CURRENT_USER,
+                    PCWSTR(registry_path.as_ptr()),
+                    None,
+                    KEY_SET_VALUE,
+                    &mut write_handle,
+                )
+            },
+            ERROR_SUCCESS
+        );
+        let writable = RegistryKey(write_handle);
+        for (field, original) in [
+            ("UninstallString", uninstall_command(&record, &manifest)),
+            ("DisplayName", record.display_name().to_owned()),
+            (
+                "DisplayIcon",
+                record.display_icon().to_string_lossy().into_owned(),
+            ),
+        ] {
+            write_string(writable.0, field, "qa-foreign-registration")
+                .expect("tamper isolated HKCU fixture");
+            assert!(
+                read_registration(&manifest).is_err(),
+                "{field} changed: uninstall must stop before payload deletion"
+            );
+            let blocked_cleanup = cleanup_after_uninstall(&record);
+            assert!(
+                !blocked_cleanup.registry_removed,
+                "{field} changed: foreign registry entry must be preserved"
+            );
+            assert!(
+                record.shortcuts.iter().all(|link| link.path.exists()),
+                "{field} changed: original shortcuts must survive"
+            );
+            assert_eq!(
+                fs::read(target.join("hello.txt")).expect("existing payload preserved"),
+                payload
+            );
+            write_string(writable.0, field, &original).expect("restore isolated HKCU fixture");
+            read_registration(&manifest).expect("restored identity should pass");
+        }
+        drop(writable);
+
+        for shortcut in &record.shortcuts {
+            let original_digest = shortcut.sha256.clone();
+            OpenOptions::new()
+                .append(true)
+                .open(&shortcut.path)
+                .and_then(|mut file| file.write_all(b"windows-shell-metadata"))
+                .expect("simulate in-place Windows Shell metadata update");
+            assert_ne!(digest_file(&shortcut.path).unwrap(), original_digest);
+            assert!(owned_shortcut_matches(shortcut));
+        }
 
         let removed = uninstall_local_install(&target, &id).expect("receipt-guarded removal");
-        assert_eq!(removed.removed_files, 1);
+        assert_eq!(removed.removed_files, 2);
         assert!(!removed.retained_unknown_files);
         let cleanup = cleanup_after_uninstall(&record);
         assert!(
@@ -742,9 +1583,114 @@ mod tests {
             "Shortcut cleanup: {:?}",
             cleanup.warnings
         );
+        for shortcut in &record.shortcuts {
+            assert!(
+                !shortcut.path.exists(),
+                "left shortcut: {:?}",
+                shortcut.path
+            );
+        }
+        let start_group = known_folder(&FOLDERID_Programs)
+            .unwrap()
+            .join(&display_name);
+        assert!(
+            !start_group.exists(),
+            "left Start menu group: {start_group:?}"
+        );
         assert!(open_key(InstallScope::CurrentUser, &name).is_err());
-        fs::remove_file(&manifest).expect("remove fixture manifest");
-        fs::remove_file(&record.uninstaller).expect("remove unused fixture binary");
+        let (rejected, warnings) = finalize_uninstaller(&record, &base.join("foreign.json"));
+        assert!(rejected.is_none());
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("TI-UNINSTALL-CLEANUP-001"))
+        );
+        assert!(manifest.exists());
+        let mut stale = record.clone();
+        stale.uninstaller_sha256 = Some("0".repeat(64));
+        assert!(!record.same_uninstaller(&stale));
+        let (rejected, warnings) = finalize_uninstaller(&stale, &manifest);
+        assert!(rejected.is_none());
+        assert!(
+            warnings
+                .iter()
+                .any(|w| w.contains("TI-UNINSTALL-CLEANUP-001"))
+        );
+        assert!(manifest.exists());
+        assert!(record.uninstaller.exists());
+        let (pending, warnings) = finalize_uninstaller(&record, &manifest);
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert!(pending.is_some());
+        assert!(manifest.exists());
+        assert!(record.uninstaller.exists());
+        drop(pending);
+        // Worker owns both handles and waits for this test process to exit.
+        // The live-child test verifies actual post-exit deletion.
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn desktop_opt_out_registers_and_cleans_start_menu_links_only() {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test clock")
+            .as_nanos();
+        let id = format!("qa.native.optout.{}.{}", std::process::id(), unique);
+        let display_name = format!("QA Native Opt Out {} {unique}", std::process::id());
+        let base = std::env::temp_dir().join(format!("turkuaz-local-opt-out-{unique}"));
+        let target = base.join("installed");
+        fs::create_dir_all(&target).expect("fixture target");
+        let executable_name = "QA-Native.exe";
+        fs::write(target.join(executable_name), b"MZ fixture executable")
+            .expect("fixture executable");
+
+        let shortcut_report = crate::windows_shortcuts::create_installed_shortcuts(
+            &target,
+            executable_name,
+            &display_name,
+            InstallScope::CurrentUser,
+            false,
+        )
+        .expect("Start menu shortcut with Desktop opted out");
+        assert_eq!(shortcut_report.created.len(), 1);
+
+        let source = std::env::current_exe().expect("test exe");
+        let warnings = register_local_install(
+            &source,
+            &id,
+            &display_name,
+            "1.0.0",
+            &target,
+            Some(executable_name),
+            InstallScope::CurrentUser,
+            false,
+            &shortcut_report.created,
+        )
+        .expect("register Desktop opt-out");
+        assert!(warnings.is_empty(), "{warnings:?}");
+
+        let name = registration_name(&id, &target).expect("owner key");
+        let root = owned_root(InstallScope::CurrentUser).expect("installer root");
+        let manifest = root.join(format!("{name}.json"));
+        let record = read_registration(&manifest).expect("registered identity");
+        assert_eq!(record.shortcuts.len(), 2, "application and uninstall links");
+        let desktop_link = known_folder(&FOLDERID_Desktop)
+            .expect("Desktop")
+            .join(format!("{display_name}.lnk"));
+        assert!(!desktop_link.exists());
+
+        let cleanup = cleanup_after_uninstall(&record);
+        assert!(cleanup.registry_removed, "{:?}", cleanup.warnings);
+        assert!(cleanup.warnings.is_empty(), "{:?}", cleanup.warnings);
+        for shortcut in &record.shortcuts {
+            assert!(
+                !shortcut.path.exists(),
+                "left shortcut: {:?}",
+                shortcut.path
+            );
+        }
+        let _ = fs::remove_file(&manifest);
+        let _ = fs::remove_file(&record.uninstaller);
         let _ = fs::remove_dir_all(&base);
     }
 

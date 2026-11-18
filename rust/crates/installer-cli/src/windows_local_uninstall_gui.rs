@@ -1,8 +1,8 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/windows_local_uninstall_gui.rs
 // Amac: Windows yuklu uygulamalar kaydindan cagirilabilen guvenli kaldirma sihirbazi
 // Modul - Rust Windows Uninstall Presentation
-// Version: 0.1.1
-// Aciklama: Acik onay, envanter on kontrolu ve degistirilmis dosyalari koruma
+// Version: 0.1.5
+// Aciklama: Acik uygulama uyarisi, kapatip yeniden dene ve korumali kaldirma
 // Bagimli Oldugu Katman: Presentation | Application
 
 use std::{
@@ -13,7 +13,9 @@ use std::{
 };
 
 use eframe::egui;
-use turkuaz_installer_package_engine::uninstall_local_install;
+use turkuaz_installer_package_engine::{
+    LOCAL_INSTALL_RUNNING_APPLICATION_ERROR, PackageEngineError, uninstall_local_install,
+};
 use windows::Win32::UI::Shell::FOLDERID_ProgramFiles;
 
 use crate::{
@@ -24,7 +26,10 @@ use crate::{
     windows_local_registration::{
         LocalRegistration, cleanup_after_uninstall, finalize_uninstaller, read_registration,
     },
+    windows_shortcuts::uninstall_display_label,
 };
+
+const RUNNING_APPLICATION_WARNING: &str = "Uygulama hâlâ çalışıyor. Önce uygulamayı ve açık pencerelerini kapatın, ardından tekrar deneyin. Kaldırma başlatılmadı; kurulum dosyaları ve kayıtları korundu.";
 
 enum UninstallPhase {
     Confirm,
@@ -32,13 +37,18 @@ enum UninstallPhase {
     Result,
 }
 
+struct UninstallResult {
+    message: String,
+    _pending_removal: Option<crate::windows_uninstaller_cleanup::PendingUninstallerRemoval>,
+}
+
 struct UninstallApp {
     record: LocalRegistration,
     manifest: PathBuf,
     phase: UninstallPhase,
     confirmed: bool,
-    worker: Option<Receiver<Result<String, String>>>,
-    result: Option<Result<String, String>>,
+    worker: Option<Receiver<Result<UninstallResult, String>>>,
+    result: Option<Result<UninstallResult, String>>,
 }
 
 impl UninstallApp {
@@ -84,7 +94,9 @@ impl UninstallApp {
         self.phase = UninstallPhase::Running;
         thread::spawn(move || {
             let result = read_registration(&manifest).and_then(|latest| {
-                if latest.package_id() != record.package_id() || latest.target() != record.target()
+                if latest.package_id() != record.package_id()
+                    || latest.target() != record.target()
+                    || !latest.same_uninstaller(&record)
                 {
                     return Err("Kaldırma envanteri işlem sırasında değişti.".into());
                 }
@@ -92,15 +104,26 @@ impl UninstallApp {
                     return Err("Tüm kullanıcılar kaldırması yönetici yetkisi gerektirir.".into());
                 }
                 let summary = uninstall_local_install(latest.target(), latest.package_id())
-                    .map_err(|e| format!("Dosyalar güvenli biçimde kaldırılamadı: {e}"))?;
+                    .map_err(|error| match error {
+                        PackageEngineError::InvalidPackage(reason)
+                            if reason == LOCAL_INSTALL_RUNNING_APPLICATION_ERROR =>
+                        {
+                            RUNNING_APPLICATION_WARNING.to_owned()
+                        }
+                        other => format!("Dosyalar güvenli biçimde kaldırılamadı: {other}"),
+                    })?;
                 let cleanup = cleanup_after_uninstall(&latest);
                 let mut warnings = cleanup.warnings;
-                if cleanup.registry_removed {
-                    warnings.extend(finalize_uninstaller(&latest, &manifest));
-                }
+                let pending_removal = if cleanup.registry_removed {
+                    let (pending, cleanup_warnings) = finalize_uninstaller(&latest, &manifest);
+                    warnings.extend(cleanup_warnings);
+                    pending
+                } else {
+                    None
+                };
                 let mut message = format!(
                     "{}: {} uygulama dosyası kaldırıldı.",
-                    latest.package_id(),
+                    latest.display_name(),
                     summary.removed_files
                 );
                 if summary.retained_unknown_files {
@@ -110,7 +133,13 @@ impl UninstallApp {
                     message.push_str("\nWindows bütünleşmesi uyarıları: ");
                     message.push_str(&warnings.join("; "));
                 }
-                Ok(message)
+                if pending_removal.is_some() {
+                    message.push_str("\nKaldırıcı bu pencere kapandığında temizlenecek.");
+                }
+                Ok(UninstallResult {
+                    message,
+                    _pending_removal: pending_removal,
+                })
             });
             let _ = sender.send(result);
         });
@@ -147,7 +176,9 @@ impl eframe::App for UninstallApp {
 
         egui::TopBottomPanel::top("uninstall_header").show(context, |ui| {
             ui.add_space(12.0);
-            ui.heading(egui::RichText::new("Turkuaz Uygulama Kaldırma").size(24.0));
+            ui.heading(
+                egui::RichText::new(uninstall_display_label(self.record.display_name())).size(24.0),
+            );
             ui.label(format!(
                 "{} · {}",
                 self.record.package_id(),
@@ -159,7 +190,9 @@ impl eframe::App for UninstallApp {
         egui::TopBottomPanel::bottom("uninstall_actions").show(context, |ui| {
             ui.separator();
             ui.add_space(9.0);
-            ui.with_layout(
+            // Limit the footer to a button row; the body needs the remaining height.
+            ui.allocate_ui_with_layout(
+                egui::vec2(ui.available_width(), 40.0),
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| match self.phase {
                     UninstallPhase::Confirm => {
@@ -190,22 +223,38 @@ impl eframe::App for UninstallApp {
                         {
                             context.send_viewport_cmd(egui::ViewportCommand::Close);
                         }
+                        if matches!(
+                            &self.result,
+                            Some(Err(error)) if error == RUNNING_APPLICATION_WARNING
+                        ) && ui
+                            .add_sized([150.0, 40.0], egui::Button::new("Tekrar dene"))
+                            .clicked()
+                        {
+                            self.result = None;
+                            self.confirmed = false;
+                            self.phase = UninstallPhase::Confirm;
+                        }
                     }
                 },
             );
         });
         egui::CentralPanel::default().show(context, |ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("uninstall_page")
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
             ui.add_space(16.0);
             match self.phase {
                 UninstallPhase::Confirm => {
                     ui.strong("Kaldırılacak uygulama:");
-                    ui.label(self.record.package_id());
+                    ui.label(self.record.display_name());
                     ui.add_space(12.0);
                     ui.strong("Kurulum konumu:");
                     ui.label(self.record.target().display().to_string());
                     ui.add_space(12.0);
                     ui.label("Yalnızca kurulum envanterinde kayıtlı ve değiştirilmemiş uygulama dosyaları kaldırılır.");
                     ui.label("Kullanıcı dosyaları, değiştirilmiş dosyalar ve yabancı kısayollar korunur.");
+                    ui.label("Uygulama açıkken kaldırma başlatılmaz; uygulamayı kapatıp yeniden deneyebilirsiniz.");
                     if self.record.scope() == InstallScope::AllUsers {
                         ui.colored_label(
                             egui::Color32::from_rgb(180, 105, 30),
@@ -226,21 +275,26 @@ impl eframe::App for UninstallApp {
                 }
                 UninstallPhase::Result => {
                     match &self.result {
-                        Some(Ok(message)) => {
+                        Some(Ok(result)) => {
                             ui.heading("Kaldırma tamamlandı");
                             ui.add_space(12.0);
-                            ui.label(message);
+                            ui.label(&result.message);
                         }
                         Some(Err(message)) => {
                             ui.heading("Kaldırma tamamlanamadı");
                             ui.add_space(12.0);
                             ui.colored_label(egui::Color32::RED, message);
-                            ui.label("Değişmiş uygulama dosyaları ve mevcut veriler korunmuştur.");
+                            if message == RUNNING_APPLICATION_WARNING {
+                                ui.label("Uygulama kapandıktan sonra 'Tekrar dene' seçeneğini kullanabilirsiniz.");
+                            } else {
+                                ui.label("Hata nedeniyle kaldırma tamamlanmamış olabilir; kurulum dosyalarını ve kayıtlarını kontrol edin.");
+                            }
                         }
                         None => {}
                     }
                 }
             }
+                });
         });
     }
 }
@@ -255,8 +309,9 @@ pub(super) fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     let manifest = Path::new(&args[3]).to_path_buf();
     let app = UninstallApp::new(manifest)?;
+    let window_title = uninstall_display_label(app.record.display_name());
     eframe::run_native(
-        "Turkuaz Uygulama Kaldırma",
+        &window_title,
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
                 .with_inner_size([760.0, 490.0])

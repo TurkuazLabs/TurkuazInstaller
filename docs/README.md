@@ -2,8 +2,8 @@
 Dosya Yolu: REPO_ROOT/docs/README.md
 Amac: Aktif Community Rust gelistirmesine ait belgeler ve tarihsel kaynaklar icin dizin
 Modul - Markdown
-Version: 1.2.0
-Aciklama: Studio, EULA, CLI, QA, release sinirlari ve tarihsel kaynaklar
+Version: 1.2.1
+Aciklama: Studio, CLI, RC hazirlik, QA ve production kabul sinirlari
 Bagimli Oldugu Katman: Documentation
 -->
 
@@ -28,7 +28,18 @@ Rust workspace kaynaklarindan olusur.
 | Publisher imzalama ve dagitim guveni | [Release signing](../rust/RELEASE_SIGNING.md) |
 | Windows GUI manuel test ve olumsuz senaryolar | [Windows smoke](../rust/SMOKE_TEST.md) |
 | Production'a gecis ve kalan kapilar | [Rust readiness](../rust/RUST_READINESS.md) |
+| v0.2.24 RC test ciktisi ve kabul kapilari | [RC kanit ve kontrol listesi](../rust/RELEASE_CANDIDATE.md) |
 | Guvenlik bildirimi | [SECURITY](../SECURITY.md) |
+
+## RC dogrulama guncellemesi (17 Kasim 2026)
+
+[CI #43952156847](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/43952156847),
+`83a5418f` kod temelinde Linux ve Windows **SUCCESS**. Windows
+Setup Studio v0.2.24 test artifact'lari gecici GitHub Actions
+ciktilaridir; 23 Kasim 2026'da suresi dolar. RC hazirlik kanitlari
+ve uretim oncesi eksikler [RELEASE_CANDIDATE.md](../rust/RELEASE_CANDIDATE.md)
+belgesindedir. Gercek Windows 10/11 GUI/UAC, publisher
+Authenticode ve bagimsiz review **NOT RUN**.
 
 ## Dogrulama kaniti
 

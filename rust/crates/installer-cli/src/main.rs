@@ -6,7 +6,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/installer-cli/src/main.rs
 // Amac: Imzali Turkuaz release metadata alarak dogrulanmis full paketi kurmak veya ileri surume guncellemek
 // Modul - Rust Binary
-// Version: 0.2.29
+// Version: 0.2.33
 // Aciklama: HTTPS release intake, package build, install/update/repair/rollback, dogrulama ve kurulu uygulamayi baslatma CLI'sidir; setup acilisinda etkileşimli kurulum akisi sunar
 // Bagimli Oldugu Katman: Application | Tool
 
@@ -61,6 +61,9 @@ mod setup_authoring_gui;
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod unsigned_local_gui;
 
+#[cfg(any(test, all(windows, feature = "setup-authoring-gui")))]
+mod setup_window_layout;
+
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod windows_elevation;
 
@@ -77,6 +80,12 @@ mod windows_local_registration;
 mod windows_local_uninstall_gui;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
+mod windows_uninstaller_cleanup;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
+mod windows_cleanup_process;
+
+#[cfg(all(windows, feature = "setup-authoring-gui"))]
 mod windows_shortcuts;
 
 #[cfg(all(windows, feature = "setup-authoring-gui"))]
@@ -87,7 +96,9 @@ use turkuaz_installer_package_engine::has_unsigned_local_setup;
 
 #[tokio::main]
 async fn main() {
-    if let Err(error) = run().await {
+    // Keep the large command-dispatch future off the comparatively small
+    // Windows main-thread stack, including unoptimized test binaries.
+    if let Err(error) = Box::pin(run()).await {
         eprintln!("Turkuaz Installer failed: {error}");
         process::exit(1);
     }

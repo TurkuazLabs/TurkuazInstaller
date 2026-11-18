@@ -1,7 +1,7 @@
 // Dosya Yolu: REPO_ROOT/rust/crates/authenticode-verification/src/lib.rs
 // Amac: Artifact Authenticode trust, publisher subject ve certificate pinini dogrulamak
 // Modul - Rust Library
-// Version: 0.1.0
+// Version: 0.1.1
 // Aciklama: Windows WinTrust ile zincir/revocation denetimi ve CryptoAPI signer kimligi kontrolu
 // Bagimli Oldugu Katman: Tool | Service
 
@@ -314,7 +314,7 @@ mod windows_authenticode {
                 0,
             )
         };
-        if subject_len < 2 || subject_len > 16_384 {
+        if !(2..=16_384).contains(&subject_len) {
             return Err(AuthenticodeVerificationError::SignerIdentityUnavailable);
         }
         let mut subject_buffer = vec![0_u16; subject_len as usize];
