@@ -2,7 +2,7 @@
 Dosya Yolu: REPO_ROOT/rust/RELEASE_CANDIDATE.md
 Amac: Community Rust surum adayi icin kanit, artifact ve yayin kapilarini tek yerde izlemek
 Modul - Markdown
-Version: 0.1.7
+Version: 0.1.8
 Aciklama: RC indirme butunlugu ve manuel Windows UAT raporu kanitlari
 Bagimli Oldugu Katman: Documentation | QA | Release
 -->
@@ -197,6 +197,27 @@ reproduction ve maskelenmis ekran/log kanitlarini
 icinde raporlayin. Kullanici verisi, secret veya private key
 eklemeyin. Bu script kurulum calistirmaz, yetki yukseltmez,
 Windows kabulunu otomatik PASS yapmaz.
+
+## Windows PowerShell 5.1 UAT ADS yol korumasi (2026-11-18)
+
+- UAT JSON cikti yolunun son bileseninde NTFS Alternate Data Stream
+  (ADS) `:` sozdizimi reddedilir. Kontrol, Windows PowerShell 5.1
+  `GetFullPath` cagrisi once ham yol uzerinde calisir.
+- Iki ara CI calismasi ([#44343513182](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44343513182)
+  ve [#44352734685](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44352734685))
+  ADS negatif testindeki .NET yol ayrisimi nedeniyle **FAILED** oldu.
+  Hata gizlenmedi; ham son-bilesen kontrolu ile duzeltildi.
+- Dogrulanmis son kod HEAD: `e2cdc2f612aac22569943d867fded0435701609b`.
+  [CI #44356916958](https://github.com/TurkuazLabs/TurkuazInstaller/actions/runs/44356916958)
+  **SUCCESS**: Linux `rust-workspace` ve Windows `rust-windows`
+  tamamlandi. Windows PowerShell 5.1 `Generate read-only Windows RC
+  manual UAT report template` adimi basarili; 12 manuel senaryo
+  `NOT_RUN` kaldi. 8 TEST-ONLY payload ve 3 dogrulayici script
+  SHA-256/boyut eslesmesini gecti; ADS, overwrite ve artifact agacina
+  yazma negatif testleri kabul edilmedi.
+- Bu CI kaniti manuel masaustu kurulumu, gercek yayinci kimligi veya
+  bagimsiz guvenlik onayi **degildir**. Windows 10/11 UAT, Authenticode,
+  pilot ve signed adapter parity kapilari aciktir. Merge/release yoktur.
 
 ## RC kabul matrisi
 
