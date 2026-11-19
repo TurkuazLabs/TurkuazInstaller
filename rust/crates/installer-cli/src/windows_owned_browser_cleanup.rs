@@ -5,9 +5,23 @@
 // Aciklama: Yalniz sabit TPM package ID, manifest ve registry sahipligi; script calistirilmaz
 // Bagimli Oldugu Katman: Tool | Security | Windows Uninstall
 
-use std::{ffi::OsStr, fs, os::windows::ffi::OsStrExt, path::{Path, PathBuf}};
-use windows::{core::PCWSTR, Win32::{Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS}, System::Registry::{HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, REG_SZ, RegCloseKey, RegDeleteKeyW, RegOpenKeyExW, RegQueryValueExW}}};
 use serde_json::Value;
+use std::{
+    ffi::OsStr,
+    fs,
+    os::windows::ffi::OsStrExt,
+    path::{Path, PathBuf},
+};
+use windows::{
+    Win32::{
+        Foundation::{ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_SUCCESS},
+        System::Registry::{
+            HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE, REG_SZ, RegCloseKey, RegDeleteKeyW,
+            RegOpenKeyExW, RegQueryValueExW,
+        },
+    },
+    core::PCWSTR,
+};
 
 const PACKAGE_ID: &str = "com.turkuazlabs.passwordmanager";
 const HOST_ID: &str = "com.turkuazlabs.passwordmanager";
@@ -29,7 +43,8 @@ pub(super) struct VerifiedHost {
 }
 
 fn same_path(left: &Path, right: &Path) -> bool {
-    left.to_string_lossy().eq_ignore_ascii_case(&right.to_string_lossy())
+    left.to_string_lossy()
+        .eq_ignore_ascii_case(&right.to_string_lossy())
 }
 
 fn wide(value: &OsStr) -> Vec<u16> {
@@ -64,7 +79,10 @@ fn open_registry_key(key: &str) -> Result<Option<OpenRegistryKey>, String> {
         return Ok(None);
     }
     if status != ERROR_SUCCESS {
-        return Err(format!("Could not read Native Messaging registry key: {key} ({})", status.0));
+        return Err(format!(
+            "Could not read Native Messaging registry key: {key} ({})",
+            status.0
+        ));
     }
     Ok(Some(OpenRegistryKey(handle)))
 }
@@ -85,10 +103,15 @@ fn registry_default(key: &str) -> Result<Option<String>, String> {
             Some(&mut needed),
         )
     };
-    if status != ERROR_SUCCESS || value_type != REG_SZ || needed < 2
-        || needed > 32_768 || needed % 2 != 0
+    if status != ERROR_SUCCESS
+        || value_type != REG_SZ
+        || needed < 2
+        || needed > 32_768
+        || needed % 2 != 0
     {
-        return Err(format!("Native Messaging default is missing or invalid: {key}"));
+        return Err(format!(
+            "Native Messaging default is missing or invalid: {key}"
+        ));
     }
     let mut bytes = vec![0_u8; needed as usize];
     let read = unsafe {
@@ -101,12 +124,15 @@ fn registry_default(key: &str) -> Result<Option<String>, String> {
             Some(&mut needed),
         )
     };
-    if read != ERROR_SUCCESS || value_type != REG_SZ
-        || needed as usize > bytes.len() || needed % 2 != 0
+    if read != ERROR_SUCCESS
+        || value_type != REG_SZ
+        || needed as usize > bytes.len()
+        || needed % 2 != 0
     {
         return Err(format!("Native Messaging registry value changed: {key}"));
     }
-    decode_registry_utf16(&bytes[..needed as usize]).map(Some)
+    decode_registry_utf16(&bytes[..needed as usize])
+        .map(Some)
         .map_err(|error| format!("Invalid Native Messaging registry value for {key}: {error}"))
 }
 
@@ -114,7 +140,8 @@ fn decode_registry_utf16(bytes: &[u8]) -> Result<String, &'static str> {
     if bytes.len() < 2 || bytes.len() % 2 != 0 {
         return Err("Invalid UTF-16 byte count");
     }
-    let units = bytes.chunks_exact(2)
+    let units = bytes
+        .chunks_exact(2)
         .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
         .collect::<Vec<_>>();
     let Some(end) = units.iter().position(|unit| *unit == 0) else {
@@ -130,7 +157,10 @@ fn delete_owned_key(key: &str) -> Result<(), String> {
     let path = wide(OsStr::new(hkcu_path(key)?));
     let status = unsafe { RegDeleteKeyW(HKEY_CURRENT_USER, PCWSTR(path.as_ptr())) };
     if status != ERROR_SUCCESS {
-        return Err(format!("Native Messaging key could not be deleted: {key} ({})", status.0));
+        return Err(format!(
+            "Native Messaging key could not be deleted: {key} ({})",
+            status.0
+        ));
     }
     Ok(())
 }
@@ -145,10 +175,13 @@ fn verify_manifest_directory(root: &Path) -> Result<(), String> {
         Err(error) => return Err(error.to_string()),
     };
     use std::os::windows::fs::MetadataExt;
-    if !metadata.is_dir() || metadata.file_type().is_symlink()
+    if !metadata.is_dir()
+        || metadata.file_type().is_symlink()
         || metadata.file_attributes() & 0x400 != 0
     {
-        return Err("Native Messaging manifest root is a reparse point or is not a directory".into());
+        return Err(
+            "Native Messaging manifest root is a reparse point or is not a directory".into(),
+        );
     }
     Ok(())
 }
@@ -157,24 +190,30 @@ fn verify_regular_file(path: &Path) -> Result<(), String> {
     let meta = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     #[cfg(windows)]
     use std::os::windows::fs::MetadataExt;
-    if !meta.is_file() || meta.file_type().is_symlink() || meta.file_attributes() & 0x400 != 0
-        || meta.len() > MAX_MANIFEST_BYTES {
+    if !meta.is_file()
+        || meta.file_type().is_symlink()
+        || meta.file_attributes() & 0x400 != 0
+        || meta.len() > MAX_MANIFEST_BYTES
+    {
         return Err("Native messaging manifest is not a bounded regular file".into());
     }
     Ok(())
 }
 
-fn validate_manifest_value(
-    manifest: &Value,
-    host: &Path,
-    chromium: bool,
-) -> Result<(), String> {
-    let object = manifest.as_object()
+fn validate_manifest_value(manifest: &Value, host: &Path, chromium: bool) -> Result<(), String> {
+    let object = manifest
+        .as_object()
         .ok_or("Native Messaging manifest must be a JSON object")?;
     const COMMON_FIELDS: [&str; 4] = ["name", "description", "path", "type"];
-    let permission_field = if chromium { "allowed_origins" } else { "allowed_extensions" };
+    let permission_field = if chromium {
+        "allowed_origins"
+    } else {
+        "allowed_extensions"
+    };
     if object.len() != COMMON_FIELDS.len() + 1
-        || !object.keys().all(|key| COMMON_FIELDS.contains(&key.as_str()) || key == permission_field)
+        || !object
+            .keys()
+            .all(|key| COMMON_FIELDS.contains(&key.as_str()) || key == permission_field)
     {
         return Err("Native Messaging manifest contains unexpected fields".into());
     }
@@ -182,7 +221,9 @@ fn validate_manifest_value(
         || manifest.get("type").and_then(Value::as_str) != Some("stdio")
         || manifest.get("description").and_then(Value::as_str)
             != Some("Turkuaz Password Manager Native Messaging Host")
-        || !manifest.get("path").and_then(Value::as_str)
+        || !manifest
+            .get("path")
+            .and_then(Value::as_str)
             .is_some_and(|value| same_path(Path::new(value), host))
     {
         return Err("Foreign or modified native messaging manifest".into());
@@ -192,9 +233,11 @@ fn validate_manifest_value(
     } else {
         FIREFOX_ID.to_owned()
     };
-    if manifest.get(permission_field).and_then(Value::as_array).is_none_or(|values| {
-        values.len() != 1 || values[0].as_str() != Some(expected.as_str())
-    }) {
+    if manifest
+        .get(permission_field)
+        .and_then(Value::as_array)
+        .is_none_or(|values| values.len() != 1 || values[0].as_str() != Some(expected.as_str()))
+    {
         return Err("Native messaging extension permissions mismatch".into());
     }
     Ok(())
@@ -253,10 +296,7 @@ pub(super) fn preflight(package_id: &str, target: &Path) -> Result<Option<Verifi
 
 /// Check every browser owner, not only the keys observed during preflight.
 /// Missing keys are safe; unreadable or newly registered keys prevent cleanup.
-fn manifest_is_unreferenced<F>(
-    manifest: &Path,
-    mut lookup: F,
-) -> Result<bool, String>
+fn manifest_is_unreferenced<F>(manifest: &Path, mut lookup: F) -> Result<bool, String>
 where
     F: FnMut(&str) -> Result<Option<String>, String>,
 {
@@ -277,12 +317,17 @@ pub(super) fn remove_verified(verified: VerifiedHost) -> Vec<String> {
     let mut warnings = Vec::new();
     let mut all_removed = true;
     for (key, manifest) in &verified.registry_entries {
-        let valid = registry_default(key).ok().flatten()
+        let valid = registry_default(key)
+            .ok()
+            .flatten()
             .is_some_and(|value| same_path(Path::new(&value), manifest))
-            && verify_manifest(manifest, &verified.installed_host, !key.contains("Mozilla")).is_ok();
+            && verify_manifest(manifest, &verified.installed_host, !key.contains("Mozilla"))
+                .is_ok();
         if !valid {
             all_removed = false;
-            warnings.push(format!("Native Messaging ownership changed; preserved: {key}"));
+            warnings.push(format!(
+                "Native Messaging ownership changed; preserved: {key}"
+            ));
             continue;
         }
         if let Err(error) = delete_owned_key(key) {
@@ -297,31 +342,48 @@ pub(super) fn remove_verified(verified: VerifiedHost) -> Vec<String> {
         for manifest in verified.manifest_paths {
             let safe_root = manifest.parent().is_some_and(|folder| {
                 verify_manifest_directory(folder).is_ok()
-                    && folder.parent().is_some_and(|parent| {
-                        verify_manifest_directory(parent).is_ok()
-                    })
+                    && folder
+                        .parent()
+                        .is_some_and(|parent| verify_manifest_directory(parent).is_ok())
             });
             if !safe_root {
-                warnings.push(format!("Native Messaging directory changed; preserved: {}", manifest.display()));
+                warnings.push(format!(
+                    "Native Messaging directory changed; preserved: {}",
+                    manifest.display()
+                ));
                 continue;
             }
             match manifest_is_unreferenced(&manifest, registry_default) {
                 Ok(true) => {}
                 Ok(false) => {
-                    warnings.push(format!("Native Messaging manifest is still registered; preserved: {}", manifest.display()));
+                    warnings.push(format!(
+                        "Native Messaging manifest is still registered; preserved: {}",
+                        manifest.display()
+                    ));
                     continue;
                 }
                 Err(error) => {
-                    warnings.push(format!("Cannot confirm Native Messaging ownership; preserved: {error}"));
+                    warnings.push(format!(
+                        "Cannot confirm Native Messaging ownership; preserved: {error}"
+                    ));
                     continue;
                 }
             }
-            if verify_manifest(&manifest, &verified.installed_host, !manifest.ends_with("firefox.json")).is_ok() {
+            if verify_manifest(
+                &manifest,
+                &verified.installed_host,
+                !manifest.ends_with("firefox.json"),
+            )
+            .is_ok()
+            {
                 if let Err(error) = fs::remove_file(&manifest) {
                     warnings.push(format!("Native Messaging manifest preserved: {error}"));
                 }
             } else {
-                warnings.push(format!("Native Messaging manifest changed; preserved: {}", manifest.display()));
+                warnings.push(format!(
+                    "Native Messaging manifest changed; preserved: {}",
+                    manifest.display()
+                ));
             }
         }
     }
@@ -333,19 +395,29 @@ mod tests {
     use super::*;
     #[test]
     fn unknown_packages_never_require_browser_cleanup() {
-        assert!(preflight("com.example.other", Path::new(r"C:\Program Files\Example")).unwrap().is_none());
+        assert!(
+            preflight("com.example.other", Path::new(r"C:\Program Files\Example"))
+                .unwrap()
+                .is_none()
+        );
     }
     #[test]
     fn cleanup_registry_paths_reject_non_hkcu_roots() {
-        assert_eq!(hkcu_path(KEYS[0]).unwrap(), r"Software\Google\Chrome\NativeMessagingHosts\com.turkuazlabs.passwordmanager");
+        assert_eq!(
+            hkcu_path(KEYS[0]).unwrap(),
+            r"Software\Google\Chrome\NativeMessagingHosts\com.turkuazlabs.passwordmanager"
+        );
         assert!(hkcu_path(r"HKLM\Software\Microsoft").is_err());
         assert!(hkcu_path(r"Software\Google").is_err());
     }
     #[test]
     fn registry_utf16_decoder_accepts_unicode_install_path() {
         let path = r"C:\Users\Çağrı\AppData\Local\Türkçe\chrome.json";
-        let bytes = path.encode_utf16().chain(std::iter::once(0))
-            .flat_map(u16::to_le_bytes).collect::<Vec<u8>>();
+        let bytes = path
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .flat_map(u16::to_le_bytes)
+            .collect::<Vec<u8>>();
         assert_eq!(decode_registry_utf16(&bytes).unwrap(), path);
     }
 
@@ -393,7 +465,8 @@ mod tests {
         let can_delete = manifest_is_unreferenced(manifest, |key| {
             checked += 1;
             Ok((key == KEYS[1]).then(|| r"c:\users\test\chrome.json".to_owned()))
-        }).unwrap();
+        })
+        .unwrap();
         assert!(!can_delete);
         assert_eq!(checked, 2);
     }
@@ -409,15 +482,21 @@ mod tests {
     fn manifest_deletion_requires_all_browser_keys_absent() {
         let manifest = Path::new(r"C:\Users\Test\chrome.json");
         let mut checked = 0;
-        assert!(manifest_is_unreferenced(manifest, |_key| {
-            checked += 1;
-            Ok(None)
-        }).unwrap());
+        assert!(
+            manifest_is_unreferenced(manifest, |_key| {
+                checked += 1;
+                Ok(None)
+            })
+            .unwrap()
+        );
         assert_eq!(checked, KEYS.len());
     }
 
     #[test]
     fn manifest_path_match_is_case_insensitive_on_windows() {
-        assert!(same_path(Path::new(r"C:\Apps\Chrome.json"), Path::new(r"c:\apps\chrome.json")));
+        assert!(same_path(
+            Path::new(r"C:\Apps\Chrome.json"),
+            Path::new(r"c:\apps\chrome.json")
+        ));
     }
 }
