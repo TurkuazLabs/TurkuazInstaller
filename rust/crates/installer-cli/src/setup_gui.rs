@@ -341,54 +341,45 @@ impl eframe::App for SetupApp {
                 ui.horizontal(|ui| {
                     if is_working {
                         ui.label("Kurulum sürüyor");
-                        ui.with_layout(
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            |ui| {
-                                if ui.button("İşlemi iptal et").clicked() {
-                                    self.request_cancel();
-                                }
-                            },
-                        );
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui.button("İşlemi iptal et").clicked() {
+                                self.request_cancel();
+                            }
+                        });
                     } else {
                         if ui.button("Vazgeç").clicked() {
                             close_requested = true;
                         }
-                        ui.with_layout(
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            |ui| {
-                                let completed_successfully = self.operation_completed;
-                                let primary_label = if self.step == 0 {
-                                    "Devam et"
-                                } else if self.step < 3 {
-                                    "İleri"
-                                } else if completed_successfully {
-                                    "Tamamlandı"
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            let completed_successfully = self.operation_completed;
+                            let primary_label = if self.step == 0 {
+                                "Devam et"
+                            } else if self.step < 3 {
+                                "İleri"
+                            } else if completed_successfully {
+                                "Tamamlandı"
+                            } else {
+                                self.operation.action_label()
+                            };
+                            let primary_enabled = !self.recovery_blocked
+                                && !completed_successfully
+                                && (self.step < 3
+                                    || self.operation != SetupOperation::Uninstall
+                                    || self.uninstall_confirmed);
+                            if ui
+                                .add_enabled(primary_enabled, egui::Button::new(primary_label))
+                                .clicked()
+                            {
+                                if self.step < 3 {
+                                    next_requested = true;
                                 } else {
-                                    self.operation.action_label()
-                                };
-                                let primary_enabled = !self.recovery_blocked
-                                    && !completed_successfully
-                                    && (self.step < 3
-                                        || self.operation != SetupOperation::Uninstall
-                                        || self.uninstall_confirmed);
-                                if ui
-                                    .add_enabled(
-                                        primary_enabled,
-                                        egui::Button::new(primary_label),
-                                    )
-                                    .clicked()
-                                {
-                                    if self.step < 3 {
-                                        next_requested = true;
-                                    } else {
-                                        start_requested = true;
-                                    }
+                                    start_requested = true;
                                 }
-                                if self.step > 0 && ui.button("Geri").clicked() {
-                                    back_requested = true;
-                                }
-                            },
-                        );
+                            }
+                            if self.step > 0 && ui.button("Geri").clicked() {
+                                back_requested = true;
+                            }
+                        });
                     }
                 });
             });
