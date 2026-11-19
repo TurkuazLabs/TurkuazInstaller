@@ -329,6 +329,70 @@ impl eframe::App for SetupApp {
         let mut close_requested = false;
         let mut appearance_changed = false;
 
+        // Reserve navigation space outside CentralPanel before scroll layout.
+        // This keeps Devam et/Ileri/Geri/Vazgec visible on Windows DPI scaling.
+        egui::TopBottomPanel::bottom("setup_navigation_footer")
+            .resizable(false)
+            .show(context, |ui| {
+                ui.add_space(8.0);
+                ui.separator();
+                ui.add_space(6.0);
+
+                ui.horizontal(|ui| {
+                    if is_working {
+                        ui.label("Kurulum sürüyor");
+                        ui.with_layout(
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            |ui| {
+                                if ui.button("İşlemi iptal et").clicked() {
+                                    self.request_cancel();
+                                }
+                            },
+                        );
+                    } else {
+                        if ui.button("Vazgeç").clicked() {
+                            close_requested = true;
+                        }
+                        ui.with_layout(
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            |ui| {
+                                let completed_successfully = self.operation_completed;
+                                let primary_label = if self.step == 0 {
+                                    "Devam et"
+                                } else if self.step < 3 {
+                                    "İleri"
+                                } else if completed_successfully {
+                                    "Tamamlandı"
+                                } else {
+                                    self.operation.action_label()
+                                };
+                                let primary_enabled = !self.recovery_blocked
+                                    && !completed_successfully
+                                    && (self.step < 3
+                                        || self.operation != SetupOperation::Uninstall
+                                        || self.uninstall_confirmed);
+                                if ui
+                                    .add_enabled(
+                                        primary_enabled,
+                                        egui::Button::new(primary_label),
+                                    )
+                                    .clicked()
+                                {
+                                    if self.step < 3 {
+                                        next_requested = true;
+                                    } else {
+                                        start_requested = true;
+                                    }
+                                }
+                                if self.step > 0 && ui.button("Geri").clicked() {
+                                    back_requested = true;
+                                }
+                            },
+                        );
+                    }
+                });
+            });
+
         egui::CentralPanel::default().show(context, |ui| {
             ui.add_space(4.0);
             ui.horizontal(|ui| {
@@ -696,63 +760,6 @@ impl eframe::App for SetupApp {
                     }
                 });
 
-            ui.add_space(8.0);
-            ui.separator();
-            ui.add_space(6.0);
-
-            ui.horizontal(|ui| {
-                if is_working {
-                    ui.label("Kurulum sürüyor");
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            if ui.button("İşlemi iptal et").clicked() {
-                                self.request_cancel();
-                            }
-                        },
-                    );
-                } else {
-                    if ui.button("Vazgeç").clicked() {
-                        close_requested = true;
-                    }
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            let completed_successfully = self.operation_completed;
-                            let primary_label = if self.step == 0 {
-                                "Devam et"
-                            } else if self.step < 3 {
-                                "İleri"
-                            } else if completed_successfully {
-                                "Tamamlandı"
-                            } else {
-                                self.operation.action_label()
-                            };
-                            let primary_enabled = !self.recovery_blocked
-                                && !completed_successfully
-                                && (self.step < 3
-                                    || self.operation != SetupOperation::Uninstall
-                                    || self.uninstall_confirmed);
-                            if ui
-                                .add_enabled(
-                                    primary_enabled,
-                                    egui::Button::new(primary_label),
-                                )
-                                .clicked()
-                            {
-                                if self.step < 3 {
-                                    next_requested = true;
-                                } else {
-                                    start_requested = true;
-                                }
-                            }
-                            if self.step > 0 && ui.button("Geri").clicked() {
-                                back_requested = true;
-                            }
-                        },
-                    );
-                }
-            });
         });
 
         if appearance_changed {
